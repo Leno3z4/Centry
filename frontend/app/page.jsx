@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState } from 'react';
 import { Providers } from '../components/Providers';
 import { WalletConnect } from '../components/WalletConnect';
@@ -25,25 +27,11 @@ function MainDashboard() {
             ['lending', 'Lending Pool'],
             ['governance', 'veGovernance'],
           ].map(([tab, label]) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              style={{
-                flex: 1,
-                padding: '12px',
-                borderRadius: '8px',
-                border: 'none',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                backgroundColor: activeTab === tab ? '#2563eb' : 'transparent',
-                color: activeTab === tab ? '#fff' : '#94a3b8',
-              }}
-            >
+            <button key={tab} onClick={() => setActiveTab(tab)} style={{ flex: 1, padding: '12px', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', backgroundColor: activeTab === tab ? '#2563eb' : 'transparent', color: activeTab === tab ? '#fff' : '#94a3b8' }}>
               {label}
             </button>
           ))}
         </div>
-
         {activeTab === 'vault' && <VaultCard />}
         {activeTab === 'lending' && <LendingCard />}
         {activeTab === 'governance' && <GovernanceCard />}
