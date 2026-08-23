@@ -12,27 +12,27 @@ import "./CentryToken.sol";
 /**
  * CentryRewardDistributor
  *
- * Neverland-style incentives controller for Centry.
+ * Neverland-style, activity-based incentives controller.
  *
- * Rewards are attached to market activity instead of a single weekly vault
- * gauge. Each supported asset can have independent supply and borrow emission
- * rates. The LendingPool notifies this contract whenever a user's balance
- * changes so rewards accrue against time-weighted balances.
+ * Each supported market can define separate supply and borrow emissions.
+ * The LendingPool settles rewards against the user's PREVIOUS balance before
+ * changing that balance, preventing deposit/withdraw/borrow timing games.
  *
- * Current testnet model:
- *   - USDC supply earns CNTRY
- *   - USDC borrow earns CNTRY
+ * For the current Arc/USYC MVP:
+ *   - USDC supply can earn CNTRY
+ *   - USDC borrow can earn CNTRY
  *   - USYC collateral can earn CNTRY
  *
- * The controller is intentionally independent from the risk engine. It can be
- * replaced/expanded later without changing the LendingPool accounting model.
+ * Reward units are the same accounting units used by the pool: supply shares,
+ * borrow shares, and collateral token units. This keeps distribution fair even
+ * while interest accrues and share exchange rates change.
  */
 contract CentryRewardDistributor is Ownable2Step, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using Math for uint256;
 
     uint256 public constant PRECISION = 1e27;
-    uint256 public constant MAX_EMISSION_PER_SECOND = 1e24; // testnet guardrail
+    uint256 public constant MAX_EMISSION_PER_SECOND = 1e24;
 
     struct Market {
         bool active;
@@ -41,8 +41,8 @@ contract CentryRewardDistributor is Ownable2Step, ReentrancyGuard {
         uint256 supplyIndex;
         uint256 borrowIndex;
         uint40 lastUpdate;
-        uint256 totalSupply;
-        uint256 totalBorrow;
+        uint256 totalSupplyUnits;
+        uint256 totalBorrowUnits;
     }
 
     struct UserState {
@@ -64,7 +64,7 @@ contract CentryRewardDistributor is Ownable2Step, ReentrancyGuard {
     event LendingPoolUpdated(address indexed pool);
     event SelfRepayOperatorUpdated(address indexed operator);
     event RewardsAccrued(address indexed user, address indexed asset, uint256 amount);
-    event Claimed(address indexed user, uint256 amount, address indexed recipient);
+    event Claimed(address indexed user, address indexed asset, uint256 amount, address indexed recipient);
     event SelfRepayRewardsClaimed(address indexed user, uint256 amount, address indexed operator);
 
     constructor(address initialOwner, address cntry_, address lendingPool_)
@@ -119,26 +119,40 @@ contract CentryRewardDistributor is Ownable2Step, ReentrancyGuard {
         emit MarketDisabled(asset);
     }
 
-    function handleSupplyChange(address user, address asset, uint256 newBalance, uint256 newTotalSupply) external onlyPool {
+    /**
+     * Called by the LendingPool BEFORE a supply-share balance changes.
+     */
+    function handleSupplyChange(
+        address user,
+        address asset,
+        uint256 oldUserUnits,
+        uint256 newTotalSupplyUnits
+    ) external onlyPool {
         Market storage m = markets[asset];
         if (!m.active) return;
-        _accrueMarket(asset);
-        _settleUser(user, asset, m);
-        m.totalSupply = newTotalSupply;
-    }
 
-    function handleBorrowChange(address user, address asset, uint256 newBalance, uint256 newTotalBorrow) external onlyPool {
-        Market storage m = markets[asset];
-        if (!m.active) return;
         _accrueMarket(asset);
-        _settleUser(user, asset, m);
-        m.totalBorrow = newTotalBorrow;
+        _settleUser(user, oldUserUnits, _poolBorrowUnits(user, asset), asset, m);
+        m.totalSupplyUnits = newTotalSupplyUnits;
     }
 
     /**
-     * Keeper-friendly settlement after a balance change. The balance itself is
-     * supplied by the pool hook; this function only reads stored indexes.
+     * Called by the LendingPool BEFORE a borrow-share balance changes.
      */
+    function handleBorrowChange(
+        address user,
+        address asset,
+        uint256 oldUserUnits,
+        uint256 newTotalBorrowUnits
+    ) external onlyPool {
+        Market storage m = markets[asset];
+        if (!m.active) return;
+
+        _accrueMarket(asset);
+        _settleUser(user, _poolSupplyUnits(user, asset), oldUserUnits, asset, m);
+        m.totalBorrowUnits = newTotalBorrowUnits;
+    }
+
     function accrueMarket(address asset) external {
         _accrueMarket(asset);
     }
@@ -148,14 +162,12 @@ contract CentryRewardDistributor is Ownable2Step, ReentrancyGuard {
     }
 
     function claimAll(address[] calldata assets) external nonReentrant returns (uint256 total) {
-        for (uint256 i; i < assets.length; ++i) {
-            total += _claimFor(msg.sender, assets[i], msg.sender);
-        }
+        for (uint256 i; i < assets.length; ++i) total += _claimFor(msg.sender, assets[i], msg.sender);
     }
 
     /**
-     * Claim CNTRY for an opted-in self-repay flow. The operator receives CNTRY
-     * and is expected to swap it for USDC before calling the vault repayment.
+     * Keeper/automation path. Rewards are sent to the operator, which can swap
+     * CNTRY for USDC and then call the vault's harvestAndRepay().
      */
     function claimForSelfRepay(address user, address[] calldata assets)
         external
@@ -166,13 +178,10 @@ contract CentryRewardDistributor is Ownable2Step, ReentrancyGuard {
         require(user != address(0), "rd: user=0");
 
         for (uint256 i; i < assets.length; ++i) {
-            total += _claimFor(user, assets[i], address(this));
+            total += _claimFor(user, assets[i], msg.sender);
         }
 
-        if (total > 0) {
-            IERC20(address(cntry)).safeTransfer(selfRepayOperator, total);
-            emit SelfRepayRewardsClaimed(user, total, selfRepayOperator);
-        }
+        if (total > 0) emit SelfRepayRewardsClaimed(user, total, msg.sender);
     }
 
     function pendingRewards(address user, address asset) external view returns (uint256) {
@@ -184,50 +193,65 @@ contract CentryRewardDistributor is Ownable2Step, ReentrancyGuard {
         if (m.active) {
             uint256 elapsed = block.timestamp - m.lastUpdate;
             if (elapsed > 0) {
-                if (m.totalSupply > 0) supplyAcc += Math.mulDiv(m.supplyEmissionPerSecond * elapsed, PRECISION, m.totalSupply);
-                if (m.totalBorrow > 0) borrowAcc += Math.mulDiv(m.borrowEmissionPerSecond * elapsed, PRECISION, m.totalBorrow);
+                if (m.totalSupplyUnits > 0 && m.supplyEmissionPerSecond > 0) {
+                    supplyAcc += Math.mulDiv(m.supplyEmissionPerSecond * elapsed, PRECISION, m.totalSupplyUnits);
+                }
+                if (m.totalBorrowUnits > 0 && m.borrowEmissionPerSecond > 0) {
+                    borrowAcc += Math.mulDiv(m.borrowEmissionPerSecond * elapsed, PRECISION, m.totalBorrowUnits);
+                }
             }
         }
 
-        uint256 supplyBal = _poolSupplyBalance(user, asset);
-        uint256 borrowBal = _poolBorrowBalance(user, asset);
-        uint256 pendingSupply = supplyBal > 0 && supplyAcc > u.supplyIndex ? Math.mulDiv(supplyBal, supplyAcc - u.supplyIndex, PRECISION) : 0;
-        uint256 pendingBorrow = borrowBal > 0 && borrowAcc > u.borrowIndex ? Math.mulDiv(borrowBal, borrowAcc - u.borrowIndex, PRECISION) : 0;
+        uint256 supplyUnits = _poolSupplyUnits(user, asset);
+        uint256 borrowUnits = _poolBorrowUnits(user, asset);
+        uint256 pendingSupply = supplyUnits > 0 && supplyAcc > u.supplyIndex
+            ? Math.mulDiv(supplyUnits, supplyAcc - u.supplyIndex, PRECISION)
+            : 0;
+        uint256 pendingBorrow = borrowUnits > 0 && borrowAcc > u.borrowIndex
+            ? Math.mulDiv(borrowUnits, borrowAcc - u.borrowIndex, PRECISION)
+            : 0;
+
         return u.accrued + pendingSupply + pendingBorrow;
     }
 
     function _accrueMarket(address asset) internal {
         Market storage m = markets[asset];
         if (!m.active) return;
+
         uint256 elapsed = block.timestamp - m.lastUpdate;
         if (elapsed == 0) return;
         m.lastUpdate = uint40(block.timestamp);
 
-        if (m.totalSupply > 0 && m.supplyEmissionPerSecond > 0) {
-            m.supplyIndex += Math.mulDiv(m.supplyEmissionPerSecond * elapsed, PRECISION, m.totalSupply);
+        if (m.totalSupplyUnits > 0 && m.supplyEmissionPerSecond > 0) {
+            m.supplyIndex += Math.mulDiv(m.supplyEmissionPerSecond * elapsed, PRECISION, m.totalSupplyUnits);
         }
-        if (m.totalBorrow > 0 && m.borrowEmissionPerSecond > 0) {
-            m.borrowIndex += Math.mulDiv(m.borrowEmissionPerSecond * elapsed, PRECISION, m.totalBorrow);
+        if (m.totalBorrowUnits > 0 && m.borrowEmissionPerSecond > 0) {
+            m.borrowIndex += Math.mulDiv(m.borrowEmissionPerSecond * elapsed, PRECISION, m.totalBorrowUnits);
         }
     }
 
-    function _settleUser(address user, address asset, Market storage m) internal {
+    function _settleUser(
+        address user,
+        uint256 supplyUnits,
+        uint256 borrowUnits,
+        address asset,
+        Market storage m
+    ) internal {
         UserState storage u = userState[asset][user];
-        uint256 supplyBal = _poolSupplyBalance(user, asset);
-        uint256 borrowBal = _poolBorrowBalance(user, asset);
 
         if (u.supplyIndex == 0) u.supplyIndex = m.supplyIndex;
         if (u.borrowIndex == 0) u.borrowIndex = m.borrowIndex;
 
-        if (supplyBal > 0 && m.supplyIndex > u.supplyIndex) {
-            u.accrued += Math.mulDiv(supplyBal, m.supplyIndex - u.supplyIndex, PRECISION);
+        if (supplyUnits > 0 && m.supplyIndex > u.supplyIndex) {
+            u.accrued += Math.mulDiv(supplyUnits, m.supplyIndex - u.supplyIndex, PRECISION);
         }
-        if (borrowBal > 0 && m.borrowIndex > u.borrowIndex) {
-            u.accrued += Math.mulDiv(borrowBal, m.borrowIndex - u.borrowIndex, PRECISION);
+        if (borrowUnits > 0 && m.borrowIndex > u.borrowIndex) {
+            u.accrued += Math.mulDiv(borrowUnits, m.borrowIndex - u.borrowIndex, PRECISION);
         }
 
         u.supplyIndex = m.supplyIndex;
         u.borrowIndex = m.borrowIndex;
+
         if (u.accrued > 0) emit RewardsAccrued(user, asset, u.accrued);
     }
 
@@ -235,7 +259,7 @@ contract CentryRewardDistributor is Ownable2Step, ReentrancyGuard {
         Market storage m = markets[asset];
         require(m.active, "rd: market inactive");
         _accrueMarket(asset);
-        _settleUser(user, asset, m);
+        _settleUser(user, _poolSupplyUnits(user, asset), _poolBorrowUnits(user, asset), asset, m);
 
         UserState storage u = userState[asset][user];
         amount = u.accrued;
@@ -247,25 +271,29 @@ contract CentryRewardDistributor is Ownable2Step, ReentrancyGuard {
         if (amount == 0) return 0;
 
         cntry.mint(recipient, amount);
-        emit Claimed(user, amount, recipient);
+        emit Claimed(user, asset, amount, recipient);
     }
 
-    function _poolSupplyBalance(address user, address asset) internal view returns (uint256) {
-        if (asset == lendingPoolUsdc()) {
-            (bool ok, bytes memory data) = lendingPool.staticcall(abi.encodeWithSignature("supplyBalance(address)", user));
+    function _poolSupplyUnits(address user, address asset) internal view returns (uint256) {
+        address poolUsdc = _lendingPoolUsdc();
+        if (asset == poolUsdc) {
+            (bool ok, bytes memory data) = lendingPool.staticcall(abi.encodeWithSignature("supplyShares(address)", user));
             return ok ? abi.decode(data, (uint256)) : 0;
         }
-        (bool ok2, bytes memory data2) = lendingPool.staticcall(abi.encodeWithSignature("collateralBalances(address,address)", user, asset));
+
+        (bool ok2, bytes memory data2) = lendingPool.staticcall(
+            abi.encodeWithSignature("collateralBalances(address,address)", user, asset)
+        );
         return ok2 ? abi.decode(data2, (uint256)) : 0;
     }
 
-    function _poolBorrowBalance(address user, address asset) internal view returns (uint256) {
-        if (asset != lendingPoolUsdc()) return 0;
-        (bool ok, bytes memory data) = lendingPool.staticcall(abi.encodeWithSignature("debtOf(address)", user));
+    function _poolBorrowUnits(address user, address asset) internal view returns (uint256) {
+        if (asset != _lendingPoolUsdc()) return 0;
+        (bool ok, bytes memory data) = lendingPool.staticcall(abi.encodeWithSignature("borrowShares(address)", user));
         return ok ? abi.decode(data, (uint256)) : 0;
     }
 
-    function lendingPoolUsdc() internal view returns (address) {
+    function _lendingPoolUsdc() internal view returns (address) {
         (bool ok, bytes memory data) = lendingPool.staticcall(abi.encodeWithSignature("usdc()"));
         require(ok, "rd: pool usdc read failed");
         return abi.decode(data, (address));
