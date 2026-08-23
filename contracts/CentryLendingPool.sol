@@ -31,6 +31,7 @@ contract CentryLendingPool is Ownable2Step, ReentrancyGuard {
 
     mapping(address => CollateralConfig) public collateralConfigs;
     mapping(address => mapping(address => uint256)) public collateralBalances;
+    mapping(address => uint256) public totalCollateral;
     mapping(address => address[]) private _userCollateralList;
     mapping(address => mapping(address => bool)) private _inCollateralList;
 
@@ -87,7 +88,7 @@ contract CentryLendingPool is Ownable2Step, ReentrancyGuard {
     function setOracle(address oracle_) external onlyOwner { require(oracle_ != address(0), "pool: oracle=0"); oracle = oracle_; emit OracleUpdated(oracle_); }
     function setInterestRateModel(address irm_) external onlyOwner { require(irm_ != address(0), "pool: irm=0"); interestRateModel = irm_; emit IrmUpdated(irm_); }
     function setReserveFactor(uint256 factor) external onlyOwner { require(factor <= MAX_RESERVE_FACTOR, "pool: reserve too high"); accrueInterest(); reserveFactor = factor; emit ReserveFactorUpdated(factor); }
-    function setAuthorisedVault(address vault) external onlyOwner { authorisedVault = vault; emit AuthorisedVaultUpdated(vault); }
+    function setAuthorisedVault(address vault) external onlyOwner { require(vault != address(0), "pool: vault=0"); authorisedVault = vault; emit AuthorisedVaultUpdated(vault); }
 
     function withdrawReserves(uint256 amount, address to) external onlyOwner {
         require(to != address(0), "pool: to=0");
@@ -148,6 +149,7 @@ contract CentryLendingPool is Ownable2Step, ReentrancyGuard {
         }
         IERC20(asset).safeTransferFrom(msg.sender, address(this), amount);
         collateralBalances[onBehalfOf][asset] += amount;
+        totalCollateral[asset] += amount;
         emit CollateralSupplied(onBehalfOf, asset, amount);
     }
 
@@ -164,6 +166,7 @@ contract CentryLendingPool is Ownable2Step, ReentrancyGuard {
     function _withdrawCollateral(address user, address asset, uint256 amount, address recipient) internal {
         require(amount > 0 && collateralBalances[user][asset] >= amount, "pool: insufficient collateral");
         collateralBalances[user][asset] -= amount;
+        totalCollateral[asset] -= amount;
         require(healthFactor(user) >= WAD, "pool: would become unhealthy");
         IERC20(asset).safeTransfer(recipient, amount);
         emit CollateralWithdrawn(user, asset, amount);
@@ -239,12 +242,13 @@ contract CentryLendingPool is Ownable2Step, ReentrancyGuard {
         uint256 collateralToSeize = _fromUSDValue(collateralAsset, Math.mulDiv(debtValueUSD, cfg.liquidationBonus, WAD));
         uint256 available = collateralBalances[borrower][collateralAsset];
         if (collateralToSeize > available) collateralToSeize = available;
-        require(collateralToSeize > 0, "pool: no collateral");
+        require(collateralToSeize > 0, "pool: no collateral to seize");
 
         borrowShares[borrower] -= shares;
         totalBorrowShares -= shares;
         totalBorrows -= actualDebt;
         collateralBalances[borrower][collateralAsset] -= collateralToSeize;
+        totalCollateral[collateralAsset] -= collateralToSeize;
 
         usdc.safeTransferFrom(msg.sender, address(this), actualDebt);
         IERC20(collateralAsset).safeTransfer(msg.sender, collateralToSeize);
