@@ -15,26 +15,13 @@ interface ICentryLendingPool {
     function repayFor(address onBehalfOf, uint256 amount) external returns (uint256);
     function liquidate(address borrower, address collateralAsset, uint256 debtAmount) external;
     function collateralBalances(address user, address asset) external view returns (uint256);
-    function collateralValueUSD(address user, address asset) external view returns (uint256);
+    function totalCollateral(address asset) external view returns (uint256);
     function debtOf(address user) external view returns (uint256);
     function healthFactor(address user) external view returns (uint256);
     function borrowCapacity(address user) external view returns (uint256);
+    function collateralValueUSD(address user, address asset) external view returns (uint256);
 }
 
-/**
- * CentrySelfRepayingVault
- *
- * Strategy layer on top of CentryLendingPool.
- *
- * User flow:
- *   USYC -> Vault -> LendingPool collateral
- *   LendingPool -> USDC borrow -> User
- *   USYC yield -> Keeper converts yield to USDC -> Keeper calls harvestAndRepay
- *   Vault -> LendingPool repayFor(user) -> user's debt falls
- *
- * The vault no longer maintains a second USDC lending pool. The LendingPool
- * is the single source of truth for collateral, debt, health and liquidity.
- */
 contract CentrySelfRepayingVault is Ownable2Step, ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
 
@@ -43,7 +30,6 @@ contract CentrySelfRepayingVault is Ownable2Step, ReentrancyGuard, Pausable {
     IERC20 public immutable usyc;
     IERC20 public immutable usdc;
     ICentryLendingPool public immutable lendingPool;
-
     address public keeper;
 
     event CollateralDeposited(address indexed user, uint256 amount);
@@ -108,11 +94,6 @@ contract CentrySelfRepayingVault is Ownable2Step, ReentrancyGuard, Pausable {
         emit Repaid(msg.sender, msg.sender, paid);
     }
 
-    /**
-     * Keeper path for the self-repaying mechanism.
-     * The keeper supplies the converted yield as USDC and the vault forwards
-     * it to the user's LendingPool debt.
-     */
     function harvestAndRepay(address user, uint256 usdcAmount)
         external
         nonReentrant
@@ -151,16 +132,15 @@ contract CentrySelfRepayingVault is Ownable2Step, ReentrancyGuard, Pausable {
         emit Liquidated(msg.sender, borrower, usdcAmount, seized);
     }
 
-    function healthFactor(address user) external view returns (uint256) {
-        return lendingPool.healthFactor(user);
-    }
+    function healthFactor(address user) external view returns (uint256) { return lendingPool.healthFactor(user); }
+    function maxBorrow(address user) external view returns (uint256) { return lendingPool.borrowCapacity(user); }
+    function collateralValueUSD(address user) external view returns (uint256) { return lendingPool.collateralValueUSD(user, address(usyc)); }
+    function totalCollateral() external view returns (uint256) { return lendingPool.totalCollateral(address(usyc)); }
 
-    function maxBorrow(address user) external view returns (uint256) {
-        return lendingPool.borrowCapacity(user);
-    }
-
-    function collateralValueUSD(address user) external view returns (uint256) {
-        return lendingPool.collateralValueUSD(user, address(usyc));
+    // Compatibility view used by the reward distributor.
+    function positions(address user) external view returns (uint256 collateral, uint256 debt) {
+        collateral = lendingPool.collateralBalances(user, address(usyc));
+        debt = lendingPool.debtOf(user);
     }
 
     function getPosition(address user)
