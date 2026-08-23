@@ -10,6 +10,11 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
 import "./CentryOracle.sol";
 import "./CentryInterestRateModel.sol";
 
+interface ICentryRewardDistributor {
+    function handleSupplyChange(address user, address asset, uint256 oldUserUnits, uint256 newTotalSupplyUnits) external;
+    function handleBorrowChange(address user, address asset, uint256 oldUserUnits, uint256 newTotalBorrowUnits) external;
+}
+
 contract CentryLendingPool is Ownable2Step, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using Math for uint256;
@@ -42,6 +47,7 @@ contract CentryLendingPool is Ownable2Step, ReentrancyGuard {
     address public oracle;
     address public interestRateModel;
     address public authorisedVault;
+    address public rewardDistributor;
 
     event CollateralConfigured(address indexed asset, uint256 ltv, uint256 liquidationThreshold, uint256 liquidationBonus);
     event CollateralDisabled(address indexed asset);
@@ -57,6 +63,7 @@ contract CentryLendingPool is Ownable2Step, ReentrancyGuard {
     event IrmUpdated(address newIrm);
     event ReserveFactorUpdated(uint256 newFactor);
     event AuthorisedVaultUpdated(address vault);
+    event RewardDistributorUpdated(address distributor);
 
     constructor(address initialOwner, address usdc_, address oracle_, address interestRateModel_, uint256 reserveFactor_) Ownable(initialOwner) {
         require(usdc_ != address(0) && oracle_ != address(0) && interestRateModel_ != address(0), "pool: zero address");
@@ -75,50 +82,51 @@ contract CentryLendingPool is Ownable2Step, ReentrancyGuard {
     function setOracle(address oracle_) external onlyOwner { require(oracle_ != address(0), "pool: oracle=0"); oracle = oracle_; emit OracleUpdated(oracle_); }
     function setInterestRateModel(address irm_) external onlyOwner { require(irm_ != address(0), "pool: irm=0"); interestRateModel = irm_; emit IrmUpdated(irm_); }
     function setReserveFactor(uint256 factor) external onlyOwner { require(factor <= MAX_RESERVE_FACTOR, "pool: reserve too high"); accrueInterest(); reserveFactor = factor; emit ReserveFactorUpdated(factor); }
-    function setAuthorisedVault(address vault) external onlyOwner { authorisedVault = vault; emit AuthorisedVaultUpdated(vault); }
+    function setAuthorisedVault(address vault) external onlyOwner { require(vault != address(0), "pool: vault=0"); authorisedVault = vault; emit AuthorisedVaultUpdated(vault); }
+    function setRewardDistributor(address distributor) external onlyOwner { require(distributor != address(0), "pool: distributor=0"); rewardDistributor = distributor; emit RewardDistributorUpdated(distributor); }
 
     function withdrawReserves(uint256 amount, address to) external onlyOwner {
         require(to != address(0), "pool: to=0"); require(amount > 0 && amount <= protocolReserves, "pool: invalid reserves");
-        require(amount <= usdc.balanceOf(address(this)), "pool: reserves not liquid");
-        protocolReserves -= amount; usdc.safeTransfer(to, amount); emit ReservesWithdrawn(to, amount);
+        require(amount <= usdc.balanceOf(address(this)), "pool: reserves not liquid"); protocolReserves -= amount; usdc.safeTransfer(to, amount); emit ReservesWithdrawn(to, amount);
     }
 
     function accrueInterest() public {
         uint256 elapsed = block.timestamp - lastAccrual; if (elapsed == 0) return; lastAccrual = block.timestamp; if (totalBorrows == 0) return;
         uint256 ratePerSecond = CentryInterestRateModel(interestRateModel).borrowRatePerSecond(_cash(), totalBorrows);
-        uint256 interestFactor = ratePerSecond * elapsed;
+        uint256 interestFactor = Math.mulDiv(ratePerSecond, elapsed, 1);
         uint256 interest = Math.mulDiv(totalBorrows, interestFactor, WAD); if (interest == 0) return;
-        uint256 reserveShare = Math.mulDiv(interest, reserveFactor, WAD);
-        totalBorrows += interest; protocolReserves += reserveShare; totalSupplyAssets += interest - reserveShare;
+        uint256 reserveShare = Math.mulDiv(interest, reserveFactor, WAD); totalBorrows += interest; protocolReserves += reserveShare; totalSupplyAssets += interest - reserveShare;
     }
 
     function supply(uint256 amount) external nonReentrant returns (uint256 shares) {
         require(amount > 0, "pool: amount=0"); accrueInterest(); shares = _toSupplyShares(amount); require(shares > 0, "pool: shares=0");
+        if (rewardDistributor != address(0)) ICentryRewardDistributor(rewardDistributor).handleSupplyChange(msg.sender, address(usdc), supplyShares[msg.sender], totalSupplyShares + shares);
         usdc.safeTransferFrom(msg.sender, address(this), amount); supplyShares[msg.sender] += shares; totalSupplyShares += shares; totalSupplyAssets += amount;
         emit Supplied(msg.sender, amount, shares);
     }
 
     function withdraw(uint256 shares) external nonReentrant returns (uint256 amount) {
         require(shares > 0, "pool: shares=0"); accrueInterest(); if (shares == type(uint256).max) shares = supplyShares[msg.sender];
-        require(shares > 0 && supplyShares[msg.sender] >= shares, "pool: insufficient shares"); amount = _fromSupplyShares(shares);
-        require(amount > 0 && amount <= _cash(), "pool: insufficient liquidity");
-        supplyShares[msg.sender] -= shares; totalSupplyShares -= shares; totalSupplyAssets -= amount; usdc.safeTransfer(msg.sender, amount);
-        emit Withdrawn(msg.sender, amount, shares);
+        require(shares > 0 && supplyShares[msg.sender] >= shares, "pool: insufficient shares"); amount = _fromSupplyShares(shares); require(amount > 0 && amount <= _cash(), "pool: insufficient liquidity");
+        if (rewardDistributor != address(0)) ICentryRewardDistributor(rewardDistributor).handleSupplyChange(msg.sender, address(usdc), supplyShares[msg.sender], totalSupplyShares - shares);
+        supplyShares[msg.sender] -= shares; totalSupplyShares -= shares; totalSupplyAssets -= amount; usdc.safeTransfer(msg.sender, amount); emit Withdrawn(msg.sender, amount, shares);
     }
 
     function supplyCollateral(address asset, uint256 amount, address onBehalfOf) external nonReentrant {
         require(amount > 0 && onBehalfOf != address(0), "pool: invalid collateral"); require(collateralConfigs[asset].active, "pool: unsupported collateral");
         if (!_inCollateralList[onBehalfOf][asset]) { require(_userCollateralList[onBehalfOf].length < MAX_COLLATERAL_ASSETS, "pool: too many collateral assets"); _userCollateralList[onBehalfOf].push(asset); _inCollateralList[onBehalfOf][asset] = true; }
-        IERC20(asset).safeTransferFrom(msg.sender, address(this), amount); collateralBalances[onBehalfOf][asset] += amount; totalCollateral[asset] += amount;
-        emit CollateralSupplied(onBehalfOf, asset, amount);
+        if (rewardDistributor != address(0)) ICentryRewardDistributor(rewardDistributor).handleSupplyChange(onBehalfOf, asset, collateralBalances[onBehalfOf][asset], totalCollateral[asset] + amount);
+        IERC20(asset).safeTransferFrom(msg.sender, address(this), amount); collateralBalances[onBehalfOf][asset] += amount; totalCollateral[asset] += amount; emit CollateralSupplied(onBehalfOf, asset, amount);
     }
 
     function withdrawCollateral(address asset, uint256 amount) external nonReentrant { _withdrawCollateral(msg.sender, asset, amount, msg.sender); }
     function withdrawCollateralFor(address user, address asset, uint256 amount, address recipient) external nonReentrant { require(msg.sender == authorisedVault, "pool: not vault"); require(user != address(0) && recipient != address(0), "pool: zero address"); _withdrawCollateral(user, asset, amount, recipient); }
 
     function _withdrawCollateral(address user, address asset, uint256 amount, address recipient) internal {
-        require(amount > 0 && collateralBalances[user][asset] >= amount, "pool: insufficient collateral"); collateralBalances[user][asset] -= amount; totalCollateral[asset] -= amount;
-        require(healthFactor(user) >= WAD, "pool: would become unhealthy"); IERC20(asset).safeTransfer(recipient, amount); emit CollateralWithdrawn(user, asset, amount);
+        require(amount > 0 && collateralBalances[user][asset] >= amount, "pool: insufficient collateral");
+        require(healthFactorAfterCollateralChange(user, asset, amount) >= WAD, "pool: would become unhealthy");
+        if (rewardDistributor != address(0)) ICentryRewardDistributor(rewardDistributor).handleSupplyChange(user, asset, collateralBalances[user][asset], totalCollateral[asset] - amount);
+        collateralBalances[user][asset] -= amount; totalCollateral[asset] -= amount; IERC20(asset).safeTransfer(recipient, amount); emit CollateralWithdrawn(user, asset, amount);
     }
 
     function borrow(uint256 amount) external nonReentrant { _borrow(msg.sender, amount, msg.sender); }
@@ -126,7 +134,9 @@ contract CentryLendingPool is Ownable2Step, ReentrancyGuard {
 
     function _borrow(address borrower, uint256 amount, address recipient) internal {
         require(amount > 0, "pool: amount=0"); accrueInterest(); require(amount <= _cash(), "pool: insufficient liquidity"); require(amount <= borrowCapacity(borrower), "pool: ltv exceeded");
-        uint256 shares = _toBorrowShares(amount); require(shares > 0, "pool: borrow shares=0"); borrowShares[borrower] += shares; totalBorrowShares += shares; totalBorrows += amount;
+        uint256 shares = _toBorrowShares(amount); require(shares > 0, "pool: borrow shares=0");
+        if (rewardDistributor != address(0)) ICentryRewardDistributor(rewardDistributor).handleBorrowChange(borrower, address(usdc), borrowShares[borrower], totalBorrowShares + shares);
+        borrowShares[borrower] += shares; totalBorrowShares += shares; totalBorrows += amount;
         require(healthFactor(borrower) >= WAD, "pool: insufficient collateral"); usdc.safeTransfer(recipient, amount); emit Borrowed(borrower, amount);
     }
 
@@ -135,8 +145,9 @@ contract CentryLendingPool is Ownable2Step, ReentrancyGuard {
 
     function _repay(address borrower, address payer, uint256 amount) internal returns (uint256 paid) {
         accrueInterest(); uint256 currentDebt = _currentDebt(borrower); require(currentDebt > 0, "pool: no debt"); if (amount == type(uint256).max || amount > currentDebt) amount = currentDebt;
-        uint256 shares = _debtToShares(amount); if (shares == 0) shares = 1; if (shares > borrowShares[borrower]) shares = borrowShares[borrower]; paid = _sharesToDebt(shares);
-        require(paid > 0 && paid <= currentDebt, "pool: invalid repay"); borrowShares[borrower] -= shares; totalBorrowShares -= shares; totalBorrows -= paid; usdc.safeTransferFrom(payer, address(this), paid); emit Repaid(borrower, payer, paid);
+        uint256 shares = _debtToShares(amount); if (shares == 0) shares = 1; if (shares > borrowShares[borrower]) shares = borrowShares[borrower]; paid = _sharesToDebt(shares); require(paid > 0 && paid <= currentDebt, "pool: invalid repay");
+        if (rewardDistributor != address(0)) ICentryRewardDistributor(rewardDistributor).handleBorrowChange(borrower, address(usdc), borrowShares[borrower], totalBorrowShares - shares);
+        borrowShares[borrower] -= shares; totalBorrowShares -= shares; totalBorrows -= paid; usdc.safeTransferFrom(payer, address(this), paid); emit Repaid(borrower, payer, paid);
     }
 
     function liquidate(address borrower, address collateralAsset, uint256 debtAmount) external nonReentrant {
@@ -145,11 +156,20 @@ contract CentryLendingPool is Ownable2Step, ReentrancyGuard {
         uint256 maxRepay = currentDebt / 2; if (debtAmount > maxRepay) debtAmount = maxRepay; require(debtAmount > 0, "pool: debtAmount=0");
         uint256 shares = _debtToShares(debtAmount); if (shares == 0) shares = 1; if (shares > borrowShares[borrower]) shares = borrowShares[borrower]; uint256 actualDebt = _sharesToDebt(shares); require(actualDebt > 0, "pool: actual debt=0");
         uint256 debtValueUSD = _toUSDValue(address(usdc), actualDebt); uint256 collateralToSeize = _fromUSDValue(collateralAsset, Math.mulDiv(debtValueUSD, cfg.liquidationBonus, WAD)); uint256 available = collateralBalances[borrower][collateralAsset]; if (collateralToSeize > available) collateralToSeize = available; require(collateralToSeize > 0, "pool: no collateral to seize");
+        if (rewardDistributor != address(0)) {
+            ICentryRewardDistributor(rewardDistributor).handleBorrowChange(borrower, address(usdc), borrowShares[borrower], totalBorrowShares - shares);
+            ICentryRewardDistributor(rewardDistributor).handleSupplyChange(borrower, collateralAsset, collateralBalances[borrower][collateralAsset], totalCollateral[collateralAsset] - collateralToSeize);
+        }
         borrowShares[borrower] -= shares; totalBorrowShares -= shares; totalBorrows -= actualDebt; collateralBalances[borrower][collateralAsset] -= collateralToSeize; totalCollateral[collateralAsset] -= collateralToSeize;
         usdc.safeTransferFrom(msg.sender, address(this), actualDebt); IERC20(collateralAsset).safeTransfer(msg.sender, collateralToSeize); emit Liquidated(msg.sender, borrower, collateralAsset, actualDebt, collateralToSeize);
     }
 
     function healthFactor(address user) public view returns (uint256) { uint256 debtUSD = _currentDebtUSD(user); if (debtUSD == 0) return type(uint256).max; return Math.mulDiv(_weightedCollateralUSD(user), WAD, debtUSD); }
+    function healthFactorAfterCollateralChange(address user, address asset, uint256 removedAmount) public view returns (uint256) {
+        uint256 debtUSD = _currentDebtUSD(user); if (debtUSD == 0) return type(uint256).max;
+        uint256 currentWeighted = _weightedCollateralUSD(user); uint256 removedValue = Math.mulDiv(_toUSDValue(asset, removedAmount), collateralConfigs[asset].liquidationThreshold, WAD);
+        if (removedValue >= currentWeighted) return 0; return Math.mulDiv(currentWeighted - removedValue, WAD, debtUSD);
+    }
     function availableLiquidity() external view returns (uint256) { return _cash(); }
     function supplyBalance(address user) external view returns (uint256) { return _fromSupplyShares(supplyShares[user]); }
     function debtOf(address user) external view returns (uint256) { return _currentDebt(user); }
