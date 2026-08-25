@@ -19,7 +19,7 @@ function Dashboard() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { reserveData, supplyBalance, usdcBalance, approveUSDC, depositLiquidity, withdrawLiquidity, isPending, isConfirming, error: lendingError } = useLendingPool();
-  const { veBalance, cntryBalance: centBalance, approveCNTRY, createLock, refetchAll: refetchGov, isPending: govPending, isConfirming: govConfirming, error: govError } = useVeGovernance();
+  const { veBalance, centBalance, approveCENT, createLock, refetchAll: refetchGov, isPending: govPending, isConfirming: govConfirming, error: govError } = useVeGovernance();
 
   const liquidity = Number(reserveData?.totalLiquidity || 0);
   const borrows = Number(reserveData?.totalBorrows || 0);
@@ -80,7 +80,7 @@ function Dashboard() {
             <div className="panel-head"><div><span className="section-kicker">GOVERNANCE</span><h2>veCENT</h2></div><span className="live-badge"><i /> {isConnected ? 'Wallet linked' : 'Connect wallet'}</span></div>
             <p className="governance-copy">Lock CENT to receive a non-transferable veCENT position with voting power that decays over the lock period.</p>
             <div className="governance-stats"><MetricSmall label="CENT balance" value={fmt(centBalance)} /><MetricSmall label="veNFTs" value={fmt(veBalance, 0)} /></div>
-            <div className="action-card"><h3>Lock CENT</h3><p>Approve CENT first, then create your lock.</p><div className="action-buttons"><button disabled={govPending || govConfirming || !isConnected} onClick={() => approveCNTRY('10')}>Approve 10 CENT</button><button disabled={govPending || govConfirming || !isConnected} onClick={async () => { await createLock('10', 52); refetchGov(); }}>Lock 10 CENT / 1 year</button></div></div>
+            <div className="action-card"><h3>Lock CENT</h3><p>Approve CENT first, then create your lock.</p><div className="action-buttons"><button disabled={govPending || govConfirming || !isConnected} onClick={() => approveCENT('10')}>Approve 10 CENT</button><button disabled={govPending || govConfirming || !isConnected} onClick={async () => { await createLock('10', 52); refetchGov(); }}>Lock 10 CENT / 1 year</button></div></div>
             <div className="notice">Voting is intentionally limited to the veCENT escrow. Gauge controls are not part of the current MVP contract set.</div>
           </div>
         </section>
