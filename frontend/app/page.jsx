@@ -23,9 +23,7 @@ function Dashboard() {
 
   const liquidity = Number(reserveData?.totalLiquidity || 0);
   const borrows = Number(reserveData?.totalBorrows || 0);
-  const utilization = liquidity > 0 ? (borrows / liquidity) * 100 : 0;
-  const supplyApr = Number(reserveData?.supplyRate || 0) * 100;
-  const borrowApr = Number(reserveData?.borrowRate || 0) * 100;
+  const utilization = Number(reserveData?.utilization || 0);
 
   return (
     <div className="app-shell">
@@ -55,7 +53,7 @@ function Dashboard() {
           <Metric label="USDC Liquidity" value={`${fmt(liquidity)} USDC`} detail="Reserve liquidity" />
           <Metric label="USDC Borrowed" value={`${fmt(borrows)} USDC`} detail="Outstanding debt" />
           <Metric label="Utilization" value={`${fmt(utilization)}%`} detail="Borrowed / available" />
-          <Metric label="Supply APR" value={`${fmt(supplyApr, 4)}%`} detail="Current rate" />
+          <Metric label="Health factor" value={isConnected ? 'Read in wallet' : 'Connect wallet'} detail="Per-account risk" />
         </section>
 
         <section className="content-grid" id="markets">
@@ -63,7 +61,7 @@ function Dashboard() {
             <div className="panel-head"><div><span className="section-kicker">MARKET</span><h2>USDC Lending Pool</h2></div><span className="live-badge"><i /> {reserveData ? 'Live onchain' : 'Configure contracts'}</span></div>
             <div className="market-row market-head"><span>Asset</span><span>Liquidity</span><span>Borrowed</span><span>Utilization</span><span /></div>
             <div className="market-row"><div className="asset"><span className="token usdc">$</span><div><strong>USDC</strong><small>Arc-native gas asset</small></div></div><strong>{fmt(liquidity)}</strong><strong>{fmt(borrows)}</strong><strong>{fmt(utilization)}%</strong><a className="row-btn" href="#actions">Manage</a></div>
-            <div className="rate-strip"><span>Supply</span><strong>{fmt(supplyApr, 4)}% APR</strong><span>•</span><span>Borrow</span><strong>{fmt(borrowApr, 4)}% APR</strong></div>
+            <div className="rate-strip"><span>Risk model</span><strong>Oracle-protected</strong><span>•</span><span>Variable interest</span><strong>Onchain</strong></div>
 
             <div id="actions" className="market-actions">
               <div className="action-card">
@@ -72,7 +70,7 @@ function Dashboard() {
                 <div className="action-row"><span>{fmt(supplyBalance)} supplied</span></div>
                 <div className="action-buttons"><button disabled={isPending || isConfirming || !isConnected} onClick={() => approveUSDC('10')}>Approve</button><button disabled={isPending || isConfirming || !isConnected} onClick={async () => { await depositLiquidity('10'); }}>Supply 10</button><button disabled={isPending || isConfirming || !isConnected} onClick={async () => { await withdrawLiquidity(); }}>Withdraw all</button></div>
               </div>
-              <div className="action-card muted-card"><h3>Borrow / repay</h3><p>Borrowing is enabled once you have sufficient collateral and the reserve has available liquidity.</p><div className="notice">Use the contract explorer while the borrow panel is being finalized.</div></div>
+              <div className="action-card muted-card"><h3>Borrow / repay</h3><p>The pool supports borrowing and repayment once collateral and available liquidity satisfy the configured risk rules.</p><div className="notice">Borrow controls will be exposed in the next UI pass with live health-factor feedback.</div></div>
             </div>
           </div>
 
@@ -81,7 +79,7 @@ function Dashboard() {
             <p className="governance-copy">Lock CENT to receive a non-transferable veCENT position with voting power that decays over the lock period.</p>
             <div className="governance-stats"><MetricSmall label="CENT balance" value={fmt(centBalance)} /><MetricSmall label="veNFTs" value={fmt(veBalance, 0)} /></div>
             <div className="action-card"><h3>Lock CENT</h3><p>Approve CENT first, then create your lock.</p><div className="action-buttons"><button disabled={govPending || govConfirming || !isConnected} onClick={() => approveCENT('10')}>Approve 10 CENT</button><button disabled={govPending || govConfirming || !isConnected} onClick={async () => { await createLock('10', 52); refetchGov(); }}>Lock 10 CENT / 1 year</button></div></div>
-            <div className="notice">Voting is intentionally limited to the veCENT escrow. Gauge controls are not part of the current MVP contract set.</div>
+            <div className="notice">One lock per wallet in the current MVP. veCENT is intentionally non-transferable.</div>
           </div>
         </section>
 
