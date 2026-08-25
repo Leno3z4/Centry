@@ -5,9 +5,9 @@ import { useAccount, useChainId } from 'wagmi';
 import { Providers } from '../components/Providers';
 import { WalletConnect } from '../components/WalletConnect';
 import { useLendingPool } from '../hooks/useLendingPool';
-import { useSelfRepayingVault } from '../hooks/useSelfRepayingVault';
+import { useVeGovernance } from '../hooks/useVeGovernance';
 
-const nav = ['Overview', 'Lending', 'Vaults', 'Leverage', 'veGovernance', 'Rewards', 'Analytics', 'Docs'];
+const nav = ['Overview', 'Lending', 'Governance', 'Rewards', 'Analytics', 'Docs'];
 
 function fmt(value, digits = 2) {
   const n = Number(value || 0);
@@ -18,27 +18,24 @@ function fmt(value, digits = 2) {
 function Dashboard() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
-  const { reserveData } = useLendingPool();
-  const { vaultData } = useSelfRepayingVault();
+  const { reserveData, supplyBalance, usdcBalance, approveUSDC, depositLiquidity, withdrawLiquidity, isPending, isConfirming, error: lendingError } = useLendingPool();
+  const { veBalance, cntryBalance: centBalance, approveCNTRY, createLock, refetchAll: refetchGov, isPending: govPending, isConfirming: govConfirming, error: govError } = useVeGovernance();
 
   const liquidity = Number(reserveData?.totalLiquidity || 0);
   const borrows = Number(reserveData?.totalBorrows || 0);
   const utilization = liquidity > 0 ? (borrows / liquidity) * 100 : 0;
-  const supplyApr = Number(reserveData?.currentLiquidityRate || 0) * 100;
-  const vaultDebt = Number(vaultData?.debt || 0);
-  const vaultCollateral = Number(vaultData?.collateral || 0);
-  const vaultMaxBorrow = Number(vaultData?.maxBorrow || 0);
-  const debtRatio = vaultMaxBorrow > 0 ? Math.min(100, (vaultDebt / vaultMaxBorrow) * 100) : 0;
+  const supplyApr = Number(reserveData?.supplyRate || 0) * 100;
+  const borrowApr = Number(reserveData?.borrowRate || 0) * 100;
 
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark">C</span><span>Centry</span></div>
         <nav className="side-nav">
-          {nav.map((label, i) => <button className={`nav-item ${i === 0 ? 'active' : ''}`} key={label}><span className="nav-icon">{['⌂', '◈', '◫', '⤢', '♢', '✦', '⌁', '□'][i]}</span>{label}</button>)}
+          {nav.map((label, i) => <button className={`nav-item ${i === 0 ? 'active' : ''}`} key={label}><span className="nav-icon">{['⌂', '◈', '♢', '✦', '⌁', '□'][i]}</span>{label}</button>)}
         </nav>
         <div className="network-card"><span className="network-dot" /><div><small>Network</small><strong>Arc Testnet</strong></div><span className="chain-id">{chainId || 5042002}</span></div>
-        <div className="sidebar-footer">Centry Protocol<br /><span>Native USDC infrastructure on Arc</span></div>
+        <div className="sidebar-footer">Centry Protocol<br /><span>Arc-native USDC lending</span></div>
       </aside>
 
       <main className="main-content">
@@ -46,38 +43,53 @@ function Dashboard() {
 
         <section className="hero">
           <div className="hero-copy">
-            <div className="eyebrow"><span /> Native USDC infrastructure</div>
-            <h1>The money market<br /><em>built for Arc.</em></h1>
-            <p>Supply USDC, borrow against yield-bearing collateral, and build self-repaying strategies entirely onchain.</p>
-            <div className="hero-actions"><a href="#markets" className="primary-btn">Explore markets <span>→</span></a><a href="#vault" className="secondary-btn">View vault</a></div>
+            <div className="eyebrow"><span /> Arc-native lending market</div>
+            <h1>USDC liquidity<br /><em>built for Arc.</em></h1>
+            <p>Supply USDC, borrow against your collateral, and manage risk directly through Centry's onchain money market.</p>
+            <div className="hero-actions"><a href="#markets" className="primary-btn">Explore market <span>→</span></a><a href="#governance" className="secondary-btn">View governance</a></div>
           </div>
           <div className="orbital-art" aria-hidden="true"><div className="orbit orbit-a" /><div className="orbit orbit-b" /><div className="orbit orbit-c" /><div className="usdc-orb"><span>$</span></div></div>
         </section>
 
         <section className="stats-grid">
-          <Metric label="USDC Liquidity" value={`${fmt(liquidity)} USDC`} detail="Onchain reserve" />
-          <Metric label="USDC Borrowed" value={`${fmt(borrows)} USDC`} detail="Onchain reserve" />
-          <Metric label="Utilization" value={`${fmt(utilization)}%`} detail="Borrowed / liquidity" />
-          <Metric label="Supply APR" value={`${fmt(supplyApr, 4)}%`} detail="Current pool rate" />
+          <Metric label="USDC Liquidity" value={`${fmt(liquidity)} USDC`} detail="Reserve liquidity" />
+          <Metric label="USDC Borrowed" value={`${fmt(borrows)} USDC`} detail="Outstanding debt" />
+          <Metric label="Utilization" value={`${fmt(utilization)}%`} detail="Borrowed / available" />
+          <Metric label="Supply APR" value={`${fmt(supplyApr, 4)}%`} detail="Current rate" />
         </section>
 
         <section className="content-grid" id="markets">
           <div className="panel market-panel">
-            <div className="panel-head"><div><span className="section-kicker">MARKET</span><h2>USDC Lending Pool</h2></div><span className="live-badge"><i /> Live onchain</span></div>
+            <div className="panel-head"><div><span className="section-kicker">MARKET</span><h2>USDC Lending Pool</h2></div><span className="live-badge"><i /> {reserveData ? 'Live onchain' : 'Configure contracts'}</span></div>
             <div className="market-row market-head"><span>Asset</span><span>Liquidity</span><span>Borrowed</span><span>Utilization</span><span /></div>
-            <div className="market-row"><div className="asset"><span className="token usdc">$</span><div><strong>USDC</strong><small>Native USDC</small></div></div><strong>{fmt(liquidity)}</strong><strong>{fmt(borrows)}</strong><strong>{fmt(utilization)}%</strong><button className="row-btn">Supply / Borrow</button></div>
-            <div className="rate-strip"><span>Current liquidity rate</span><strong>{fmt(supplyApr, 4)}% APR</strong><span>•</span><span>Read directly from LendingPool</span></div>
+            <div className="market-row"><div className="asset"><span className="token usdc">$</span><div><strong>USDC</strong><small>Arc-native gas asset</small></div></div><strong>{fmt(liquidity)}</strong><strong>{fmt(borrows)}</strong><strong>{fmt(utilization)}%</strong><a className="row-btn" href="#actions">Manage</a></div>
+            <div className="rate-strip"><span>Supply</span><strong>{fmt(supplyApr, 4)}% APR</strong><span>•</span><span>Borrow</span><strong>{fmt(borrowApr, 4)}% APR</strong></div>
+
+            <div id="actions" className="market-actions">
+              <div className="action-card">
+                <h3>Supply USDC</h3>
+                <p>Wallet balance: {fmt(usdcBalance)} USDC</p>
+                <div className="action-row"><span>{fmt(supplyBalance)} supplied</span></div>
+                <div className="action-buttons"><button disabled={isPending || isConfirming || !isConnected} onClick={() => approveUSDC('10')}>Approve</button><button disabled={isPending || isConfirming || !isConnected} onClick={async () => { await depositLiquidity('10'); }}>Supply 10</button><button disabled={isPending || isConfirming || !isConnected} onClick={async () => { await withdrawLiquidity(); }}>Withdraw all</button></div>
+              </div>
+              <div className="action-card muted-card"><h3>Borrow / repay</h3><p>Borrowing is enabled once you have sufficient collateral and the reserve has available liquidity.</p><div className="notice">Use the contract explorer while the borrow panel is being finalized.</div></div>
+            </div>
           </div>
 
-          <div className="panel vault-panel" id="vault">
-            <div className="panel-head"><div><span className="section-kicker">VAULT</span><h2>Self-Repaying</h2></div><span className="live-badge"><i /> {isConnected ? 'Wallet linked' : 'Connect wallet'}</span></div>
-            {isConnected ? <><div className="vault-title"><span className="token usyc">U</span><div><strong>USYC Vault</strong><small>Yield-bearing collateral</small></div></div><div className="vault-metrics"><MetricSmall label="Collateral" value={`${fmt(vaultCollateral)} USYC`} /><MetricSmall label="Debt" value={`${fmt(vaultDebt)} USDC`} /><MetricSmall label="Max borrow" value={`${fmt(vaultMaxBorrow)} USDC`} /></div><div className="debt-bar"><div><span>Debt / max borrow</span><strong>{fmt(debtRatio)}%</strong></div><div className="bar"><span style={{ width: `${debtRatio}%` }} /></div></div></> : <div className="empty-state">Connect your wallet to read your vault position from Arc.</div>}
+          <div className="panel governance-panel" id="governance">
+            <div className="panel-head"><div><span className="section-kicker">GOVERNANCE</span><h2>veCENT</h2></div><span className="live-badge"><i /> {isConnected ? 'Wallet linked' : 'Connect wallet'}</span></div>
+            <p className="governance-copy">Lock CENT to receive a non-transferable veCENT position with voting power that decays over the lock period.</p>
+            <div className="governance-stats"><MetricSmall label="CENT balance" value={fmt(centBalance)} /><MetricSmall label="veNFTs" value={fmt(veBalance, 0)} /></div>
+            <div className="action-card"><h3>Lock CENT</h3><p>Approve CENT first, then create your lock.</p><div className="action-buttons"><button disabled={govPending || govConfirming || !isConnected} onClick={() => approveCNTRY('10')}>Approve 10 CENT</button><button disabled={govPending || govConfirming || !isConnected} onClick={async () => { await createLock('10', 52); refetchGov(); }}>Lock 10 CENT / 1 year</button></div></div>
+            <div className="notice">Voting is intentionally limited to the veCENT escrow. Gauge controls are not part of the current MVP contract set.</div>
           </div>
         </section>
 
+        {(lendingError || govError) && <div className="panel error-panel"><strong>Transaction/read error</strong><p>{(lendingError || govError)?.shortMessage || (lendingError || govError)?.message || 'Check that the contract addresses and Arc network are configured.'}</p></div>}
+
         <section className="bottom-grid">
-          <div className="panel feature-panel"><span className="section-kicker">PROTOCOL</span><h2>Yield that pays the debt.</h2><p>Centry routes yield from locked collateral toward outstanding USDC debt, reducing the balance over time instead of relying on manual repayment.</p><a href="#vault">Open a vault →</a></div>
-          <div className="panel feature-panel purple"><span className="section-kicker">GOVERNANCE</span><h2>veCENTRY</h2><p>Lock protocol tokens into tradable veNFT positions and direct gauge emissions. Protocol revenue is denominated in native USDC.</p><a href="#governance">View governance →</a></div>
+          <div className="panel feature-panel"><span className="section-kicker">PROTOCOL</span><h2>Simple core. Strong controls.</h2><p>Centry keeps the lending engine modular: isolated reserves, configurable risk limits, oracle validation, interest accrual, and liquidation protection.</p><a href="#markets">Open the market →</a></div>
+          <div className="panel feature-panel purple"><span className="section-kicker">TREASURY</span><h2>Revenue in USDC.</h2><p>Protocol revenue can be distributed through the dedicated revenue distributor while administration remains separated from the lending pool.</p><a href="#governance">View governance →</a></div>
         </section>
 
         <footer className="page-footer"><span>Centry Protocol</span><span>Built on Arc · Testnet</span><span>{address ? `${address.slice(0, 6)}…${address.slice(-4)}` : 'Wallet not connected'}</span></footer>
