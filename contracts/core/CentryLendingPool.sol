@@ -1,0 +1,169 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/access/Ownable2Step.sol";
+import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/access/Ownable.sol";
+import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/utils/ReentrancyGuard.sol";
+import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/utils/Pausable.sol";
+import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/token/ERC20/IERC20.sol";
+import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/token/ERC20/utils/SafeERC20.sol";
+import "../interfaces/ICentryOracle.sol";
+import "./CentryInterestRateStrategy.sol";
+
+/// @notice Arc-focused multi-reserve lending MVP.
+/// @dev Uses ERC-20 USDC accounting. Fee-on-transfer/rebasing reserves are rejected.
+contract CentryLendingPool is Ownable2Step, ReentrancyGuard, Pausable {
+    using SafeERC20 for IERC20;
+    uint256 public constant RAY = 1e27;
+    uint256 public constant WAD = 1e18;
+    uint256 public constant BPS = 10_000;
+    uint256 public constant YEAR = 365 days;
+    uint256 public constant MAX_CLOSE_FACTOR_BPS = 5_000;
+    uint256 public constant MAX_RESERVES = 16;
+
+    error ReserveExists(); error ReserveMissing(); error ReserveLimit(); error InvalidRiskParams(); error InvalidAddress(); error AmountZero(); error CapExceeded(); error InsufficientLiquidity(); error InsufficientBalance(); error BorrowNotAllowed(); error HealthFactorTooLow(); error HealthFactorHealthy(); error InvalidOraclePrice(); error UnsupportedDecimals(); error UnsupportedTokenBehavior(); error NothingToSweep();
+
+    struct Reserve {
+        bool active; uint8 decimals; uint16 ltvBps; uint16 liquidationThresholdBps; uint16 liquidationBonusBps; uint16 reserveFactorBps;
+        uint128 supplyCap; uint128 borrowCap; uint256 liquidityIndex; uint256 borrowIndex; uint256 totalScaledSupply; uint256 totalScaledBorrow; uint40 lastAccrual;
+    }
+    mapping(address => Reserve) public reserves;
+    address[] public reserveList;
+    mapping(address => mapping(address => uint256)) public scaledSupply;
+    mapping(address => mapping(address => uint256)) public scaledBorrow;
+    ICentryOracle public immutable oracle;
+    CentryInterestRateStrategy public immutable rateStrategy;
+    address public immutable treasury;
+
+    event ReserveAdded(address indexed asset, uint8 decimals, uint16 ltvBps, uint16 liquidationThresholdBps, uint16 liquidationBonusBps, uint16 reserveFactorBps, uint128 supplyCap, uint128 borrowCap);
+    event ReserveRiskUpdated(address indexed asset, uint16 ltvBps, uint16 liquidationThresholdBps, uint16 liquidationBonusBps, uint128 supplyCap, uint128 borrowCap);
+    event Supplied(address indexed asset, address indexed user, uint256 amount, uint256 scaledAmount);
+    event Withdrawn(address indexed asset, address indexed user, uint256 amount, uint256 scaledAmount);
+    event Borrowed(address indexed asset, address indexed user, uint256 amount, uint256 scaledAmount);
+    event Repaid(address indexed asset, address indexed payer, address indexed borrower, uint256 amount, uint256 scaledAmount);
+    event Liquidated(address indexed collateralAsset, address indexed debtAsset, address indexed borrower, address liquidator, uint256 repaidDebt, uint256 seizedCollateral);
+    event InterestAccrued(address indexed asset, uint256 liquidityIndex, uint256 borrowIndex, uint256 borrowRatePerYear, uint256 utilization);
+    event ProtocolFeesSwept(address indexed asset, address indexed treasury, uint256 amount);
+
+    constructor(address initialOwner, address oracle_, address rateStrategy_, address treasury_) Ownable(initialOwner) {
+        if (oracle_ == address(0) || rateStrategy_ == address(0) || treasury_ == address(0)) revert InvalidAddress();
+        oracle = ICentryOracle(oracle_); rateStrategy = CentryInterestRateStrategy(rateStrategy_); treasury = treasury_;
+    }
+
+    function addReserve(address asset, uint16 ltvBps, uint16 liquidationThresholdBps, uint16 liquidationBonusBps, uint16 reserveFactorBps, uint128 supplyCap, uint128 borrowCap) external onlyOwner {
+        if (asset == address(0)) revert InvalidAddress();
+        Reserve storage old = reserves[asset]; if (old.active) revert ReserveExists();
+        if (reserveList.length >= MAX_RESERVES) revert ReserveLimit();
+        if (ltvBps == 0 || ltvBps > liquidationThresholdBps || liquidationThresholdBps >= BPS) revert InvalidRiskParams();
+        if (liquidationBonusBps < BPS || liquidationBonusBps > 12_000 || reserveFactorBps > 3_000) revert InvalidRiskParams();
+        if (supplyCap == 0 || borrowCap == 0 || borrowCap > supplyCap) revert InvalidRiskParams();
+        uint8 decimals = IERC20Metadata(asset).decimals(); if (decimals == 0 || decimals > 18) revert UnsupportedDecimals();
+        reserves[asset] = Reserve(true, decimals, ltvBps, liquidationThresholdBps, liquidationBonusBps, reserveFactorBps, supplyCap, borrowCap, RAY, RAY, 0, 0, uint40(block.timestamp));
+        reserveList.push(asset);
+        emit ReserveAdded(asset, decimals, ltvBps, liquidationThresholdBps, liquidationBonusBps, reserveFactorBps, supplyCap, borrowCap);
+    }
+
+    function setReserveRiskParams(address asset, uint16 ltvBps, uint16 liquidationThresholdBps, uint16 liquidationBonusBps, uint128 supplyCap, uint128 borrowCap) external onlyOwner {
+        Reserve storage r = _reserve(asset);
+        if (ltvBps == 0 || ltvBps > liquidationThresholdBps || liquidationThresholdBps >= BPS) revert InvalidRiskParams();
+        if (liquidationBonusBps < BPS || liquidationBonusBps > 12_000 || supplyCap == 0 || borrowCap == 0 || borrowCap > supplyCap) revert InvalidRiskParams();
+        r.ltvBps = ltvBps; r.liquidationThresholdBps = liquidationThresholdBps; r.liquidationBonusBps = liquidationBonusBps; r.supplyCap = supplyCap; r.borrowCap = borrowCap;
+        emit ReserveRiskUpdated(asset, ltvBps, liquidationThresholdBps, liquidationBonusBps, supplyCap, borrowCap);
+    }
+    function pause() external onlyOwner { _pause(); }
+    function unpause() external onlyOwner { _unpause(); }
+
+    function supply(address asset, uint256 amount) external nonReentrant whenNotPaused {
+        if (amount == 0) revert AmountZero(); Reserve storage r = _accrue(asset);
+        if (_currentSupply(r) + amount > r.supplyCap) revert CapExceeded();
+        uint256 scaled = _toScaledUp(amount, r.liquidityIndex); if (scaled == 0) revert AmountZero();
+        IERC20 t = IERC20(asset); uint256 beforeBal = t.balanceOf(address(this)); t.safeTransferFrom(msg.sender, address(this), amount);
+        if (t.balanceOf(address(this)) - beforeBal != amount) revert UnsupportedTokenBehavior();
+        scaledSupply[msg.sender][asset] += scaled; r.totalScaledSupply += scaled; emit Supplied(asset, msg.sender, amount, scaled);
+    }
+
+    function withdraw(address asset, uint256 amount) external nonReentrant returns (uint256 withdrawn) {
+        Reserve storage r = _accrue(asset); uint256 userCurrent = _currentUserSupply(r, msg.sender, asset);
+        withdrawn = amount == type(uint256).max ? userCurrent : amount; if (withdrawn == 0 || withdrawn > userCurrent) revert InsufficientBalance();
+        uint256 scaled = _toScaledUp(withdrawn, r.liquidityIndex); if (scaled > scaledSupply[msg.sender][asset]) scaled = scaledSupply[msg.sender][asset];
+        if (withdrawn > IERC20(asset).balanceOf(address(this))) revert InsufficientLiquidity();
+        scaledSupply[msg.sender][asset] -= scaled; r.totalScaledSupply -= scaled; IERC20(asset).safeTransfer(msg.sender, withdrawn);
+        if (_userDebtValue(msg.sender) != 0 && healthFactor(msg.sender) < WAD) revert BorrowNotAllowed();
+        emit Withdrawn(asset, msg.sender, withdrawn, scaled);
+    }
+
+    function borrow(address asset, uint256 amount) external nonReentrant whenNotPaused {
+        if (amount == 0) revert AmountZero(); Reserve storage r = _accrue(asset);
+        if (_currentBorrows(r) + amount > r.borrowCap) revert CapExceeded(); if (IERC20(asset).balanceOf(address(this)) < amount) revert InsufficientLiquidity();
+        uint256 scaled = _toScaledUp(amount, r.borrowIndex); scaledBorrow[msg.sender][asset] += scaled; r.totalScaledBorrow += scaled;
+        if (healthFactor(msg.sender) < WAD) { scaledBorrow[msg.sender][asset] -= scaled; r.totalScaledBorrow -= scaled; revert BorrowNotAllowed(); }
+        IERC20(asset).safeTransfer(msg.sender, amount); emit Borrowed(asset, msg.sender, amount, scaled);
+    }
+
+    function repay(address asset, uint256 amount) external nonReentrant returns (uint256 repaid) { return _repay(asset, msg.sender, msg.sender, amount); }
+    function repayFor(address asset, address borrower, uint256 amount) external nonReentrant returns (uint256 repaid) { if (borrower == address(0)) revert InvalidAddress(); return _repay(asset, msg.sender, borrower, amount); }
+
+    function _repay(address asset, address payer, address borrower, uint256 amount) internal returns (uint256 repaid) {
+        if (amount == 0) revert AmountZero(); Reserve storage r = _accrue(asset); uint256 debt = _currentUserBorrow(r, borrower, asset);
+        repaid = amount == type(uint256).max ? debt : amount; if (repaid == 0 || repaid > debt) revert InsufficientBalance();
+        uint256 scaled = _toScaledUp(repaid, r.borrowIndex); if (scaled > scaledBorrow[borrower][asset]) scaled = scaledBorrow[borrower][asset];
+        IERC20 t = IERC20(asset); uint256 beforeBal = t.balanceOf(address(this)); t.safeTransferFrom(payer, address(this), repaid); if (t.balanceOf(address(this)) - beforeBal != repaid) revert UnsupportedTokenBehavior();
+        scaledBorrow[borrower][asset] -= scaled; r.totalScaledBorrow -= scaled; emit Repaid(asset, payer, borrower, repaid, scaled);
+    }
+
+    function liquidate(address collateralAsset, address debtAsset, address borrower, uint256 debtAmount) external nonReentrant {
+        if (borrower == address(0) || debtAmount == 0) revert AmountZero(); if (healthFactor(borrower) >= WAD) revert HealthFactorHealthy();
+        Reserve storage c = _accrue(collateralAsset); Reserve storage d = _accrue(debtAsset);
+        uint256 borrowerDebt = _currentUserBorrow(d, borrower, debtAsset); uint256 maxRepay = (borrowerDebt * MAX_CLOSE_FACTOR_BPS) / BPS; uint256 requested = debtAmount < maxRepay ? debtAmount : maxRepay; if (requested == 0) revert InsufficientBalance();
+        uint256 debtValue = _assetValue(debtAsset, requested); uint256 collateralPrice = _assetPrice(collateralAsset);
+        uint256 seize = (debtValue * uint256(c.liquidationBonusBps) * (10 ** c.decimals)) / (collateralPrice * BPS);
+        uint256 userCollateral = _currentUserSupply(c, borrower, collateralAsset);
+        if (seize > userCollateral) { seize = userCollateral; uint256 maxDebtValue = (seize * collateralPrice) / (10 ** c.decimals); maxDebtValue = (maxDebtValue * BPS) / c.liquidationBonusBps; requested = _amountFromValue(debtAsset, maxDebtValue); if (requested > maxRepay) requested = maxRepay; }
+        if (requested == 0 || seize == 0) revert InsufficientBalance();
+        uint256 debtScaled = _toScaledUp(requested, d.borrowIndex); if (debtScaled > scaledBorrow[borrower][debtAsset]) debtScaled = scaledBorrow[borrower][debtAsset];
+        uint256 collateralScaled = _toScaledUp(seize, c.liquidityIndex); if (collateralScaled > scaledSupply[borrower][collateralAsset]) collateralScaled = scaledSupply[borrower][collateralAsset];
+        IERC20 debtToken = IERC20(debtAsset); uint256 beforeBal = debtToken.balanceOf(address(this)); debtToken.safeTransferFrom(msg.sender, address(this), requested); if (debtToken.balanceOf(address(this)) - beforeBal != requested) revert UnsupportedTokenBehavior();
+        scaledBorrow[borrower][debtAsset] -= debtScaled; d.totalScaledBorrow -= debtScaled; scaledSupply[borrower][collateralAsset] -= collateralScaled; c.totalScaledSupply -= collateralScaled;
+        IERC20(collateralAsset).safeTransfer(msg.sender, seize); emit Liquidated(collateralAsset, debtAsset, borrower, msg.sender, requested, seize);
+    }
+
+    function sweepProtocolFees(address asset, uint256 amount) external onlyOwner nonReentrant {
+        Reserve storage r = _accrue(asset); uint256 assets = IERC20(asset).balanceOf(address(this)) + _currentBorrows(r); uint256 liabilities = _currentSupply(r); if (assets <= liabilities) revert NothingToSweep();
+        uint256 available = assets - liabilities; uint256 requested = amount == type(uint256).max ? available : amount; if (requested == 0 || requested > available) revert NothingToSweep();
+        IERC20(asset).safeTransfer(treasury, requested); emit ProtocolFeesSwept(asset, treasury, requested);
+    }
+
+    function currentSupply(address asset) external view returns (uint256) { Reserve memory r = _reserveMem(asset); return (r.totalScaledSupply * _projectLiquidityIndex(r, asset)) / RAY; }
+    function currentBorrow(address asset) external view returns (uint256) { Reserve memory r = _reserveMem(asset); return (r.totalScaledBorrow * _projectBorrowIndex(r, asset)) / RAY; }
+    function supplyBalance(address user, address asset) external view returns (uint256) { Reserve memory r = _reserveMem(asset); return (scaledSupply[user][asset] * _projectLiquidityIndex(r, asset)) / RAY; }
+    function borrowBalance(address user, address asset) external view returns (uint256) { Reserve memory r = _reserveMem(asset); return (scaledBorrow[user][asset] * _projectBorrowIndex(r, asset)) / RAY; }
+    function utilization(address asset) public view returns (uint256) { Reserve memory r = _reserveMem(asset); uint256 b = (r.totalScaledBorrow * _projectBorrowIndex(r, asset)) / RAY; uint256 cash = IERC20(asset).balanceOf(address(this)); return b == 0 || cash + b == 0 ? 0 : (b * WAD) / (cash + b); }
+
+    function healthFactor(address user) public view returns (uint256) {
+        uint256 debtValue = _userDebtValue(user); if (debtValue == 0) return type(uint256).max; uint256 adjustedCollateral;
+        for (uint256 i = 0; i < reserveList.length; ++i) { address asset = reserveList[i]; Reserve memory r = reserves[asset]; uint256 collateral = (scaledSupply[user][asset] * _projectLiquidityIndex(r, asset)) / RAY; if (collateral != 0) adjustedCollateral += (_assetValue(asset, collateral) * r.liquidationThresholdBps) / BPS; }
+        return (adjustedCollateral * WAD) / debtValue;
+    }
+
+    function _reserve(address asset) internal view returns (Reserve storage r) { r = reserves[asset]; if (!r.active) revert ReserveMissing(); }
+    function _reserveMem(address asset) internal view returns (Reserve memory r) { r = reserves[asset]; if (!r.active) revert ReserveMissing(); }
+    function _accrue(address asset) internal returns (Reserve storage r) {
+        r = _reserve(asset); uint256 elapsed = block.timestamp - r.lastAccrual; if (elapsed == 0) return r;
+        uint256 borrowAmount = _currentBorrows(r); uint256 cash = IERC20(asset).balanceOf(address(this)); uint256 util = borrowAmount == 0 || cash + borrowAmount == 0 ? 0 : (borrowAmount * WAD) / (cash + borrowAmount);
+        uint256 borrowRate = rateStrategy.getBorrowRate(util); uint256 newBorrowIndex = (r.borrowIndex * (WAD + (borrowRate * elapsed) / YEAR)) / WAD;
+        uint256 supplyRate = (borrowRate * util * (BPS - r.reserveFactorBps)) / (WAD * BPS); uint256 newLiquidityIndex = (r.liquidityIndex * (WAD + (supplyRate * elapsed) / YEAR)) / WAD;
+        r.borrowIndex = newBorrowIndex; r.liquidityIndex = newLiquidityIndex; r.lastAccrual = uint40(block.timestamp); emit InterestAccrued(asset, newLiquidityIndex, newBorrowIndex, borrowRate, util);
+    }
+    function _currentSupply(Reserve memory r) internal pure returns (uint256) { return (r.totalScaledSupply * r.liquidityIndex) / RAY; }
+    function _currentBorrows(Reserve memory r) internal pure returns (uint256) { return (r.totalScaledBorrow * r.borrowIndex) / RAY; }
+    function _currentUserSupply(Reserve storage r, address user, address asset) internal view returns (uint256) { return (scaledSupply[user][asset] * r.liquidityIndex) / RAY; }
+    function _currentUserBorrow(Reserve storage r, address user, address asset) internal view returns (uint256) { return (scaledBorrow[user][asset] * r.borrowIndex) / RAY; }
+    function _projectLiquidityIndex(Reserve memory r, address asset) internal view returns (uint256) { if (r.lastAccrual == block.timestamp) return r.liquidityIndex; uint256 elapsed = block.timestamp - r.lastAccrual; uint256 b = _currentBorrows(r); uint256 cash = IERC20(asset).balanceOf(address(this)); uint256 u = b == 0 || cash + b == 0 ? 0 : (b * WAD) / (cash + b); uint256 br = rateStrategy.getBorrowRate(u); uint256 sr = (br * u * (BPS - r.reserveFactorBps)) / (WAD * BPS); return (r.liquidityIndex * (WAD + (sr * elapsed) / YEAR)) / WAD; }
+    function _projectBorrowIndex(Reserve memory r, address asset) internal view returns (uint256) { if (r.lastAccrual == block.timestamp) return r.borrowIndex; uint256 elapsed = block.timestamp - r.lastAccrual; uint256 b = _currentBorrows(r); uint256 cash = IERC20(asset).balanceOf(address(this)); uint256 u = b == 0 || cash + b == 0 ? 0 : (b * WAD) / (cash + b); uint256 br = rateStrategy.getBorrowRate(u); return (r.borrowIndex * (WAD + (br * elapsed) / YEAR)) / WAD; }
+    function _userDebtValue(address user) internal view returns (uint256 total) { for (uint256 i = 0; i < reserveList.length; ++i) { address asset = reserveList[i]; Reserve memory r = reserves[asset]; uint256 debt = (scaledBorrow[user][asset] * _projectBorrowIndex(r, asset)) / RAY; if (debt != 0) total += _assetValue(asset, debt); } }
+    function _assetPrice(address asset) internal view returns (uint256 p) { (p,) = oracle.getPrice(asset); if (p == 0) revert InvalidOraclePrice(); }
+    function _assetValue(address asset, uint256 amount) internal view returns (uint256) { return (amount * _assetPrice(asset)) / (10 ** reserves[asset].decimals); }
+    function _amountFromValue(address asset, uint256 valueE18) internal view returns (uint256) { return (valueE18 * (10 ** reserves[asset].decimals)) / _assetPrice(asset); }
+    function _toScaledUp(uint256 amount, uint256 index) internal pure returns (uint256) { return ((amount * RAY) + index - 1) / index; }
+}
