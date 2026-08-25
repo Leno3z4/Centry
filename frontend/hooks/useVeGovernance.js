@@ -1,113 +1,37 @@
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { parseUnits, formatUnits } from 'viem';
-import { CONTRACT_ADDRESSES } from '../constants/contracts';
-import { VE_NFT_ABI, GAUGE_CONTROLLER_ABI, ERC20_ABI } from '../constants/abis';
+import { CONTRACT_ADDRESSES, hasAddress } from '../constants/contracts';
+import { VE_CENTRY_ABI, ERC20_ABI } from '../constants/abis';
 
 export function useVeGovernance() {
   const { address } = useAccount();
-
-  // Number of veNFTs owned
-  const { data: veBalance, refetch: refetchVeBalance } = useReadContract({
-    address: CONTRACT_ADDRESSES.veNFT,
-    abi: VE_NFT_ABI,
-    functionName: 'balanceOf',
-    args: address ? [address] : undefined,
-    query: { enabled: !!address },
-  });
-
-  // Next token ID (to find what IDs exist: 1 to nextTokenId-1)
-  const { data: nextTokenId } = useReadContract({
-    address: CONTRACT_ADDRESSES.veNFT,
-    abi: VE_NFT_ABI,
-    functionName: 'nextTokenId',
-  });
-
-  // FIX: approve CNTRY (not USYC) to VeNFT
-  // FIX: CNTRY has 18 decimals (not 6)
-  const { data: cntryAllowance, refetch: refetchCntryAllowance } = useReadContract({
-    address: CONTRACT_ADDRESSES.cntryToken,
-    abi: ERC20_ABI,
-    functionName: 'allowance',
-    args: address ? [address, CONTRACT_ADDRESSES.veNFT] : undefined,
-    query: { enabled: !!address },
-  });
-
-  const { data: cntryBalance, refetch: refetchCntryBalance } = useReadContract({
-    address: CONTRACT_ADDRESSES.cntryToken,
-    abi: ERC20_ABI,
-    functionName: 'balanceOf',
-    args: address ? [address] : undefined,
-    query: { enabled: !!address },
-  });
-
+  const ready = hasAddress('veCentry') && hasAddress('centryToken');
+  const { data: nftBalance, refetch: refetchBalance } = useReadContract({ address: CONTRACT_ADDRESSES.veCentry, abi: VE_CENTRY_ABI, functionName: 'balanceOf', args: address && ready ? [address] : undefined, query: { enabled: !!address && ready } });
+  const { data: tokenId } = useReadContract({ address: CONTRACT_ADDRESSES.veCentry, abi: VE_CENTRY_ABI, functionName: 'tokenIdOf', args: address && ready ? [address] : undefined, query: { enabled: !!address && ready } });
+  const { data: power } = useReadContract({ address: CONTRACT_ADDRESSES.veCentry, abi: VE_CENTRY_ABI, functionName: 'votingPowerOf', args: address && ready ? [address] : undefined, query: { enabled: !!address && ready } });
+  const { data: locked } = useReadContract({ address: CONTRACT_ADDRESSES.veCentry, abi: VE_CENTRY_ABI, functionName: 'lockedAmount', args: address && ready ? [address] : undefined, query: { enabled: !!address && ready } });
+  const { data: lockEnd } = useReadContract({ address: CONTRACT_ADDRESSES.veCentry, abi: VE_CENTRY_ABI, functionName: 'lockEnd', args: address && ready ? [address] : undefined, query: { enabled: !!address && ready } });
+  const { data: balance } = useReadContract({ address: CONTRACT_ADDRESSES.centryToken, abi: ERC20_ABI, functionName: 'balanceOf', args: address && hasAddress('centryToken') ? [address] : undefined, query: { enabled: !!address && hasAddress('centryToken') } });
+  const { data: allowance, refetch: refetchAllowance } = useReadContract({ address: CONTRACT_ADDRESSES.centryToken, abi: ERC20_ABI, functionName: 'allowance', args: address && ready ? [address, CONTRACT_ADDRESSES.veCentry] : undefined, query: { enabled: !!address && ready } });
   const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash });
 
-  // FIX: approve CNTRY (18 decimals) to VeNFT
-  const approveCNTRY = async (amount) => {
-    const parsedAmount = parseUnits(amount.toString(), 18);
-    return await writeContractAsync({
-      address: CONTRACT_ADDRESSES.cntryToken,
-      abi: ERC20_ABI,
-      functionName: 'approve',
-      args: [CONTRACT_ADDRESSES.veNFT, parsedAmount],
-    });
-  };
-
-  // FIX: createLock takes DURATION in seconds, not absolute timestamp
-  // FIX: CNTRY has 18 decimals
-  const createLock = async (amount, durationWeeks) => {
-    const parsedAmount = parseUnits(amount.toString(), 18);
-    const durationSeconds = BigInt(durationWeeks) * 7n * 24n * 3600n;
-    return await writeContractAsync({
-      address: CONTRACT_ADDRESSES.veNFT,
-      abi: VE_NFT_ABI,
-      functionName: 'createLock',
-      args: [parsedAmount, durationSeconds],
-    });
-  };
-
-  // FIX: vote(tokenId, gauge, weight) — was voteForGaugeWeight(gauge, weight)
-  // FIX: tokenId is required — which NFT is voting
-  const voteForGauge = async (tokenId, gaugeAddress, weight) => {
-    return await writeContractAsync({
-      address: CONTRACT_ADDRESSES.gaugeController,
-      abi: GAUGE_CONTROLLER_ABI,
-      functionName: 'vote',
-      args: [BigInt(tokenId), gaugeAddress, BigInt(weight)],
-    });
-  };
-
-  // Get position details for a specific tokenId
-  const getTokenPosition = (tokenId) => useReadContract({
-    address: CONTRACT_ADDRESSES.veNFT,
-    abi: VE_NFT_ABI,
-    functionName: 'getPosition',
-    args: [BigInt(tokenId)],
-    query: { enabled: tokenId > 0 },
-  });
-
-  const refetchAll = () => {
-    refetchVeBalance();
-    refetchCntryAllowance();
-    refetchCntryBalance();
-  };
+  const approveCENT = (amount) => writeContractAsync({ address: CONTRACT_ADDRESSES.centryToken, abi: ERC20_ABI, functionName: 'approve', args: [CONTRACT_ADDRESSES.veCentry, parseUnits(amount.toString(), 18)] });
+  const createLock = (amount, weeks) => writeContractAsync({ address: CONTRACT_ADDRESSES.veCentry, abi: VE_CENTRY_ABI, functionName: 'createLock', args: [parseUnits(amount.toString(), 18), BigInt(weeks) * 7n * 24n * 60n * 60n] });
+  const increaseLock = (amount) => writeContractAsync({ address: CONTRACT_ADDRESSES.veCentry, abi: VE_CENTRY_ABI, functionName: 'increaseAmount', args: [parseUnits(amount.toString(), 18)] });
+  const extendLock = (weeks) => writeContractAsync({ address: CONTRACT_ADDRESSES.veCentry, abi: VE_CENTRY_ABI, functionName: 'extendLock', args: [BigInt(weeks) * 7n * 24n * 60n * 60n] });
 
   return {
-    veBalance:        veBalance ? Number(veBalance) : 0,
-    nextTokenId:      nextTokenId ? Number(nextTokenId) : 1,
-    cntryBalance:     cntryBalance ? formatUnits(cntryBalance, 18) : '0',
-    cntryAllowance:   cntryAllowance ? formatUnits(cntryAllowance, 18) : '0',
-    rawCntryAllowance: cntryAllowance || 0n,
-    approveCNTRY,
-    createLock,
-    voteForGauge,
-    getTokenPosition,
-    refetchAll,
-    isPending,
-    isConfirming,
-    isConfirmed,
-    txHash: hash,
-    error,
+    configured: ready,
+    veBalance: Number(nftBalance ?? 0n),
+    tokenId: Number(tokenId ?? 0n),
+    votingPower: formatUnits(power ?? 0n, 18),
+    lockedAmount: formatUnits(locked ?? 0n, 18),
+    lockEnd: lockEnd ? new Date(Number(lockEnd) * 1000) : null,
+    centryBalance: formatUnits(balance ?? 0n, 18),
+    centryAllowance: formatUnits(allowance ?? 0n, 18),
+    approveCENT, createLock, increaseLock, extendLock,
+    refetchAll: () => Promise.all([refetchBalance(), refetchAllowance()]),
+    isPending, isConfirming, isConfirmed, txHash: hash, error,
   };
 }
