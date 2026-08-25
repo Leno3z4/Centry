@@ -1,115 +1,122 @@
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { parseUnits, formatUnits, maxUint256 } from 'viem';
-import { CONTRACT_ADDRESSES } from '../constants/contracts';
+import { parseUnits, formatUnits } from 'viem';
+import { CONTRACT_ADDRESSES, hasAddress } from '../constants/contracts';
 import { LENDING_POOL_ABI, ERC20_ABI } from '../constants/abis';
+
+const enabled = (name) => hasAddress(name);
+const zero = 0n;
 
 export function useLendingPool() {
   const { address } = useAccount();
+  const poolReady = enabled('lendingPool') && enabled('USDC');
 
-  // FIX: getReserveData() takes NO args (old hook passed USDC address)
-  const { data: reserveData, refetch: refetchReserve } = useReadContract({
+  const { data: totalSupplyRaw, refetch: refetchSupply } = useReadContract({
     address: CONTRACT_ADDRESSES.lendingPool,
     abi: LENDING_POOL_ABI,
-    functionName: 'getReserveData',
+    functionName: 'currentSupply',
+    args: poolReady ? [CONTRACT_ADDRESSES.USDC] : undefined,
+    query: { enabled: poolReady },
   });
-
-  // User's current USDC supply value (not shares — human-readable)
-  const { data: supplyBalanceRaw, refetch: refetchSupplyBalance } = useReadContract({
+  const { data: totalBorrowRaw, refetch: refetchBorrow } = useReadContract({
+    address: CONTRACT_ADDRESSES.lendingPool,
+    abi: LENDING_POOL_ABI,
+    functionName: 'currentBorrow',
+    args: poolReady ? [CONTRACT_ADDRESSES.USDC] : undefined,
+    query: { enabled: poolReady },
+  });
+  const { data: utilizationRaw, refetch: refetchUtilization } = useReadContract({
+    address: CONTRACT_ADDRESSES.lendingPool,
+    abi: LENDING_POOL_ABI,
+    functionName: 'utilization',
+    args: poolReady ? [CONTRACT_ADDRESSES.USDC] : undefined,
+    query: { enabled: poolReady },
+  });
+  const { data: supplyBalanceRaw, refetch: refetchUserSupply } = useReadContract({
     address: CONTRACT_ADDRESSES.lendingPool,
     abi: LENDING_POOL_ABI,
     functionName: 'supplyBalance',
-    args: address ? [address] : undefined,
-    query: { enabled: !!address },
+    args: address && poolReady ? [address, CONTRACT_ADDRESSES.USDC] : undefined,
+    query: { enabled: !!address && poolReady },
   });
-
-  // User's raw supply shares (needed for partial withdraw)
-  const { data: supplySharesRaw, refetch: refetchShares } = useReadContract({
+  const { data: borrowBalanceRaw, refetch: refetchUserBorrow } = useReadContract({
     address: CONTRACT_ADDRESSES.lendingPool,
     abi: LENDING_POOL_ABI,
-    functionName: 'supplyShares',
-    args: address ? [address] : undefined,
-    query: { enabled: !!address },
+    functionName: 'borrowBalance',
+    args: address && poolReady ? [address, CONTRACT_ADDRESSES.USDC] : undefined,
+    query: { enabled: !!address && poolReady },
   });
-
-  const { data: usdcBalance, refetch: refetchUsdcBalance } = useReadContract({
+  const { data: healthFactorRaw, refetch: refetchHealth } = useReadContract({
+    address: CONTRACT_ADDRESSES.lendingPool,
+    abi: LENDING_POOL_ABI,
+    functionName: 'healthFactor',
+    args: address && enabled('lendingPool') ? [address] : undefined,
+    query: { enabled: !!address && enabled('lendingPool') },
+  });
+  const { data: usdcBalanceRaw, refetch: refetchBalance } = useReadContract({
     address: CONTRACT_ADDRESSES.USDC,
     abi: ERC20_ABI,
     functionName: 'balanceOf',
-    args: address ? [address] : undefined,
-    query: { enabled: !!address },
+    args: address && enabled('USDC') ? [address] : undefined,
+    query: { enabled: !!address && enabled('USDC') },
   });
-
-  const { data: usdcAllowance, refetch: refetchAllowance } = useReadContract({
+  const { data: allowanceRaw, refetch: refetchAllowance } = useReadContract({
     address: CONTRACT_ADDRESSES.USDC,
     abi: ERC20_ABI,
     functionName: 'allowance',
-    args: address ? [address, CONTRACT_ADDRESSES.lendingPool] : undefined,
-    query: { enabled: !!address },
+    args: address && poolReady ? [address, CONTRACT_ADDRESSES.lendingPool] : undefined,
+    query: { enabled: !!address && poolReady },
   });
 
   const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash });
 
-  const approveUSDC = async (amount) => {
-    const parsedAmount = parseUnits(amount.toString(), 6);
-    return await writeContractAsync({
-      address: CONTRACT_ADDRESSES.USDC,
-      abi: ERC20_ABI,
-      functionName: 'approve',
-      args: [CONTRACT_ADDRESSES.lendingPool, parsedAmount],
-    });
-  };
+  const approveUSDC = (amount) => writeContractAsync({
+    address: CONTRACT_ADDRESSES.USDC,
+    abi: ERC20_ABI,
+    functionName: 'approve',
+    args: [CONTRACT_ADDRESSES.lendingPool, parseUnits(amount.toString(), 6)],
+  });
+  const supply = (amount) => writeContractAsync({
+    address: CONTRACT_ADDRESSES.lendingPool,
+    abi: LENDING_POOL_ABI,
+    functionName: 'supply',
+    args: [CONTRACT_ADDRESSES.USDC, parseUnits(amount.toString(), 6)],
+  });
+  const withdraw = (amount) => writeContractAsync({
+    address: CONTRACT_ADDRESSES.lendingPool,
+    abi: LENDING_POOL_ABI,
+    functionName: 'withdraw',
+    args: [CONTRACT_ADDRESSES.USDC, parseUnits(amount.toString(), 6)],
+  });
+  const borrow = (amount) => writeContractAsync({
+    address: CONTRACT_ADDRESSES.lendingPool,
+    abi: LENDING_POOL_ABI,
+    functionName: 'borrow',
+    args: [CONTRACT_ADDRESSES.USDC, parseUnits(amount.toString(), 6)],
+  });
+  const repay = (amount) => writeContractAsync({
+    address: CONTRACT_ADDRESSES.lendingPool,
+    abi: LENDING_POOL_ABI,
+    functionName: 'repay',
+    args: [CONTRACT_ADDRESSES.USDC, parseUnits(amount.toString(), 6)],
+  });
 
-  // FIX: supply(uint256 amount) — 1 arg, no asset address, no referral code
-  const depositLiquidity = async (amount) => {
-    const parsedAmount = parseUnits(amount.toString(), 6);
-    return await writeContractAsync({
-      address: CONTRACT_ADDRESSES.lendingPool,
-      abi: LENDING_POOL_ABI,
-      functionName: 'supply',
-      args: [parsedAmount],
-    });
-  };
+  const refetchAll = () => Promise.all([
+    refetchSupply(), refetchBorrow(), refetchUtilization(), refetchUserSupply(),
+    refetchUserBorrow(), refetchHealth(), refetchBalance(), refetchAllowance(),
+  ]);
 
-  // FIX: withdraw(uint256 shares) — pass maxUint256 to withdraw everything
-  const withdrawLiquidity = async () => {
-    return await writeContractAsync({
-      address: CONTRACT_ADDRESSES.lendingPool,
-      abi: LENDING_POOL_ABI,
-      functionName: 'withdraw',
-      args: [maxUint256],
-    });
-  };
-
-  const refetchAll = () => {
-    refetchReserve();
-    refetchUsdcBalance();
-    refetchAllowance();
-    refetchSupplyBalance();
-    refetchShares();
-  };
-
+  const format6 = (v) => formatUnits(v ?? zero, 6);
   return {
-    // FIX: 4 return values, all WAD (1e18) not RAY (1e27)
-    // [0] totalLiquidity, [1] totalBorrows, [2] borrowRatePerYear, [3] supplyRatePerYear
-    reserveData: reserveData ? {
-      totalLiquidity:  formatUnits(reserveData[0] || 0n, 6),
-      totalBorrows:    formatUnits(reserveData[1] || 0n, 6),
-      borrowRate:      formatUnits(reserveData[2] || 0n, 18),  // WAD annual rate
-      supplyRate:      formatUnits(reserveData[3] || 0n, 18),  // WAD annual rate
-    } : null,
-    supplyBalance:    supplyBalanceRaw ? formatUnits(supplyBalanceRaw, 6) : '0',
-    usdcBalance:      usdcBalance ? formatUnits(usdcBalance, 6) : '0',
-    usdcAllowance:    usdcAllowance ? formatUnits(usdcAllowance, 6) : '0',
-    rawUsdcAllowance: usdcAllowance || 0n,
-    approveUSDC,
-    depositLiquidity,
-    withdrawLiquidity,
-    refetchAll,
-    isPending,
-    isConfirming,
-    isConfirmed,
-    txHash: hash,
-    error,
+    configured: poolReady,
+    reserveData: { totalLiquidity: format6(totalSupplyRaw), totalBorrows: format6(totalBorrowRaw), utilization: `${Number(formatUnits(utilizationRaw ?? zero, 18)) * 100}` },
+    supplyBalance: format6(supplyBalanceRaw),
+    borrowBalance: format6(borrowBalanceRaw),
+    healthFactor: healthFactorRaw === undefined ? '—' : healthFactorRaw === 0n || healthFactorRaw === undefined ? '∞' : Number(formatUnits(healthFactorRaw, 18)).toFixed(2),
+    usdcBalance: format6(usdcBalanceRaw),
+    usdcAllowance: format6(allowanceRaw),
+    rawUsdcAllowance: allowanceRaw ?? zero,
+    approveUSDC, supply, withdraw, borrow, repay, refetchAll,
+    isPending, isConfirming, isConfirmed, txHash: hash, error,
   };
 }
