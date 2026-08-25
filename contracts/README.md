@@ -2,37 +2,32 @@
 
 Centry is a Neverland-inspired lending/tokenomics stack designed for Arc's stablecoin-native environment.
 
-## Scope
+## Current architecture
 
-- Multi-reserve ERC-20 lending pool
-- Supply, borrow, repay, collateral withdrawal and liquidation
-- Chainlink-style oracle adapter with stale-price protection
-- Immutable two-slope interest-rate model
-- Fixed-supply CENT governance/incentive token with Permit
-- Non-transferable veCENT voting escrow with linear decay
-- Pull-based revenue distribution using timelocked Merkle roots
-- Test-only mock ERC-20 and mock oracle
+- `CentryLendingPool`: multi-reserve supply/borrow/repay/withdraw/liquidation core
+- `CentryInterestRateStrategy`: immutable two-slope utilization model
+- `CentryOracle`: Chainlink-style adapter with positive-price and stale-price checks
+- `CentryToken`: fixed-supply CENT token
+- `CentryVotingEscrow`: non-transferable veCENT position with linear voting-power decay
+- `CentryRevenueDistributor`: pull-based Merkle revenue distribution with a two-day root delay
+- `mocks/`: test-only ERC-20 and oracle contracts
 
-## Arc note
+The first deployment deliberately does **not** include the old self-repaying vault or gauge-controller contracts. The frontend is fail-closed around that decision instead of calling stale addresses.
 
-Arc exposes USDC as native gas and also exposes an ERC-20 USDC interface. The lending pool intentionally uses the ERC-20 interface for accounting and transfers. Native USDC is still used to pay transaction fees.
+## Arc integration
+
+The lending pool uses the ERC-20 interface for USDC accounting and transfers. Arc's native USDC is still the gas asset. Do not hard-code an old testnet address into application code; supply the actual deployed/testnet asset address through configuration.
 
 ## Security posture
 
-This repository is an engineering MVP, **not an audited production protocol**. Security measures include:
+This is an engineering MVP, **not an audited production protocol**. It uses OpenZeppelin Ownable2Step, Pausable, ReentrancyGuard and SafeERC20, explicit reserve/borrow caps, oracle freshness checks, exact token-balance deltas, bounded liquidation parameters, no upgradeable proxy, and a fixed-supply governance token.
 
-- OpenZeppelin Ownable2Step, Pausable, ReentrancyGuard and SafeERC20
-- Checks-effects-interactions around token transfers
-- Exact-balance checks to reject fee-on-transfer/rebasing behavior
-- Caps on supply, borrowing, reserves and liquidation parameters
-- Oracle positive-price and staleness checks
-- No upgradeable proxy layer
-- Fixed-supply protocol token with no mint function after construction
-- Non-transferable vote-escrow NFT to reduce accounting attack surface
-- Two-day delay before revenue Merkle roots can become active
+No smart contract can honestly be guaranteed unhackable. Before mainnet, perform independent audit/review, fuzzing and invariant testing, economic/risk review, oracle validation, and controlled testnet rollout.
 
-Before mainnet use, the protocol still requires independent review/audit, fuzz/property testing, invariant testing, deployment through a multisig/timelock, oracle validation, economic/risk review and controlled limits.
+## Frontend configuration
 
-## Production deployment principle
+The frontend reads addresses from `frontend/.env.local` using the variables in `frontend/.env.example`. Never commit private keys or secrets. Contract addresses are public; wallet private keys are not.
 
-The `CentryLendingPool` owner should be a multisig or timelock, **not a personal hot wallet**. Never put private keys, seed phrases, API secrets or wallet JSON files in this repository.
+## Production ownership
+
+Use a multisig or timelock as the lending-pool and distributor owner. Do not use a personal hot wallet for privileged protocol administration.
