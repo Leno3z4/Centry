@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   useAccount,
+  useChainId,
   usePublicClient,
   useReadContract,
   useWriteContract,
@@ -8,20 +9,23 @@ import {
 import { formatUnits, maxUint256, parseUnits } from 'viem';
 import { CONTRACT_ADDRESSES, hasAddress } from '../constants/contracts';
 import { ERC20_ABI, LENDING_POOL_ABI } from '../constants/abis';
+import { arcTestnet } from '../config/wagmi';
 
 const ZERO = 0n;
 const MAX_UINT256 = maxUint256;
 
 export function useLendingPool() {
   const { address } = useAccount();
+  const chainId = useChainId();
   const publicClient = usePublicClient();
   const [transactionPending, setTransactionPending] = useState(false);
   const [transactionHash, setTransactionHash] = useState(null);
   const [transactionError, setTransactionError] = useState(null);
 
   const configured = hasAddress('lendingPool') && hasAddress('USDC');
-  const commonQuery = { enabled: configured };
-  const walletQuery = { enabled: configured && Boolean(address) };
+  const correctNetwork = !address || chainId === arcTestnet.id;
+  const commonQuery = { enabled: configured && correctNetwork };
+  const walletQuery = { enabled: configured && Boolean(address) && correctNetwork };
 
   const { data: totalSupplyRaw, refetch: refetchSupply } = useReadContract({
     address: CONTRACT_ADDRESSES.lendingPool,
@@ -77,7 +81,7 @@ export function useLendingPool() {
     abi: ERC20_ABI,
     functionName: 'balanceOf',
     args: [address],
-    query: { enabled: Boolean(address) && hasAddress('USDC') },
+    query: { enabled: Boolean(address) && hasAddress('USDC') && correctNetwork },
   });
   const { data: allowanceRaw, refetch: refetchAllowance } = useReadContract({
     address: CONTRACT_ADDRESSES.USDC,
@@ -90,6 +94,14 @@ export function useLendingPool() {
   const { writeContractAsync, isPending, error } = useWriteContract();
 
   const sendAndWait = async (request) => {
+    if (!address) {
+      throw new Error('Connect your wallet before submitting a transaction.');
+    }
+
+    if (chainId !== arcTestnet.id) {
+      throw new Error('Switch your wallet to Arc Testnet before submitting a transaction.');
+    }
+
     if (!publicClient) {
       throw new Error('Wallet client is not ready. Please reconnect your wallet.');
     }
@@ -162,6 +174,8 @@ export function useLendingPool() {
   });
 
   const refetchAll = async () => {
+    if (!correctNetwork) return;
+
     await Promise.all([
       refetchSupply(),
       refetchBorrow(),
@@ -186,6 +200,7 @@ export function useLendingPool() {
 
   return {
     configured,
+    correctNetwork,
     reserveData: {
       totalLiquidity: format6(totalSupplyRaw),
       totalBorrows: format6(totalBorrowRaw),
