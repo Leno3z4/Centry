@@ -1,7 +1,7 @@
 import {
   useAccount,
+  usePublicClient,
   useReadContract,
-  useWaitForTransactionReceipt,
   useWriteContract,
 } from 'wagmi';
 import {
@@ -23,6 +23,8 @@ const MAX_UINT256 = maxUint256;
 
 export function useLendingPool() {
   const { address } = useAccount();
+  const publicClient = usePublicClient();
+
   const configured =
     hasAddress('lendingPool') &&
     hasAddress('USDC');
@@ -35,10 +37,7 @@ export function useLendingPool() {
     enabled: configured && Boolean(address),
   };
 
-  const {
-    data: totalSupplyRaw,
-    refetch: refetchSupply,
-  } = useReadContract({
+  const { data: totalSupplyRaw, refetch: refetchSupply } = useReadContract({
     address: CONTRACT_ADDRESSES.lendingPool,
     abi: LENDING_POOL_ABI,
     functionName: 'currentSupply',
@@ -46,10 +45,7 @@ export function useLendingPool() {
     query: commonQuery,
   });
 
-  const {
-    data: totalBorrowRaw,
-    refetch: refetchBorrow,
-  } = useReadContract({
+  const { data: totalBorrowRaw, refetch: refetchBorrow } = useReadContract({
     address: CONTRACT_ADDRESSES.lendingPool,
     abi: LENDING_POOL_ABI,
     functionName: 'currentBorrow',
@@ -57,10 +53,7 @@ export function useLendingPool() {
     query: commonQuery,
   });
 
-  const {
-    data: utilizationRaw,
-    refetch: refetchUtilization,
-  } = useReadContract({
+  const { data: utilizationRaw, refetch: refetchUtilization } = useReadContract({
     address: CONTRACT_ADDRESSES.lendingPool,
     abi: LENDING_POOL_ABI,
     functionName: 'utilization',
@@ -68,38 +61,23 @@ export function useLendingPool() {
     query: commonQuery,
   });
 
-  const {
-    data: supplyBalanceRaw,
-    refetch: refetchUserSupply,
-  } = useReadContract({
+  const { data: supplyBalanceRaw, refetch: refetchUserSupply } = useReadContract({
     address: CONTRACT_ADDRESSES.lendingPool,
     abi: LENDING_POOL_ABI,
     functionName: 'supplyBalance',
-    args: [
-      address,
-      CONTRACT_ADDRESSES.USDC,
-    ],
+    args: [address, CONTRACT_ADDRESSES.USDC],
     query: walletQuery,
   });
 
-  const {
-    data: borrowBalanceRaw,
-    refetch: refetchUserBorrow,
-  } = useReadContract({
+  const { data: borrowBalanceRaw, refetch: refetchUserBorrow } = useReadContract({
     address: CONTRACT_ADDRESSES.lendingPool,
     abi: LENDING_POOL_ABI,
     functionName: 'borrowBalance',
-    args: [
-      address,
-      CONTRACT_ADDRESSES.USDC,
-    ],
+    args: [address, CONTRACT_ADDRESSES.USDC],
     query: walletQuery,
   });
 
-  const {
-    data: healthFactorRaw,
-    refetch: refetchHealth,
-  } = useReadContract({
+  const { data: healthFactorRaw, refetch: refetchHealth } = useReadContract({
     address: CONTRACT_ADDRESSES.lendingPool,
     abi: LENDING_POOL_ABI,
     functionName: 'healthFactor',
@@ -107,10 +85,7 @@ export function useLendingPool() {
     query: walletQuery,
   });
 
-  const {
-    data: borrowPowerRaw,
-    refetch: refetchBorrowPower,
-  } = useReadContract({
+  const { data: borrowPowerRaw, refetch: refetchBorrowPower } = useReadContract({
     address: CONTRACT_ADDRESSES.lendingPool,
     abi: LENDING_POOL_ABI,
     functionName: 'borrowPower',
@@ -118,10 +93,7 @@ export function useLendingPool() {
     query: walletQuery,
   });
 
-  const {
-    data: usdcBalanceRaw,
-    refetch: refetchBalance,
-  } = useReadContract({
+  const { data: usdcBalanceRaw, refetch: refetchBalance } = useReadContract({
     address: CONTRACT_ADDRESSES.USDC,
     abi: ERC20_ABI,
     functionName: 'balanceOf',
@@ -131,97 +103,88 @@ export function useLendingPool() {
     },
   });
 
-  const {
-    data: allowanceRaw,
-    refetch: refetchAllowance,
-  } = useReadContract({
+  const { data: allowanceRaw, refetch: refetchAllowance } = useReadContract({
     address: CONTRACT_ADDRESSES.USDC,
     abi: ERC20_ABI,
     functionName: 'allowance',
-    args: [
-      address,
-      CONTRACT_ADDRESSES.lendingPool,
-    ],
+    args: [address, CONTRACT_ADDRESSES.lendingPool],
     query: walletQuery,
   });
 
   const {
     writeContractAsync,
-    data: hash,
     isPending,
     error,
   } = useWriteContract();
 
-  const {
-    isLoading: isConfirming,
-    isSuccess: isConfirmed,
-  } = useWaitForTransactionReceipt({
-    hash,
+  const sendAndWait = async (request) => {
+    if (!publicClient) {
+      throw new Error('Wallet client is not ready. Please reconnect your wallet.');
+    }
+
+    const hash = await writeContractAsync(request);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
+    if (receipt.status !== 'success') {
+      throw new Error('The transaction was reverted onchain.');
+    }
+
+    return hash;
+  };
+
+  const approveUSDC = (amount) => sendAndWait({
+    address: CONTRACT_ADDRESSES.USDC,
+    abi: ERC20_ABI,
+    functionName: 'approve',
+    args: [
+      CONTRACT_ADDRESSES.lendingPool,
+      parseUnits(String(amount), 6),
+    ],
   });
 
-  const approveUSDC = (amount) => {
-    return writeContractAsync({
-      address: CONTRACT_ADDRESSES.USDC,
-      abi: ERC20_ABI,
-      functionName: 'approve',
-      args: [
-        CONTRACT_ADDRESSES.lendingPool,
-        parseUnits(String(amount), 6),
-      ],
-    });
-  };
+  const supply = (amount) => sendAndWait({
+    address: CONTRACT_ADDRESSES.lendingPool,
+    abi: LENDING_POOL_ABI,
+    functionName: 'supply',
+    args: [
+      CONTRACT_ADDRESSES.USDC,
+      parseUnits(String(amount), 6),
+    ],
+  });
 
-  const supply = (amount) => {
-    return writeContractAsync({
-      address: CONTRACT_ADDRESSES.lendingPool,
-      abi: LENDING_POOL_ABI,
-      functionName: 'supply',
-      args: [
-        CONTRACT_ADDRESSES.USDC,
-        parseUnits(String(amount), 6),
-      ],
-    });
-  };
+  const withdraw = (amount = 'max') => sendAndWait({
+    address: CONTRACT_ADDRESSES.lendingPool,
+    abi: LENDING_POOL_ABI,
+    functionName: 'withdraw',
+    args: [
+      CONTRACT_ADDRESSES.USDC,
+      amount === 'max'
+        ? MAX_UINT256
+        : parseUnits(String(amount), 6),
+    ],
+  });
 
-  const withdraw = (amount = 'max') => {
-    return writeContractAsync({
-      address: CONTRACT_ADDRESSES.lendingPool,
-      abi: LENDING_POOL_ABI,
-      functionName: 'withdraw',
-      args: [
-        CONTRACT_ADDRESSES.USDC,
-        amount === 'max'
-          ? MAX_UINT256
-          : parseUnits(String(amount), 6),
-      ],
-    });
-  };
+  const borrow = (amount) => sendAndWait({
+    address: CONTRACT_ADDRESSES.lendingPool,
+    abi: LENDING_POOL_ABI,
+    functionName: 'borrow',
+    args: [
+      CONTRACT_ADDRESSES.USDC,
+      parseUnits(String(amount), 6),
+    ],
+  });
 
-  const borrow = (amount) => {
-    return writeContractAsync({
-      address: CONTRACT_ADDRESSES.lendingPool,
-      abi: LENDING_POOL_ABI,
-      functionName: 'borrow',
-      args: [
-        CONTRACT_ADDRESSES.USDC,
-        parseUnits(String(amount), 6),
-      ],
-    });
-  };
-
-  const repay = (amount = 'max') => {
-    return writeContractAsync({
-      address: CONTRACT_ADDRESSES.lendingPool,
-      abi: LENDING_POOL_ABI,
-      functionName: 'repay',
-      args: [
-        CONTRACT_ADDRESSES.USDC,
-        amount === 'max'
-          ? MAX_UINT256
-          : parseUnits(String(amount), 6),
-      ],
-    });
-  };
+  const repay = (amount = 'max') => sendAndWait({
+    address: CONTRACT_ADDRESSES.lendingPool,
+    abi: LENDING_POOL_ABI,
+    functionName: 'repay',
+    args: [
+      CONTRACT_ADDRESSES.USDC,
+      amount === 'max'
+        ? MAX_UINT256
+        : parseUnits(String(amount), 6),
+    ],
+  });
 
   const refetchAll = async () => {
     await Promise.all([
@@ -237,13 +200,8 @@ export function useLendingPool() {
     ]);
   };
 
-  const format6 = (value) => {
-    return formatUnits(value ?? ZERO, 6);
-  };
-
-  const format18 = (value) => {
-    return formatUnits(value ?? ZERO, 18);
-  };
+  const format6 = (value) => formatUnits(value ?? ZERO, 6);
+  const format18 = (value) => formatUnits(value ?? ZERO, 18);
 
   const healthFactor =
     healthFactorRaw === undefined
@@ -257,8 +215,7 @@ export function useLendingPool() {
     reserveData: {
       totalLiquidity: format6(totalSupplyRaw),
       totalBorrows: format6(totalBorrowRaw),
-      utilization:
-        Number(format18(utilizationRaw)) * 100,
+      utilization: Number(format18(utilizationRaw)) * 100,
     },
     supplyBalance: format6(supplyBalanceRaw),
     borrowBalance: format6(borrowBalanceRaw),
@@ -274,9 +231,9 @@ export function useLendingPool() {
     repay,
     refetchAll,
     isPending,
-    isConfirming,
-    isConfirmed,
-    txHash: hash,
+    isConfirming: false,
+    isConfirmed: false,
+    txHash: null,
     error,
   };
 }
