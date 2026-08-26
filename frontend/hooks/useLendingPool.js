@@ -115,12 +115,17 @@ export function useLendingPool() {
     }
   };
 
-  const approveUSDC = (amount) => sendAndWait({
-    address: CONTRACT_ADDRESSES.USDC,
-    abi: ERC20_ABI,
-    functionName: 'approve',
-    args: [CONTRACT_ADDRESSES.lendingPool, parseUnits(String(amount), 6)],
-  });
+  const approveUSDC = async (amount) => {
+    const hash = await sendAndWait({
+      address: CONTRACT_ADDRESSES.USDC,
+      abi: ERC20_ABI,
+      functionName: 'approve',
+      args: [CONTRACT_ADDRESSES.lendingPool, parseUnits(String(amount), 6)],
+    });
+
+    await refetchAllowance();
+    return hash;
+  };
 
   const supply = (amount) => sendAndWait({
     address: CONTRACT_ADDRESSES.lendingPool,
