@@ -1,0 +1,282 @@
+/* Mobile-first corrections for the Centry application. */
+
+.mobile-menu-button {
+    display: none;
+}
+
+.wallet-connect-wrap {
+    position: relative;
+}
+
+.wallet-error {
+    max-width: 320px;
+    margin: 7px 0 0;
+    color: #d9a6a6;
+    font-size: 10px;
+    line-height: 1.45;
+}
+
+.wallet-button-icon {
+    font-size: 15px;
+    line-height: 1;
+}
+
+.wallet-status-dot {
+    width: 6px;
+    height: 6px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 9px var(--green);
+}
+
+@media (max-width: 1100px) {
+    .main-content {
+        padding-right: 24px;
+        padding-left: 24px;
+    }
+
+    .content-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 760px) {
+    body {
+        overflow-x: hidden;
+    }
+
+    .sidebar {
+        position: fixed;
+        inset: 0 auto 0 0;
+        width: min(82vw, 300px);
+        padding: 20px 14px;
+        transform: translateX(-105%);
+        transition: transform 180ms ease;
+        box-shadow: 20px 0 60px #00000055;
+    }
+
+    .sidebar.mobile-open {
+        transform: translateX(0);
+    }
+
+    .mobile-menu-button {
+        display: inline-flex;
+        width: 42px;
+        height: 42px;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        background: #0d0916;
+        color: var(--text);
+        font-size: 19px;
+    }
+
+    .main-content {
+        width: 100%;
+        min-height: 100vh;
+        margin-left: 0;
+        padding: 0 14px 24px;
+    }
+
+    .topbar {
+        position: sticky;
+        z-index: 15;
+        top: 0;
+        height: 68px;
+        gap: 10px;
+        background: rgba(8, 6, 17, 0.9);
+        backdrop-filter: blur(18px);
+    }
+
+    .topbar > * {
+        min-width: 0;
+    }
+
+    .breadcrumb {
+        overflow: hidden;
+        flex: 1;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .wallet-area {
+        display: flex;
+        max-width: 58%;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .wallet-balance {
+        display: none;
+    }
+
+    .connect-wallet,
+    .wallet-address,
+    .network-warning {
+        min-height: 40px;
+        padding: 9px 12px;
+        border-radius: 10px;
+        font-size: 11px;
+    }
+
+    .wallet-address {
+        max-width: 125px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .network-warning {
+        position: absolute;
+        top: 73px;
+        right: 14px;
+        z-index: 25;
+        max-width: calc(100vw - 28px);
+    }
+
+    .hero {
+        min-height: auto;
+        padding: 44px 4px 34px;
+    }
+
+    .hero h1 {
+        margin: 16px 0 18px;
+        font-size: clamp(42px, 14vw, 62px);
+        letter-spacing: -3px;
+    }
+
+    .hero-copy p {
+        font-size: 13px;
+    }
+
+    .hero-actions {
+        display: grid;
+        grid-template-columns: 1fr;
+    }
+
+    .hero-actions .primary-btn,
+    .hero-actions .secondary-btn {
+        width: 100%;
+    }
+
+    .page-stack {
+        gap: 14px;
+        padding-top: 20px;
+    }
+
+    .section-header {
+        display: grid;
+        gap: 12px;
+    }
+
+    .section-header h1 {
+        margin-top: 5px;
+        font-size: clamp(34px, 11vw, 48px);
+        letter-spacing: -2px;
+    }
+
+    .section-header p {
+        font-size: 12px;
+    }
+
+    .stats-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+
+    .metric {
+        min-height: 104px;
+        padding: 14px;
+    }
+
+    .metric > strong {
+        font-size: 18px;
+    }
+
+    .panel {
+        padding: 16px;
+        border-radius: 13px;
+    }
+
+    .panel-head {
+        align-items: center;
+        margin-bottom: 15px;
+    }
+
+    .panel h2 {
+        font-size: 17px;
+    }
+
+    .market-list-item {
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+        padding: 13px;
+    }
+
+    .market-list-item > div:not(.asset) {
+        display: none;
+    }
+
+    .market-list-item .asset {
+        min-width: 0;
+    }
+
+    .market-list-item .asset > div:last-child {
+        min-width: 0;
+    }
+
+    .market-list-item .asset strong,
+    .market-list-item .asset small {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .page-view {
+        min-height: calc(100vh - 68px);
+    }
+
+    input,
+    select {
+        min-height: 48px;
+        font-size: 16px;
+    }
+
+    .primary-btn,
+    .secondary-btn,
+    .large-btn {
+        min-height: 50px;
+    }
+}
+
+@media (max-width: 430px) {
+    .brand {
+        padding-bottom: 24px;
+    }
+
+    .topbar {
+        gap: 7px;
+    }
+
+    .connect-wallet {
+        padding: 9px 10px;
+    }
+
+    .wallet-button-icon {
+        display: none;
+    }
+
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .panel {
+        padding: 14px;
+    }
+}
