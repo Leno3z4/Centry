@@ -1,10 +1,16 @@
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { useState } from 'react';
+import { useAccount, usePublicClient, useReadContract, useWriteContract } from 'wagmi';
 import { parseUnits, formatUnits } from 'viem';
 import { CONTRACT_ADDRESSES, hasAddress } from '../constants/contracts';
 import { VE_CENTRY_ABI, ERC20_ABI } from '../constants/abis';
 
 export function useVeGovernance() {
   const { address } = useAccount();
+  const publicClient = usePublicClient();
+  const [transactionPending, setTransactionPending] = useState(false);
+  const [transactionHash, setTransactionHash] = useState(null);
+  const [transactionError, setTransactionError] = useState(null);
+
   const configured = hasAddress('veCentry') && hasAddress('centryToken');
 
   const { data: veBalance, refetch: refetchVeBalance } = useReadContract({
@@ -63,36 +69,72 @@ export function useVeGovernance() {
     query: { enabled: !!address && configured },
   });
 
-  const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash });
+  const { writeContractAsync, isPending, error } = useWriteContract();
 
-  const approveCENT = (amount) => writeContractAsync({
-    address: CONTRACT_ADDRESSES.centryToken,
-    abi: ERC20_ABI,
-    functionName: 'approve',
-    args: [CONTRACT_ADDRESSES.veCentry, parseUnits(amount.toString(), 18)],
-  });
+  const sendAndWait = async (request) => {
+    if (!publicClient) {
+      throw new Error('Wallet client is not ready. Please reconnect your wallet.');
+    }
 
-  const createLock = (amount, weeks) => writeContractAsync({
+    setTransactionPending(true);
+    setTransactionError(null);
+
+    try {
+      const hash = await writeContractAsync(request);
+      setTransactionHash(hash);
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
+      if (receipt.status !== 'success') {
+        throw new Error('The transaction was reverted onchain.');
+      }
+
+      return hash;
+    } catch (caughtError) {
+      setTransactionError(caughtError);
+      throw caughtError;
+    } finally {
+      setTransactionPending(false);
+    }
+  };
+
+  const approveCENT = async (amount) => {
+    const hash = await sendAndWait({
+      address: CONTRACT_ADDRESSES.centryToken,
+      abi: ERC20_ABI,
+      functionName: 'approve',
+      args: [CONTRACT_ADDRESSES.veCentry, parseUnits(amount.toString(), 18)],
+    });
+
+    await refetchCentAllowance();
+    return hash;
+  };
+
+  const createLock = (amount, weeks) => sendAndWait({
     address: CONTRACT_ADDRESSES.veCentry,
     abi: VE_CENTRY_ABI,
     functionName: 'createLock',
     args: [parseUnits(amount.toString(), 18), BigInt(weeks) * 7n * 24n * 60n * 60n],
   });
 
-  const increaseLock = (amount) => writeContractAsync({
+  const increaseLock = (amount) => sendAndWait({
     address: CONTRACT_ADDRESSES.veCentry,
     abi: VE_CENTRY_ABI,
     functionName: 'increaseAmount',
     args: [parseUnits(amount.toString(), 18)],
   });
 
-  const extendLock = (weeks) => writeContractAsync({
+  const extendLock = (weeks) => sendAndWait({
     address: CONTRACT_ADDRESSES.veCentry,
     abi: VE_CENTRY_ABI,
     functionName: 'extendLock',
     args: [BigInt(weeks) * 7n * 24n * 60n * 60n],
   });
+
+  const refetchAll = () => Promise.all([
+    refetchVeBalance(),
+    refetchCentBalance(),
+    refetchCentAllowance(),
+  ]);
 
   return {
     configured,
@@ -107,11 +149,11 @@ export function useVeGovernance() {
     createLock,
     increaseLock,
     extendLock,
-    refetchAll: () => Promise.all([refetchVeBalance(), refetchCentBalance(), refetchCentAllowance()]),
-    isPending,
-    isConfirming,
-    isConfirmed,
-    txHash: hash,
-    error,
+    refetchAll,
+    isPending: isPending || transactionPending,
+    isConfirming: transactionPending && !isPending,
+    isConfirmed: Boolean(transactionHash) && !transactionPending && !transactionError,
+    txHash: transactionHash,
+    error: transactionError || error,
   };
 }
