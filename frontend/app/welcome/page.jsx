@@ -7,7 +7,7 @@ import './landing.css';
 const pillars = [
     { title: 'Lend', text: 'Supply supported assets into Centry markets and earn market-driven interest.' },
     { title: 'Borrow', text: 'Use eligible collateral to access liquidity while Centry tracks account risk onchain.' },
-    { title: 'Govern', text: 'Lock CENT into veCENT to participate in protocol governance.' }
+    { title: 'Govern', text: 'Lock CENT into veCENT to participate in protocol governance.' },
 ];
 
 export default function WelcomePage() {
@@ -19,7 +19,7 @@ export default function WelcomePage() {
                     <a href="#how-it-works">How it works</a>
                     <a href="#markets">Markets</a>
                     <a href="#governance">Governance</a>
-                    <Link href="/">Open app</Link>
+                    <Link href="/app">Open app</Link>
                 </div>
                 <span className="landing-network">ARC TESTNET</span>
             </nav>
@@ -30,7 +30,7 @@ export default function WelcomePage() {
                     <h1>Liquidity for the <em>next network.</em></h1>
                     <p>Centry is an Arc-native lending protocol for supplying liquidity, borrowing against supported collateral, and coordinating the protocol through veCENT governance.</p>
                     <div className="landing-actions">
-                        <Link className="primary-btn" href="/">Enter Centry <span>→</span></Link>
+                        <Link className="primary-btn" href="/app">Enter Centry <span>→</span></Link>
                         <a className="secondary-btn" href="#how-it-works">Learn how it works</a>
                     </div>
                     <div className="landing-note"><span className="network-dot" />Currently deployed on Arc Testnet</div>
