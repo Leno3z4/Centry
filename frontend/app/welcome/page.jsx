@@ -2,30 +2,19 @@
 
 import React from 'react';
 import Link from 'next/link';
+import './landing.css';
 
 const pillars = [
-    {
-        title: 'Lend',
-        text: 'Supply supported assets into Centry markets and earn market-driven interest.'
-    },
-    {
-        title: 'Borrow',
-        text: 'Use eligible collateral to access liquidity while Centry tracks account risk onchain.'
-    },
-    {
-        title: 'Govern',
-        text: 'Lock CENT into veCENT to participate in protocol governance.'
-    }
+    { title: 'Lend', text: 'Supply supported assets into Centry markets and earn market-driven interest.' },
+    { title: 'Borrow', text: 'Use eligible collateral to access liquidity while Centry tracks account risk onchain.' },
+    { title: 'Govern', text: 'Lock CENT into veCENT to participate in protocol governance.' }
 ];
 
 export default function WelcomePage() {
     return (
         <main className="landing-page">
             <nav className="landing-nav">
-                <div className="brand">
-                    <span className="brand-mark">C</span>
-                    <span>Centry</span>
-                </div>
+                <div className="brand"><span className="brand-mark">C</span><span>Centry</span></div>
                 <div className="landing-nav-links">
                     <a href="#how-it-works">How it works</a>
                     <a href="#markets">Markets</a>
@@ -39,18 +28,12 @@ export default function WelcomePage() {
                 <div className="landing-hero-copy">
                     <span className="eyebrow"><i /> Arc-native money market</span>
                     <h1>Liquidity for the <em>next network.</em></h1>
-                    <p>
-                        Centry is an Arc-native lending protocol for supplying liquidity,
-                        borrowing against supported collateral, and coordinating the protocol through veCENT governance.
-                    </p>
+                    <p>Centry is an Arc-native lending protocol for supplying liquidity, borrowing against supported collateral, and coordinating the protocol through veCENT governance.</p>
                     <div className="landing-actions">
                         <Link className="primary-btn" href="/">Enter Centry <span>→</span></Link>
                         <a className="secondary-btn" href="#how-it-works">Learn how it works</a>
                     </div>
-                    <div className="landing-note">
-                        <span className="network-dot" />
-                        Currently deployed on Arc Testnet
-                    </div>
+                    <div className="landing-note"><span className="network-dot" />Currently deployed on Arc Testnet</div>
                 </div>
                 <div className="landing-orbit" aria-hidden="true">
                     <div className="landing-ring ring-one" />
@@ -69,9 +52,7 @@ export default function WelcomePage() {
                 <div className="landing-pillars">
                     {pillars.map((pillar, index) => (
                         <article className="landing-pillar" key={pillar.title}>
-                            <span>0{index + 1}</span>
-                            <h3>{pillar.title}</h3>
-                            <p>{pillar.text}</p>
+                            <span>0{index + 1}</span><h3>{pillar.title}</h3><p>{pillar.text}</p>
                         </article>
                     ))}
                 </div>
@@ -81,10 +62,7 @@ export default function WelcomePage() {
                 <div>
                     <span className="section-kicker">MARKETS</span>
                     <h2>Start with a transparent test market.</h2>
-                    <p>
-                        The current Arc Testnet deployment uses mUSDC, Centry's deployed test token.
-                        It is clearly separated from real Arc-issued assets until their contracts and oracle feeds are verified.
-                    </p>
+                    <p>The current Arc Testnet deployment uses mUSDC, Centry's deployed test token. It is clearly separated from real Arc-issued assets until their contracts and oracle feeds are verified.</p>
                 </div>
                 <div className="landing-market-card">
                     <div><span className="token usdc">$</span><div><strong>mUSDC</strong><small>Test USDC · Arc Testnet</small></div></div>
@@ -98,10 +76,7 @@ export default function WelcomePage() {
                 <p>Lock CENT into veCENT to receive voting power and participate in protocol governance.</p>
             </section>
 
-            <footer className="landing-footer">
-                <strong>Centry</strong>
-                <span>Arc Testnet · Experimental software</span>
-            </footer>
+            <footer className="landing-footer"><strong>Centry</strong><span>Arc Testnet · Experimental software</span></footer>
         </main>
     );
 }
