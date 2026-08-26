@@ -6,38 +6,16 @@ import { Providers } from '../components/Providers';
 import { WalletConnect } from '../components/WalletConnect';
 import { useLendingPool } from '../hooks/useLendingPool';
 import { useVeGovernance } from '../hooks/useVeGovernance';
+import { ACTIVE_MARKETS, UPCOMING_MARKETS } from '../constants/markets';
 
 const NAV_ITEMS = [
-    {
-        id: 'overview',
-        label: 'Overview',
-        icon: '⌂',
-    },
-    {
-        id: 'lending',
-        label: 'Lending',
-        icon: '◈',
-    },
-    {
-        id: 'governance',
-        label: 'Governance',
-        icon: '♢',
-    },
-    {
-        id: 'rewards',
-        label: 'Rewards',
-        icon: '✦',
-    },
-    {
-        id: 'analytics',
-        label: 'Analytics',
-        icon: '⌁',
-    },
-    {
-        id: 'docs',
-        label: 'Docs',
-        icon: '□',
-    },
+    { id: 'overview', label: 'Overview', icon: '⌂' },
+    { id: 'lending', label: 'Lending', icon: '◈' },
+    { id: 'portfolio', label: 'Portfolio', icon: '◒' },
+    { id: 'governance', label: 'Governance', icon: '♢' },
+    { id: 'rewards', label: 'Rewards', icon: '✦' },
+    { id: 'analytics', label: 'Analytics', icon: '⌁' },
+    { id: 'docs', label: 'Docs', icon: '□' },
 ];
 
 function formatNumber(value, digits = 2) {
@@ -53,37 +31,27 @@ function formatNumber(value, digits = 2) {
     });
 }
 
-function formatHealthFactor(value) {
-    if (value === '∞') {
-        return '∞';
-    }
-
-    if (value === '—') {
-        return '—';
+function formatHealth(value) {
+    if (value === '∞' || value === '—') {
+        return value;
     }
 
     const number = Number(value);
 
-    if (!Number.isFinite(number)) {
-        return '—';
-    }
-
-    return number.toFixed(2);
+    return Number.isFinite(number)
+        ? number.toFixed(2)
+        : '—';
 }
 
-function txMessage(error) {
+function errorText(error) {
     return (
-        error?.shortMessage
-        || error?.message
-        || 'Transaction failed. Check the wallet, network, allowance, and contract state.'
+        error?.shortMessage ||
+        error?.message ||
+        'Transaction failed. Check your wallet, network, allowance, and contract state.'
     );
 }
 
-function Metric({
-    label,
-    value,
-    detail,
-}) {
+function StatCard({ label, value, detail }) {
     return (
         <div className="metric">
             <span>{label}</span>
@@ -93,766 +61,13 @@ function Metric({
     );
 }
 
-function MetricSmall({
-    label,
-    value,
-}) {
-    return (
-        <div>
-            <span>{label}</span>
-            <strong>{value}</strong>
-        </div>
-    );
-}
-
-function ActionButton({
+function AppShell({
+    activeView,
+    setActiveView,
+    chainId,
+    address,
     children,
-    disabled,
-    onClick,
 }) {
-    return (
-        <button
-            type="button"
-            disabled={disabled}
-            onClick={onClick}
-        >
-            {children}
-        </button>
-    );
-}
-
-function Dashboard() {
-    const {
-        address,
-        isConnected,
-    } = useAccount();
-
-    const chainId = useChainId();
-
-    const {
-        reserveData,
-        supplyBalance,
-        borrowBalance,
-        healthFactor,
-        usdcBalance,
-        usdcAllowance,
-        approveUSDC,
-        supply,
-        withdraw,
-        borrow,
-        repay,
-        refetchAll: refetchLending,
-        isPending: lendingPending,
-        isConfirming: lendingConfirming,
-        error: lendingError,
-    } = useLendingPool();
-
-    const {
-        veBalance,
-        tokenId,
-        votingPower,
-        lockedAmount,
-        lockEnd,
-        centBalance,
-        centAllowance,
-        approveCENT,
-        createLock,
-        increaseLock,
-        extendLock,
-        refetchAll: refetchGovernance,
-        isPending: governancePending,
-        isConfirming: governanceConfirming,
-        error: governanceError,
-    } = useVeGovernance();
-
-    const [activeView, setActiveView] = useState('overview');
-    const [supplyAmount, setSupplyAmount] = useState('');
-    const [withdrawAmount, setWithdrawAmount] = useState('');
-    const [borrowAmount, setBorrowAmount] = useState('');
-    const [repayAmount, setRepayAmount] = useState('');
-    const [lockAmount, setLockAmount] = useState('');
-    const [lockWeeks, setLockWeeks] = useState('52');
-    const [notice, setNotice] = useState('');
-
-    const busy = lendingPending || lendingConfirming || governancePending || governanceConfirming;
-
-    const liquidity = Number(reserveData?.totalLiquidity || 0);
-    const borrowed = Number(reserveData?.totalBorrows || 0);
-    const utilization = Number(reserveData?.utilization || 0);
-    const userSupply = Number(supplyBalance || 0);
-    const userBorrow = Number(borrowBalance || 0);
-    const health = formatHealthFactor(healthFactor);
-
-    const supplyNeedsApproval = useMemo(() => {
-        if (!supplyAmount) {
-            return false;
-        }
-
-        return Number(supplyAmount) > Number(usdcAllowance || 0);
-    }, [supplyAmount, usdcAllowance]);
-
-    const lockNeedsApproval = useMemo(() => {
-        if (!lockAmount) {
-            return false;
-        }
-
-        return Number(lockAmount) > Number(centAllowance || 0);
-    }, [lockAmount, centAllowance]);
-
-    const resetNoticeLater = () => {
-        window.setTimeout(() => {
-            setNotice('');
-        }, 7000);
-    };
-
-    const runLendingAction = async (action, successText) => {
-        try {
-            setNotice('');
-            await action();
-            await refetchLending();
-            setNotice(successText);
-            resetNoticeLater();
-        } catch (error) {
-            setNotice(txMessage(error));
-            resetNoticeLater();
-        }
-    };
-
-    const runGovernanceAction = async (action, successText) => {
-        try {
-            setNotice('');
-            await action();
-            await refetchGovernance();
-            setNotice(successText);
-            resetNoticeLater();
-        } catch (error) {
-            setNotice(txMessage(error));
-            resetNoticeLater();
-        }
-    };
-
-    const handleSupply = async () => {
-        if (!supplyAmount || Number(supplyAmount) <= 0) {
-            return;
-        }
-
-        if (supplyNeedsApproval) {
-            await runLendingAction(
-                () => approveUSDC(supplyAmount),
-                `Approved ${supplyAmount} USDC for Centry.`,
-            );
-            return;
-        }
-
-        await runLendingAction(
-            () => supply(supplyAmount),
-            `Supplied ${supplyAmount} USDC to Centry.`,
-        );
-        setSupplyAmount('');
-    };
-
-    const handleWithdraw = async () => {
-        if (!withdrawAmount || Number(withdrawAmount) <= 0) {
-            return;
-        }
-
-        await runLendingAction(
-            () => withdraw(withdrawAmount),
-            `Withdrew ${withdrawAmount} USDC from Centry.`,
-        );
-        setWithdrawAmount('');
-    };
-
-    const handleBorrow = async () => {
-        if (!borrowAmount || Number(borrowAmount) <= 0) {
-            return;
-        }
-
-        await runLendingAction(
-            () => borrow(borrowAmount),
-            `Borrowed ${borrowAmount} USDC from Centry.`,
-        );
-        setBorrowAmount('');
-    };
-
-    const handleRepay = async () => {
-        if (!repayAmount || Number(repayAmount) <= 0) {
-            return;
-        }
-
-        await runLendingAction(
-            () => repay(repayAmount),
-            `Repaid ${repayAmount} USDC to Centry.`,
-        );
-        setRepayAmount('');
-    };
-
-    const handleLock = async () => {
-        if (!lockAmount || Number(lockAmount) <= 0) {
-            return;
-        }
-
-        if (lockNeedsApproval) {
-            await runGovernanceAction(
-                () => approveCENT(lockAmount),
-                `Approved ${lockAmount} CENT for veCENT.`,
-            );
-            return;
-        }
-
-        await runGovernanceAction(
-            () => createLock(lockAmount, lockWeeks),
-            `Locked ${lockAmount} CENT for ${lockWeeks} weeks.`,
-        );
-        setLockAmount('');
-    };
-
-    const handleRefresh = async () => {
-        try {
-            await Promise.all([
-                refetchLending(),
-                refetchGovernance(),
-            ]);
-            setNotice('Dashboard refreshed from Arc.');
-            resetNoticeLater();
-        } catch (error) {
-            setNotice(txMessage(error));
-            resetNoticeLater();
-        }
-    };
-
-    const renderOverview = () => (
-        <>
-            <section className="hero">
-                <div className="hero-copy">
-                    <div className="eyebrow">
-                        <span />
-                        Arc-native lending market
-                    </div>
-                    <h1>
-                        USDC liquidity
-                        <br />
-                        <em>built for Arc.</em>
-                    </h1>
-                    <p>
-                        Supply USDC, borrow against your collateral, and manage risk directly through Centry&apos;s onchain money market.
-                    </p>
-                    <div className="hero-actions">
-                        <button
-                            type="button"
-                            className="primary-btn"
-                            onClick={() => setActiveView('lending')}
-                        >
-                            Open lending
-                            <span>→</span>
-                        </button>
-                        <button
-                            type="button"
-                            className="secondary-btn"
-                            onClick={() => setActiveView('governance')}
-                        >
-                            Open governance
-                        </button>
-                    </div>
-                </div>
-                <div className="orbital-art" aria-hidden="true">
-                    <div className="orbit orbit-a" />
-                    <div className="orbit orbit-b" />
-                    <div className="orbit orbit-c" />
-                    <div className="usdc-orb">
-                        <span>$</span>
-                    </div>
-                </div>
-            </section>
-
-            <section className="stats-grid">
-                <Metric
-                    label="USDC Liquidity"
-                    value={`${formatNumber(liquidity)} USDC`}
-                    detail="Reserve liquidity"
-                />
-                <Metric
-                    label="USDC Borrowed"
-                    value={`${formatNumber(borrowed)} USDC`}
-                    detail="Outstanding debt"
-                />
-                <Metric
-                    label="Utilization"
-                    value={`${formatNumber(utilization)}%`}
-                    detail="Borrowed / available"
-                />
-                <Metric
-                    label="Health factor"
-                    value={isConnected ? health : 'Connect wallet'}
-                    detail="Per-account risk"
-                />
-            </section>
-
-            <section className="content-grid">
-                <div className="panel market-panel">
-                    <div className="panel-head">
-                        <div>
-                            <span className="section-kicker">MARKET</span>
-                            <h2>USDC Lending Pool</h2>
-                        </div>
-                        <span className="live-badge">
-                            <i />
-                            Live onchain
-                        </span>
-                    </div>
-                    <div className="market-row market-head">
-                        <span>Asset</span>
-                        <span>Liquidity</span>
-                        <span>Borrowed</span>
-                        <span>Utilization</span>
-                        <span />
-                    </div>
-                    <div className="market-row">
-                        <div className="asset">
-                            <span className="token usdc">$</span>
-                            <div>
-                                <strong>USDC</strong>
-                                <small>Arc-native gas asset</small>
-                            </div>
-                        </div>
-                        <strong>{formatNumber(liquidity)}</strong>
-                        <strong>{formatNumber(borrowed)}</strong>
-                        <strong>{formatNumber(utilization)}%</strong>
-                        <button
-                            type="button"
-                            className="row-btn"
-                            onClick={() => setActiveView('lending')}
-                        >
-                            Manage
-                        </button>
-                    </div>
-                    <div className="rate-strip">
-                        <span>Risk model</span>
-                        <strong>Oracle-protected</strong>
-                        <span>•</span>
-                        <span>Variable interest</span>
-                        <strong>Onchain</strong>
-                    </div>
-                </div>
-
-                <div className="panel governance-panel">
-                    <div className="panel-head">
-                        <div>
-                            <span className="section-kicker">GOVERNANCE</span>
-                            <h2>veCENT</h2>
-                        </div>
-                        <span className="live-badge">
-                            <i />
-                            {isConnected ? 'Wallet linked' : 'Connect wallet'}
-                        </span>
-                    </div>
-                    <p className="governance-copy">
-                        Lock CENT to receive a non-transferable veCENT position with time-decaying voting power.
-                    </p>
-                    <div className="governance-stats">
-                        <MetricSmall
-                            label="CENT balance"
-                            value={formatNumber(centBalance)}
-                        />
-                        <MetricSmall
-                            label="veNFTs"
-                            value={formatNumber(veBalance, 0)}
-                        />
-                    </div>
-                    <button
-                        type="button"
-                        className="primary-btn"
-                        onClick={() => setActiveView('governance')}
-                    >
-                        Manage veCENT
-                    </button>
-                </div>
-            </section>
-        </>
-    );
-
-    const renderLending = () => (
-        <section className="content-grid single-column-view">
-            <div className="panel market-panel">
-                <div className="panel-head">
-                    <div>
-                        <span className="section-kicker">LENDING</span>
-                        <h2>Manage your USDC position</h2>
-                    </div>
-                    <span className="live-badge">
-                        <i />
-                        Arc Testnet
-                    </span>
-                </div>
-
-                <div className="stats-grid inner-stats">
-                    <Metric
-                        label="Wallet USDC"
-                        value={formatNumber(usdcBalance)}
-                        detail="Available to supply / approve"
-                    />
-                    <Metric
-                        label="Supplied"
-                        value={formatNumber(userSupply)}
-                        detail="Current collateral balance"
-                    />
-                    <Metric
-                        label="Borrowed"
-                        value={formatNumber(userBorrow)}
-                        detail="Current debt balance"
-                    />
-                    <Metric
-                        label="Health factor"
-                        value={health}
-                        detail="Below 1.00 is liquidatable"
-                    />
-                </div>
-
-                <div className="market-actions lending-actions-grid">
-                    <div className="action-card">
-                        <h3>Supply USDC</h3>
-                        <p>
-                            Wallet balance: {formatNumber(usdcBalance)} USDC
-                        </p>
-                        <input
-                            type="number"
-                            min="0"
-                            step="0.000001"
-                            placeholder="Amount"
-                            value={supplyAmount}
-                            onChange={(event) => setSupplyAmount(event.target.value)}
-                        />
-                        <div className="action-buttons">
-                            <ActionButton
-                                disabled={
-                                    busy
-                                    || !isConnected
-                                    || !supplyAmount
-                                }
-                                onClick={handleSupply}
-                            >
-                                {supplyNeedsApproval ? 'Approve USDC' : 'Supply USDC'}
-                            </ActionButton>
-                        </div>
-                    </div>
-
-                    <div className="action-card">
-                        <h3>Withdraw USDC</h3>
-                        <p>
-                            Supplied: {formatNumber(userSupply)} USDC
-                        </p>
-                        <input
-                            type="number"
-                            min="0"
-                            step="0.000001"
-                            placeholder="Amount"
-                            value={withdrawAmount}
-                            onChange={(event) => setWithdrawAmount(event.target.value)}
-                        />
-                        <div className="action-buttons">
-                            <ActionButton
-                                disabled={
-                                    busy
-                                    || !isConnected
-                                    || !withdrawAmount
-                                }
-                                onClick={handleWithdraw}
-                            >
-                                Withdraw USDC
-                            </ActionButton>
-                        </div>
-                    </div>
-
-                    <div className="action-card">
-                        <h3>Borrow USDC</h3>
-                        <p>
-                            Health factor: {health}
-                        </p>
-                        <input
-                            type="number"
-                            min="0"
-                            step="0.000001"
-                            placeholder="Amount"
-                            value={borrowAmount}
-                            onChange={(event) => setBorrowAmount(event.target.value)}
-                        />
-                        <div className="action-buttons">
-                            <ActionButton
-                                disabled={
-                                    busy
-                                    || !isConnected
-                                    || !borrowAmount
-                                }
-                                onClick={handleBorrow}
-                            >
-                                Borrow USDC
-                            </ActionButton>
-                        </div>
-                    </div>
-
-                    <div className="action-card">
-                        <h3>Repay USDC</h3>
-                        <p>
-                            Debt: {formatNumber(userBorrow)} USDC
-                        </p>
-                        <input
-                            type="number"
-                            min="0"
-                            step="0.000001"
-                            placeholder="Amount"
-                            value={repayAmount}
-                            onChange={(event) => setRepayAmount(event.target.value)}
-                        />
-                        <div className="action-buttons">
-                            <ActionButton
-                                disabled={
-                                    busy
-                                    || !isConnected
-                                    || !repayAmount
-                                }
-                                onClick={handleRepay}
-                            >
-                                Repay USDC
-                            </ActionButton>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-    );
-
-    const renderGovernance = () => (
-        <section className="content-grid single-column-view">
-            <div className="panel governance-panel">
-                <div className="panel-head">
-                    <div>
-                        <span className="section-kicker">GOVERNANCE</span>
-                        <h2>veCENT</h2>
-                    </div>
-                    <span className="live-badge">
-                        <i />
-                        {isConnected ? 'Wallet linked' : 'Connect wallet'}
-                    </span>
-                </div>
-
-                <p className="governance-copy">
-                    Lock CENT to create a non-transferable veCENT position. Voting power decreases as the lock approaches expiry.
-                </p>
-
-                <div className="stats-grid inner-stats">
-                    <Metric
-                        label="CENT balance"
-                        value={formatNumber(centBalance)}
-                        detail="Wallet balance"
-                    />
-                    <Metric
-                        label="Locked CENT"
-                        value={formatNumber(lockedAmount)}
-                        detail="Current lock"
-                    />
-                    <Metric
-                        label="Voting power"
-                        value={formatNumber(votingPower)}
-                        detail="Current veCENT power"
-                    />
-                    <Metric
-                        label="veNFT"
-                        value={tokenId ? `#${tokenId}` : 'None'}
-                        detail={lockEnd ? `Unlocks ${lockEnd.toLocaleDateString()}` : 'No active lock'}
-                    />
-                </div>
-
-                <div className="market-actions">
-                    <div className="action-card">
-                        <h3>Create lock</h3>
-                        <p>
-                            Allowance: {formatNumber(centAllowance)} CENT
-                        </p>
-                        <input
-                            type="number"
-                            min="0"
-                            step="1"
-                            placeholder="CENT amount"
-                            value={lockAmount}
-                            onChange={(event) => setLockAmount(event.target.value)}
-                        />
-                        <select
-                            value={lockWeeks}
-                            onChange={(event) => setLockWeeks(event.target.value)}
-                        >
-                            <option value="1">1 week</option>
-                            <option value="26">26 weeks</option>
-                            <option value="52">52 weeks</option>
-                            <option value="104">104 weeks</option>
-                        </select>
-                        <div className="action-buttons">
-                            <ActionButton
-                                disabled={
-                                    busy
-                                    || !isConnected
-                                    || !lockAmount
-                                }
-                                onClick={handleLock}
-                            >
-                                {lockNeedsApproval ? 'Approve CENT' : 'Lock CENT'}
-                            </ActionButton>
-                        </div>
-                    </div>
-
-                    <div className="action-card">
-                        <h3>Existing lock</h3>
-                        <p>
-                            Current position: {tokenId ? `veCENT #${tokenId}` : 'None'}
-                        </p>
-                        <div className="action-buttons">
-                            <ActionButton
-                                disabled={!isConnected || !lockedAmount || busy}
-                                onClick={() => runGovernanceAction(
-                                    () => increaseLock(lockedAmount),
-                                    'Requested an increase to the existing lock.',
-                                )}
-                            >
-                                Increase by locked amount
-                            </ActionButton>
-                            <ActionButton
-                                disabled={!isConnected || !lockEnd || busy}
-                                onClick={() => runGovernanceAction(
-                                    () => extendLock(52),
-                                    'Extended the existing lock by 52 weeks.',
-                                )}
-                            >
-                                Extend 52 weeks
-                            </ActionButton>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-    );
-
-    const renderRewards = () => (
-        <section className="content-grid single-column-view">
-            <div className="panel feature-panel">
-                <span className="section-kicker">REWARDS</span>
-                <h2>Revenue distribution</h2>
-                <p>
-                    The current MVP has a dedicated revenue distributor, but it does not fabricate reward balances. When a real Merkle epoch is published, claims will be handled from that distributor using the published proof.
-                </p>
-                <div className="rate-strip">
-                    <span>Distributor</span>
-                    <strong>Configured</strong>
-                    <span>•</span>
-                    <span>Asset</span>
-                    <strong>ERC-20</strong>
-                </div>
-                <p className="notice">
-                    Reward claims are intentionally disabled here until an actual reward epoch and Merkle proof are available.
-                </p>
-            </div>
-        </section>
-    );
-
-    const renderAnalytics = () => (
-        <section className="content-grid single-column-view">
-            <div className="panel market-panel">
-                <div className="panel-head">
-                    <div>
-                        <span className="section-kicker">ANALYTICS</span>
-                        <h2>Live market metrics</h2>
-                    </div>
-                    <button
-                        type="button"
-                        className="row-btn"
-                        onClick={handleRefresh}
-                    >
-                        Refresh
-                    </button>
-                </div>
-                <div className="stats-grid inner-stats">
-                    <Metric
-                        label="Total supply"
-                        value={`${formatNumber(liquidity)} USDC`}
-                        detail="Read from LendingPool"
-                    />
-                    <Metric
-                        label="Total borrow"
-                        value={`${formatNumber(borrowed)} USDC`}
-                        detail="Read from LendingPool"
-                    />
-                    <Metric
-                        label="Utilization"
-                        value={`${formatNumber(utilization)}%`}
-                        detail="Onchain reserve ratio"
-                    />
-                    <Metric
-                        label="Your health factor"
-                        value={health}
-                        detail="Account risk metric"
-                    />
-                </div>
-                <div className="rate-strip">
-                    <span>Connected wallet</span>
-                    <strong>
-                        {isConnected
-                            ? `${address.slice(0, 6)}…${address.slice(-4)}`
-                            : 'Not connected'}
-                    </strong>
-                    <span>•</span>
-                    <span>Chain ID</span>
-                    <strong>{chainId || '—'}</strong>
-                </div>
-            </div>
-        </section>
-    );
-
-    const renderDocs = () => (
-        <section className="content-grid single-column-view">
-            <div className="panel feature-panel">
-                <span className="section-kicker">DOCS</span>
-                <h2>Centry on Arc Testnet</h2>
-                <p>
-                    Centry is the Arc-native lending MVP in this repository. The current deployment uses the tested LendingPool, oracle adapter, immutable interest-rate strategy, CENT, veCENT, and revenue distributor.
-                </p>
-                <div className="rate-strip">
-                    <span>Network</span>
-                    <strong>Arc Testnet</strong>
-                    <span>•</span>
-                    <span>Chain ID</span>
-                    <strong>{chainId || 5042002}</strong>
-                </div>
-                <a
-                    href="https://github.com/Leno3z4/Centry/tree/main/contracts"
-                    target="_blank"
-                    rel="noreferrer"
-                >
-                    Open contract source →
-                </a>
-            </div>
-        </section>
-    );
-
-    const renderView = () => {
-        switch (activeView) {
-            case 'lending':
-                return renderLending();
-            case 'governance':
-                return renderGovernance();
-            case 'rewards':
-                return renderRewards();
-            case 'analytics':
-                return renderAnalytics();
-            case 'docs':
-                return renderDocs();
-            case 'overview':
-            default:
-                return renderOverview();
-        }
-    };
-
-    const activeLabel =
-        NAV_ITEMS.find((item) => item.id === activeView)?.label
-        || 'Overview';
-
     return (
         <div className="app-shell">
             <aside className="sidebar">
@@ -861,16 +76,16 @@ function Dashboard() {
                     <span>Centry</span>
                 </div>
 
-                <nav className="side-nav">
+                <nav className="side-nav" aria-label="Primary navigation">
                     {NAV_ITEMS.map((item) => (
                         <button
+                            key={item.id}
                             type="button"
                             className={`nav-item ${activeView === item.id ? 'active' : ''}`}
-                            key={item.id}
                             onClick={() => setActiveView(item.id)}
                         >
                             <span className="nav-icon">{item.icon}</span>
-                            {item.label}
+                            <span>{item.label}</span>
                         </button>
                     ))}
                 </nav>
@@ -885,9 +100,8 @@ function Dashboard() {
                 </div>
 
                 <div className="sidebar-footer">
-                    Centry Protocol
-                    <br />
-                    <span>Arc-native USDC lending</span>
+                    <strong>Centry Protocol</strong>
+                    <span>Arc-native liquidity</span>
                 </div>
             </aside>
 
@@ -896,46 +110,18 @@ function Dashboard() {
                     <div className="breadcrumb">
                         <span>CENTRY</span>
                         <b>/</b>
-                        {activeLabel}
+                        {NAV_ITEMS.find((item) => item.id === activeView)?.label}
                     </div>
-                    <div className="topbar-actions">
-                        <button
-                            type="button"
-                            className="refresh-btn"
-                            onClick={handleRefresh}
-                        >
-                            Refresh
-                        </button>
-                        <WalletConnect />
-                    </div>
+                    <WalletConnect />
                 </header>
 
-                {!isConnected && (
-                    <div className="notice-panel">
-                        Connect your wallet to enable transaction controls. Public market metrics remain readable.
-                    </div>
-                )}
-
-                {notice && (
-                    <div className="notice-panel">
-                        {notice}
-                    </div>
-                )}
-
-                {(lendingError || governanceError) && (
-                    <div className="panel error-panel">
-                        <strong>Onchain error</strong>
-                        <p>
-                            {txMessage(lendingError || governanceError)}
-                        </p>
-                    </div>
-                )}
-
-                {renderView()}
+                <div className="page-view">
+                    {children}
+                </div>
 
                 <footer className="page-footer">
                     <span>Centry Protocol</span>
-                    <span>Built on Arc · Testnet</span>
+                    <span>Arc Testnet</span>
                     <span>
                         {address
                             ? `${address.slice(0, 6)}…${address.slice(-4)}`
@@ -947,7 +133,703 @@ function Dashboard() {
     );
 }
 
-export default function App() {
+function Overview({
+    lending,
+    governance,
+    connected,
+    setActiveView,
+}) {
+    const liquidity = Number(lending.reserveData?.totalLiquidity || 0);
+    const borrowed = Number(lending.reserveData?.totalBorrows || 0);
+    const utilization = Number(lending.reserveData?.utilization || 0);
+
+    return (
+        <div className="page-stack">
+            <section className="hero">
+                <div className="hero-copy">
+                    <div className="eyebrow">
+                        <span />
+                        Arc-native lending market
+                    </div>
+                    <h1>
+                        Liquidity,
+                        <br />
+                        <em>built for Arc.</em>
+                    </h1>
+                    <p>
+                        Centry is building an Arc-native money market for lending,
+                        borrowing, and onchain risk management.
+                    </p>
+                    <div className="hero-actions">
+                        <button
+                            type="button"
+                            className="primary-btn"
+                            onClick={() => setActiveView('lending')}
+                        >
+                            Open lending
+                            <span>→</span>
+                        </button>
+                        <button
+                            type="button"
+                            className="secondary-btn"
+                            onClick={() => setActiveView('portfolio')}
+                        >
+                            View portfolio
+                        </button>
+                    </div>
+                </div>
+
+                <div className="orbital-art" aria-hidden="true">
+                    <div className="orbit orbit-a" />
+                    <div className="orbit orbit-b" />
+                    <div className="orbit orbit-c" />
+                    <div className="usdc-orb">
+                        <span>$</span>
+                    </div>
+                </div>
+            </section>
+
+            <section className="stats-grid">
+                <StatCard
+                    label="Active liquidity"
+                    value={`${formatNumber(liquidity)} mUSDC`}
+                    detail="Centry test reserve"
+                />
+                <StatCard
+                    label="Borrowed"
+                    value={`${formatNumber(borrowed)} mUSDC`}
+                    detail="Outstanding debt"
+                />
+                <StatCard
+                    label="Utilization"
+                    value={`${formatNumber(utilization)}%`}
+                    detail="Pool utilization"
+                />
+                <StatCard
+                    label="Health factor"
+                    value={connected ? formatHealth(lending.healthFactor) : 'Connect wallet'}
+                    detail={connected ? 'Your account' : 'Per-account risk'}
+                />
+            </section>
+
+            <section className="content-grid">
+                <div className="panel panel-large">
+                    <div className="panel-head">
+                        <div>
+                            <span className="section-kicker">MARKETS</span>
+                            <h2>Available markets</h2>
+                        </div>
+                        <span className="live-badge">
+                            <i />
+                            Testnet
+                        </span>
+                    </div>
+
+                    <div className="market-list">
+                        {ACTIVE_MARKETS.map((market) => (
+                            <button
+                                key={market.id}
+                                type="button"
+                                className="market-list-item"
+                                onClick={() => setActiveView('lending')}
+                            >
+                                <div className="asset">
+                                    <span className="token usdc">$</span>
+                                    <div>
+                                        <strong>{market.symbol}</strong>
+                                        <small>{market.name}</small>
+                                    </div>
+                                </div>
+                                <div>
+                                    <span>Status</span>
+                                    <strong className="status-live">Live</strong>
+                                </div>
+                                <div>
+                                    <span>Liquidity</span>
+                                    <strong>{formatNumber(liquidity)} mUSDC</strong>
+                                </div>
+                                <span className="market-arrow">→</span>
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="upcoming-markets">
+                        <div className="subsection-head">
+                            <span className="section-kicker">COMING SOON</span>
+                            <span>Assets are enabled only after address + oracle verification.</span>
+                        </div>
+                        <div className="chip-row">
+                            {UPCOMING_MARKETS.map((market) => (
+                                <div className="market-chip" key={market.id}>
+                                    <strong>{market.symbol}</strong>
+                                    <span>{market.status === 'coming-soon' ? 'Coming soon' : 'Disabled'}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="panel">
+                    <div className="panel-head">
+                        <div>
+                            <span className="section-kicker">GOVERNANCE</span>
+                            <h2>veCENT</h2>
+                        </div>
+                    </div>
+                    <p className="panel-copy">
+                        Lock CENT to receive non-transferable voting power that decays over time.
+                    </p>
+                    <div className="governance-stats">
+                        <StatCard
+                            label="CENT balance"
+                            value={formatNumber(governance.centBalance)}
+                            detail="Wallet balance"
+                        />
+                        <StatCard
+                            label="Voting power"
+                            value={formatNumber(governance.votingPower)}
+                            detail="Current veCENT"
+                        />
+                    </div>
+                    <button
+                        type="button"
+                        className="primary-btn full-btn"
+                        onClick={() => setActiveView('governance')}
+                    >
+                        Manage veCENT
+                    </button>
+                </div>
+            </section>
+        </div>
+    );
+}
+
+function Lending({ lending, connected }) {
+    const [action, setAction] = useState('supply');
+    const [amount, setAmount] = useState('');
+    const [notice, setNotice] = useState('');
+
+    const busy = lending.isPending || lending.isConfirming;
+    const allowance = Number(lending.usdcAllowance || 0);
+    const numericAmount = Number(amount || 0);
+
+    const needsApproval =
+        connected &&
+        ['supply', 'repay'].includes(action) &&
+        numericAmount > allowance;
+
+    const run = async () => {
+        if (!connected || !amount || numericAmount <= 0 || busy) {
+            return;
+        }
+
+        try {
+            setNotice('');
+
+            if (needsApproval) {
+                await lending.approveUSDC(amount);
+                setNotice(`Approved ${amount} mUSDC.`);
+                return;
+            }
+
+            if (action === 'supply') {
+                await lending.supply(amount);
+            }
+
+            if (action === 'withdraw') {
+                await lending.withdraw(amount);
+            }
+
+            if (action === 'borrow') {
+                await lending.borrow(amount);
+            }
+
+            if (action === 'repay') {
+                await lending.repay(amount);
+            }
+
+            await lending.refetchAll();
+            setAmount('');
+            setNotice(`${action[0].toUpperCase()}${action.slice(1)} completed.`);
+        } catch (error) {
+            setNotice(errorText(error));
+        }
+    };
+
+    const setMax = () => {
+        if (action === 'withdraw') {
+            setAmount(lending.supplyBalance || '0');
+            return;
+        }
+
+        if (action === 'repay') {
+            setAmount(lending.borrowBalance || '0');
+            return;
+        }
+
+        setAmount(lending.usdcBalance || '0');
+    };
+
+    return (
+        <div className="page-stack">
+            <div className="section-header">
+                <div>
+                    <span className="section-kicker">LENDING</span>
+                    <h1>mUSDC money market</h1>
+                    <p>Full market controls for the Centry test reserve.</p>
+                </div>
+                <div className="test-badge">TEST ASSET · mUSDC</div>
+            </div>
+
+            <div className="warning-banner">
+                <strong>Important:</strong>
+                <span>
+                    mUSDC is the Centry test token you deployed. It is not Arc-issued USDC and does not represent real value.
+                </span>
+            </div>
+
+            <section className="stats-grid">
+                <StatCard label="Wallet" value={`${formatNumber(lending.usdcBalance)} mUSDC`} detail="Available" />
+                <StatCard label="Supplied" value={`${formatNumber(lending.supplyBalance)} mUSDC`} detail="Your collateral" />
+                <StatCard label="Borrowed" value={`${formatNumber(lending.borrowBalance)} mUSDC`} detail="Your debt" />
+                <StatCard label="Health factor" value={connected ? formatHealth(lending.healthFactor) : '—'} detail="Above 1.00 is healthier" />
+            </section>
+
+            <section className="workspace-grid">
+                <div className="panel workspace-panel">
+                    <div className="action-tabs">
+                        {['supply', 'withdraw', 'borrow', 'repay'].map((item) => (
+                            <button
+                                key={item}
+                                type="button"
+                                className={action === item ? 'active' : ''}
+                                onClick={() => setAction(item)}
+                            >
+                                {item[0].toUpperCase() + item.slice(1)}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="form-card">
+                        <span className="section-kicker">{action.toUpperCase()}</span>
+                        <h2>{action[0].toUpperCase() + action.slice(1)} mUSDC</h2>
+                        <p>
+                            Enter an amount and Centry will use the deployed lending-pool contract.
+                        </p>
+
+                        <label className="field-label" htmlFor="market-amount">
+                            Amount
+                        </label>
+
+                        <div className="amount-input-wrap">
+                            <input
+                                id="market-amount"
+                                type="number"
+                                min="0"
+                                step="0.000001"
+                                placeholder="0.00"
+                                value={amount}
+                                onChange={(event) => setAmount(event.target.value)}
+                            />
+                            <span>mUSDC</span>
+                        </div>
+
+                        <div className="form-meta">
+                            <span>Wallet: {formatNumber(lending.usdcBalance)} mUSDC</span>
+                            <button type="button" onClick={setMax}>Max</button>
+                        </div>
+
+                        {!connected ? (
+                            <div className="connect-prompt">
+                                Connect your wallet above to interact with the deployed pool.
+                            </div>
+                        ) : (
+                            <button
+                                type="button"
+                                className="primary-btn full-btn large-btn"
+                                disabled={busy || !amount}
+                                onClick={run}
+                            >
+                                {busy
+                                    ? 'Waiting for confirmation…'
+                                    : needsApproval
+                                        ? `Approve mUSDC for ${action}`
+                                        : `${action[0].toUpperCase()}${action.slice(1)} mUSDC`}
+                            </button>
+                        )}
+
+                        {notice && <div className="notice">{notice}</div>}
+                    </div>
+                </div>
+
+                <div className="panel position-panel">
+                    <div className="panel-head">
+                        <div>
+                            <span className="section-kicker">POSITION</span>
+                            <h2>Your risk</h2>
+                        </div>
+                    </div>
+                    <div className="position-list">
+                        <div className="position-row">
+                            <span>Supplied</span>
+                            <strong>{formatNumber(lending.supplyBalance)} mUSDC</strong>
+                        </div>
+                        <div className="position-row">
+                            <span>Borrowed</span>
+                            <strong>{formatNumber(lending.borrowBalance)} mUSDC</strong>
+                        </div>
+                        <div className="position-row">
+                            <span>Borrow power</span>
+                            <strong>{formatNumber(lending.borrowPower)} USD</strong>
+                        </div>
+                        <div className="position-row">
+                            <span>Health factor</span>
+                            <strong>{connected ? formatHealth(lending.healthFactor) : '—'}</strong>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    );
+}
+
+function Portfolio({ lending, connected }) {
+    return (
+        <div className="page-stack">
+            <div className="section-header">
+                <div>
+                    <span className="section-kicker">PORTFOLIO</span>
+                    <h1>Your position</h1>
+                    <p>Collateral, debt, borrowing capacity, and account health.</p>
+                </div>
+            </div>
+
+            {!connected && (
+                <div className="connect-prompt large-prompt">
+                    Connect your wallet to load your onchain portfolio.
+                </div>
+            )}
+
+            <section className="portfolio-grid">
+                <StatCard label="Supplied" value={`${formatNumber(lending.supplyBalance)} mUSDC`} detail="Collateral" />
+                <StatCard label="Borrowed" value={`${formatNumber(lending.borrowBalance)} mUSDC`} detail="Debt" />
+                <StatCard label="Borrow power" value={`${formatNumber(lending.borrowPower)} USD`} detail="Maximum debt value" />
+                <StatCard label="Health factor" value={connected ? formatHealth(lending.healthFactor) : '—'} detail="Liquidation boundary" />
+            </section>
+
+            <div className="panel">
+                <div className="panel-head">
+                    <div>
+                        <span className="section-kicker">RISK</span>
+                        <h2>Position health</h2>
+                    </div>
+                </div>
+                <div className="risk-card">
+                    <div className="risk-value">
+                        <span>Health factor</span>
+                        <strong>{connected ? formatHealth(lending.healthFactor) : '—'}</strong>
+                    </div>
+                    <div className="risk-track">
+                        <span />
+                    </div>
+                    <p>
+                        Centry blocks new borrowing when your debt exceeds borrow power and can liquidate unhealthy positions.
+                    </p>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function Governance({ governance, connected }) {
+    const [amount, setAmount] = useState('');
+    const [weeks, setWeeks] = useState('52');
+    const [notice, setNotice] = useState('');
+
+    const busy = governance.isPending || governance.isConfirming;
+    const needsApproval =
+        connected && Number(amount || 0) > Number(governance.centAllowance || 0);
+
+    const submit = async () => {
+        if (!connected || !amount || Number(amount) <= 0 || busy) {
+            return;
+        }
+
+        try {
+            setNotice('');
+
+            if (needsApproval) {
+                await governance.approveCENT(amount);
+                setNotice(`Approved ${amount} CENT.`);
+                return;
+            }
+
+            await governance.createLock(amount, weeks);
+            await governance.refetchAll();
+            setAmount('');
+            setNotice('CENT lock created.');
+        } catch (error) {
+            setNotice(errorText(error));
+        }
+    };
+
+    return (
+        <div className="page-stack">
+            <div className="section-header">
+                <div>
+                    <span className="section-kicker">GOVERNANCE</span>
+                    <h1>veCENT</h1>
+                    <p>Lock CENT to create your governance position.</p>
+                </div>
+            </div>
+
+            <section className="governance-hero-grid">
+                <div className="panel governance-hero-card">
+                    <span className="section-kicker">CURRENT POSITION</span>
+                    <div className="big-number">{formatNumber(governance.votingPower)}</div>
+                    <span className="muted-label">Voting power</span>
+                    <div className="governance-stat-line">
+                        <span>CENT balance</span>
+                        <strong>{formatNumber(governance.centBalance)}</strong>
+                    </div>
+                    <div className="governance-stat-line">
+                        <span>Locked CENT</span>
+                        <strong>{formatNumber(governance.lockedAmount)}</strong>
+                    </div>
+                    <div className="governance-stat-line">
+                        <span>veNFTs</span>
+                        <strong>{governance.veBalance}</strong>
+                    </div>
+                    <div className="governance-stat-line">
+                        <span>Lock end</span>
+                        <strong>
+                            {governance.lockEnd
+                                ? governance.lockEnd.toLocaleDateString()
+                                : '—'}
+                        </strong>
+                    </div>
+                </div>
+
+                <div className="panel">
+                    <span className="section-kicker">CREATE LOCK</span>
+                    <h2>Lock CENT</h2>
+                    <p className="panel-copy">
+                        The current MVP supports one lock per wallet with weekly lock expiry.
+                    </p>
+
+                    <label className="field-label" htmlFor="cent-amount">
+                        CENT amount
+                    </label>
+                    <div className="amount-input-wrap">
+                        <input
+                            id="cent-amount"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={amount}
+                            onChange={(event) => setAmount(event.target.value)}
+                        />
+                        <span>CENT</span>
+                    </div>
+
+                    <label className="field-label" htmlFor="lock-weeks">
+                        Lock duration
+                    </label>
+                    <select
+                        id="lock-weeks"
+                        value={weeks}
+                        onChange={(event) => setWeeks(event.target.value)}
+                    >
+                        <option value="4">4 weeks</option>
+                        <option value="13">13 weeks</option>
+                        <option value="26">26 weeks</option>
+                        <option value="52">52 weeks</option>
+                    </select>
+
+                    {!connected ? (
+                        <div className="connect-prompt">
+                            Connect your wallet to manage veCENT.
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            className="primary-btn full-btn large-btn"
+                            disabled={busy || !amount}
+                            onClick={submit}
+                        >
+                            {busy
+                                ? 'Waiting for confirmation…'
+                                : needsApproval
+                                    ? 'Approve CENT'
+                                    : `Lock CENT for ${weeks} weeks`}
+                        </button>
+                    )}
+
+                    {notice && <div className="notice">{notice}</div>}
+                </div>
+            </section>
+        </div>
+    );
+}
+
+function Rewards() {
+    return (
+        <div className="page-stack">
+            <div className="section-header">
+                <div>
+                    <span className="section-kicker">REWARDS</span>
+                    <h1>Protocol rewards</h1>
+                    <p>Reward infrastructure is deployed, but distribution stays disabled until an eligible epoch is configured.</p>
+                </div>
+            </div>
+
+            <div className="feature-grid">
+                <div className="panel feature-card">
+                    <span className="section-kicker">REVENUE</span>
+                    <h2>Revenue distributor</h2>
+                    <p>Claims use Merkle proofs and the deployed revenue distributor contract.</p>
+                </div>
+                <div className="panel feature-card">
+                    <span className="section-kicker">INCENTIVES</span>
+                    <h2>Liquidity incentives</h2>
+                    <p>Future market incentives can be introduced without changing the lending pool core.</p>
+                </div>
+                <div className="panel feature-card">
+                    <span className="section-kicker">GOVERNANCE</span>
+                    <h2>veCENT utility</h2>
+                    <p>Governance and reward mechanics can expand as Centry adds additional markets.</p>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function Analytics({ lending }) {
+    return (
+        <div className="page-stack">
+            <div className="section-header">
+                <div>
+                    <span className="section-kicker">ANALYTICS</span>
+                    <h1>Market analytics</h1>
+                    <p>Current figures read directly from the Centry lending pool.</p>
+                </div>
+            </div>
+
+            <section className="stats-grid">
+                <StatCard label="Liquidity" value={`${formatNumber(lending.reserveData?.totalLiquidity)} mUSDC`} detail="Current supply" />
+                <StatCard label="Borrowed" value={`${formatNumber(lending.reserveData?.totalBorrows)} mUSDC`} detail="Current debt" />
+                <StatCard label="Utilization" value={`${formatNumber(lending.reserveData?.utilization)}%`} detail="Current utilization" />
+                <StatCard label="Enabled market" value="mUSDC" detail="Test reserve" />
+            </section>
+
+            <div className="panel empty-chart-panel">
+                <span className="section-kicker">HISTORY</span>
+                <h2>Historical charts</h2>
+                <p>
+                    Historical graphs will be populated from indexed onchain events once the market has enough history. The dashboard will not fabricate metrics.
+                </p>
+            </div>
+        </div>
+    );
+}
+
+function Docs() {
+    return (
+        <div className="page-stack">
+            <div className="section-header">
+                <div>
+                    <span className="section-kicker">DOCS</span>
+                    <h1>Centry documentation</h1>
+                    <p>Current testnet architecture and user flows.</p>
+                </div>
+            </div>
+
+            <div className="docs-grid">
+                {[
+                    ['Lending', ['Supply mUSDC', 'Borrow against collateral', 'Repay debt', 'Withdraw collateral']],
+                    ['Governance', ['CENT token', 'veCENT locks', 'Voting power decay', 'Revenue distribution']],
+                    ['Markets', ['mUSDC test market', 'Future USDC', 'Future EURC', 'Future USYC']],
+                    ['Security', ['Oracle validation', 'Reserve caps', 'Pause controls', 'Independent audit before production']],
+                ].map(([title, items]) => (
+                    <div className="panel doc-card" key={title}>
+                        <span className="section-kicker">{title.toUpperCase()}</span>
+                        <h2>{title}</h2>
+                        <div className="doc-list">
+                            {items.map((item) => (
+                                <div className="doc-item" key={item}>
+                                    <span>→</span>
+                                    <strong>{item}</strong>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function Dashboard() {
+    const { address, isConnected } = useAccount();
+    const chainId = useChainId();
+    const lending = useLendingPool();
+    const governance = useVeGovernance();
+    const [activeView, setActiveView] = useState('overview');
+
+    const content = useMemo(() => {
+        if (activeView === 'lending') {
+            return <Lending lending={lending} connected={isConnected} />;
+        }
+
+        if (activeView === 'portfolio') {
+            return <Portfolio lending={lending} connected={isConnected} />;
+        }
+
+        if (activeView === 'governance') {
+            return <Governance governance={governance} connected={isConnected} />;
+        }
+
+        if (activeView === 'rewards') {
+            return <Rewards />;
+        }
+
+        if (activeView === 'analytics') {
+            return <Analytics lending={lending} />;
+        }
+
+        if (activeView === 'docs') {
+            return <Docs />;
+        }
+
+        return (
+            <Overview
+                lending={lending}
+                governance={governance}
+                connected={isConnected}
+                setActiveView={setActiveView}
+            />
+        );
+    }, [
+        activeView,
+        lending,
+        governance,
+        isConnected,
+    ]);
+
+    return (
+        <AppShell
+            activeView={activeView}
+            setActiveView={setActiveView}
+            chainId={chainId}
+            address={address}
+        >
+            {content}
+        </AppShell>
+    );
+}
+
+export default function Page() {
     return (
         <Providers>
             <Dashboard />
