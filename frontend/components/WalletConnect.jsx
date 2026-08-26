@@ -11,77 +11,129 @@ import {
 import { arcTestnet } from '../config/wagmi';
 import { useLendingPool } from '../hooks/useLendingPool';
 
+function shortenAddress(address) {
+  if (!address) return '';
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
+
 export function WalletConnect() {
-  const { address, isConnected } = useAccount();
-  const { connect, connectors, isPending } = useConnect();
+  const { address, isConnected, isConnecting } = useAccount();
+  const {
+    connect,
+    connectors,
+    isPending: isConnectPending,
+    error: connectError,
+  } = useConnect();
   const { disconnect } = useDisconnect();
   const chainId = useChainId();
-  const { switchChain, isPending: isSwitching } = useSwitchChain();
+  const {
+    switchChain,
+    isPending: isSwitching,
+    error: switchError,
+  } = useSwitchChain();
   const { usdcBalance } = useLendingPool();
 
-  const injected =
-    connectors.find((connector) => connector.id === 'injected') ||
-    connectors[0];
+  const injected = connectors.find(
+    (connector) => connector.id === 'injected',
+  );
 
   const isWrongNetwork =
-    isConnected &&
-    chainId !== arcTestnet.id;
+    isConnected && chainId !== arcTestnet.id;
 
-  if (isConnected) {
+  const handleConnect = async () => {
+    if (!injected || isConnectPending || isConnecting) return;
+
+    try {
+      await connect({ connector: injected });
+    } catch {
+      // wagmi exposes the connection error through connectError.
+    }
+  };
+
+  const handleSwitchNetwork = async () => {
+    if (isSwitching) return;
+
+    try {
+      await switchChain({ chainId: arcTestnet.id });
+    } catch {
+      // wagmi exposes the switch error through switchError.
+    }
+  };
+
+  if (!isConnected) {
     return (
-      <div className="wallet-area">
-        {isWrongNetwork ? (
-          <button
-            type="button"
-            className="network-warning"
-            onClick={() => switchChain({ chainId: arcTestnet.id })}
-          >
-            {isSwitching
-              ? 'Switching…'
-              : 'Switch to Arc Testnet'}
-          </button>
-        ) : null}
-
-        <div className="wallet-balance">
-          <span>mUSDC balance</span>
-          <strong>
-            {Number(usdcBalance || 0).toLocaleString(
-              undefined,
-              {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              },
-            )}{' '}
-            mUSDC
-          </strong>
-        </div>
-
+      <div className="wallet-connect-wrap">
         <button
           type="button"
-          className="wallet-address"
-          onClick={() => disconnect()}
-          title="Disconnect wallet"
+          className="connect-wallet"
+          disabled={!injected || isConnectPending || isConnecting}
+          onClick={handleConnect}
+          aria-label="Connect wallet"
         >
-          {address?.slice(0, 6)}…{address?.slice(-4)}
+          <span>
+            {isConnectPending || isConnecting
+              ? 'Connecting…'
+              : 'Connect wallet'}
+          </span>
+          <span className="wallet-button-icon" aria-hidden="true">
+            ↗
+          </span>
         </button>
+
+        {connectError ? (
+          <p className="wallet-error" role="alert">
+            {connectError.shortMessage || connectError.message}
+          </p>
+        ) : null}
       </div>
     );
   }
 
   return (
-    <button
-      type="button"
-      className="connect-wallet"
-      disabled={!injected || isPending}
-      onClick={() =>
-        injected &&
-        connect({ connector: injected })
-      }
-    >
-      {isPending
-        ? 'Connecting…'
-        : 'Connect wallet'}
-      <span>↗</span>
-    </button>
+    <div className="wallet-area">
+      {isWrongNetwork ? (
+        <button
+          type="button"
+          className="network-warning"
+          onClick={handleSwitchNetwork}
+          disabled={isSwitching}
+        >
+          <span>
+            {isSwitching
+              ? 'Switching network…'
+              : 'Switch to Arc Testnet'}
+          </span>
+          <span aria-hidden="true">→</span>
+        </button>
+      ) : null}
+
+      {switchError ? (
+        <p className="wallet-error" role="alert">
+          {switchError.shortMessage || switchError.message}
+        </p>
+      ) : null}
+
+      <div className="wallet-balance">
+        <span>Test balance</span>
+        <strong>
+          {Number(usdcBalance || 0).toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}{' '}
+          mUSDC
+        </strong>
+      </div>
+
+      <button
+        type="button"
+        className="wallet-address"
+        onClick={() => disconnect()}
+        title="Disconnect wallet"
+        aria-label={`Disconnect ${shortenAddress(address)}`}
+      >
+        <span className="wallet-status-dot" aria-hidden="true" />
+        {shortenAddress(address)}
+      </button>
+    </div>
   );
 }
