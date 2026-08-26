@@ -1,8 +1,4 @@
-/* Mobile-first corrections for the Centry application. */
-
-.mobile-menu-button {
-    display: none;
-}
+/* Responsive Centry layout. Navigation stays visible and usable on phones. */
 
 .wallet-connect-wrap {
     position: relative;
@@ -46,68 +42,101 @@
 }
 
 @media (max-width: 760px) {
+    html,
     body {
+        width: 100%;
+        min-width: 0;
         overflow-x: hidden;
     }
 
     .sidebar {
-        position: fixed;
-        inset: 0 auto 0 0;
-        width: min(82vw, 300px);
-        padding: 20px 14px;
-        transform: translateX(-105%);
-        transition: transform 180ms ease;
-        box-shadow: 20px 0 60px #00000055;
+        position: sticky;
+        top: 0;
+        z-index: 30;
+        display: block;
+        width: 100%;
+        min-height: 0;
+        padding: 12px 12px 10px;
+        border-right: 0;
+        border-bottom: 1px solid #211a2e;
+        background: rgba(6, 5, 12, 0.96);
     }
 
-    .sidebar.mobile-open {
-        transform: translateX(0);
+    .brand {
+        padding: 0 4px 10px;
+        font-size: 20px;
     }
 
-    .mobile-menu-button {
-        display: inline-flex;
-        width: 42px;
-        height: 42px;
-        align-items: center;
-        justify-content: center;
-        border: 1px solid var(--line);
-        border-radius: 11px;
-        background: #0d0916;
-        color: var(--text);
-        font-size: 19px;
+    .brand-mark {
+        width: 30px;
+        height: 30px;
+    }
+
+    .side-nav {
+        display: flex;
+        gap: 6px;
+        overflow-x: auto;
+        padding: 2px 0 4px;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .side-nav::-webkit-scrollbar {
+        display: none;
+    }
+
+    .nav-item {
+        width: auto;
+        min-width: max-content;
+        min-height: 40px;
+        padding: 9px 12px;
+        border-radius: 10px;
+        font-size: 11px;
+    }
+
+    .nav-item:hover {
+        transform: none;
+    }
+
+    .nav-icon {
+        width: 17px;
+        height: 17px;
+        font-size: 13px;
+    }
+
+    .network-card,
+    .sidebar-footer {
+        display: none;
     }
 
     .main-content {
         width: 100%;
-        min-height: 100vh;
+        min-height: 0;
         margin-left: 0;
         padding: 0 14px 24px;
     }
 
     .topbar {
         position: sticky;
-        z-index: 15;
+        z-index: 20;
         top: 0;
-        height: 68px;
-        gap: 10px;
+        height: 64px;
+        gap: 8px;
         background: rgba(8, 6, 17, 0.9);
         backdrop-filter: blur(18px);
     }
 
-    .topbar > * {
-        min-width: 0;
-    }
-
     .breadcrumb {
-        overflow: hidden;
+        min-width: 0;
         flex: 1;
+        overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
 
     .wallet-area {
         display: flex;
-        max-width: 58%;
+        max-width: 52%;
         align-items: center;
         gap: 6px;
     }
@@ -120,13 +149,13 @@
     .wallet-address,
     .network-warning {
         min-height: 40px;
-        padding: 9px 12px;
+        padding: 9px 11px;
         border-radius: 10px;
-        font-size: 11px;
+        font-size: 10px;
     }
 
     .wallet-address {
-        max-width: 125px;
+        max-width: 120px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -134,19 +163,19 @@
 
     .network-warning {
         position: absolute;
-        top: 73px;
+        top: 69px;
         right: 14px;
-        z-index: 25;
+        z-index: 35;
         max-width: calc(100vw - 28px);
     }
 
     .hero {
         min-height: auto;
-        padding: 44px 4px 34px;
+        padding: 42px 2px 30px;
     }
 
     .hero h1 {
-        margin: 16px 0 18px;
+        margin: 15px 0 17px;
         font-size: clamp(42px, 14vw, 62px);
         letter-spacing: -3px;
     }
@@ -167,7 +196,7 @@
 
     .page-stack {
         gap: 14px;
-        padding-top: 20px;
+        padding-top: 18px;
     }
 
     .section-header {
@@ -191,8 +220,8 @@
     }
 
     .metric {
-        min-height: 104px;
-        padding: 14px;
+        min-height: 100px;
+        padding: 13px;
     }
 
     .metric > strong {
@@ -200,7 +229,7 @@
     }
 
     .panel {
-        padding: 16px;
+        padding: 15px;
         border-radius: 13px;
     }
 
@@ -215,8 +244,8 @@
 
     .market-list-item {
         grid-template-columns: minmax(0, 1fr) auto;
-        gap: 10px;
-        padding: 13px;
+        gap: 9px;
+        padding: 12px;
     }
 
     .market-list-item > div:not(.asset) {
@@ -238,8 +267,18 @@
         white-space: nowrap;
     }
 
-    .page-view {
-        min-height: calc(100vh - 68px);
+    .action-tabs {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+    }
+
+    .action-tabs button {
+        min-height: 44px;
+    }
+
+    .amount-input-wrap {
+        min-height: 54px;
     }
 
     input,
@@ -253,15 +292,34 @@
     .large-btn {
         min-height: 50px;
     }
+
+    .workspace-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .page-view {
+        min-height: 0;
+    }
+
+    .page-footer {
+        flex-wrap: wrap;
+        gap: 8px 14px;
+        padding-bottom: 12px;
+    }
 }
 
 @media (max-width: 430px) {
-    .brand {
-        padding-bottom: 24px;
+    .main-content {
+        padding-right: 10px;
+        padding-left: 10px;
     }
 
     .topbar {
-        gap: 7px;
+        gap: 6px;
+    }
+
+    .breadcrumb b {
+        margin: 0 5px;
     }
 
     .connect-wallet {
@@ -272,11 +330,20 @@
         display: none;
     }
 
+    .wallet-address {
+        max-width: 106px;
+    }
+
     .stats-grid {
         grid-template-columns: 1fr;
     }
 
     .panel {
-        padding: 14px;
+        padding: 13px;
+    }
+
+    .asset .token {
+        width: 32px;
+        height: 32px;
     }
 }
