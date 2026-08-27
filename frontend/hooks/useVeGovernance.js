@@ -3,7 +3,7 @@ import { useAccount, useChainId, usePublicClient, useReadContract, useWriteContr
 import { parseUnits, formatUnits } from 'viem';
 import { CONTRACT_ADDRESSES, hasAddress } from '../constants/contracts';
 import { VE_CENTRY_ABI, ERC20_ABI } from '../constants/abis';
-import { arcTestnet } from '../config/wagmi';
+import { arcTestnet } from '../config/multiWagmi';
 
 export function useVeGovernance() {
   const { address } = useAccount();
