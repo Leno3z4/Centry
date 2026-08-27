@@ -59,9 +59,12 @@ interface ICentryYieldVault {
 }
 
 /// @title Centry Self-Repaying Vault
-/// @notice Isolated position that borrows through the existing Centry lending
-///         pool and uses realized yield to repay its own debt.
-/// @dev v1 intentionally supports one asset and one yield vault per position.
+/// @notice An isolated user position that supplies a selected collateral asset
+///         to the existing Centry lending pool, borrows the configured debt
+///         asset, invests that debt asset in a Centry Yield Vault, and uses
+///         realized positive yield to repay the debt.
+/// @dev The debt/yield asset is fixed by the configured yield vault. Any
+///      supported lending-pool reserve can be selected as collateral.
 contract CentrySelfRepayingVault is
     Ownable2Step,
     ReentrancyGuard,
@@ -73,7 +76,8 @@ contract CentrySelfRepayingVault is
 
     ICentryLendingPool public immutable lendingPool;
     ICentryYieldVault public immutable yieldVault;
-    IERC20 public immutable assetToken;
+    IERC20 public immutable collateralAsset;
+    IERC20 public immutable debtAsset;
 
     uint256 public collateralSupplied;
     uint256 public yieldPrincipal;
@@ -95,11 +99,18 @@ contract CentrySelfRepayingVault is
 
     event CollateralDeposited(
         address indexed owner,
+        address indexed asset,
+        uint256 amount
+    );
+
+    event CollateralWithdrawn(
+        address indexed owner,
         uint256 amount
     );
 
     event PositionOpened(
         address indexed owner,
+        address indexed collateralAsset,
         uint256 collateral,
         uint256 borrowed,
         uint256 yieldShares
@@ -107,7 +118,7 @@ contract CentrySelfRepayingVault is
 
     event YieldHarvested(
         uint256 assetsRedeemed,
-        uint256 principalReturned,
+        uint256 remainingYieldAssets,
         uint256 profit
     );
 
@@ -118,7 +129,8 @@ contract CentrySelfRepayingVault is
 
     event PositionClosed(
         address indexed owner,
-        uint256 returnedAssets
+        uint256 returnedCollateral,
+        uint256 returnedYieldAssets
     );
 
     event PositionPaused(address indexed account);
@@ -127,27 +139,30 @@ contract CentrySelfRepayingVault is
     constructor(
         address initialOwner,
         address lendingPool_,
-        address yieldVault_,
-        address asset_
+        address collateralAsset_,
+        address debtAsset_,
+        address yieldVault_
     ) Ownable(initialOwner) {
         if (
             initialOwner == address(0) ||
             lendingPool_ == address(0) ||
-            yieldVault_ == address(0) ||
-            asset_ == address(0)
+            collateralAsset_ == address(0) ||
+            debtAsset_ == address(0) ||
+            yieldVault_ == address(0)
         ) {
             revert InvalidAddress();
         }
 
         if (
-            ICentryYieldVault(yieldVault_).asset() != asset_
+            ICentryYieldVault(yieldVault_).asset() != debtAsset_
         ) {
             revert InvalidAsset();
         }
 
         lendingPool = ICentryLendingPool(lendingPool_);
         yieldVault = ICentryYieldVault(yieldVault_);
-        assetToken = IERC20(asset_);
+        collateralAsset = IERC20(collateralAsset_);
+        debtAsset = IERC20(debtAsset_);
     }
 
     function depositCollateral(
@@ -161,7 +176,7 @@ contract CentrySelfRepayingVault is
             revert AmountZero();
         }
 
-        assetToken.safeTransferFrom(
+        collateralAsset.safeTransferFrom(
             msg.sender,
             address(this),
             amount
@@ -170,6 +185,34 @@ contract CentrySelfRepayingVault is
         collateralSupplied += amount;
 
         emit CollateralDeposited(
+            msg.sender,
+            address(collateralAsset),
+            amount
+        );
+    }
+
+    function withdrawUnopenedCollateral(
+        uint256 amount
+    ) external onlyOwner whenNotPaused nonReentrant {
+        if (positionOpen) {
+            revert PositionActive();
+        }
+
+        if (
+            amount == 0 ||
+            amount > collateralSupplied
+        ) {
+            revert AmountZero();
+        }
+
+        collateralSupplied -= amount;
+
+        collateralAsset.safeTransfer(
+            msg.sender,
+            amount
+        );
+
+        emit CollateralWithdrawn(
             msg.sender,
             amount
         );
@@ -182,21 +225,24 @@ contract CentrySelfRepayingVault is
             revert PositionAlreadyOpen();
         }
 
-        if (collateralSupplied == 0 || borrowAmount == 0) {
+        if (
+            collateralSupplied == 0 ||
+            borrowAmount == 0
+        ) {
             revert AmountZero();
         }
 
         lendingPool.supply(
-            address(assetToken),
+            address(collateralAsset),
             collateralSupplied
         );
 
         lendingPool.borrow(
-            address(assetToken),
+            address(debtAsset),
             borrowAmount
         );
 
-        assetToken.forceApprove(
+        debtAsset.forceApprove(
             address(yieldVault),
             borrowAmount
         );
@@ -224,19 +270,19 @@ contract CentrySelfRepayingVault is
 
         emit PositionOpened(
             msg.sender,
+            address(collateralAsset),
             collateralSupplied,
             borrowAmount,
             shares
         );
     }
 
-    /// @notice Realizes yield, repays only the amount above the original
-    ///         yield principal, and reinvests the remaining underlying.
-    /// @dev A loss never reduces yieldPrincipal. This preserves the original
-    ///      cost basis so recovered principal is not misclassified as yield.
+    /// @notice Realizes the current yield position and uses only profit above
+    ///         the original yield principal to repay the debt.
+    /// @dev Permissionless by design. The caller cannot redirect the funds;
+    ///      harvested yield and repayment remain inside this position.
     function harvestAndRepay()
         external
-        onlyOwner
         whenNotPaused
         nonReentrant
         returns (uint256 repaidAmount)
@@ -247,7 +293,7 @@ contract CentrySelfRepayingVault is
 
         uint256 debt = lendingPool.borrowBalance(
             address(this),
-            address(assetToken)
+            address(debtAsset)
         );
 
         if (debt == 0) {
@@ -258,7 +304,7 @@ contract CentrySelfRepayingVault is
             revert NoYield();
         }
 
-        uint256 balanceBefore = assetToken.balanceOf(
+        uint256 beforeBalance = debtAsset.balanceOf(
             address(this)
         );
 
@@ -268,11 +314,14 @@ contract CentrySelfRepayingVault is
             address(this)
         );
 
-        uint256 received = assetToken.balanceOf(
+        uint256 received = debtAsset.balanceOf(
             address(this)
-        ) - balanceBefore;
+        ) - beforeBalance;
 
-        if (received != redeemed || received == 0) {
+        if (
+            received != redeemed ||
+            received == 0
+        ) {
             revert InvalidVaultState();
         }
 
@@ -285,13 +334,13 @@ contract CentrySelfRepayingVault is
                 ? debt
                 : profit;
 
-            assetToken.forceApprove(
+            debtAsset.forceApprove(
                 address(lendingPool),
                 repaidAmount
             );
 
             uint256 actualRepaid = lendingPool.repayFor(
-                address(assetToken),
+                address(debtAsset),
                 address(this),
                 repaidAmount
             );
@@ -305,14 +354,8 @@ contract CentrySelfRepayingVault is
 
         uint256 remainingAssets = received - repaidAmount;
 
-        if (remainingAssets == 0) {
-            yieldShares = 0;
-
-            if (yieldPrincipal != 0) {
-                revert InvalidVaultState();
-            }
-        } else {
-            assetToken.forceApprove(
+        if (remainingAssets > 0) {
+            debtAsset.forceApprove(
                 address(yieldVault),
                 remainingAssets
             );
@@ -327,16 +370,9 @@ contract CentrySelfRepayingVault is
             }
 
             yieldShares = newShares;
-
-            if (received >= yieldPrincipal) {
-                yieldPrincipal = received - profit;
-            }
+        } else {
+            yieldShares = 0;
         }
-
-        uint256 remainingDebt = lendingPool.borrowBalance(
-            address(this),
-            address(assetToken)
-        );
 
         emit YieldHarvested(
             received,
@@ -346,7 +382,10 @@ contract CentrySelfRepayingVault is
 
         emit DebtRepaid(
             repaidAmount,
-            remainingDebt
+            lendingPool.borrowBalance(
+                address(this),
+                address(debtAsset)
+            )
         );
     }
 
@@ -367,7 +406,7 @@ contract CentrySelfRepayingVault is
     {
         return lendingPool.borrowBalance(
             address(this),
-            address(assetToken)
+            address(debtAsset)
         );
     }
 
@@ -381,12 +420,29 @@ contract CentrySelfRepayingVault is
         );
     }
 
+    function harvestableProfit()
+        external
+        view
+        returns (uint256)
+    {
+        uint256 currentAssets = yieldVault.convertToAssets(
+            yieldShares
+        );
+
+        return currentAssets > yieldPrincipal
+            ? currentAssets - yieldPrincipal
+            : 0;
+    }
+
     function closePosition()
         external
         onlyOwner
         whenNotPaused
         nonReentrant
-        returns (uint256 returnedAssets)
+        returns (
+            uint256 returnedCollateral,
+            uint256 returnedYieldAssets
+        )
     {
         if (!positionOpen) {
             revert PositionNotOpen();
@@ -394,7 +450,7 @@ contract CentrySelfRepayingVault is
 
         uint256 debt = lendingPool.borrowBalance(
             address(this),
-            address(assetToken)
+            address(debtAsset)
         );
 
         if (debt != 0) {
@@ -402,7 +458,7 @@ contract CentrySelfRepayingVault is
         }
 
         if (yieldShares > 0) {
-            yieldVault.redeem(
+            returnedYieldAssets = yieldVault.redeem(
                 yieldShares,
                 address(this),
                 address(this)
@@ -413,8 +469,8 @@ contract CentrySelfRepayingVault is
         yieldPrincipal = 0;
 
         if (collateralSupplied > 0) {
-            lendingPool.withdraw(
-                address(assetToken),
+            returnedCollateral = lendingPool.withdraw(
+                address(collateralAsset),
                 type(uint256).max
             );
         }
@@ -422,22 +478,24 @@ contract CentrySelfRepayingVault is
         collateralSupplied = 0;
         positionOpen = false;
 
-        returnedAssets = assetToken.balanceOf(
-            address(this)
-        );
-
-        if (returnedAssets == 0) {
-            revert InvalidVaultState();
+        if (returnedCollateral > 0) {
+            collateralAsset.safeTransfer(
+                owner(),
+                returnedCollateral
+            );
         }
 
-        assetToken.safeTransfer(
-            owner(),
-            returnedAssets
-        );
+        if (returnedYieldAssets > 0) {
+            debtAsset.safeTransfer(
+                owner(),
+                returnedYieldAssets
+            );
+        }
 
         emit PositionClosed(
             owner(),
-            returnedAssets
+            returnedCollateral,
+            returnedYieldAssets
         );
     }
 
