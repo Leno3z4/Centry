@@ -38,7 +38,8 @@ export function WalletConnect() {
   );
 
   const isWrongNetwork =
-    isConnected && chainId !== arcTestnet.id;
+    isConnected &&
+    chainId !== arcTestnet.id;
 
   const handleConnect = async () => {
     if (!injected || isConnectPending || isConnecting) return;
@@ -75,9 +76,6 @@ export function WalletConnect() {
               ? 'Connecting…'
               : 'Connect wallet'}
           </span>
-          <span className="wallet-button-icon" aria-hidden="true">
-            ↗
-          </span>
         </button>
 
         {connectError ? (
@@ -103,7 +101,6 @@ export function WalletConnect() {
               ? 'Switching network…'
               : 'Switch to Arc Testnet'}
           </span>
-          <span aria-hidden="true">→</span>
         </button>
       ) : null}
 
