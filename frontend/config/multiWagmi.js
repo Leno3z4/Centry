@@ -1,5 +1,7 @@
 import { createConfig, http } from 'wagmi';
 import { defineChain } from 'viem';
+import { injected } from 'wagmi/connectors';
+import { walletConnect } from '@wagmi/connectors/walletConnect';
 
 export const arcTestnet = defineChain({
   id: 5042002,
@@ -22,9 +24,33 @@ export const arcTestnet = defineChain({
   },
 });
 
+const walletConnectProjectId =
+  process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
+
+const connectors = [
+  injected({
+    shimDisconnect: true,
+  }),
+];
+
+if (walletConnectProjectId) {
+  connectors.push(
+    walletConnect({
+      projectId: walletConnectProjectId,
+      showQrModal: true,
+      metadata: {
+        name: 'Centry',
+        description: 'Arc-native lending protocol',
+        url: 'https://centry-car-xen.vercel.app',
+        icons: [],
+      },
+    }),
+  );
+}
+
 export const config = createConfig({
   chains: [arcTestnet],
-  connectors: [],
+  connectors,
   transports: {
     [arcTestnet.id]: http(),
   },
