@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   useAccount,
   useConnect,
@@ -8,12 +8,17 @@ import {
   useChainId,
   useSwitchChain,
 } from 'wagmi';
-import { arcTestnet } from '../config/wagmi';
+import { arcTestnet } from '../config/multiWagmi';
 import { useLendingPool } from '../hooks/useLendingPool';
 
 function shortenAddress(address) {
   if (!address) return '';
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
+
+function connectorLabel(connector) {
+  if (connector.name) return connector.name;
+  return 'Browser wallet';
 }
 
 export function WalletConnect() {
@@ -32,20 +37,18 @@ export function WalletConnect() {
     error: switchError,
   } = useSwitchChain();
   const { usdcBalance } = useLendingPool();
-
-  const injected = connectors.find(
-    (connector) => connector.id === 'injected',
-  );
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const isWrongNetwork =
     isConnected &&
     chainId !== arcTestnet.id;
 
-  const handleConnect = async () => {
-    if (!injected || isConnectPending || isConnecting) return;
+  const handleConnectorSelect = async (connector) => {
+    if (isConnectPending || isConnecting) return;
 
     try {
-      await connect({ connector: injected });
+      await connect({ connector });
+      setPickerOpen(false);
     } catch {
       // wagmi exposes the connection error through connectError.
     }
@@ -67,21 +70,87 @@ export function WalletConnect() {
         <button
           type="button"
           className="connect-wallet"
-          disabled={!injected || isConnectPending || isConnecting}
-          onClick={handleConnect}
-          aria-label="Connect wallet"
+          onClick={() => setPickerOpen(true)}
+          disabled={isConnectPending || isConnecting}
+          aria-haspopup="dialog"
+          aria-expanded={pickerOpen}
         >
-          <span>
-            {isConnectPending || isConnecting
-              ? 'Connecting…'
-              : 'Connect wallet'}
-          </span>
+          Connect wallet
         </button>
 
-        {connectError ? (
-          <p className="wallet-error" role="alert">
-            {connectError.shortMessage || connectError.message}
-          </p>
+        {pickerOpen ? (
+          <div
+            className="wallet-picker-backdrop"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) {
+                setPickerOpen(false);
+              }
+            }}
+          >
+            <section
+              className="wallet-picker"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="wallet-picker-title"
+            >
+              <div className="wallet-picker-header">
+                <div>
+                  <span className="section-kicker">WALLET</span>
+                  <h2 id="wallet-picker-title">Connect a wallet</h2>
+                  <p>Choose which wallet you want to use with Centry.</p>
+                </div>
+                <button
+                  type="button"
+                  className="wallet-picker-close"
+                  onClick={() => setPickerOpen(false)}
+                  aria-label="Close wallet picker"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="wallet-options">
+                {connectors.length > 0 ? (
+                  connectors.map((connector) => (
+                    <button
+                      key={connector.uid}
+                      type="button"
+                      className="wallet-option"
+                      onClick={() => handleConnectorSelect(connector)}
+                      disabled={isConnectPending || isConnecting}
+                    >
+                      <span className="wallet-option-mark">
+                        {connectorLabel(connector).slice(0, 1).toUpperCase()}
+                      </span>
+                      <span className="wallet-option-copy">
+                        <strong>{connectorLabel(connector)}</strong>
+                        <small>
+                          {connector.type === 'injected'
+                            ? 'Browser extension'
+                            : 'Wallet connector'}
+                        </small>
+                      </span>
+                      <span className="wallet-option-action">Connect</span>
+                    </button>
+                  ))
+                ) : (
+                  <div className="wallet-empty-state">
+                    <strong>No compatible wallet found</strong>
+                    <span>
+                      Install a browser wallet such as MetaMask, then refresh the page.
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {connectError ? (
+                <p className="wallet-error" role="alert">
+                  {connectError.shortMessage || connectError.message}
+                </p>
+              ) : null}
+            </section>
+          </div>
         ) : null}
       </div>
     );
@@ -96,11 +165,7 @@ export function WalletConnect() {
           onClick={handleSwitchNetwork}
           disabled={isSwitching}
         >
-          <span>
-            {isSwitching
-              ? 'Switching network…'
-              : 'Switch to Arc Testnet'}
-          </span>
+          {isSwitching ? 'Switching network…' : 'Switch to Arc Testnet'}
         </button>
       ) : null}
 
