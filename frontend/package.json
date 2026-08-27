@@ -9,9 +9,9 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.85.0",
-    "@x402/core": "^0.6.0",
-    "@x402/evm": "^0.6.0",
-    "@x402/svm": "^0.6.0",
+    "@x402/core": "latest",
+    "@x402/evm": "latest",
+    "@x402/svm": "latest",
     "next": "^15.4.6",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
