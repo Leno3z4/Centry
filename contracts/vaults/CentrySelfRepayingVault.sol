@@ -53,18 +53,15 @@ interface ICentryYieldVault {
         address owner_
     ) external returns (uint256 assets);
 
-    function balanceOf(
-        address account
-    ) external view returns (uint256);
+    function convertToAssets(
+        uint256 shares
+    ) external view returns (uint256 assets);
 }
 
 /// @title Centry Self-Repaying Vault
-/// @notice An isolated user position that supplies collateral to the existing
-///         Centry lending pool, borrows the same asset, places the borrowed
-///         asset into a Centry Yield Vault, and uses realized positive yield
-///         to repay the position's debt.
-/// @dev One deployed instance belongs to one owner. A factory can create
-///      isolated instances for multiple users without sharing accounting.
+/// @notice Isolated position that borrows through the existing Centry lending
+///         pool and uses realized yield to repay its own debt.
+/// @dev v1 intentionally supports one asset and one yield vault per position.
 contract CentrySelfRepayingVault is
     Ownable2Step,
     ReentrancyGuard,
@@ -153,9 +150,6 @@ contract CentrySelfRepayingVault is
         assetToken = IERC20(asset_);
     }
 
-    /// @notice Deposits collateral into this isolated position.
-    /// @dev Additional collateral is deliberately disabled after opening so
-    ///      accounting cannot claim collateral that was never supplied to the pool.
     function depositCollateral(
         uint256 amount
     ) external onlyOwner whenNotPaused nonReentrant {
@@ -181,8 +175,6 @@ contract CentrySelfRepayingVault is
         );
     }
 
-    /// @notice Supplies collateral, borrows, and deposits the borrowed asset
-    ///         into the configured yield vault.
     function openPosition(
         uint256 borrowAmount
     ) external onlyOwner whenNotPaused nonReentrant {
@@ -209,15 +201,16 @@ contract CentrySelfRepayingVault is
             borrowAmount
         );
 
-        yieldShares = yieldVault.deposit(
+        uint256 shares = yieldVault.deposit(
             borrowAmount,
             address(this)
         );
 
-        if (yieldShares == 0) {
+        if (shares == 0) {
             revert InvalidVaultState();
         }
 
+        yieldShares = shares;
         yieldPrincipal = borrowAmount;
         positionOpen = true;
 
@@ -233,13 +226,14 @@ contract CentrySelfRepayingVault is
             msg.sender,
             collateralSupplied,
             borrowAmount,
-            yieldShares
+            shares
         );
     }
 
-    /// @notice Realizes the yield position, uses only positive profit to repay
-    ///         debt, and reinvests the remaining assets.
-    /// @return repaidAmount The amount of debt repaid from realized profit.
+    /// @notice Realizes yield, repays only the amount above the original
+    ///         yield principal, and reinvests the remaining underlying.
+    /// @dev A loss never reduces yieldPrincipal. This preserves the original
+    ///      cost basis so recovered principal is not misclassified as yield.
     function harvestAndRepay()
         external
         onlyOwner
@@ -264,7 +258,7 @@ contract CentrySelfRepayingVault is
             revert NoYield();
         }
 
-        uint256 beforeBalance = assetToken.balanceOf(
+        uint256 balanceBefore = assetToken.balanceOf(
             address(this)
         );
 
@@ -276,7 +270,7 @@ contract CentrySelfRepayingVault is
 
         uint256 received = assetToken.balanceOf(
             address(this)
-        ) - beforeBalance;
+        ) - balanceBefore;
 
         if (received != redeemed || received == 0) {
             revert InvalidVaultState();
@@ -306,30 +300,37 @@ contract CentrySelfRepayingVault is
                 revert InvalidVaultState();
             }
 
-            totalRepaid += repaidAmount;
+            totalRepaid += actualRepaid;
         }
 
         uint256 remainingAssets = received - repaidAmount;
 
-        if (remainingAssets > 0) {
+        if (remainingAssets == 0) {
+            yieldShares = 0;
+
+            if (yieldPrincipal != 0) {
+                revert InvalidVaultState();
+            }
+        } else {
             assetToken.forceApprove(
                 address(yieldVault),
                 remainingAssets
             );
 
-            yieldShares = yieldVault.deposit(
+            uint256 newShares = yieldVault.deposit(
                 remainingAssets,
                 address(this)
             );
 
-            if (yieldShares == 0) {
+            if (newShares == 0) {
                 revert InvalidVaultState();
             }
 
-            yieldPrincipal = remainingAssets;
-        } else {
-            yieldShares = 0;
-            yieldPrincipal = 0;
+            yieldShares = newShares;
+
+            if (received >= yieldPrincipal) {
+                yieldPrincipal = received - profit;
+            }
         }
 
         uint256 remainingDebt = lendingPool.borrowBalance(
@@ -349,7 +350,37 @@ contract CentrySelfRepayingVault is
         );
     }
 
-    /// @notice Closes the position after the lending debt has reached zero.
+    function currentYieldAssets()
+        external
+        view
+        returns (uint256)
+    {
+        return yieldVault.convertToAssets(
+            yieldShares
+        );
+    }
+
+    function currentDebt()
+        external
+        view
+        returns (uint256)
+    {
+        return lendingPool.borrowBalance(
+            address(this),
+            address(assetToken)
+        );
+    }
+
+    function currentHealthFactor()
+        external
+        view
+        returns (uint256)
+    {
+        return lendingPool.healthFactor(
+            address(this)
+        );
+    }
+
     function closePosition()
         external
         onlyOwner
@@ -407,27 +438,6 @@ contract CentrySelfRepayingVault is
         emit PositionClosed(
             owner(),
             returnedAssets
-        );
-    }
-
-    function currentDebt()
-        external
-        view
-        returns (uint256)
-    {
-        return lendingPool.borrowBalance(
-            address(this),
-            address(assetToken)
-        );
-    }
-
-    function currentHealthFactor()
-        external
-        view
-        returns (uint256)
-    {
-        return lendingPool.healthFactor(
-            address(this)
         );
     }
 
