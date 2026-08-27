@@ -63,16 +63,23 @@ contract CentrySelfRepayingVaultFactory {
 
         (
             bool debtActive,
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
+            uint8 debtDecimals,
+            uint16 debtLtvBps,
+            uint16 debtLiquidationThresholdBps,
+            uint16 debtLiquidationBonusBps,
+            uint16 debtReserveFactorBps,
+            uint128 debtSupplyCap,
             uint128 debtBorrowCap
         ) = ICentryReserveRegistry(lendingPool_).getReserveConfig(
             debtAsset_
         );
+
+        debtDecimals;
+        debtLtvBps;
+        debtLiquidationThresholdBps;
+        debtLiquidationBonusBps;
+        debtReserveFactorBps;
+        debtSupplyCap;
 
         if (
             !debtActive ||
@@ -94,21 +101,28 @@ contract CentrySelfRepayingVaultFactory {
         }
 
         (
-            bool active,
-            ,
-            ,
-            ,
-            ,
-            ,
-            uint128 supplyCap,
-            
+            bool collateralActive,
+            uint8 collateralDecimals,
+            uint16 collateralLtvBps,
+            uint16 collateralLiquidationThresholdBps,
+            uint16 collateralLiquidationBonusBps,
+            uint16 collateralReserveFactorBps,
+            uint128 collateralSupplyCap,
+            uint128 collateralBorrowCap
         ) = ICentryReserveRegistry(lendingPool).getReserveConfig(
             collateralAsset
         );
 
+        collateralDecimals;
+        collateralLtvBps;
+        collateralLiquidationThresholdBps;
+        collateralLiquidationBonusBps;
+        collateralReserveFactorBps;
+        collateralBorrowCap;
+
         if (
-            !active ||
-            supplyCap == 0
+            !collateralActive ||
+            collateralSupplyCap == 0
         ) {
             revert UnsupportedCollateral();
         }
