@@ -1,9 +1,10 @@
 import './globals.css';
 import './mobile.css';
+import './welcome/landing.css';
 
 export const metadata = {
   title: 'Centry',
-  description: 'Native USDC lending and yield infrastructure on Arc.',
+  description: 'Arc-native lending and yield infrastructure.',
 };
 
 export default function RootLayout({ children }) {
