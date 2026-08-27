@@ -37,6 +37,22 @@ interface ICentryLendingPool {
     function healthFactor(
         address user
     ) external view returns (uint256);
+
+    function getReserveConfig(
+        address asset
+    )
+        external
+        view
+        returns (
+            bool active,
+            uint8 decimals,
+            uint16 ltvBps,
+            uint16 liquidationThresholdBps,
+            uint16 liquidationBonusBps,
+            uint16 reserveFactorBps,
+            uint128 supplyCap,
+            uint128 borrowCap
+        );
 }
 
 interface ICentryYieldVault {
@@ -87,6 +103,8 @@ contract CentrySelfRepayingVault is
 
     error InvalidAddress();
     error InvalidAsset();
+    error UnsupportedCollateral();
+    error UnsupportedDebtAsset();
     error AmountZero();
     error PositionAlreadyOpen();
     error PositionNotOpen();
@@ -157,6 +175,46 @@ contract CentrySelfRepayingVault is
             ICentryYieldVault(yieldVault_).asset() != debtAsset_
         ) {
             revert InvalidAsset();
+        }
+
+        (
+            bool collateralActive,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            uint128 collateralSupplyCap,
+        ) = ICentryLendingPool(lendingPool_).getReserveConfig(
+            collateralAsset_
+        );
+
+        if (
+            !collateralActive ||
+            collateralSupplyCap == 0
+        ) {
+            revert UnsupportedCollateral();
+        }
+
+        (
+            bool debtActive,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            uint128 debtBorrowCap
+        ) = ICentryLendingPool(lendingPool_).getReserveConfig(
+            debtAsset_
+        );
+
+        if (
+            !debtActive ||
+            debtBorrowCap == 0
+        ) {
+            revert UnsupportedDebtAsset();
         }
 
         lendingPool = ICentryLendingPool(lendingPool_);
@@ -314,9 +372,9 @@ contract CentrySelfRepayingVault is
             address(this)
         );
 
-        uint256 received = debtAsset.balanceOf(
-            address(this)
-        ) - beforeBalance;
+        uint256 received =
+            debtAsset.balanceOf(address(this)) -
+            beforeBalance;
 
         if (
             received != redeemed ||
