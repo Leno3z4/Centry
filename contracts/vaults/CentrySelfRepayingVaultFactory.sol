@@ -3,10 +3,27 @@ pragma solidity ^0.8.24;
 
 import "./CentrySelfRepayingVault.sol";
 
+interface ICentryReserveRegistry {
+    function getReserveConfig(
+        address asset
+    )
+        external
+        view
+        returns (
+            bool active,
+            uint8 decimals,
+            uint16 ltvBps,
+            uint16 liquidationThresholdBps,
+            uint16 liquidationBonusBps,
+            uint16 reserveFactorBps,
+            uint128 supplyCap,
+            uint128 borrowCap
+        );
+}
+
 /// @title Centry Self-Repaying Vault Factory
-/// @notice Creates isolated positions that can choose a supported collateral
-///         asset while keeping the debt/yield asset fixed to the configured
-///         Centry Yield Vault asset.
+/// @notice Creates isolated positions that choose a supported collateral
+///         asset while keeping the debt/yield asset fixed to the yield vault.
 contract CentrySelfRepayingVaultFactory {
     address public immutable lendingPool;
     address public immutable yieldVault;
@@ -23,6 +40,7 @@ contract CentrySelfRepayingVaultFactory {
 
     error InvalidAddress();
     error InvalidYieldAsset();
+    error UnsupportedCollateral();
 
     constructor(
         address lendingPool_,
@@ -43,6 +61,26 @@ contract CentrySelfRepayingVaultFactory {
             revert InvalidYieldAsset();
         }
 
+        (
+            bool debtActive,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            uint128 debtBorrowCap
+        ) = ICentryReserveRegistry(lendingPool_).getReserveConfig(
+            debtAsset_
+        );
+
+        if (
+            !debtActive ||
+            debtBorrowCap == 0
+        ) {
+            revert InvalidYieldAsset();
+        }
+
         lendingPool = lendingPool_;
         yieldVault = yieldVault_;
         debtAsset = debtAsset_;
@@ -53,6 +91,26 @@ contract CentrySelfRepayingVaultFactory {
     ) external returns (address position) {
         if (collateralAsset == address(0)) {
             revert InvalidAddress();
+        }
+
+        (
+            bool active,
+            ,
+            ,
+            ,
+            ,
+            ,
+            uint128 supplyCap,
+            
+        ) = ICentryReserveRegistry(lendingPool).getReserveConfig(
+            collateralAsset
+        );
+
+        if (
+            !active ||
+            supplyCap == 0
+        ) {
+            revert UnsupportedCollateral();
         }
 
         CentrySelfRepayingVault vault =
