@@ -1,6 +1,7 @@
 import './globals.css';
 import './mobile.css';
 import './welcome/landing.css';
+import './wallet-picker.css';
 
 export const metadata = {
   title: 'Centry',
