@@ -40,19 +40,16 @@ interface ICentryLendingPool {
 
     function getReserveConfig(
         address asset
-    )
-        external
-        view
-        returns (
-            bool active,
-            uint8 decimals,
-            uint16 ltvBps,
-            uint16 liquidationThresholdBps,
-            uint16 liquidationBonusBps,
-            uint16 reserveFactorBps,
-            uint128 supplyCap,
-            uint128 borrowCap
-        );
+    ) external view returns (
+        bool active,
+        uint8 decimals,
+        uint16 ltvBps,
+        uint16 liquidationThresholdBps,
+        uint16 liquidationBonusBps,
+        uint16 reserveFactorBps,
+        uint128 supplyCap,
+        uint128 borrowCap
+    );
 }
 
 interface ICentryYieldVault {
@@ -75,12 +72,13 @@ interface ICentryYieldVault {
 }
 
 /// @title Centry Self-Repaying Vault
-/// @notice An isolated user position that supplies a selected collateral asset
-///         to the existing Centry lending pool, borrows the configured debt
-///         asset, invests that debt asset in a Centry Yield Vault, and uses
+/// @notice Isolated user position that supplies a selected collateral asset
+///         to the existing Centry lending pool, borrows the fixed debt asset,
+///         invests that debt asset in the Centry Yield Vault, and uses
 ///         realized positive yield to repay the debt.
-/// @dev The debt/yield asset is fixed by the configured yield vault. Any
-///      supported lending-pool reserve can be selected as collateral.
+/// @dev Collateral is supplied to the lending pool when deposited so the
+///      position can be inspected before borrowing. The debt/yield asset is
+///      fixed by the configured yield vault.
 contract CentrySelfRepayingVault is
     Ownable2Step,
     ReentrancyGuard,
@@ -177,50 +175,48 @@ contract CentrySelfRepayingVault is
             revert InvalidAsset();
         }
 
-        (
-            bool collateralActive,
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            uint128 collateralSupplyCap,
-        ) = ICentryLendingPool(lendingPool_).getReserveConfig(
+        _requireActiveReserve(
+            lendingPool_,
             collateralAsset_
         );
 
-        if (
-            !collateralActive ||
-            collateralSupplyCap == 0
-        ) {
-            revert UnsupportedCollateral();
-        }
-
-        (
-            bool debtActive,
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            uint128 debtBorrowCap
-        ) = ICentryLendingPool(lendingPool_).getReserveConfig(
+        _requireActiveReserve(
+            lendingPool_,
             debtAsset_
         );
-
-        if (
-            !debtActive ||
-            debtBorrowCap == 0
-        ) {
-            revert UnsupportedDebtAsset();
-        }
 
         lendingPool = ICentryLendingPool(lendingPool_);
         yieldVault = ICentryYieldVault(yieldVault_);
         collateralAsset = IERC20(collateralAsset_);
         debtAsset = IERC20(debtAsset_);
+    }
+
+    function _requireActiveReserve(
+        address pool,
+        address asset
+    ) internal view {
+        (
+            bool success,
+            bytes memory data
+        ) = pool.staticcall(
+            abi.encodeWithSelector(
+                ICentryLendingPool.getReserveConfig.selector,
+                asset
+            )
+        );
+
+        if (!success || data.length < 32) {
+            revert UnsupportedCollateral();
+        }
+
+        bool active = abi.decode(
+            data,
+            (bool)
+        );
+
+        if (!active) {
+            revert UnsupportedCollateral();
+        }
     }
 
     function depositCollateral(
@@ -237,6 +233,16 @@ contract CentrySelfRepayingVault is
         collateralAsset.safeTransferFrom(
             msg.sender,
             address(this),
+            amount
+        );
+
+        collateralAsset.forceApprove(
+            address(lendingPool),
+            amount
+        );
+
+        lendingPool.supply(
+            address(collateralAsset),
             amount
         );
 
@@ -261,6 +267,15 @@ contract CentrySelfRepayingVault is
             amount > collateralSupplied
         ) {
             revert AmountZero();
+        }
+
+        uint256 withdrawn = lendingPool.withdraw(
+            address(collateralAsset),
+            amount
+        );
+
+        if (withdrawn != amount) {
+            revert InvalidVaultState();
         }
 
         collateralSupplied -= amount;
@@ -290,11 +305,6 @@ contract CentrySelfRepayingVault is
             revert AmountZero();
         }
 
-        lendingPool.supply(
-            address(collateralAsset),
-            collateralSupplied
-        );
-
         lendingPool.borrow(
             address(debtAsset),
             borrowAmount
@@ -314,10 +324,6 @@ contract CentrySelfRepayingVault is
             revert InvalidVaultState();
         }
 
-        yieldShares = shares;
-        yieldPrincipal = borrowAmount;
-        positionOpen = true;
-
         uint256 health = lendingPool.healthFactor(
             address(this)
         );
@@ -325,6 +331,10 @@ contract CentrySelfRepayingVault is
         if (health < WAD) {
             revert HealthFactorTooLow();
         }
+
+        yieldShares = shares;
+        yieldPrincipal = borrowAmount;
+        positionOpen = true;
 
         emit PositionOpened(
             msg.sender,
@@ -335,10 +345,9 @@ contract CentrySelfRepayingVault is
         );
     }
 
-    /// @notice Realizes the current yield position and uses only profit above
-    ///         the original yield principal to repay the debt.
-    /// @dev Permissionless by design. The caller cannot redirect the funds;
-    ///      harvested yield and repayment remain inside this position.
+    /// @notice Realizes the current yield position and uses only positive
+    ///         profit above the original yield principal to repay debt.
+    /// @dev Permissionless. The caller cannot redirect harvested funds.
     function harvestAndRepay()
         external
         whenNotPaused
