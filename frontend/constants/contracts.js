@@ -31,6 +31,22 @@ export const CONTRACT_ADDRESSES = Object.freeze({
     'NEXT_PUBLIC_CENTRY_REVENUE_DISTRIBUTOR',
     '0xc54A67aBF5a5697F2dDCd75d6165a17E73048271'
   ),
+  selfRepayingFactory: env(
+    'NEXT_PUBLIC_CENTRY_SELF_REPAYING_FACTORY',
+    ''
+  ),
+  yieldVault: env(
+    'NEXT_PUBLIC_CENTRY_YIELD_VAULT',
+    '0x58d5b2d559895EF8446f2a38Dde1D29CE6d00E41'
+  ),
+  testYieldStrategy: env(
+    'NEXT_PUBLIC_CENTRY_TEST_YIELD_STRATEGY',
+    '0x5cF01Da1F06b602E3315678a88F605305fE58029'
+  ),
+  positionCollateral: env(
+    'NEXT_PUBLIC_CENTRY_POSITION_COLLATERAL',
+    ''
+  ),
 });
 
 export function hasAddress(name) {
