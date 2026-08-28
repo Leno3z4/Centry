@@ -31,9 +31,18 @@ export function useSelfRepayingVault() {
     hasAddress('positionCollateral');
   const correctNetwork = chainId === arcTestnet.id;
   const walletEnabled = configured && Boolean(address) && correctNetwork;
+  const factoryAddress = hasAddress('selfRepayingFactory')
+    ? CONTRACT_ADDRESSES.selfRepayingFactory
+    : undefined;
+  const collateralAddress = hasAddress('positionCollateral')
+    ? CONTRACT_ADDRESSES.positionCollateral
+    : undefined;
+  const positionAddress = /^0x[a-fA-F0-9]{40}$/.test(selectedPosition)
+    ? selectedPosition
+    : undefined;
 
   const { data: positions, refetch: refetchPositions } = useReadContract({
-    address: CONTRACT_ADDRESSES.selfRepayingFactory,
+    address: factoryAddress,
     abi: SELF_REPAYING_FACTORY_ABI,
     functionName: 'positionsOf',
     args: [address],
@@ -47,11 +56,11 @@ export function useSelfRepayingVault() {
     }
   }, [positions, selectedPosition]);
 
-  const positionEnabled = walletEnabled && Boolean(selectedPosition);
+  const positionEnabled = walletEnabled && Boolean(positionAddress);
   const positionQuery = { enabled: positionEnabled };
 
   const { data: positionOpen, refetch: refetchOpen } = useReadContract({
-    address: selectedPosition,
+    address: positionAddress,
     abi: SELF_REPAYING_POSITION_ABI,
     functionName: 'positionOpen',
     query: positionQuery,
@@ -59,7 +68,7 @@ export function useSelfRepayingVault() {
 
   const { data: collateralSupplied, refetch: refetchCollateral } =
     useReadContract({
-      address: selectedPosition,
+      address: positionAddress,
       abi: SELF_REPAYING_POSITION_ABI,
       functionName: 'collateralSupplied',
       query: positionQuery,
@@ -67,14 +76,14 @@ export function useSelfRepayingVault() {
 
   const { data: yieldPrincipal, refetch: refetchYieldPrincipal } =
     useReadContract({
-      address: selectedPosition,
+      address: positionAddress,
       abi: SELF_REPAYING_POSITION_ABI,
       functionName: 'yieldPrincipal',
       query: positionQuery,
     });
 
   const { data: currentDebt, refetch: refetchDebt } = useReadContract({
-    address: selectedPosition,
+    address: positionAddress,
     abi: SELF_REPAYING_POSITION_ABI,
     functionName: 'currentDebt',
     query: positionQuery,
@@ -82,7 +91,7 @@ export function useSelfRepayingVault() {
 
   const { data: currentYieldAssets, refetch: refetchYieldAssets } =
     useReadContract({
-      address: selectedPosition,
+      address: positionAddress,
       abi: SELF_REPAYING_POSITION_ABI,
       functionName: 'currentYieldAssets',
       query: positionQuery,
@@ -90,14 +99,14 @@ export function useSelfRepayingVault() {
 
   const { data: harvestableProfit, refetch: refetchProfit } =
     useReadContract({
-      address: selectedPosition,
+      address: positionAddress,
       abi: SELF_REPAYING_POSITION_ABI,
       functionName: 'harvestableProfit',
       query: positionQuery,
     });
 
   const { data: healthFactor, refetch: refetchHealth } = useReadContract({
-    address: selectedPosition,
+    address: positionAddress,
     abi: SELF_REPAYING_POSITION_ABI,
     functionName: 'healthFactor',
     query: positionQuery,
@@ -105,12 +114,12 @@ export function useSelfRepayingVault() {
 
   const { data: collateralAllowance, refetch: refetchAllowance } =
     useReadContract({
-      address: CONTRACT_ADDRESSES.positionCollateral,
+      address: collateralAddress,
       abi: ERC20_ABI,
       functionName: 'allowance',
-      args: [address, selectedPosition],
+      args: [address, positionAddress],
       query: {
-        enabled: walletEnabled && Boolean(selectedPosition),
+        enabled: walletEnabled && Boolean(positionAddress),
       },
     });
 
@@ -151,11 +160,15 @@ export function useSelfRepayingVault() {
   };
 
   const createPosition = async () => {
+    if (!factoryAddress || !collateralAddress) {
+      throw new Error('Self-repaying factory or collateral address is not configured.');
+    }
+
     await sendAndWait({
-      address: CONTRACT_ADDRESSES.selfRepayingFactory,
+      address: factoryAddress,
       abi: SELF_REPAYING_FACTORY_ABI,
       functionName: 'createPosition',
-      args: [CONTRACT_ADDRESSES.positionCollateral],
+      args: [collateralAddress],
     });
 
     const result = await refetchPositions();
@@ -165,17 +178,21 @@ export function useSelfRepayingVault() {
   };
 
   const approveCollateral = async (amount) => {
+    if (!collateralAddress || !positionAddress) {
+      throw new Error('Select a position before approving collateral.');
+    }
+
     return sendAndWait({
-      address: CONTRACT_ADDRESSES.positionCollateral,
+      address: collateralAddress,
       abi: ERC20_ABI,
       functionName: 'approve',
-      args: [selectedPosition, parseUnits(String(amount), 18)],
+      args: [positionAddress, parseUnits(String(amount), 18)],
     });
   };
 
   const depositCollateral = (amount) =>
     sendAndWait({
-      address: selectedPosition,
+      address: positionAddress,
       abi: SELF_REPAYING_POSITION_ABI,
       functionName: 'depositCollateral',
       args: [parseUnits(String(amount), 18)],
@@ -183,7 +200,7 @@ export function useSelfRepayingVault() {
 
   const openPosition = (amount) =>
     sendAndWait({
-      address: selectedPosition,
+      address: positionAddress,
       abi: SELF_REPAYING_POSITION_ABI,
       functionName: 'openPosition',
       args: [parseUnits(String(amount), 6)],
@@ -191,30 +208,35 @@ export function useSelfRepayingVault() {
 
   const harvestAndRepay = () =>
     sendAndWait({
-      address: selectedPosition,
+      address: positionAddress,
       abi: SELF_REPAYING_POSITION_ABI,
       functionName: 'harvestAndRepay',
     });
 
   const closePosition = () =>
     sendAndWait({
-      address: selectedPosition,
+      address: positionAddress,
       abi: SELF_REPAYING_POSITION_ABI,
       functionName: 'closePosition',
     });
 
   const refetchAll = async () => {
-    await Promise.all([
-      refetchPositions(),
-      refetchOpen(),
-      refetchCollateral(),
-      refetchYieldPrincipal(),
-      refetchDebt(),
-      refetchYieldAssets(),
-      refetchProfit(),
-      refetchHealth(),
-      refetchAllowance(),
-    ]);
+    const requests = [refetchPositions()];
+
+    if (positionAddress) {
+      requests.push(
+        refetchOpen(),
+        refetchCollateral(),
+        refetchYieldPrincipal(),
+        refetchDebt(),
+        refetchYieldAssets(),
+        refetchProfit(),
+        refetchHealth(),
+        refetchAllowance(),
+      );
+    }
+
+    await Promise.all(requests);
   };
 
   return {
