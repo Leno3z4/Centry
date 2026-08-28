@@ -26,88 +26,192 @@ jobs:
 
       - name: Run Centry keeper
         env:
-          ARC_RPC_URL: ${{ secrets.ARC_RPC_URL }}
+          ARC_RPC_URL_SECRET: ${{ secrets.ARC_RPC_URL }}
+          ARC_RPC_URL_VARIABLE: ${{ vars.ARC_RPC_URL }}
           KEEPER_PRIVATE_KEY: ${{ secrets.KEEPER_PRIVATE_KEY }}
-          CENTRY_SELF_REPAYING_FACTORY: ${{ vars.CENTRY_SELF_REPAYING_FACTORY }}
+          FACTORY_SECRET: ${{ secrets.CENTRY_SELF_REPAYING_FACTORY }}
+          FACTORY_VARIABLE: ${{ vars.CENTRY_SELF_REPAYING_FACTORY }}
           MIN_HARVEST_AMOUNT: "100000"
         run: |
           node <<'NODE'
           const { ethers } = require('ethers');
 
-          const rpcUrl = process.env.ARC_RPC_URL;
-          const privateKey = process.env.KEEPER_PRIVATE_KEY;
-          const factoryAddress = process.env.CENTRY_SELF_REPAYING_FACTORY;
-          const minHarvest = BigInt(process.env.MIN_HARVEST_AMOUNT);
+          const rpcUrl =
+            process.env.ARC_RPC_URL_SECRET ||
+            process.env.ARC_RPC_URL_VARIABLE;
 
-          if (!rpcUrl || !privateKey || !factoryAddress) {
-            throw new Error('Missing required keeper configuration');
+          const privateKey = process.env.KEEPER_PRIVATE_KEY;
+
+          const factoryAddress =
+            process.env.FACTORY_SECRET ||
+            process.env.FACTORY_VARIABLE;
+
+          const minHarvest = BigInt(
+            process.env.MIN_HARVEST_AMOUNT || '100000'
+          );
+
+          const missing = [];
+
+          if (!rpcUrl) {
+            missing.push('ARC_RPC_URL (Secret or Variable)');
+          }
+
+          if (!privateKey) {
+            missing.push('KEEPER_PRIVATE_KEY (Secret)');
+          }
+
+          if (!factoryAddress) {
+            missing.push(
+              'CENTRY_SELF_REPAYING_FACTORY (Secret or Variable)'
+            );
+          }
+
+          if (missing.length > 0) {
+            throw new Error(
+              `Missing keeper configuration: ${missing.join(', ')}`
+            );
+          }
+
+          if (!ethers.isAddress(factoryAddress)) {
+            throw new Error('CENTRY_SELF_REPAYING_FACTORY is not a valid address');
           }
 
           const provider = new ethers.JsonRpcProvider(rpcUrl);
           const wallet = new ethers.Wallet(privateKey, provider);
 
-          const factoryAbi = [
-            'function allPositionsLength() view returns (uint256)',
-            'function allPositions(uint256) view returns (address)'
-          ];
-
-          const positionAbi = [
-            'function harvestableProfit() view returns (uint256)',
-            'function harvestAndRepay() returns (uint256)',
-            'function positionOpen() view returns (bool)'
-          ];
-
-          const factory = new ethers.Contract(
-            factoryAddress,
-            factoryAbi,
-            provider
-          );
-
           async function main() {
+            const network = await provider.getNetwork();
+            const chainId = network.chainId.toString();
+
+            console.log(`Connected chainId: ${chainId}`);
+            console.log(`Keeper address: ${wallet.address}`);
+
+            if (chainId !== '5042002') {
+              throw new Error(
+                `Wrong network: expected Arc Testnet (5042002), got ${chainId}`
+              );
+            }
+
+            const keeperBalance = await provider.getBalance(wallet.address);
+            console.log(
+              `Keeper gas balance: ${ethers.formatEther(keeperBalance)} native`
+            );
+
+            if (keeperBalance === 0n) {
+              throw new Error('Keeper wallet has zero native gas balance');
+            }
+
+            const factoryAbi = [
+              'function allPositionsLength() view returns (uint256)',
+              'function allPositions(uint256) view returns (address)'
+            ];
+
+            const positionAbi = [
+              'function harvestableProfit() view returns (uint256)',
+              'function harvestAndRepay() returns (uint256)',
+              'function positionOpen() view returns (bool)'
+            ];
+
+            const factory = new ethers.Contract(
+              factoryAddress,
+              factoryAbi,
+              provider
+            );
+
+            console.log(`Factory: ${factoryAddress}`);
+
             const total = await factory.allPositionsLength();
             console.log(`Positions discovered: ${total}`);
 
+            let attempted = 0;
+            let succeeded = 0;
+            let failed = 0;
+
             for (let i = 0n; i < total; i++) {
               const positionAddress = await factory.allPositions(i);
-              const position = new ethers.Contract(
-                positionAddress,
-                positionAbi,
-                wallet
-              );
 
-              const open = await position.positionOpen();
-
-              if (!open) {
-                console.log(`${positionAddress}: closed, skipping`);
-                continue;
-              }
-
-              const profit = await position.harvestableProfit();
-              console.log(
-                `${positionAddress}: harvestable profit = ${profit.toString()}`
-              );
-
-              if (profit < minHarvest) {
-                console.log(
-                  `${positionAddress}: below threshold (${minHarvest}), skipping`
+              try {
+                const position = new ethers.Contract(
+                  positionAddress,
+                  positionAbi,
+                  wallet
                 );
-                continue;
+
+                const open = await position.positionOpen();
+
+                if (!open) {
+                  console.log(
+                    `${positionAddress}: closed, skipping`
+                  );
+                  continue;
+                }
+
+                const profit = await position.harvestableProfit();
+
+                console.log(
+                  `${positionAddress}: harvestable profit = ${profit.toString()}`
+                );
+
+                if (profit < minHarvest) {
+                  console.log(
+                    `${positionAddress}: below threshold (${minHarvest}), skipping`
+                  );
+                  continue;
+                }
+
+                attempted++;
+
+                const gasEstimate =
+                  await position.harvestAndRepay.estimateGas();
+
+                const feeData = await provider.getFeeData();
+
+                const overrides = {
+                  gasLimit: gasEstimate * 120n / 100n
+                };
+
+                if (feeData.maxFeePerGas) {
+                  overrides.maxFeePerGas = feeData.maxFeePerGas;
+                  overrides.maxPriorityFeePerGas =
+                    feeData.maxPriorityFeePerGas ?? 0n;
+                } else if (feeData.gasPrice) {
+                  overrides.gasPrice = feeData.gasPrice;
+                }
+
+                const tx = await position.harvestAndRepay(overrides);
+
+                console.log(
+                  `${positionAddress}: submitted ${tx.hash}`
+                );
+
+                const receipt = await tx.wait();
+
+                console.log(
+                  `${positionAddress}: confirmed in block ${receipt.blockNumber}`
+                );
+
+                succeeded++;
+              } catch (error) {
+                failed++;
+
+                const message = error?.shortMessage ||
+                  error?.reason ||
+                  error?.message ||
+                  String(error);
+
+                console.error(
+                  `${positionAddress}: keeper attempt failed: ${message}`
+                );
               }
+            }
 
-              const feeData = await provider.getFeeData();
-              const gasEstimate = await position.harvestAndRepay.estimateGas();
+            console.log(
+              `Keeper summary: attempted=${attempted}, succeeded=${succeeded}, failed=${failed}`
+            );
 
-              const tx = await position.harvestAndRepay({
-                gasLimit: gasEstimate * 120n / 100n,
-                ...(feeData.maxFeePerGas
-                  ? { maxFeePerGas: feeData.maxFeePerGas, maxPriorityFeePerGas: feeData.maxPriorityFeePerGas ?? 0n }
-                  : { gasPrice: feeData.gasPrice ?? undefined })
-              });
-
-              console.log(`${positionAddress}: submitted ${tx.hash}`);
-              const receipt = await tx.wait();
-              console.log(
-                `${positionAddress}: confirmed in block ${receipt.blockNumber}`
+            if (attempted > 0 && succeeded === 0) {
+              throw new Error(
+                'All eligible keeper attempts failed'
               );
             }
           }
