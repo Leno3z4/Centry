@@ -1,0 +1,516 @@
+.shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 78% 8%, rgba(120, 62, 208, 0.22), transparent 28%),
+    radial-gradient(circle at 12% 80%, rgba(74, 38, 120, 0.12), transparent 30%),
+    #080611;
+  color: #f7f4ff;
+}
+
+.topbar {
+  display: flex;
+  min-height: 76px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 42px;
+  border-bottom: 1px solid #211a2e;
+  background: rgba(6, 5, 12, 0.82);
+  backdrop-filter: blur(18px);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.brand span {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 2px solid #9b62ff;
+  border-radius: 50%;
+  color: #c59cff;
+}
+
+.page {
+  width: min(1180px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 56px 0 80px;
+}
+
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+
+.kicker {
+  color: #967ab8;
+  font: 10px 'DM Mono', monospace;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.header h1,
+.configCard h1 {
+  margin: 10px 0 14px;
+  font-size: clamp(42px, 6vw, 72px);
+  line-height: 0.98;
+  letter-spacing: -3.5px;
+}
+
+.header p,
+.configCard p {
+  max-width: 720px;
+  margin: 0;
+  color: #a49caf;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.headerMeta {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid #2c223b;
+  border-radius: 999px;
+  color: #bdb0ce;
+  font: 10px 'DM Mono', monospace;
+  white-space: nowrap;
+}
+
+.liveDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #4ee39a;
+  box-shadow: 0 0 12px #4ee39a;
+}
+
+.chain {
+  color: #6f657c;
+}
+
+.connectCard,
+.configCard,
+.positionPicker,
+.card,
+.notice,
+.transaction {
+  border: 1px solid #282033;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #100b1a, #0b0813);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
+}
+
+.connectCard,
+.configCard {
+  padding: 28px;
+}
+
+.connectCard h2 {
+  margin: 9px 0 8px;
+  font-size: 24px;
+}
+
+.connectCard p {
+  margin: 0 0 18px;
+  color: #8f869b;
+  line-height: 1.6;
+}
+
+.configRows {
+  display: grid;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.configRows div {
+  display: grid;
+  gap: 5px;
+  padding: 13px 15px;
+  border: 1px solid #21182d;
+  border-radius: 11px;
+  background: #0d0916;
+}
+
+.configRows span,
+.metric span,
+.detailRows span,
+.progressLabel span {
+  color: #756d83;
+  font-size: 10px;
+}
+
+.configRows strong {
+  color: #d4c7e4;
+  font: 11px 'DM Mono', monospace;
+  overflow-wrap: anywhere;
+}
+
+.positionPicker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 16px;
+  padding: 18px 20px;
+}
+
+.positionPicker h2 {
+  margin: 7px 0 0;
+  font-size: 18px;
+}
+
+.positionSelectRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.positionSelectRow select {
+  width: 220px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid #3b2d4d;
+  border-radius: 10px;
+  background: #0c0814;
+  color: #f7f4ff;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.metric {
+  min-height: 132px;
+  padding: 18px;
+  border: 1px solid #282033;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #100b1b, #0b0813);
+}
+
+.metric strong {
+  display: block;
+  margin: 12px 0 7px;
+  color: #f4edff;
+  font-size: 24px;
+  letter-spacing: -0.8px;
+}
+
+.metric small {
+  color: #5f576a;
+  font: 9px 'DM Mono', monospace;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.card {
+  padding: 24px;
+}
+
+.cardHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.card h2 {
+  margin: 7px 0 0;
+  font-size: 22px;
+}
+
+.address {
+  padding: 6px 9px;
+  border: 1px solid #282033;
+  border-radius: 9px;
+  color: #766d82;
+  font: 9px 'DM Mono', monospace;
+}
+
+.label {
+  display: block;
+  margin: 18px 0 8px;
+  color: #c3b6d1;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.inputRow {
+  display: flex;
+  align-items: center;
+  border: 1px solid #2d2439;
+  border-radius: 11px;
+  background: #0b0712;
+}
+
+.inputRow:focus-within {
+  border-color: #6e42b5;
+  box-shadow: 0 0 0 3px rgba(155, 98, 255, 0.08);
+}
+
+.inputRow input {
+  width: 100%;
+  min-height: 50px;
+  padding: 0 13px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #fff;
+}
+
+.inputRow input::-webkit-outer-spin-button,
+.inputRow input::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.inputRow span {
+  padding-right: 14px;
+  color: #80758d;
+  font: 10px 'DM Mono', monospace;
+}
+
+.helper {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 8px 0 14px;
+  color: #696174;
+  font: 9px 'DM Mono', monospace;
+}
+
+.helper button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #b895ff;
+  font: inherit;
+}
+
+.primaryButton,
+.secondaryButton,
+.secondaryButtonFull,
+.dangerButton {
+  width: 100%;
+  min-height: 48px;
+  border-radius: 11px;
+  font-size: 12px;
+  font-weight: 700;
+  transition: transform 160ms ease, filter 160ms ease, border-color 160ms ease;
+}
+
+.primaryButton {
+  border: 1px solid transparent;
+  background: linear-gradient(100deg, #8b4eff, #b67cff);
+  color: #fff;
+  box-shadow: 0 10px 35px rgba(108, 49, 181, 0.2);
+}
+
+.primaryButton:hover:not(:disabled),
+.secondaryButton:hover:not(:disabled),
+.secondaryButtonFull:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.secondaryButton,
+.secondaryButtonFull {
+  border: 1px solid #413051;
+  background: #0d0916;
+  color: #d8cdea;
+}
+
+.secondaryButton {
+  width: auto;
+  min-width: 150px;
+  padding: 0 16px;
+}
+
+.secondaryButtonFull {
+  margin-top: 10px;
+}
+
+.dangerButton {
+  margin-top: 10px;
+  border: 1px solid #41252f;
+  background: #120b10;
+  color: #d99aa9;
+}
+
+.progressBlock {
+  padding: 15px;
+  border: 1px solid #21182d;
+  border-radius: 12px;
+  background: #0c0814;
+}
+
+.progressLabel {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.progressLabel strong {
+  color: #cbbce2;
+  font: 10px 'DM Mono', monospace;
+}
+
+.progressTrack {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #1b1425;
+}
+
+.progressTrack span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #8b4eff, #c59cff);
+}
+
+.detailRows {
+  display: grid;
+  gap: 0;
+  margin: 18px 0;
+  border-top: 1px solid #21182d;
+}
+
+.detailRows div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 13px 0;
+  border-bottom: 1px solid #21182d;
+}
+
+.detailRows strong {
+  color: #f1eaff;
+  font: 11px 'DM Mono', monospace;
+}
+
+.eligible,
+.waiting {
+  padding: 6px 9px;
+  border-radius: 999px;
+  font: 9px 'DM Mono', monospace;
+}
+
+.eligible {
+  border: 1px solid #24503d;
+  background: #0b1a14;
+  color: #4ee39a;
+}
+
+.waiting {
+  border: 1px solid #373044;
+  background: #0c0913;
+  color: #82788f;
+}
+
+.emptyState {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+  border: 1px dashed #342744;
+  border-radius: 12px;
+  background: #0c0814;
+}
+
+.emptyState p {
+  margin: 0;
+  color: #968ca2;
+  line-height: 1.6;
+}
+
+.notice,
+.transaction {
+  margin-top: 16px;
+  padding: 13px 15px;
+  color: #cfc2dc;
+  font: 10px 'DM Mono', monospace;
+  overflow-wrap: anywhere;
+}
+
+.transaction {
+  color: #746a80;
+}
+
+@media (max-width: 900px) {
+  .topbar {
+    padding: 12px 18px;
+  }
+
+  .page {
+    width: min(100% - 28px, 760px);
+    padding-top: 36px;
+  }
+
+  .header,
+  .positionPicker {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .positionSelectRow {
+    width: 100%;
+  }
+
+  .positionSelectRow select,
+  .secondaryButton {
+    width: 100%;
+  }
+
+  .metrics {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .brand {
+    font-size: 18px;
+  }
+
+  .headerMeta {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .card,
+  .connectCard,
+  .configCard {
+    padding: 18px;
+  }
+
+  .page {
+    width: min(100% - 20px, 760px);
+    padding-bottom: 42px;
+  }
+}
