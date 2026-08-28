@@ -40,20 +40,28 @@ interface ICentryLendingPool {
 
     function getReserveConfig(
         address asset
-    ) external view returns (
-        bool active,
-        uint8 decimals,
-        uint16 ltvBps,
-        uint16 liquidationThresholdBps,
-        uint16 liquidationBonusBps,
-        uint16 reserveFactorBps,
-        uint128 supplyCap,
-        uint128 borrowCap
-    );
+    )
+        external
+        view
+        returns (
+            bool active,
+            uint8 decimals,
+            uint16 ltvBps,
+            uint16 liquidationThresholdBps,
+            uint16 liquidationBonusBps,
+            uint16 reserveFactorBps,
+            uint128 supplyCap,
+            uint128 borrowCap
+        );
 }
 
 interface ICentryYieldVault {
     function asset() external view returns (address);
+
+    function approve(
+        address spender,
+        uint256 amount
+    ) external returns (bool);
 
     function deposit(
         uint256 assets,
@@ -74,7 +82,7 @@ interface ICentryYieldVault {
 /// @title Centry Self-Repaying Vault
 /// @notice Isolated user position that supplies a selected collateral asset
 ///         to the existing Centry lending pool, borrows the fixed debt asset,
-///         invests that debt asset in the Centry Yield Vault, and uses
+///         invests the debt asset in the Centry Yield Vault, and uses
 ///         realized positive yield to repay the debt.
 /// @dev Collateral is supplied to the lending pool when deposited so the
 ///      position can be inspected before borrowing. The debt/yield asset is
@@ -345,8 +353,9 @@ contract CentrySelfRepayingVault is
         );
     }
 
-    /// @notice Realizes the current yield position and uses only positive
-    ///         profit above the original yield principal to repay debt.
+    /// @notice Approves this position to redeem its own cYLD shares, then
+    ///         realizes yield and uses only positive profit above principal
+    ///         to repay the debt.
     /// @dev Permissionless. The caller cannot redirect harvested funds.
     function harvestAndRepay()
         external
@@ -375,8 +384,15 @@ contract CentrySelfRepayingVault is
             address(this)
         );
 
+        uint256 sharesToRedeem = yieldShares;
+
+        yieldVault.approve(
+            address(this),
+            sharesToRedeem
+        );
+
         uint256 redeemed = yieldVault.redeem(
-            yieldShares,
+            sharesToRedeem,
             address(this),
             address(this)
         );
@@ -525,6 +541,11 @@ contract CentrySelfRepayingVault is
         }
 
         if (yieldShares > 0) {
+            yieldVault.approve(
+                address(this),
+                yieldShares
+            );
+
             returnedYieldAssets = yieldVault.redeem(
                 yieldShares,
                 address(this),
