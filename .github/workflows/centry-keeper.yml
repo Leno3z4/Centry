@@ -1,0 +1,119 @@
+name: Centry Testnet Keeper
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  keeper:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install ethers
+        run: npm install --no-save ethers@6
+
+      - name: Run Centry keeper
+        env:
+          ARC_RPC_URL: ${{ secrets.ARC_RPC_URL }}
+          KEEPER_PRIVATE_KEY: ${{ secrets.KEEPER_PRIVATE_KEY }}
+          CENTRY_SELF_REPAYING_FACTORY: ${{ vars.CENTRY_SELF_REPAYING_FACTORY }}
+          MIN_HARVEST_AMOUNT: "100000"
+        run: |
+          node <<'NODE'
+          const { ethers } = require('ethers');
+
+          const rpcUrl = process.env.ARC_RPC_URL;
+          const privateKey = process.env.KEEPER_PRIVATE_KEY;
+          const factoryAddress = process.env.CENTRY_SELF_REPAYING_FACTORY;
+          const minHarvest = BigInt(process.env.MIN_HARVEST_AMOUNT);
+
+          if (!rpcUrl || !privateKey || !factoryAddress) {
+            throw new Error('Missing required keeper configuration');
+          }
+
+          const provider = new ethers.JsonRpcProvider(rpcUrl);
+          const wallet = new ethers.Wallet(privateKey, provider);
+
+          const factoryAbi = [
+            'function allPositionsLength() view returns (uint256)',
+            'function allPositions(uint256) view returns (address)'
+          ];
+
+          const positionAbi = [
+            'function harvestableProfit() view returns (uint256)',
+            'function harvestAndRepay() returns (uint256)',
+            'function positionOpen() view returns (bool)'
+          ];
+
+          const factory = new ethers.Contract(
+            factoryAddress,
+            factoryAbi,
+            provider
+          );
+
+          async function main() {
+            const total = await factory.allPositionsLength();
+            console.log(`Positions discovered: ${total}`);
+
+            for (let i = 0n; i < total; i++) {
+              const positionAddress = await factory.allPositions(i);
+              const position = new ethers.Contract(
+                positionAddress,
+                positionAbi,
+                wallet
+              );
+
+              const open = await position.positionOpen();
+
+              if (!open) {
+                console.log(`${positionAddress}: closed, skipping`);
+                continue;
+              }
+
+              const profit = await position.harvestableProfit();
+              console.log(
+                `${positionAddress}: harvestable profit = ${profit.toString()}`
+              );
+
+              if (profit < minHarvest) {
+                console.log(
+                  `${positionAddress}: below threshold (${minHarvest}), skipping`
+                );
+                continue;
+              }
+
+              const feeData = await provider.getFeeData();
+              const gasEstimate = await position.harvestAndRepay.estimateGas();
+
+              const tx = await position.harvestAndRepay({
+                gasLimit: gasEstimate * 120n / 100n,
+                ...(feeData.maxFeePerGas
+                  ? { maxFeePerGas: feeData.maxFeePerGas, maxPriorityFeePerGas: feeData.maxPriorityFeePerGas ?? 0n }
+                  : { gasPrice: feeData.gasPrice ?? undefined })
+              });
+
+              console.log(`${positionAddress}: submitted ${tx.hash}`);
+              const receipt = await tx.wait();
+              console.log(
+                `${positionAddress}: confirmed in block ${receipt.blockNumber}`
+              );
+            }
+          }
+
+          main().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
