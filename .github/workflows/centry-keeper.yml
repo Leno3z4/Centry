@@ -73,11 +73,66 @@ jobs:
           }
 
           if (!ethers.isAddress(factoryAddress)) {
-            throw new Error('CENTRY_SELF_REPAYING_FACTORY is not a valid address');
+            throw new Error(
+              'CENTRY_SELF_REPAYING_FACTORY is not a valid address'
+            );
           }
 
           const provider = new ethers.JsonRpcProvider(rpcUrl);
           const wallet = new ethers.Wallet(privateKey, provider);
+
+          const factoryAbi = [
+            'function allPositionsLength() view returns (uint256)',
+            'function allPositions(uint256) view returns (address)'
+          ];
+
+          const positionAbi = [
+            'function harvestableProfit() view returns (uint256)',
+            'function harvestAndRepay() returns (uint256)',
+            'function positionOpen() view returns (bool)',
+            'function currentDebt() view returns (uint256)'
+          ];
+
+          const errorAbi = [
+            'error PositionNotOpen()',
+            'error NoDebt()',
+            'error NoYield()',
+            'error InvalidVaultState()',
+            'error HealthFactorTooLow()',
+            'error PositionAlreadyOpen()',
+            'error PositionActive()',
+            'error DebtOutstanding()',
+            'error AmountZero()',
+            'error UnsupportedCollateral()',
+            'error UnsupportedDebtAsset()'
+          ];
+
+          const errorInterface = new ethers.Interface(errorAbi);
+
+          function explainError(error) {
+            const candidates = [
+              error?.data,
+              error?.info?.error?.data,
+              error?.info?.data,
+              error?.revert?.data
+            ].filter(Boolean);
+
+            for (const data of candidates) {
+              try {
+                const decoded = errorInterface.parseError(data);
+                if (decoded) {
+                  return decoded.name;
+                }
+              } catch (_) {
+                // Continue looking for revert data in another field.
+              }
+            }
+
+            return error?.shortMessage ||
+              error?.reason ||
+              error?.message ||
+              'Unknown error';
+          }
 
           async function main() {
             const network = await provider.getNetwork();
@@ -101,17 +156,6 @@ jobs:
               throw new Error('Keeper wallet has zero native gas balance');
             }
 
-            const factoryAbi = [
-              'function allPositionsLength() view returns (uint256)',
-              'function allPositions(uint256) view returns (address)'
-            ];
-
-            const positionAbi = [
-              'function harvestableProfit() view returns (uint256)',
-              'function harvestAndRepay() returns (uint256)',
-              'function positionOpen() view returns (bool)'
-            ];
-
             const factory = new ethers.Contract(
               factoryAddress,
               factoryAbi,
@@ -126,6 +170,7 @@ jobs:
             let attempted = 0;
             let succeeded = 0;
             let failed = 0;
+            let skipped = 0;
 
             for (let i = 0n; i < total; i++) {
               const positionAddress = await factory.allPositions(i);
@@ -140,22 +185,30 @@ jobs:
                 const open = await position.positionOpen();
 
                 if (!open) {
-                  console.log(
-                    `${positionAddress}: closed, skipping`
-                  );
+                  console.log(`${positionAddress}: closed, skipping`);
+                  skipped++;
+                  continue;
+                }
+
+                const debt = await position.currentDebt();
+
+                if (debt === 0n) {
+                  console.log(`${positionAddress}: debt = 0, skipping`);
+                  skipped++;
                   continue;
                 }
 
                 const profit = await position.harvestableProfit();
 
                 console.log(
-                  `${positionAddress}: harvestable profit = ${profit.toString()}`
+                  `${positionAddress}: debt = ${debt.toString()}, harvestable profit = ${profit.toString()}`
                 );
 
                 if (profit < minHarvest) {
                   console.log(
                     `${positionAddress}: below threshold (${minHarvest}), skipping`
                   );
+                  skipped++;
                   continue;
                 }
 
@@ -194,25 +247,18 @@ jobs:
               } catch (error) {
                 failed++;
 
-                const message = error?.shortMessage ||
-                  error?.reason ||
-                  error?.message ||
-                  String(error);
-
                 console.error(
-                  `${positionAddress}: keeper attempt failed: ${message}`
+                  `${positionAddress}: keeper attempt failed: ${explainError(error)}`
                 );
               }
             }
 
             console.log(
-              `Keeper summary: attempted=${attempted}, succeeded=${succeeded}, failed=${failed}`
+              `Keeper summary: attempted=${attempted}, succeeded=${succeeded}, failed=${failed}, skipped=${skipped}`
             );
 
             if (attempted > 0 && succeeded === 0) {
-              throw new Error(
-                'All eligible keeper attempts failed'
-              );
+              throw new Error('All eligible keeper attempts failed');
             }
           }
 
