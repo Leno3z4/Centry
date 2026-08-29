@@ -2,24 +2,14 @@ import { CONTRACT_ADDRESSES } from './contracts';
 
 export const MARKETS = [
   {
-    id: 'musdc',
-    symbol: 'mUSDC',
-    name: 'Test USDC',
-    decimals: 6,
-    address: CONTRACT_ADDRESSES.USDC,
-    kind: 'test',
-    status: 'live',
-    description: 'Centry test reserve. This is not Arc-issued USDC.',
-  },
-  {
     id: 'usdc',
     symbol: 'USDC',
-    name: 'Arc USDC',
+    name: 'USD Coin',
     decimals: 6,
-    address: '',
-    kind: 'arc',
-    status: 'coming-soon',
-    description: 'Reserved for the verified Arc USDC contract and production-grade oracle.',
+    address: CONTRACT_ADDRESSES.USDC,
+    kind: 'arc-native',
+    status: 'live',
+    description: 'Native Arc USDC used as Centry\'s stablecoin reserve.',
   },
   {
     id: 'eurc',
