@@ -24,7 +24,7 @@ function errorText(error) {
   return error?.shortMessage || error?.message || 'The transaction could not be completed. Check wallet, network, allowance, and contract state.';
 }
 
-function Content() {
+export function SelfRepayingContent() {
   const { isConnected } = useAccount();
   const chainId = useChainId();
   const selfRepay = useSelfRepayingVault();
@@ -158,5 +158,5 @@ function Content() {
 }
 
 export default function Page() {
-  return <Providers><div className={styles.shell}><header className={styles.topbar}><a href="/app" className={styles.brand}><span>C</span> Centry</a><WalletConnect /></header><Content /></div></Providers>;
+  return <Providers><div className={styles.shell}><header className={styles.topbar}><a href="/app" className={styles.brand}><span>C</span> Centry</a><WalletConnect /></header><SelfRepayingContent /></div></Providers>;
 }
