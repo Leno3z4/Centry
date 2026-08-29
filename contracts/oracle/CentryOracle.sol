@@ -5,7 +5,10 @@ import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5
 import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/utils/Pausable.sol";
 
 interface IAggregatorV3 {
-    function decimals() external view returns (uint8);
+    function decimals()
+        external
+        view
+        returns (uint8);
 
     function latestRoundData()
         external
@@ -19,9 +22,26 @@ interface IAggregatorV3 {
         );
 }
 
+interface IBandStdReference {
+    struct ReferenceData {
+        uint256 rate;
+        uint256 lastUpdatedBase;
+        uint256 lastUpdatedQuote;
+    }
+
+    function getReferenceData(
+        string calldata baseSymbol,
+        string calldata quoteSymbol
+    )
+        external
+        view
+        returns (ReferenceData memory);
+}
+
 /// @title Centry Oracle
-/// @notice Chainlink-style USD oracle adapter with explicit staleness bounds.
+/// @notice USD oracle adapter with explicit staleness bounds.
 /// @dev Returned prices are normalized to 1e18.
+///      Supports Chainlink-style feeds and Band Standard Reference feeds.
 contract CentryOracle is Ownable2Step, Pausable {
     struct FeedConfig {
         address feed;
@@ -29,7 +49,16 @@ contract CentryOracle is Ownable2Step, Pausable {
         bool enabled;
     }
 
+    struct BandFeedConfig {
+        address reference;
+        string baseSymbol;
+        string quoteSymbol;
+        uint32 maxStaleness;
+        bool enabled;
+    }
+
     mapping(address => FeedConfig) public feeds;
+    mapping(address => BandFeedConfig) public bandFeeds;
 
     error AssetNotConfigured();
     error InvalidFeed();
@@ -46,7 +75,20 @@ contract CentryOracle is Ownable2Step, Pausable {
 
     event FeedDisabled(address indexed asset);
 
-    constructor(address initialOwner) Ownable(initialOwner) {}
+    event BandFeedConfigured(
+        address indexed asset,
+        address indexed reference,
+        string baseSymbol,
+        string quoteSymbol,
+        uint32 maxStaleness,
+        bool enabled
+    );
+
+    event BandFeedDisabled(address indexed asset);
+
+    constructor(address initialOwner)
+        Ownable(initialOwner)
+    {}
 
     function setFeed(
         address asset,
@@ -54,19 +96,11 @@ contract CentryOracle is Ownable2Step, Pausable {
         uint32 maxStaleness,
         bool enabled
     ) external onlyOwner {
-        if (
-            asset == address(0) ||
-            feed == address(0)
-        ) {
-            revert InvalidFeed();
-        }
-
-        if (
-            maxStaleness == 0 ||
-            maxStaleness > 30 days
-        ) {
-            revert InvalidStaleness();
-        }
+        _validateCommon(
+            asset,
+            feed,
+            maxStaleness
+        );
 
         IAggregatorV3(feed).decimals();
 
@@ -84,11 +118,62 @@ contract CentryOracle is Ownable2Step, Pausable {
         );
     }
 
+    function setBandFeed(
+        address asset,
+        address reference,
+        string calldata baseSymbol,
+        string calldata quoteSymbol,
+        uint32 maxStaleness,
+        bool enabled
+    ) external onlyOwner {
+        _validateCommon(
+            asset,
+            reference,
+            maxStaleness
+        );
+
+        if (
+            bytes(baseSymbol).length == 0 ||
+            bytes(quoteSymbol).length == 0
+        ) {
+            revert InvalidFeed();
+        }
+
+        IBandStdReference(reference).getReferenceData(
+            baseSymbol,
+            quoteSymbol
+        );
+
+        bandFeeds[asset] = BandFeedConfig({
+            reference: reference,
+            baseSymbol: baseSymbol,
+            quoteSymbol: quoteSymbol,
+            maxStaleness: maxStaleness,
+            enabled: enabled
+        });
+
+        emit BandFeedConfigured(
+            asset,
+            reference,
+            baseSymbol,
+            quoteSymbol,
+            maxStaleness,
+            enabled
+        );
+    }
+
     function disableFeed(
         address asset
     ) external onlyOwner {
         feeds[asset].enabled = false;
         emit FeedDisabled(asset);
+    }
+
+    function disableBandFeed(
+        address asset
+    ) external onlyOwner {
+        bandFeeds[asset].enabled = false;
+        emit BandFeedDisabled(asset);
     }
 
     function pause() external onlyOwner {
@@ -105,6 +190,15 @@ contract CentryOracle is Ownable2Step, Pausable {
         uint256 priceE18,
         uint256 updatedAt
     ) {
+        BandFeedConfig memory bandConfig = bandFeeds[asset];
+
+        if (
+            bandConfig.enabled &&
+            bandConfig.reference != address(0)
+        ) {
+            return _getBandPrice(bandConfig);
+        }
+
         FeedConfig memory config = feeds[asset];
 
         if (
@@ -114,6 +208,57 @@ contract CentryOracle is Ownable2Step, Pausable {
             revert AssetNotConfigured();
         }
 
+        return _getAggregatorPrice(config);
+    }
+
+    function _getBandPrice(
+        BandFeedConfig memory config
+    ) internal view returns (
+        uint256 priceE18,
+        uint256 updatedAt
+    ) {
+        IBandStdReference.ReferenceData memory data =
+            IBandStdReference(config.reference)
+                .getReferenceData(
+                    config.baseSymbol,
+                    config.quoteSymbol
+                );
+
+        if (data.rate == 0) {
+            revert InvalidPrice();
+        }
+
+        updatedAt = data.lastUpdatedBase <
+            data.lastUpdatedQuote
+            ? data.lastUpdatedBase
+            : data.lastUpdatedQuote;
+
+        if (updatedAt == 0) {
+            revert InvalidPrice();
+        }
+
+        if (
+            updatedAt > block.timestamp ||
+            block.timestamp - updatedAt >
+            config.maxStaleness
+        ) {
+            revert StalePrice();
+        }
+
+        // Band Standard Reference rates are normalized to 1e18.
+        priceE18 = data.rate;
+
+        if (priceE18 == 0) {
+            revert InvalidPrice();
+        }
+    }
+
+    function _getAggregatorPrice(
+        FeedConfig memory config
+    ) internal view returns (
+        uint256 priceE18,
+        uint256 updatedAt
+    ) {
         (
             ,
             int256 answer,
@@ -132,7 +277,8 @@ contract CentryOracle is Ownable2Step, Pausable {
 
         if (
             timestamp > block.timestamp ||
-            block.timestamp - timestamp > config.maxStaleness
+            block.timestamp - timestamp >
+            config.maxStaleness
         ) {
             revert StalePrice();
         }
@@ -152,5 +298,25 @@ contract CentryOracle is Ownable2Step, Pausable {
         }
 
         updatedAt = timestamp;
+    }
+
+    function _validateCommon(
+        address asset,
+        address source,
+        uint32 maxStaleness
+    ) internal pure {
+        if (
+            asset == address(0) ||
+            source == address(0)
+        ) {
+            revert InvalidFeed();
+        }
+
+        if (
+            maxStaleness == 0 ||
+            maxStaleness > 30 days
+        ) {
+            revert InvalidStaleness();
+        }
     }
 }
