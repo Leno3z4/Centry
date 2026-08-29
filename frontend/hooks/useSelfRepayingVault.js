@@ -32,56 +32,33 @@ export function useSelfRepayingVault() {
   const walletEnabled = configured && Boolean(address) && correctNetwork;
   const factoryAddress = hasAddress('selfRepayingFactory') ? CONTRACT_ADDRESSES.selfRepayingFactory : undefined;
   const positionAddress = /^0x[a-fA-F0-9]{40}$/.test(selectedPosition) ? selectedPosition : undefined;
-  const collateralAddress = selectedCollateral?.address;
+  const collateralAddress = selectedCollateral.address;
+  const positionEnabled = walletEnabled && Boolean(positionAddress);
+  const positionQuery = { enabled: positionEnabled };
 
-  const { data: positions, refetch: refetchPositions } = useReadContract({
-    address: factoryAddress,
-    abi: SELF_REPAYING_FACTORY_ABI,
-    functionName: 'positionsOf',
-    args: [address],
-    query: { enabled: walletEnabled },
-  });
+  const { data: positions, refetch: refetchPositions } = useReadContract({ address: factoryAddress, abi: SELF_REPAYING_FACTORY_ABI, functionName: 'positionsOf', args: [address], query: { enabled: walletEnabled } });
+  const { data: positionOpen, refetch: refetchOpen } = useReadContract({ address: positionAddress, abi: SELF_REPAYING_POSITION_ABI, functionName: 'positionOpen', query: positionQuery });
+  const { data: collateralSupplied, refetch: refetchCollateral } = useReadContract({ address: positionAddress, abi: SELF_REPAYING_POSITION_ABI, functionName: 'collateralSupplied', query: positionQuery });
+  const { data: yieldPrincipal, refetch: refetchYieldPrincipal } = useReadContract({ address: positionAddress, abi: SELF_REPAYING_POSITION_ABI, functionName: 'yieldPrincipal', query: positionQuery });
+  const { data: totalRepaid, refetch: refetchTotalRepaid } = useReadContract({ address: positionAddress, abi: SELF_REPAYING_POSITION_ABI, functionName: 'totalRepaid', query: positionQuery });
+  const { data: currentDebt, refetch: refetchDebt } = useReadContract({ address: positionAddress, abi: SELF_REPAYING_POSITION_ABI, functionName: 'currentDebt', query: positionQuery });
+  const { data: currentYieldAssets, refetch: refetchYieldAssets } = useReadContract({ address: positionAddress, abi: SELF_REPAYING_POSITION_ABI, functionName: 'currentYieldAssets', query: positionQuery });
+  const { data: harvestableProfit, refetch: refetchProfit } = useReadContract({ address: positionAddress, abi: SELF_REPAYING_POSITION_ABI, functionName: 'harvestableProfit', query: positionQuery });
+  const { data: healthFactor, refetch: refetchHealth } = useReadContract({ address: positionAddress, abi: SELF_REPAYING_POSITION_ABI, functionName: 'healthFactor', query: positionQuery });
+  const { data: collateralAssetAddress } = useReadContract({ address: positionAddress, abi: SELF_REPAYING_POSITION_ABI, functionName: 'collateralAsset', query: positionQuery });
 
   useEffect(() => {
     const latest = positions?.[positions.length - 1] || '';
     if (!selectedPosition || !positions?.includes(selectedPosition)) setSelectedPosition(latest);
   }, [positions, selectedPosition]);
 
-  const positionEnabled = walletEnabled && Boolean(positionAddress);
-  const positionQuery = { enabled: positionEnabled };
-  const read = (functionName) => useReadContract({ address: positionAddress, abi: SELF_REPAYING_POSITION_ABI, functionName, query: positionQuery });
-
-  const { data: positionOpen, refetch: refetchOpen } = read('positionOpen');
-  const { data: collateralSupplied, refetch: refetchCollateral } = read('collateralSupplied');
-  const { data: yieldPrincipal, refetch: refetchYieldPrincipal } = read('yieldPrincipal');
-  const { data: totalRepaid, refetch: refetchTotalRepaid } = read('totalRepaid');
-  const { data: currentDebt, refetch: refetchDebt } = read('currentDebt');
-  const { data: currentYieldAssets, refetch: refetchYieldAssets } = read('currentYieldAssets');
-  const { data: harvestableProfit, refetch: refetchProfit } = read('harvestableProfit');
-  const { data: healthFactor, refetch: refetchHealth } = read('healthFactor');
-  const { data: collateralAssetAddress } = read('collateralAsset');
-
   useEffect(() => {
     const deployedAsset = getCollateralAsset(collateralAssetAddress);
     if (deployedAsset) setSelectedCollateral(deployedAsset);
   }, [collateralAssetAddress]);
 
-  const { data: collateralAllowance, refetch: refetchAllowance } = useReadContract({
-    address: collateralAddress,
-    abi: ERC20_ABI,
-    functionName: 'allowance',
-    args: [address, positionAddress],
-    query: { enabled: walletEnabled && Boolean(positionAddress) && Boolean(collateralAddress) },
-  });
-
-  const { data: collateralBalance, refetch: refetchBalance } = useReadContract({
-    address: collateralAddress,
-    abi: ERC20_ABI,
-    functionName: 'balanceOf',
-    args: [address],
-    query: { enabled: walletEnabled && Boolean(collateralAddress) },
-  });
-
+  const { data: collateralAllowance, refetch: refetchAllowance } = useReadContract({ address: collateralAddress, abi: ERC20_ABI, functionName: 'allowance', args: [address, positionAddress], query: { enabled: walletEnabled && Boolean(positionAddress) } });
+  const { data: collateralBalance, refetch: refetchBalance } = useReadContract({ address: collateralAddress, abi: ERC20_ABI, functionName: 'balanceOf', args: [address], query: { enabled: walletEnabled } });
   const { writeContractAsync } = useWriteContract();
 
   const sendAndWait = async (request) => {
@@ -104,7 +81,7 @@ export function useSelfRepayingVault() {
     }
   };
 
-  const createPosition = async (asset = selectedCollateral?.address) => {
+  const createPosition = async (asset = selectedCollateral.address) => {
     if (!factoryAddress || !asset) throw new Error('Select a collateral asset first.');
     await sendAndWait({ address: factoryAddress, abi: SELF_REPAYING_FACTORY_ABI, functionName: 'createPosition', args: [asset] });
     const result = await refetchPositions();
@@ -112,7 +89,6 @@ export function useSelfRepayingVault() {
     setSelectedPosition(latest);
     return latest || null;
   };
-
   const approveCollateral = async (amount) => sendAndWait({ address: collateralAddress, abi: ERC20_ABI, functionName: 'approve', args: [positionAddress, parseUnits(String(amount), selectedCollateral.decimals)] });
   const depositCollateral = (amount) => sendAndWait({ address: positionAddress, abi: SELF_REPAYING_POSITION_ABI, functionName: 'depositCollateral', args: [parseUnits(String(amount), selectedCollateral.decimals)] });
   const openPosition = (amount) => sendAndWait({ address: positionAddress, abi: SELF_REPAYING_POSITION_ABI, functionName: 'openPosition', args: [parseUnits(String(amount), 6)] });
@@ -126,34 +102,5 @@ export function useSelfRepayingVault() {
     await Promise.all(requests);
   };
 
-  return {
-    configured,
-    positions: positions || [],
-    selectedPosition,
-    setSelectedPosition,
-    selectedCollateral,
-    setSelectedCollateral,
-    collateralAssets: COLLATERAL_ASSETS,
-    collateralAssetAddress,
-    collateralBalance: collateralBalance || 0n,
-    collateralAllowance: collateralAllowance || 0n,
-    positionOpen: Boolean(positionOpen),
-    collateralSupplied: collateralSupplied || 0n,
-    yieldPrincipal: yieldPrincipal || 0n,
-    totalRepaid: totalRepaid || 0n,
-    currentDebt: currentDebt || 0n,
-    currentYieldAssets: currentYieldAssets || 0n,
-    harvestableProfit: harvestableProfit || 0n,
-    healthFactor: healthFactor || 0n,
-    transactionPending,
-    transactionHash,
-    transactionError,
-    createPosition,
-    approveCollateral,
-    depositCollateral,
-    openPosition,
-    harvestAndRepay,
-    closePosition,
-    refetchAll,
-  };
+  return { configured, positions: positions || [], selectedPosition, setSelectedPosition, selectedCollateral, setSelectedCollateral, collateralAssets: COLLATERAL_ASSETS, collateralAssetAddress, collateralBalance: collateralBalance || 0n, collateralAllowance: collateralAllowance || 0n, positionOpen: Boolean(positionOpen), collateralSupplied: collateralSupplied || 0n, yieldPrincipal: yieldPrincipal || 0n, totalRepaid: totalRepaid || 0n, currentDebt: currentDebt || 0n, currentYieldAssets: currentYieldAssets || 0n, harvestableProfit: harvestableProfit || 0n, healthFactor: healthFactor || 0n, transactionPending, transactionHash, transactionError, createPosition, approveCollateral, depositCollateral, openPosition, harvestAndRepay, closePosition, refetchAll };
 }
