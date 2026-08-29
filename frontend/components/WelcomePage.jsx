@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import ProtocolStats from './ProtocolStats';
 
 export default function WelcomePage() {
     return (
@@ -44,6 +45,8 @@ export default function WelcomePage() {
                     <div className="landing-core"><span>C</span></div>
                 </div>
             </section>
+
+            <ProtocolStats />
 
             <section id="how-it-works" className="landing-section">
                 <div className="landing-section-heading">
