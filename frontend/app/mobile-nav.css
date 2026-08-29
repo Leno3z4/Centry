@@ -1,35 +1,31 @@
 @media (max-width: 760px) {
+  /* Mobile navigation is a floating control; desktop navigation is unchanged. */
   .app-shell .sidebar {
-    position: sticky;
-    top: 0;
-    z-index: 40;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    min-height: 58px;
-    padding: 10px 12px;
-    border-right: 0;
-    border-bottom: 1px solid #211a2e;
-    background: rgba(6, 5, 12, 0.96);
-    backdrop-filter: blur(18px);
+    position: static;
+    display: block;
+    width: 0;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    backdrop-filter: none;
   }
 
   .app-shell .sidebar .brand {
-    padding: 0;
-    font-size: 20px;
+    display: none;
   }
 
   .app-shell .sidebar .side-nav {
-    position: absolute;
+    position: fixed;
     top: 58px;
-    left: 0;
-    right: 0;
+    left: 10px;
+    right: 10px;
     display: none;
     flex-direction: column;
     gap: 4px;
     padding: 10px;
-    border-bottom: 1px solid #211a2e;
+    border: 1px solid #211a2e;
+    border-radius: 12px;
     background: rgba(6, 5, 12, 0.98);
     box-shadow: 0 18px 30px rgba(0, 0, 0, .35);
   }
@@ -50,16 +46,19 @@
   .app-shell .sidebar .sidebar-footer { display: none; }
 
   .mobile-menu-button {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 100;
     display: inline-flex;
     width: 40px;
     height: 40px;
     align-items: center;
     justify-content: center;
-    flex: 0 0 auto;
     padding: 0;
-    border: 1px solid #30273b;
-    border-radius: 10px;
-    background: #100c18;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
     color: #f4effb;
     cursor: pointer;
   }
@@ -68,7 +67,7 @@
   .mobile-menu-icon::before,
   .mobile-menu-icon::after {
     display: block;
-    width: 17px;
+    width: 18px;
     height: 1.5px;
     border-radius: 2px;
     background: currentColor;
