@@ -20,6 +20,17 @@
   font-family: var(--display-font);
 }
 
+/* Small eyebrow/kicker labels add visual noise and are intentionally hidden globally. */
+.eyebrow,
+.section-kicker {
+  display: none !important;
+}
+
+/* Keep the Centry wordmark, remove the standalone C mark. */
+.brand-mark {
+  display: none !important;
+}
+
 .brand {
   letter-spacing: -0.4px;
 }
