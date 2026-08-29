@@ -1,0 +1,117 @@
+@import url('https://fonts.googleapis.com/css2?family=Lusitana:wght@400;700&display=swap');
+
+:root {
+  --display-font: 'Lusitana', Georgia, serif;
+}
+
+/* Large/display text uses Lusitana. Body/UI copy remains Inter/DM Mono. */
+.brand,
+.hero h1,
+.section-header h1,
+.panel h2,
+.landing-hero h1,
+.landing-section h2,
+.landing-pillar h3,
+.landing-governance h2,
+.metric > strong,
+.protocol-stat > strong,
+.protocol-stat small,
+.landing-core span {
+  font-family: var(--display-font);
+}
+
+.brand {
+  letter-spacing: -0.4px;
+}
+
+.protocol-stats {
+  max-width: 1250px;
+  margin: 0 auto;
+  padding: 0 0 34px;
+}
+
+.protocol-stats-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.protocol-stats-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #8ee6b0;
+  font: 10px 'DM Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.protocol-stats-live i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #8ee6b0;
+  box-shadow: 0 0 10px #8ee6b0;
+}
+
+.protocol-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.protocol-stat {
+  min-height: 132px;
+  padding: 20px;
+  border: 1px solid #282033;
+  border-radius: 15px;
+  background: linear-gradient(145deg, #100b1b, #0b0813);
+}
+
+.protocol-stat > span,
+.protocol-stat > em {
+  display: block;
+}
+
+.protocol-stat > span {
+  color: #756d83;
+  font-size: 10px;
+}
+
+.protocol-stat > strong {
+  display: block;
+  margin: 13px 0 5px;
+  color: #f7f4ff;
+  font-size: 27px;
+  line-height: 1;
+  letter-spacing: -1px;
+}
+
+.protocol-stat > strong small {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0;
+  color: #8e849e;
+}
+
+.protocol-stat > em {
+  color: #5e5669;
+  font: normal 9px 'DM Mono', monospace;
+}
+
+@media (max-width: 800px) {
+  .protocol-stats {
+    padding-bottom: 20px;
+  }
+
+  .protocol-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .protocol-stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
