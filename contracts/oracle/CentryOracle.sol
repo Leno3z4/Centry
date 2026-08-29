@@ -38,10 +38,38 @@ interface IBandStdReference {
         returns (ReferenceData memory);
 }
 
+interface IPythCentry {
+    struct Price {
+        int64 price;
+        uint64 conf;
+        int32 expo;
+        uint publishTime;
+    }
+
+    function getPriceUnsafe(
+        bytes32 id
+    )
+        external
+        view
+        returns (Price memory price);
+
+    function getUpdateFee(
+        bytes[] calldata updateData
+    )
+        external
+        view
+        returns (uint fee);
+
+    function updatePriceFeeds(
+        bytes[] calldata updateData
+    )
+        external
+        payable;
+}
+
 /// @title Centry Oracle
-/// @notice USD oracle adapter with explicit staleness bounds.
-/// @dev Returned prices are normalized to 1e18.
-///      Supports Chainlink-style feeds and Band Standard Reference feeds.
+/// @notice Multi-provider USD oracle adapter with explicit staleness bounds.
+/// @dev Prices returned by getPrice() are normalized to 1e18.
 contract CentryOracle is Ownable2Step, Pausable {
     struct FeedConfig {
         address feed;
@@ -57,14 +85,26 @@ contract CentryOracle is Ownable2Step, Pausable {
         bool enabled;
     }
 
+    struct PythFeedConfig {
+        bytes32 priceId;
+        uint32 maxStaleness;
+        bool enabled;
+    }
+
     mapping(address => FeedConfig) public feeds;
     mapping(address => BandFeedConfig) public bandFeeds;
+    mapping(address => PythFeedConfig) public pythFeeds;
+
+    address public pyth;
 
     error AssetNotConfigured();
     error InvalidFeed();
     error InvalidPrice();
     error InvalidStaleness();
     error StalePrice();
+    error PythNotConfigured();
+    error PythUpdateFailed();
+    error PythPriceOverflow();
 
     event FeedConfigured(
         address indexed asset,
@@ -86,6 +126,17 @@ contract CentryOracle is Ownable2Step, Pausable {
 
     event BandFeedDisabled(address indexed asset);
 
+    event PythConfigured(address indexed pyth);
+
+    event PythFeedConfigured(
+        address indexed asset,
+        bytes32 indexed priceId,
+        uint32 maxStaleness,
+        bool enabled
+    );
+
+    event PythFeedDisabled(address indexed asset);
+
     constructor(address initialOwner)
         Ownable(initialOwner)
     {}
@@ -96,11 +147,7 @@ contract CentryOracle is Ownable2Step, Pausable {
         uint32 maxStaleness,
         bool enabled
     ) external onlyOwner {
-        _validateCommon(
-            asset,
-            feed,
-            maxStaleness
-        );
+        _validateCommon(asset, feed, maxStaleness);
 
         IAggregatorV3(feed).decimals();
 
@@ -162,6 +209,85 @@ contract CentryOracle is Ownable2Step, Pausable {
         );
     }
 
+    function setPyth(
+        address pythAddress
+    ) external onlyOwner {
+        if (pythAddress == address(0)) {
+            revert PythNotConfigured();
+        }
+
+        pyth = pythAddress;
+
+        emit PythConfigured(pythAddress);
+    }
+
+    function setPythFeed(
+        address asset,
+        bytes32 priceId,
+        uint32 maxStaleness,
+        bool enabled
+    ) external onlyOwner {
+        if (asset == address(0) || priceId == bytes32(0)) {
+            revert InvalidFeed();
+        }
+
+        if (
+            maxStaleness == 0 ||
+            maxStaleness > 30 days
+        ) {
+            revert InvalidStaleness();
+        }
+
+        if (pyth == address(0)) {
+            revert PythNotConfigured();
+        }
+
+        pythFeeds[asset] = PythFeedConfig({
+            priceId: priceId,
+            maxStaleness: maxStaleness,
+            enabled: enabled
+        });
+
+        emit PythFeedConfigured(
+            asset,
+            priceId,
+            maxStaleness,
+            enabled
+        );
+    }
+
+    function updatePythPrices(
+        bytes[] calldata priceUpdate
+    ) external payable {
+        if (pyth == address(0)) {
+            revert PythNotConfigured();
+        }
+
+        uint fee = IPythCentry(pyth).getUpdateFee(
+            priceUpdate
+        );
+
+        if (msg.value != fee) {
+            revert PythUpdateFailed();
+        }
+
+        IPythCentry(pyth).updatePriceFeeds{value: fee}(
+            priceUpdate
+        );
+    }
+
+    function getPythUpdateFee(
+        bytes[] calldata priceUpdate
+    ) external view returns (uint256) {
+        if (pyth == address(0)) {
+            revert PythNotConfigured();
+        }
+
+        return IPythCentry(pyth).getUpdateFee(
+            priceUpdate
+        );
+    }
+
     function disableFeed(
         address asset
     ) external onlyOwner {
@@ -174,6 +300,13 @@ contract CentryOracle is Ownable2Step, Pausable {
     ) external onlyOwner {
         bandFeeds[asset].enabled = false;
         emit BandFeedDisabled(asset);
+    }
+
+    function disablePythFeed(
+        address asset
+    ) external onlyOwner {
+        pythFeeds[asset].enabled = false;
+        emit PythFeedDisabled(asset);
     }
 
     function pause() external onlyOwner {
@@ -190,6 +323,15 @@ contract CentryOracle is Ownable2Step, Pausable {
         uint256 priceE18,
         uint256 updatedAt
     ) {
+        PythFeedConfig memory pythConfig = pythFeeds[asset];
+
+        if (
+            pythConfig.enabled &&
+            pyth != address(0)
+        ) {
+            return _getPythPrice(pythConfig);
+        }
+
         BandFeedConfig memory bandConfig = bandFeeds[asset];
 
         if (
@@ -209,6 +351,66 @@ contract CentryOracle is Ownable2Step, Pausable {
         }
 
         return _getAggregatorPrice(config);
+    }
+
+    function _getPythPrice(
+        PythFeedConfig memory config
+    ) internal view returns (
+        uint256 priceE18,
+        uint256 updatedAt
+    ) {
+        IPythCentry.Price memory price =
+            IPythCentry(pyth).getPriceUnsafe(
+                config.priceId
+            );
+
+        if (price.price <= 0 || price.publishTime == 0) {
+            revert InvalidPrice();
+        }
+
+        if (
+            price.publishTime > block.timestamp ||
+            block.timestamp - price.publishTime >
+            config.maxStaleness
+        ) {
+            revert StalePrice();
+        }
+
+        uint256 unsignedPrice = uint256(
+            uint64(price.price)
+        );
+        int256 exponent = int256(price.expo);
+
+        if (exponent >= 0) {
+            if (exponent > 18) {
+                revert PythPriceOverflow();
+            }
+
+            priceE18 = unsignedPrice *
+                (10 ** uint256(exponent + 18));
+        } else {
+            int256 scale = 18 + exponent;
+
+            if (scale >= 0) {
+                priceE18 = unsignedPrice *
+                    (10 ** uint256(scale));
+            } else {
+                int256 divisorPower = -scale;
+
+                if (divisorPower > 77) {
+                    revert PythPriceOverflow();
+                }
+
+                priceE18 = unsignedPrice /
+                    (10 ** uint256(divisorPower));
+            }
+        }
+
+        if (priceE18 == 0) {
+            revert InvalidPrice();
+        }
+
+        updatedAt = price.publishTime;
     }
 
     function _getBandPrice(
