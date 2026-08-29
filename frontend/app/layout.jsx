@@ -1,4 +1,5 @@
 import './globals.css';
+import './typography.css';
 import './mobile.css';
 import './welcome/landing.css';
 import './wallet-picker.css';
