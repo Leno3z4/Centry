@@ -66,7 +66,7 @@ export function SelfRepayingContent() {
     try {
       await action();
       await selfRepay.refetchAll();
-      setNotice(`${label} confirmed onchain.`);
+      setNotice(`${label} confirmed.`);
     } catch (error) {
       setNotice(errorText(error));
     } finally {
@@ -92,9 +92,7 @@ export function SelfRepayingContent() {
         <section className={styles.messageCard}>
           <span className={styles.kicker}>SELF-REPAYING</span>
           <h1>Configuration incomplete</h1>
-          <p>
-            The public self-repaying deployment configuration is incomplete.
-          </p>
+          <p>The self-repaying deployment configuration is incomplete.</p>
         </section>
       </main>
     );
@@ -106,9 +104,7 @@ export function SelfRepayingContent() {
         <div>
           <span className={styles.kicker}>CENTRY · SELF-REPAYING</span>
           <h1>Let the yield pay the debt.</h1>
-          <p>
-            Deposit collateral, borrow mUSDC, and let Centry handle the rest.
-          </p>
+          <p>Deposit collateral, borrow mUSDC, and let Centry handle the rest.</p>
         </div>
 
         <div className={styles.network}>
@@ -132,56 +128,17 @@ export function SelfRepayingContent() {
         </section>
       ) : (
         <section className={styles.card}>
-          <div className={styles.cardTop}>
-            <div>
-              <span className={styles.kicker}>POSITION</span>
-              <h2>{positionExists ? 'Your position' : 'Create a position'}</h2>
-            </div>
-
-            {positionExists ? (
-              <span className={styles.address}>
-                {formatAddress(selfRepay.selectedPosition)}
-              </span>
-            ) : null}
-          </div>
-
-          {selfRepay.positions.length > 0 ? (
-            <div className={styles.positionBar}>
-              <select
-                value={selfRepay.selectedPosition}
-                onChange={(event) =>
-                  selfRepay.setSelectedPosition(event.target.value)
-                }
-                disabled={busy}
-                aria-label="Your Centry position"
-              >
-                {selfRepay.positions.map((position) => (
-                  <option key={position} value={position}>
-                    {formatAddress(position)}
-                  </option>
-                ))}
-              </select>
-
-              <button
-                type="button"
-                className={styles.textButton}
-                disabled={busy}
-                onClick={() =>
-                  run(
-                    'Create position',
-                    () => selfRepay.createPosition(selected.address),
-                  )
-                }
-              >
-                + New
-              </button>
-            </div>
-          ) : null}
-
           {!positionExists ? (
-            <>
+            <div className={styles.createView}>
+              <div className={styles.cardTop}>
+                <div>
+                  <span className={styles.kicker}>START HERE</span>
+                  <h2>Create a position</h2>
+                </div>
+              </div>
+
               <label className={styles.label} htmlFor="collateral-asset">
-                Collateral
+                Choose collateral
               </label>
 
               <select
@@ -203,9 +160,8 @@ export function SelfRepayingContent() {
                 className={styles.primaryButton}
                 disabled={busy}
                 onClick={() =>
-                  run(
-                    'Create position',
-                    () => selfRepay.createPosition(selected.address),
+                  run('Create position', () =>
+                    selfRepay.createPosition(selected.address),
                   )
                 }
               >
@@ -213,33 +169,63 @@ export function SelfRepayingContent() {
                   ? 'Creating…'
                   : `Create ${selected.symbol} position`}
               </button>
-            </>
+            </div>
           ) : (
             <>
-              <div className={styles.assetSummary}>
+              <div className={styles.positionHeader}>
                 <div>
-                  <span>Collateral</span>
-                  <strong>{selected.symbol}</strong>
-                </div>
-                <div>
-                  <span>Wallet</span>
-                  <strong>
+                  <span className={styles.kicker}>YOUR POSITION</span>
+                  <h2>{selected.symbol} position</h2>
+                  <p>
                     {formatToken(
-                      selfRepay.collateralBalance,
+                      selfRepay.collateralSupplied,
                       selected.decimals,
-                    )}
-                  </strong>
+                    )}{' '}
+                    {selected.symbol} deposited
+                  </p>
                 </div>
-                <div>
-                  <span>Debt</span>
-                  <strong>
-                    {formatToken(selfRepay.currentDebt, 6)} mUSDC
-                  </strong>
+
+                <div className={styles.debtBadge}>
+                  {formatToken(selfRepay.currentDebt, 6)} mUSDC debt
                 </div>
               </div>
 
+              {selfRepay.positions.length > 1 ? (
+                <div className={styles.positionSwitcher}>
+                  <select
+                    value={selfRepay.selectedPosition}
+                    onChange={(event) =>
+                      selfRepay.setSelectedPosition(event.target.value)
+                    }
+                    disabled={busy}
+                    aria-label="Choose position"
+                  >
+                    {selfRepay.positions.map((position) => (
+                      <option key={position} value={position}>
+                        {formatAddress(position)}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className={styles.textButton}
+                    disabled={busy}
+                    onClick={() =>
+                      run(
+                        'Create position',
+                        () => selfRepay.createPosition(selected.address),
+                      )
+                    }
+                  >
+                    + New
+                  </button>
+                </div>
+              ) : null}
+
+              <div className={styles.formDivider} />
+
               <label className={styles.label} htmlFor="collateral">
-                Deposit collateral
+                Add collateral
               </label>
 
               <div className={styles.inputRow}>
@@ -314,7 +300,7 @@ export function SelfRepayingContent() {
               </div>
 
               <label className={styles.label} htmlFor="borrow">
-                Borrow
+                Borrow mUSDC
               </label>
 
               <div className={styles.inputRow}>
@@ -341,11 +327,11 @@ export function SelfRepayingContent() {
               >
                 {busyAction === 'Open position'
                   ? 'Starting…'
-                  : 'Borrow mUSDC'}
+                  : 'Borrow mUSDC & start yield'}
               </button>
 
               <p className={styles.note}>
-                Yield generated by the position is used to repay the debt.
+                Your borrowed funds are put to work automatically. Yield is used to repay your debt.
               </p>
             </>
           )}
