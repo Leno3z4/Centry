@@ -50,7 +50,7 @@ contract CentryOracle is Ownable2Step, Pausable {
     }
 
     struct BandFeedConfig {
-        address reference;
+        address bandReference;
         string baseSymbol;
         string quoteSymbol;
         uint32 maxStaleness;
@@ -77,7 +77,7 @@ contract CentryOracle is Ownable2Step, Pausable {
 
     event BandFeedConfigured(
         address indexed asset,
-        address indexed reference,
+        address indexed bandReference,
         string baseSymbol,
         string quoteSymbol,
         uint32 maxStaleness,
@@ -120,7 +120,7 @@ contract CentryOracle is Ownable2Step, Pausable {
 
     function setBandFeed(
         address asset,
-        address reference,
+        address bandReference,
         string calldata baseSymbol,
         string calldata quoteSymbol,
         uint32 maxStaleness,
@@ -128,7 +128,7 @@ contract CentryOracle is Ownable2Step, Pausable {
     ) external onlyOwner {
         _validateCommon(
             asset,
-            reference,
+            bandReference,
             maxStaleness
         );
 
@@ -139,13 +139,13 @@ contract CentryOracle is Ownable2Step, Pausable {
             revert InvalidFeed();
         }
 
-        IBandStdReference(reference).getReferenceData(
+        IBandStdReference(bandReference).getReferenceData(
             baseSymbol,
             quoteSymbol
         );
 
         bandFeeds[asset] = BandFeedConfig({
-            reference: reference,
+            bandReference: bandReference,
             baseSymbol: baseSymbol,
             quoteSymbol: quoteSymbol,
             maxStaleness: maxStaleness,
@@ -154,7 +154,7 @@ contract CentryOracle is Ownable2Step, Pausable {
 
         emit BandFeedConfigured(
             asset,
-            reference,
+            bandReference,
             baseSymbol,
             quoteSymbol,
             maxStaleness,
@@ -194,7 +194,7 @@ contract CentryOracle is Ownable2Step, Pausable {
 
         if (
             bandConfig.enabled &&
-            bandConfig.reference != address(0)
+            bandConfig.bandReference != address(0)
         ) {
             return _getBandPrice(bandConfig);
         }
@@ -218,7 +218,7 @@ contract CentryOracle is Ownable2Step, Pausable {
         uint256 updatedAt
     ) {
         IBandStdReference.ReferenceData memory data =
-            IBandStdReference(config.reference)
+            IBandStdReference(config.bandReference)
                 .getReferenceData(
                     config.baseSymbol,
                     config.quoteSymbol
@@ -245,7 +245,6 @@ contract CentryOracle is Ownable2Step, Pausable {
             revert StalePrice();
         }
 
-        // Band Standard Reference rates are normalized to 1e18.
         priceE18 = data.rate;
 
         if (priceE18 == 0) {
