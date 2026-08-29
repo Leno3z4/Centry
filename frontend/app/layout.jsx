@@ -2,6 +2,7 @@ import './globals.css';
 import './mobile.css';
 import './welcome/landing.css';
 import './wallet-picker.css';
+import { Providers } from '../components/Providers';
 
 export const metadata = {
   title: 'Centry',
@@ -11,7 +12,9 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }
