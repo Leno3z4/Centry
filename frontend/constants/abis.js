@@ -64,6 +64,22 @@ export const LENDING_POOL_ABI = [
   },
   {
     type: 'function',
+    name: 'getReserveConfig',
+    stateMutability: 'view',
+    inputs: [{ name: 'asset', type: 'address' }],
+    outputs: [
+      { name: 'active', type: 'bool' },
+      { name: 'decimals', type: 'uint8' },
+      { name: 'ltvBps', type: 'uint16' },
+      { name: 'liquidationThresholdBps', type: 'uint16' },
+      { name: 'liquidationBonusBps', type: 'uint16' },
+      { name: 'reserveFactorBps', type: 'uint16' },
+      { name: 'supplyCap', type: 'uint128' },
+      { name: 'borrowCap', type: 'uint128' },
+    ],
+  },
+  {
+    type: 'function',
     name: 'supplyBalance',
     stateMutability: 'view',
     inputs: [
