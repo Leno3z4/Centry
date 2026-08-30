@@ -13,8 +13,10 @@ import { arcTestnet } from '../config/multiWagmi';
 
 const ZERO = 0n;
 const MAX_UINT256 = maxUint256;
+const DEFAULT_ASSET = CONTRACT_ADDRESSES.USDC;
+const DEFAULT_DECIMALS = 6;
 
-export function useLendingPool() {
+export function useLendingPool(assetAddress = DEFAULT_ASSET, assetDecimals = DEFAULT_DECIMALS) {
   const { address } = useAccount();
   const chainId = useChainId();
   const publicClient = usePublicClient();
@@ -22,18 +24,30 @@ export function useLendingPool() {
   const [transactionHash, setTransactionHash] = useState(null);
   const [transactionError, setTransactionError] = useState(null);
 
-  const configured = hasAddress('lendingPool') && hasAddress('USDC');
+  const asset = assetAddress || DEFAULT_ASSET;
+  const decimals = Number.isInteger(assetDecimals) ? assetDecimals : DEFAULT_DECIMALS;
+  const configured =
+    hasAddress('lendingPool') &&
+    /^0x[a-fA-F0-9]{40}$/.test(asset);
   const correctNetwork = !address || chainId === arcTestnet.id;
   const commonQuery = { enabled: configured && correctNetwork };
   const walletQuery = {
     enabled: configured && Boolean(address) && correctNetwork,
   };
 
+  const { data: reserveConfigRaw, refetch: refetchReserveConfig } = useReadContract({
+    address: CONTRACT_ADDRESSES.lendingPool,
+    abi: LENDING_POOL_ABI,
+    functionName: 'getReserveConfig',
+    args: [asset],
+    query: commonQuery,
+  });
+
   const { data: totalSupplyRaw, refetch: refetchSupply } = useReadContract({
     address: CONTRACT_ADDRESSES.lendingPool,
     abi: LENDING_POOL_ABI,
     functionName: 'currentSupply',
-    args: [CONTRACT_ADDRESSES.USDC],
+    args: [asset],
     query: commonQuery,
   });
 
@@ -41,7 +55,7 @@ export function useLendingPool() {
     address: CONTRACT_ADDRESSES.lendingPool,
     abi: LENDING_POOL_ABI,
     functionName: 'currentBorrow',
-    args: [CONTRACT_ADDRESSES.USDC],
+    args: [asset],
     query: commonQuery,
   });
 
@@ -49,7 +63,7 @@ export function useLendingPool() {
     address: CONTRACT_ADDRESSES.lendingPool,
     abi: LENDING_POOL_ABI,
     functionName: 'utilization',
-    args: [CONTRACT_ADDRESSES.USDC],
+    args: [asset],
     query: commonQuery,
   });
 
@@ -57,7 +71,7 @@ export function useLendingPool() {
     address: CONTRACT_ADDRESSES.lendingPool,
     abi: LENDING_POOL_ABI,
     functionName: 'supplyBalance',
-    args: [address, CONTRACT_ADDRESSES.USDC],
+    args: [address, asset],
     query: walletQuery,
   });
 
@@ -65,7 +79,7 @@ export function useLendingPool() {
     address: CONTRACT_ADDRESSES.lendingPool,
     abi: LENDING_POOL_ABI,
     functionName: 'borrowBalance',
-    args: [address, CONTRACT_ADDRESSES.USDC],
+    args: [address, asset],
     query: walletQuery,
   });
 
@@ -85,18 +99,18 @@ export function useLendingPool() {
     query: walletQuery,
   });
 
-  const { data: usdcBalanceRaw, refetch: refetchBalance } = useReadContract({
-    address: CONTRACT_ADDRESSES.USDC,
+  const { data: walletBalanceRaw, refetch: refetchBalance } = useReadContract({
+    address: asset,
     abi: ERC20_ABI,
     functionName: 'balanceOf',
     args: [address],
     query: {
-      enabled: Boolean(address) && hasAddress('USDC') && correctNetwork,
+      enabled: Boolean(address) && configured && correctNetwork,
     },
   });
 
   const { data: allowanceRaw, refetch: refetchAllowance } = useReadContract({
-    address: CONTRACT_ADDRESSES.USDC,
+    address: asset,
     abi: ERC20_ABI,
     functionName: 'allowance',
     args: [address, CONTRACT_ADDRESSES.lendingPool],
@@ -139,14 +153,14 @@ export function useLendingPool() {
     }
   };
 
-  const approveUSDC = async (amount) => {
+  const approveAsset = async (amount) => {
     const hash = await sendAndWait({
-      address: CONTRACT_ADDRESSES.USDC,
+      address: asset,
       abi: ERC20_ABI,
       functionName: 'approve',
       args: [
         CONTRACT_ADDRESSES.lendingPool,
-        parseUnits(String(amount), 6),
+        parseUnits(String(amount), decimals),
       ],
     });
 
@@ -159,8 +173,8 @@ export function useLendingPool() {
     abi: LENDING_POOL_ABI,
     functionName: 'supply',
     args: [
-      CONTRACT_ADDRESSES.USDC,
-      parseUnits(String(amount), 6),
+      asset,
+      parseUnits(String(amount), decimals),
     ],
   });
 
@@ -169,8 +183,8 @@ export function useLendingPool() {
     abi: LENDING_POOL_ABI,
     functionName: 'withdraw',
     args: [
-      CONTRACT_ADDRESSES.USDC,
-      amount === 'max' ? MAX_UINT256 : parseUnits(String(amount), 6),
+      asset,
+      amount === 'max' ? MAX_UINT256 : parseUnits(String(amount), decimals),
     ],
   });
 
@@ -179,8 +193,8 @@ export function useLendingPool() {
     abi: LENDING_POOL_ABI,
     functionName: 'borrow',
     args: [
-      CONTRACT_ADDRESSES.USDC,
-      parseUnits(String(amount), 6),
+      asset,
+      parseUnits(String(amount), decimals),
     ],
   });
 
@@ -189,8 +203,8 @@ export function useLendingPool() {
     abi: LENDING_POOL_ABI,
     functionName: 'repay',
     args: [
-      CONTRACT_ADDRESSES.USDC,
-      amount === 'max' ? MAX_UINT256 : parseUnits(String(amount), 6),
+      asset,
+      amount === 'max' ? MAX_UINT256 : parseUnits(String(amount), decimals),
     ],
   });
 
@@ -198,6 +212,7 @@ export function useLendingPool() {
     if (!correctNetwork) return;
 
     await Promise.all([
+      refetchReserveConfig(),
       refetchSupply(),
       refetchBorrow(),
       refetchUtilization(),
@@ -210,7 +225,7 @@ export function useLendingPool() {
     ]);
   };
 
-  const format6 = (value) => formatUnits(value ?? ZERO, 6);
+  const formatAsset = (value) => formatUnits(value ?? ZERO, decimals);
   const format18 = (value) => formatUnits(value ?? ZERO, 18);
 
   const supplyAmount = supplyBalanceRaw ?? ZERO;
@@ -233,10 +248,6 @@ export function useLendingPool() {
         ? '∞'
         : healthFactorNumber.toFixed(2);
 
-  // The contract is the source of truth. A zero-position or zero-debt account
-  // is displayed as 100% health because there is no liquidation risk.
-  // Otherwise the bar is derived directly from the onchain health factor:
-  // percentage = (1 - 1 / HF) × 100, capped only for the visual bar.
   const healthFactorPercent =
     !hasSupply || !hasDebt
       ? 100
@@ -250,29 +261,35 @@ export function useLendingPool() {
           );
 
   const totalBorrowPower = Number(format18(borrowPowerRaw));
-  const currentDebt = Number(format6(borrowBalanceRaw));
+  const currentDebt = Number(formatAsset(borrowBalanceRaw));
   const borrowLimit = Number.isFinite(totalBorrowPower)
     ? Math.max(totalBorrowPower - currentDebt, 0)
     : 0;
 
+  const reserveActive = Boolean(reserveConfigRaw?.[0]);
+
   return {
+    asset,
+    decimals,
     configured,
     correctNetwork,
+    reserveActive,
+    reserveConfig: reserveConfigRaw,
     reserveData: {
-      totalLiquidity: format6(totalSupplyRaw),
-      totalBorrows: format6(totalBorrowRaw),
+      totalLiquidity: formatAsset(totalSupplyRaw),
+      totalBorrows: formatAsset(totalBorrowRaw),
       utilization: Number(format18(utilizationRaw)) * 100,
     },
-    supplyBalance: format6(supplyBalanceRaw),
-    borrowBalance: format6(borrowBalanceRaw),
+    supplyBalance: formatAsset(supplyBalanceRaw),
+    borrowBalance: formatAsset(borrowBalanceRaw),
     borrowPower: format18(borrowPowerRaw),
     borrowLimit: borrowLimit.toFixed(2),
     healthFactor,
     healthFactorPercent,
-    usdcBalance: format6(usdcBalanceRaw),
-    usdcAllowance: format6(allowanceRaw),
-    rawUsdcAllowance: allowanceRaw ?? ZERO,
-    approveUSDC,
+    walletBalance: formatAsset(walletBalanceRaw),
+    allowance: formatAsset(allowanceRaw),
+    rawAllowance: allowanceRaw ?? ZERO,
+    approveAsset,
     supply,
     withdraw,
     borrow,
@@ -286,5 +303,11 @@ export function useLendingPool() {
       !transactionError,
     txHash: transactionHash,
     error: transactionError || error,
+
+    // Backward-compatible USDC aliases for the existing dashboard.
+    usdcBalance: formatAsset(walletBalanceRaw),
+    usdcAllowance: formatAsset(allowanceRaw),
+    rawUsdcAllowance: allowanceRaw ?? ZERO,
+    approveUSDC: approveAsset,
   };
 }
