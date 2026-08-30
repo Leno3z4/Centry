@@ -1,6 +1,6 @@
 # Centry — Real USDC migration on Arc testnet
 
-This milestone switches the frontend from the Centry mock `mUSDC` reserve to Arc testnet's native USDC asset exposed through its ERC-20 interface.
+This milestone switches Centry from the mock USDC asset to Arc testnet's native USDC exposed through its ERC-20 interface.
 
 ## Verified Arc testnet USDC
 
@@ -14,15 +14,15 @@ Arc's native USDC is also the network gas asset. The ERC-20 interface is the rep
 
 Changing the frontend address does **not** automatically change reserves in an already deployed `CentryLendingPool`.
 
-The current pool is multi-reserve and does not hard-code mUSDC. The owner can add the real USDC reserve without changing the pool contract.
+The current pool is multi-reserve and does not hard-code a single debt asset. The owner can add the real USDC reserve without changing the pool contract.
 
 Before using the updated frontend:
 
 1. Connect the Centry deployer/owner wallet to Arc testnet in Remix.
 2. Open the deployed `CentryLendingPool` at the current pool address.
 3. Confirm the caller is the pool owner.
-4. Open the deployed oracle used by that pool.
-5. Set the USDC/USD price to `1e18` for the current testnet smoke test if the oracle is still the mock oracle.
+4. Open the deployed Chronicle-backed oracle used by that pool.
+5. Verify the USDC/USD price is fresh and normalized correctly.
 6. Call `addReserve` on the lending pool with the real USDC address.
 7. Use conservative testnet caps.
 8. Fund the pool with real Arc testnet USDC before testing borrowing.
