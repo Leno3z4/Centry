@@ -170,9 +170,7 @@ export function useLendingPool() {
     functionName: 'withdraw',
     args: [
       CONTRACT_ADDRESSES.USDC,
-      amount === 'max'
-        ? MAX_UINT256
-        : parseUnits(String(amount), 6),
+      amount === 'max' ? MAX_UINT256 : parseUnits(String(amount), 6),
     ],
   });
 
@@ -192,9 +190,7 @@ export function useLendingPool() {
     functionName: 'repay',
     args: [
       CONTRACT_ADDRESSES.USDC,
-      amount === 'max'
-        ? MAX_UINT256
-        : parseUnits(String(amount), 6),
+      amount === 'max' ? MAX_UINT256 : parseUnits(String(amount), 6),
     ],
   });
 
@@ -242,10 +238,16 @@ export function useLendingPool() {
         ? 0
         : Math.round(
             Math.min(
-              Math.max((healthFactorNumber - 1) * 100, 0),
+              Math.max(((healthFactorNumber - 1) / 2) * 100, 0),
               100,
             ),
           );
+
+  const totalBorrowPower = Number(format18(borrowPowerRaw));
+  const currentDebt = Number(format6(borrowBalanceRaw));
+  const borrowLimit = Number.isFinite(totalBorrowPower)
+    ? Math.max(totalBorrowPower - currentDebt, 0)
+    : 0;
 
   return {
     configured,
@@ -258,6 +260,7 @@ export function useLendingPool() {
     supplyBalance: format6(supplyBalanceRaw),
     borrowBalance: format6(borrowBalanceRaw),
     borrowPower: format18(borrowPowerRaw),
+    borrowLimit: borrowLimit.toFixed(2),
     healthFactor,
     healthFactorPercent,
     usdcBalance: format6(usdcBalanceRaw),
