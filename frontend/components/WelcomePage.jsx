@@ -81,16 +81,15 @@ export default function WelcomePage() {
                     <span className="section-kicker">MARKETS</span>
                     <h2>Start with a transparent test market.</h2>
                     <p>
-                        The current Arc Testnet deployment uses mUSDC, Centry's deployed test token.
-                        It is clearly separated from real Arc-issued assets until their contracts and oracle feeds are verified.
+                        The current Arc Testnet deployment uses native USDC, with the token and oracle configuration verified for the current test market.
                     </p>
                 </div>
                 <div className="landing-market-card">
                     <div>
                         <span className="token usdc">$</span>
                         <div>
-                            <strong>mUSDC</strong>
-                            <small>Test USDC · Arc Testnet</small>
+                            <strong>USDC</strong>
+                            <small>Arc Testnet USDC</small>
                         </div>
                     </div>
                     <span className="live-badge"><i /> Live</span>
