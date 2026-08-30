@@ -2,9 +2,8 @@
 
 import React, { useMemo, useState } from 'react';
 import { useAccount } from 'wagmi';
-import { formatUnits } from 'viem';
 import { MARKETS } from '../constants/markets';
-import { useLendingPool } from '../hooks/useLendingPool';
+import { useMultiMarketLending } from '../hooks/useMultiMarketLending';
 
 function formatNumber(value, digits = 2) {
   const number = Number(value || 0);
@@ -41,7 +40,7 @@ function HealthMeter({ percent }) {
 export default function MultiMarketLending() {
   const { isConnected } = useAccount();
   const supportedMarkets = useMemo(
-    () => MARKETS.filter((market) => market.address),
+    () => MARKETS.filter((market) => market.address && market.status === 'live'),
     [],
   );
   const [marketId, setMarketId] = useState('usdc');
@@ -52,7 +51,7 @@ export default function MultiMarketLending() {
   const market =
     supportedMarkets.find((item) => item.id === marketId) ||
     supportedMarkets[0];
-  const lending = useLendingPool(market?.address, market?.decimals);
+  const lending = useMultiMarketLending(market?.address, market?.decimals);
   const busy = lending.isPending || lending.isConfirming;
   const numericAmount = Number(amount || 0);
   const currentDebt = Number(lending.borrowBalance || 0);
@@ -138,8 +137,15 @@ export default function MultiMarketLending() {
     }
   };
 
-  const healthLabel =
-    lending.healthFactor === '∞' ? '∞' : lending.healthFactor || '—';
+  const healthLabel = lending.healthFactor === '∞' ? '∞' : lending.healthFactor || '—';
+
+  if (!market) {
+    return (
+      <div className="mm-page">
+        <div className="connect-prompt">No configured lending markets are available yet.</div>
+      </div>
+    );
+  }
 
   return (
     <div className="mm-page">
@@ -147,7 +153,7 @@ export default function MultiMarketLending() {
         <div>
           <span className="section-kicker">CENTRY · MARKETS</span>
           <h1>Borrow & lend</h1>
-          <p>One interface for every Centry reserve enabled on Arc Testnet.</p>
+          <p>One interface for every Centry lending market enabled on Arc Testnet.</p>
         </div>
         <div className="test-badge">ARC TESTNET</div>
       </div>
@@ -158,8 +164,8 @@ export default function MultiMarketLending() {
             key={item.id}
             type="button"
             role="tab"
-            aria-selected={market?.id === item.id}
-            className={market?.id === item.id ? 'active' : ''}
+            aria-selected={market.id === item.id}
+            className={market.id === item.id ? 'active' : ''}
             onClick={() => changeMarket(item.id)}
           >
             <strong>{item.symbol}</strong>
@@ -171,17 +177,17 @@ export default function MultiMarketLending() {
       <section className="mm-summary">
         <div className="metric">
           <span>Wallet</span>
-          <strong>{isConnected ? `${formatNumber(lending.walletBalance)} ${market?.symbol}` : '—'}</strong>
+          <strong>{isConnected ? `${formatNumber(lending.walletBalance)} ${market.symbol}` : '—'}</strong>
           <small>Available in wallet</small>
         </div>
         <div className="metric">
           <span>Supplied</span>
-          <strong>{isConnected ? `${formatNumber(lending.supplyBalance)} ${market?.symbol}` : '—'}</strong>
+          <strong>{isConnected ? `${formatNumber(lending.supplyBalance)} ${market.symbol}` : '—'}</strong>
           <small>Your supplied balance</small>
         </div>
         <div className="metric">
           <span>Borrowed</span>
-          <strong>{isConnected ? `${formatNumber(lending.borrowBalance)} ${market?.symbol}` : '—'}</strong>
+          <strong>{isConnected ? `${formatNumber(lending.borrowBalance)} ${market.symbol}` : '—'}</strong>
           <small>Your debt in this market</small>
         </div>
         <div className="metric">
@@ -195,8 +201,8 @@ export default function MultiMarketLending() {
         <div className="panel">
           <div className="panel-head">
             <div>
-              <span className="section-kicker">{market?.symbol}</span>
-              <h2>{action[0].toUpperCase() + action.slice(1)} {market?.symbol}</h2>
+              <span className="section-kicker">{market.symbol}</span>
+              <h2>{action[0].toUpperCase() + action.slice(1)} {market.symbol}</h2>
             </div>
             <span className={lending.reserveActive ? 'live-badge' : 'test-badge'}>
               {lending.reserveActive ? 'Reserve live' : 'Reserve not enabled'}
@@ -216,28 +222,26 @@ export default function MultiMarketLending() {
             ))}
           </div>
 
-          <label className="field-label" htmlFor="multi-market-amount">
-            Amount
-          </label>
+          <label className="field-label" htmlFor="multi-market-amount">Amount</label>
           <div className="amount-input-wrap">
             <input
               id="multi-market-amount"
               type="number"
               min="0"
               max={action === 'repay' ? lending.borrowBalance : undefined}
-              step={market?.decimals >= 8 ? '0.00000001' : '0.000001'}
+              step={market.decimals >= 8 ? '0.00000001' : '0.000001'}
               placeholder="0.00"
               value={amount}
               onChange={changeAmount}
             />
-            <span>{market?.symbol}</span>
+            <span>{market.symbol}</span>
           </div>
 
           <div className="form-meta">
             <span>
               {action === 'repay'
-                ? `Owed: ${isConnected ? `${formatNumber(lending.borrowBalance, Math.min(market?.decimals || 2, 6))} ${market?.symbol}` : 'Connect wallet'}`
-                : `Wallet: ${isConnected ? `${formatNumber(lending.walletBalance)} ${market?.symbol}` : 'Connect wallet'}`}
+                ? `Owed: ${isConnected ? `${formatNumber(lending.borrowBalance, Math.min(market.decimals, 6))} ${market.symbol}` : 'Connect wallet'}`
+                : `Wallet: ${isConnected ? `${formatNumber(lending.walletBalance)} ${market.symbol}` : 'Connect wallet'}`}
             </span>
             {isConnected && <button type="button" onClick={setMax}>Max</button>}
           </div>
@@ -245,9 +249,7 @@ export default function MultiMarketLending() {
           {!isConnected ? (
             <div className="connect-prompt">Connect your wallet to interact with this market.</div>
           ) : !lending.reserveActive ? (
-            <div className="connect-prompt">
-              {market?.symbol} is registered in Centry but its lending reserve is not enabled yet.
-            </div>
+            <div className="connect-prompt">{market.symbol} is registered but its lending reserve is not enabled yet.</div>
           ) : (
             <button
               type="button"
@@ -258,8 +260,8 @@ export default function MultiMarketLending() {
               {busy
                 ? 'Waiting for confirmation…'
                 : needsApproval
-                  ? `Approve ${market?.symbol}`
-                  : `${action[0].toUpperCase()}${action.slice(1)} ${market?.symbol}`}
+                  ? `Approve ${market.symbol}`
+                  : `${action[0].toUpperCase()}${action.slice(1)} ${market.symbol}`}
             </button>
           )}
 
@@ -278,10 +280,10 @@ export default function MultiMarketLending() {
           <HealthMeter percent={lending.healthFactorPercent} />
 
           <div className="mm-risk-list">
-            <div><span>Market</span><strong>{market?.symbol}</strong></div>
+            <div><span>Market</span><strong>{market.symbol}</strong></div>
             <div><span>Reserve</span><strong>{lending.reserveActive ? 'Active' : 'Not enabled'}</strong></div>
-            <div><span>Market liquidity</span><strong>{formatNumber(lending.reserveData?.totalLiquidity)} {market?.symbol}</strong></div>
-            <div><span>Market borrowed</span><strong>{formatNumber(lending.reserveData?.totalBorrows)} {market?.symbol}</strong></div>
+            <div><span>Market liquidity</span><strong>{formatNumber(lending.reserveData?.totalLiquidity)} {market.symbol}</strong></div>
+            <div><span>Market borrowed</span><strong>{formatNumber(lending.reserveData?.totalBorrows)} {market.symbol}</strong></div>
             <div><span>Utilization</span><strong>{formatNumber(lending.reserveData?.utilization)}%</strong></div>
           </div>
 
