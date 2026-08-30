@@ -4,6 +4,7 @@ import './mobile.css';
 import './mobile-nav.css';
 import './welcome/landing.css';
 import './wallet-picker.css';
+import './health-meter.css';
 import { Providers } from '../components/Providers';
 
 export const metadata = {
