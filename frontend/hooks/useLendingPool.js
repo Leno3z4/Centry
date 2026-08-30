@@ -213,7 +213,10 @@ export function useLendingPool() {
   const format6 = (value) => formatUnits(value ?? ZERO, 6);
   const format18 = (value) => formatUnits(value ?? ZERO, 18);
 
-  const hasDebt = (borrowBalanceRaw ?? ZERO) > ZERO;
+  const supplyAmount = supplyBalanceRaw ?? ZERO;
+  const debtAmount = borrowBalanceRaw ?? ZERO;
+  const hasSupply = supplyAmount > ZERO;
+  const hasDebt = debtAmount > ZERO;
   const healthIsInfinite =
     healthFactorRaw !== undefined &&
     healthFactorRaw >= MAX_UINT256 - 1000n;
@@ -230,19 +233,21 @@ export function useLendingPool() {
         ? '∞'
         : healthFactorNumber.toFixed(2);
 
-  // UI health is a normalized view of the onchain health factor.
-  // It is 0% at the liquidation boundary (HF = 1), approaches 100%
-  // as HF increases, and is exactly 100% when there is no debt (HF = ∞).
-  const healthFactorPercent = !hasDebt
-    ? 100
-    : healthFactorNumber === null || !Number.isFinite(healthFactorNumber)
-      ? 0
-      : Math.round(
-          Math.min(
-            Math.max((1 - 1 / healthFactorNumber) * 100, 0),
-            100,
-          ),
-        );
+  // The contract is the source of truth. A zero-position or zero-debt account
+  // is displayed as 100% health because there is no liquidation risk.
+  // Otherwise the bar is derived directly from the onchain health factor:
+  // percentage = (1 - 1 / HF) × 100, capped only for the visual bar.
+  const healthFactorPercent =
+    !hasSupply || !hasDebt
+      ? 100
+      : healthFactorNumber === null || !Number.isFinite(healthFactorNumber)
+        ? 0
+        : Math.round(
+            Math.min(
+              Math.max((1 - 1 / healthFactorNumber) * 100, 0),
+              100,
+            ),
+          );
 
   const totalBorrowPower = Number(format18(borrowPowerRaw));
   const currentDebt = Number(format6(borrowBalanceRaw));
