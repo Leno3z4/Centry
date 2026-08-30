@@ -69,12 +69,12 @@ export default function ProtocolStats() {
       <div className="protocol-stats-grid">
         <article className="protocol-stat">
           <span>Total supplied</span>
-          <strong>{formatUsdc(supply)} <small>mUSDC</small></strong>
+          <strong>{formatUsdc(supply)} <small>USDC</small></strong>
           <em>Current liquidity</em>
         </article>
         <article className="protocol-stat">
           <span>Total borrowed</span>
-          <strong>{formatUsdc(borrow)} <small>mUSDC</small></strong>
+          <strong>{formatUsdc(borrow)} <small>USDC</small></strong>
           <em>Outstanding debt</em>
         </article>
         <article className="protocol-stat">
