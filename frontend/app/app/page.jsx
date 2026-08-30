@@ -20,6 +20,8 @@ const NAV_ITEMS = [
   { id: 'docs', label: 'Docs', icon: '□' },
 ];
 
+const ASSET = 'USDC';
+
 function formatNumber(value, digits = 2) {
   const number = Number(value || 0);
   if (!Number.isFinite(number)) return '0.00';
@@ -51,10 +53,10 @@ function HealthMeter({ value, connected = true }) {
   const percent = connected ? Math.min(Math.max(Number(value || 0), 0), 100) : 0;
 
   return (
-    <div style={{ display: 'grid', gap: 10 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center' }}>
-        <span style={{ color: '#9991ad', fontSize: 12 }}>Position health</span>
-        <strong style={{ fontSize: 18 }}>{connected ? `${percent}%` : '—'}</strong>
+    <div className="health-meter">
+      <div className="health-meter-head">
+        <span>Position health</span>
+        <strong>{connected ? `${percent}%` : '—'}</strong>
       </div>
       <div
         role="progressbar"
@@ -62,26 +64,14 @@ function HealthMeter({ value, connected = true }) {
         aria-valuemin="0"
         aria-valuemax="100"
         aria-valuenow={connected ? percent : 0}
-        style={{
-          width: '100%',
-          height: 10,
-          overflow: 'hidden',
-          borderRadius: 999,
-          background: '#21182d',
-          border: '1px solid #30253d',
-        }}
+        className="health-track"
       >
         <div
-          style={{
-            width: `${percent}%`,
-            height: '100%',
-            borderRadius: 'inherit',
-            background: 'linear-gradient(90deg, #9b62ff, #4ee39a)',
-            transition: 'width 180ms ease',
-          }}
+          className="health-fill"
+          style={{ width: `${percent}%` }}
         />
       </div>
-      <p style={{ margin: 0, color: '#756d83', fontSize: 11, lineHeight: 1.6 }}>
+      <p>
         Higher is safer. 0% is at the liquidation boundary; 100% represents a strong safety buffer.
       </p>
     </div>
@@ -169,8 +159,8 @@ function Overview({ lending, governance, connected, setActiveView }) {
       </section>
 
       <section className="stats-grid">
-        <StatCard label="Active liquidity" value={`${formatNumber(liquidity)} mUSDC`} detail="Centry test reserve" />
-        <StatCard label="Borrowed" value={`${formatNumber(borrowed)} mUSDC`} detail="Outstanding debt" />
+        <StatCard label="Active liquidity" value={`${formatNumber(liquidity)} ${ASSET}`} detail="Centry test reserve" />
+        <StatCard label="Borrowed" value={`${formatNumber(borrowed)} ${ASSET}`} detail="Outstanding debt" />
         <StatCard label="Utilization" value={`${formatNumber(utilization)}%`} detail="Pool utilization" />
         <StatCard label="Health" value={connected ? `${lending.healthFactorPercent}%` : '—'} detail={connected ? 'Your safety buffer' : 'Connect wallet'} />
       </section>
@@ -186,7 +176,7 @@ function Overview({ lending, governance, connected, setActiveView }) {
               <button key={market.id} type="button" className="market-list-item" onClick={() => setActiveView('lending')}>
                 <div className="asset"><span className="token usdc">$</span><div><strong>{market.symbol}</strong><small>{market.name}</small></div></div>
                 <div><span>Status</span><strong className="status-live">Live</strong></div>
-                <div><span>Liquidity</span><strong>{formatNumber(liquidity)} mUSDC</strong></div>
+                <div><span>Liquidity</span><strong>{formatNumber(liquidity)} {ASSET}</strong></div>
                 <span className="market-arrow">Open</span>
               </button>
             ))}
@@ -263,7 +253,7 @@ function Lending({ lending, connected }) {
 
       if (needsApproval) {
         await lending.approveUSDC(amount);
-        setNotice(`Approved ${amount} mUSDC.`);
+        setNotice(`Approved ${amount} ${ASSET}.`);
         return;
       }
 
@@ -297,16 +287,16 @@ function Lending({ lending, connected }) {
   return (
     <div className="page-stack">
       <div className="section-header">
-        <div><span className="section-kicker">LENDING</span><h1>mUSDC money market</h1><p>Real controls for the deployed Centry test reserve.</p></div>
-        <div className="test-badge">TEST ASSET · mUSDC</div>
+        <div><span className="section-kicker">LENDING</span><h1>{ASSET} money market</h1><p>Real controls for the deployed Centry test reserve.</p></div>
+        <div className="test-badge">TESTNET · {ASSET}</div>
       </div>
 
-      <div className="warning-banner"><strong>Testnet only:</strong><span>mUSDC is Centry's test token and is not Arc-issued USDC.</span></div>
+      <div className="warning-banner"><strong>Testnet only:</strong><span>These balances use Arc Testnet {ASSET}.</span></div>
 
       <section className="stats-grid">
-        <StatCard label="Wallet" value={connected ? `${formatNumber(lending.usdcBalance)} mUSDC` : '—'} detail={connected ? 'Available' : 'Connect wallet'} />
-        <StatCard label="Supplied" value={connected ? `${formatNumber(lending.supplyBalance)} mUSDC` : '—'} detail="Your collateral" />
-        <StatCard label="Borrowed" value={connected ? `${formatNumber(lending.borrowBalance)} mUSDC` : '—'} detail="Your debt" />
+        <StatCard label="Wallet" value={connected ? `${formatNumber(lending.usdcBalance)} ${ASSET}` : '—'} detail={connected ? 'Available' : 'Connect wallet'} />
+        <StatCard label="Supplied" value={connected ? `${formatNumber(lending.supplyBalance)} ${ASSET}` : '—'} detail="Your collateral" />
+        <StatCard label="Borrowed" value={connected ? `${formatNumber(lending.borrowBalance)} ${ASSET}` : '—'} detail="Your debt" />
         <StatCard label="Health" value={connected ? `${lending.healthFactorPercent}%` : '—'} detail={connected ? 'Safety buffer' : 'Connect wallet'} />
       </section>
 
@@ -322,7 +312,7 @@ function Lending({ lending, connected }) {
 
           <div className="form-card">
             <span className="section-kicker">{action.toUpperCase()}</span>
-            <h2>{action[0].toUpperCase() + action.slice(1)} mUSDC</h2>
+            <h2>{action[0].toUpperCase() + action.slice(1)} {ASSET}</h2>
             <label className="field-label" htmlFor="market-amount">Amount</label>
             <div className="amount-input-wrap">
               <input
@@ -335,13 +325,13 @@ function Lending({ lending, connected }) {
                 value={amount}
                 onChange={changeAmount}
               />
-              <span>mUSDC</span>
+              <span>{ASSET}</span>
             </div>
             <div className="form-meta">
               <span>
                 {action === 'repay'
-                  ? `Owed: ${connected ? `${formatNumber(lending.borrowBalance, 6)} mUSDC` : 'Connect wallet'}`
-                  : `Wallet: ${connected ? `${formatNumber(lending.usdcBalance)} mUSDC` : 'Connect wallet'}`}
+                  ? `Owed: ${connected ? `${formatNumber(lending.borrowBalance, 6)} ${ASSET}` : 'Connect wallet'}`
+                  : `Wallet: ${connected ? `${formatNumber(lending.usdcBalance)} ${ASSET}` : 'Connect wallet'}`}
               </span>
               {connected && <button type="button" onClick={setMax}>Max</button>}
             </div>
@@ -358,8 +348,8 @@ function Lending({ lending, connected }) {
                 {busy
                   ? 'Waiting for confirmation…'
                   : needsApproval
-                    ? `Approve mUSDC for ${action}`
-                    : `${action[0].toUpperCase()}${action.slice(1)} mUSDC`}
+                    ? `Approve ${ASSET} for ${action}`
+                    : `${action[0].toUpperCase()}${action.slice(1)} ${ASSET}`}
               </button>
             )}
             {notice && <div className="notice">{notice}</div>}
@@ -369,8 +359,8 @@ function Lending({ lending, connected }) {
         <div className="panel position-panel">
           <div className="panel-head"><div><span className="section-kicker">POSITION</span><h2>Your risk</h2></div></div>
           <div className="position-list">
-            <div className="position-row"><span>Supplied</span><strong>{connected ? `${formatNumber(lending.supplyBalance)} mUSDC` : '—'}</strong></div>
-            <div className="position-row"><span>Borrowed</span><strong>{connected ? `${formatNumber(lending.borrowBalance)} mUSDC` : '—'}</strong></div>
+            <div className="position-row"><span>Supplied</span><strong>{connected ? `${formatNumber(lending.supplyBalance)} ${ASSET}` : '—'}</strong></div>
+            <div className="position-row"><span>Borrowed</span><strong>{connected ? `${formatNumber(lending.borrowBalance)} ${ASSET}` : '—'}</strong></div>
             <div className="position-row"><span>Borrow power</span><strong>{connected ? `${formatNumber(lending.borrowPower)} USD` : '—'}</strong></div>
             <div className="position-row"><span>Health</span><strong>{connected ? `${lending.healthFactorPercent}%` : '—'}</strong></div>
           </div>
@@ -390,8 +380,8 @@ function Portfolio({ lending, connected }) {
       {!connected && <div className="connect-prompt large-prompt">Connect your wallet to load your onchain portfolio.</div>}
 
       <section className="portfolio-grid">
-        <StatCard label="Supplied" value={connected ? `${formatNumber(lending.supplyBalance)} mUSDC` : '—'} detail="Collateral" />
-        <StatCard label="Borrowed" value={connected ? `${formatNumber(lending.borrowBalance)} mUSDC` : '—'} detail="Debt" />
+        <StatCard label="Supplied" value={connected ? `${formatNumber(lending.supplyBalance)} ${ASSET}` : '—'} detail="Collateral" />
+        <StatCard label="Borrowed" value={connected ? `${formatNumber(lending.borrowBalance)} ${ASSET}` : '—'} detail="Debt" />
         <StatCard label="Borrow power" value={connected ? `${formatNumber(lending.borrowPower)} USD` : '—'} detail="Maximum debt value" />
         <StatCard label="Health" value={connected ? `${lending.healthFactorPercent}%` : '—'} detail="Safety buffer" />
       </section>
@@ -471,11 +461,11 @@ function Rewards() {
 }
 
 function Analytics({ lending }) {
-  return <div className="page-stack"><div className="section-header"><div><span className="section-kicker">ANALYTICS</span><h1>Market analytics</h1><p>Current figures are read from the deployed Centry lending pool.</p></div></div><section className="stats-grid"><StatCard label="Liquidity" value={`${formatNumber(lending.reserveData?.totalLiquidity)} mUSDC`} detail="Current supply" /><StatCard label="Borrowed" value={`${formatNumber(lending.reserveData?.totalBorrows)} mUSDC`} detail="Current debt" /><StatCard label="Utilization" value={`${formatNumber(lending.reserveData?.utilization)}%`} detail="Current utilization" /><StatCard label="Enabled market" value="mUSDC" detail="Test reserve" /></section><div className="panel empty-chart-panel"><span className="section-kicker">HISTORY</span><h2>Historical charts</h2><p>Historical graphs require indexed onchain events. Centry will not fabricate a historical series.</p></div></div>;
+  return <div className="page-stack"><div className="section-header"><div><span className="section-kicker">ANALYTICS</span><h1>Market analytics</h1><p>Current figures are read from the deployed Centry lending pool.</p></div></div><section className="stats-grid"><StatCard label="Liquidity" value={`${formatNumber(lending.reserveData?.totalLiquidity)} ${ASSET}`} detail="Current supply" /><StatCard label="Borrowed" value={`${formatNumber(lending.reserveData?.totalBorrows)} ${ASSET}`} detail="Current debt" /><StatCard label="Utilization" value={`${formatNumber(lending.reserveData?.utilization)}%`} detail="Current utilization" /><StatCard label="Enabled market" value={ASSET} detail="Test reserve" /></section><div className="panel empty-chart-panel"><span className="section-kicker">HISTORY</span><h2>Historical charts</h2><p>Historical graphs require indexed onchain events. Centry will not fabricate a historical series.</p></div></div>;
 }
 
 function Docs() {
-  return <div className="page-stack"><div className="section-header"><div><span className="section-kicker">DOCS</span><h1>Centry documentation</h1><p>Current testnet architecture and user flows.</p></div></div><div className="docs-grid">{[['Lending', ['Supply mUSDC', 'Borrow against collateral', 'Repay debt', 'Withdraw collateral']], ['Governance', ['CENT token', 'veCENT locks', 'Voting power decay', 'Revenue distribution']], ['Markets', ['mUSDC test market', 'Future USDC', 'Future EURC', 'Future USYC']], ['Security', ['Oracle validation', 'Reserve caps', 'Pause controls', 'Independent audit before production']]].map(([title, items]) => <div className="panel doc-card" key={title}><span className="section-kicker">{title.toUpperCase()}</span><h2>{title}</h2><div className="doc-list">{items.map((item) => <div className="doc-item" key={item}><span className="doc-marker">•</span><strong>{item}</strong></div>)}</div></div>)}</div></div>;
+  return <div className="page-stack"><div className="section-header"><div><span className="section-kicker">DOCS</span><h1>Centry documentation</h1><p>Current testnet architecture and user flows.</p></div></div><div className="docs-grid">{[['Lending', [`Supply ${ASSET}`, `Borrow against collateral`, `Repay debt`, `Withdraw collateral`]], ['Governance', ['CENT token', 'veCENT locks', 'Voting power decay', 'Revenue distribution']], ['Markets', [`${ASSET} test market`, 'Future EURC', 'Future USYC', 'Future stablecoins']], ['Security', ['Oracle validation', 'Reserve caps', 'Pause controls', 'Independent audit before production']]].map(([title, items]) => <div className="panel doc-card" key={title}><span className="section-kicker">{title.toUpperCase()}</span><h2>{title}</h2><div className="doc-list">{items.map((item) => <div className="doc-item" key={item}><span className="doc-marker">•</span><strong>{item}</strong></div>)}</div></div>)}</div></div>;
 }
 
 function Dashboard() {
