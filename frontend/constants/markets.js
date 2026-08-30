@@ -18,8 +18,8 @@ export const MARKETS = [
     decimals: 6,
     address: CONTRACT_ADDRESSES.EURC,
     kind: 'arc',
-    status: 'coming-soon',
-    description: 'Arc-native euro stablecoin. Enable after its lending reserve and Chronicle feed are configured.',
+    status: 'live',
+    description: 'Arc-native euro stablecoin enabled for the Centry lending reserve.',
   },
   {
     id: 'cirbtc',
@@ -28,8 +28,8 @@ export const MARKETS = [
     decimals: 8,
     address: CONTRACT_ADDRESSES.CIRBTC,
     kind: 'arc',
-    status: 'coming-soon',
-    description: 'Circle Wrapped Bitcoin on Arc. Enable after its lending reserve, oracle, and risk parameters are configured.',
+    status: 'live',
+    description: 'Circle Wrapped Bitcoin enabled for the Centry lending reserve.',
   },
   {
     id: 'usyc',
