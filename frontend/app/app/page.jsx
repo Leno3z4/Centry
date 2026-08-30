@@ -66,10 +66,7 @@ function HealthMeter({ value, connected = true }) {
         aria-valuenow={connected ? percent : 0}
         className="health-track"
       >
-        <div
-          className="health-fill"
-          style={{ width: `${percent}%` }}
-        />
+        <div className="health-fill" style={{ width: `${percent}%` }} />
       </div>
       <p>
         Higher is safer. 0% is at the liquidation boundary; 100% represents a strong safety buffer.
@@ -361,7 +358,7 @@ function Lending({ lending, connected }) {
           <div className="position-list">
             <div className="position-row"><span>Supplied</span><strong>{connected ? `${formatNumber(lending.supplyBalance)} ${ASSET}` : '—'}</strong></div>
             <div className="position-row"><span>Borrowed</span><strong>{connected ? `${formatNumber(lending.borrowBalance)} ${ASSET}` : '—'}</strong></div>
-            <div className="position-row"><span>Borrow power</span><strong>{connected ? `${formatNumber(lending.borrowPower)} USD` : '—'}</strong></div>
+            <div className="position-row"><span>Borrow limit</span><strong>{connected ? `${formatNumber(lending.borrowLimit)} USD` : '—'}</strong></div>
             <div className="position-row"><span>Health</span><strong>{connected ? `${lending.healthFactorPercent}%` : '—'}</strong></div>
           </div>
         </div>
@@ -382,7 +379,7 @@ function Portfolio({ lending, connected }) {
       <section className="portfolio-grid">
         <StatCard label="Supplied" value={connected ? `${formatNumber(lending.supplyBalance)} ${ASSET}` : '—'} detail="Collateral" />
         <StatCard label="Borrowed" value={connected ? `${formatNumber(lending.borrowBalance)} ${ASSET}` : '—'} detail="Debt" />
-        <StatCard label="Borrow power" value={connected ? `${formatNumber(lending.borrowPower)} USD` : '—'} detail="Maximum debt value" />
+        <StatCard label="Borrow limit" value={connected ? `${formatNumber(lending.borrowLimit)} USD` : '—'} detail="Remaining borrowing room" />
         <StatCard label="Health" value={connected ? `${lending.healthFactorPercent}%` : '—'} detail="Safety buffer" />
       </section>
 
