@@ -102,7 +102,7 @@ export function SelfRepayingContent() {
   return (
     <main className={styles.page}>
       <header className={styles.header}>
-        <div><span className={styles.kicker}>CENTRY · SELF-REPAYING</span><h1>Let the yield pay the debt.</h1><p>Deposit collateral, borrow mUSDC, and let Centry handle the rest.</p></div>
+        <div><span className={styles.kicker}>CENTRY · SELF-REPAYING</span><h1>Let the yield pay the debt.</h1><p>Deposit collateral, borrow USDC, and let Centry handle the rest.</p></div>
         <div className={styles.network}><span className={styles.liveDot} />Arc Testnet</div>
       </header>
 
@@ -125,7 +125,7 @@ export function SelfRepayingContent() {
             <>
               <div className={styles.positionHeader}>
                 <div><span className={styles.kicker}>YOUR POSITION</span><h2>{selected.symbol} position</h2><p>{formatToken(selfRepay.collateralSupplied, selected.decimals)} {selected.symbol} deposited</p></div>
-                <div className={styles.debtBadge}>{currentDebt} mUSDC debt</div>
+                <div className={styles.debtBadge}>{currentDebt} USDC debt</div>
               </div>
 
               {selfRepay.positions.length > 1 ? (
@@ -146,22 +146,22 @@ export function SelfRepayingContent() {
                 <button type="button" className={styles.primaryButton} disabled={busy || !collateralAmount || !collateralAllowanceEnough} onClick={() => run('Deposit collateral', () => selfRepay.depositCollateral(collateralAmount))}>{busyAction === 'Deposit collateral' ? 'Depositing…' : `Deposit ${selected.symbol}`}</button>
               </div>
 
-              <label className={styles.label} htmlFor="borrow">Borrow mUSDC</label>
-              <div className={styles.inputRow}><input id="borrow" type="number" min="0" step="0.000001" value={borrowAmount} onChange={(event) => setBorrowAmount(event.target.value)} /><span>mUSDC</span></div>
-              <button type="button" className={styles.primaryButton} disabled={busy || !borrowAmount} onClick={() => run('Open position', () => selfRepay.openPosition(borrowAmount))}>{busyAction === 'Open position' ? 'Starting…' : 'Borrow mUSDC & start yield'}</button>
+              <label className={styles.label} htmlFor="borrow">Borrow USDC</label>
+              <div className={styles.inputRow}><input id="borrow" type="number" min="0" step="0.000001" value={borrowAmount} onChange={(event) => setBorrowAmount(event.target.value)} /><span>USDC</span></div>
+              <button type="button" className={styles.primaryButton} disabled={busy || !borrowAmount} onClick={() => run('Open position', () => selfRepay.openPosition(borrowAmount))}>{busyAction === 'Open position' ? 'Starting…' : 'Borrow USDC & start yield'}</button>
 
               <div className={styles.healthSection}>
                 <div className={styles.healthHeader}><span>Position health</span><strong>{selfRepay.healthFactorPercent ?? '—'}%</strong></div>
                 <div className={styles.healthTrack} role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={selfRepay.healthFactorPercent ?? 0}><div className={styles.healthFill} style={{ width: `${Math.min(Math.max(Number(selfRepay.healthFactorPercent ?? 0), 0), 100)}%` }} /></div>
-                <p className={styles.healthHint}>Your position is healthy when the bar stays above the risk zone.</p>
+                <p className={styles.healthHint}>Higher is safer. 0% is the liquidation boundary.</p>
               </div>
 
-              <label className={styles.label} htmlFor="repay">Repay debt</label>
-              <div className={styles.inputRow}><input id="repay" type="text" inputMode="decimal" value={repayAmount} placeholder={currentDebt} onChange={(event) => setCappedRepayAmount(event.target.value)} /><span>mUSDC</span></div>
-              <div className={styles.helper}><span>Owed {currentDebt} mUSDC</span><button type="button" onClick={() => setRepayAmount(currentDebt)}>Max</button></div>
+              <label className={styles.label} htmlFor="repay">Repay USDC</label>
+              <div className={styles.inputRow}><input id="repay" type="text" inputMode="decimal" value={repayAmount} placeholder={currentDebt} onChange={(event) => setCappedRepayAmount(event.target.value)} /><span>USDC</span></div>
+              <div className={styles.helper}><span>Owed {currentDebt} USDC</span><button type="button" onClick={() => setRepayAmount(currentDebt)}>Max</button></div>
               <button type="button" className={styles.secondaryButton} disabled={busy || !repayAmount || Number(repayAmount) <= 0} onClick={() => run('Repay debt', () => selfRepay.repay(repayAmount))}>{busyAction === 'Repay debt' ? 'Repaying…' : 'Repay debt'}</button>
 
-              <p className={styles.note}>Your borrowed funds are put to work automatically. Yield is used to repay your debt.</p>
+              <p className={styles.note}>Your borrowed USDC is put to work automatically. Yield is used to repay your debt.</p>
             </>
           )}
           {notice ? <div className={styles.notice}>{notice}</div> : null}
