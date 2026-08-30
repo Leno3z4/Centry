@@ -541,7 +541,7 @@ export function WalletConnect() {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
           })}{' '}
-          mUSDC
+          USDC
         </strong>
       </div>
 
