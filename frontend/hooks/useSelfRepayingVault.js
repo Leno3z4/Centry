@@ -59,9 +59,7 @@ export function useSelfRepayingVault() {
   const chainId = useChainId();
   const publicClient = usePublicClient();
   const [selectedPosition, setSelectedPosition] = useState('');
-  const [selectedCollateral, setSelectedCollateral] = useState(
-    COLLATERAL_ASSETS[0],
-  );
+  const [selectedCollateral, setSelectedCollateral] = useState(COLLATERAL_ASSETS[0]);
   const [transactionPending, setTransactionPending] = useState(false);
   const [transactionHash, setTransactionHash] = useState(null);
   const [transactionError, setTransactionError] = useState(null);
@@ -71,9 +69,7 @@ export function useSelfRepayingVault() {
     hasAddress('yieldVault') &&
     hasAddress('USDC') &&
     hasAddress('lendingPool') &&
-    COLLATERAL_ASSETS.every((asset) =>
-      /^0x[a-fA-F0-9]{40}$/.test(asset.address),
-    );
+    COLLATERAL_ASSETS.every((asset) => /^0x[a-fA-F0-9]{40}$/.test(asset.address));
 
   const correctNetwork = chainId === arcTestnet.id;
   const walletEnabled = configured && Boolean(address) && correctNetwork;
@@ -102,21 +98,19 @@ export function useSelfRepayingVault() {
     query: positionQuery,
   });
 
-  const { data: collateralSupplied, refetch: refetchCollateral } =
-    useReadContract({
-      address: positionAddress,
-      abi: SELF_REPAYING_POSITION_ABI,
-      functionName: 'collateralSupplied',
-      query: positionQuery,
-    });
+  const { data: collateralSupplied, refetch: refetchCollateral } = useReadContract({
+    address: positionAddress,
+    abi: SELF_REPAYING_POSITION_ABI,
+    functionName: 'collateralSupplied',
+    query: positionQuery,
+  });
 
-  const { data: yieldPrincipal, refetch: refetchYieldPrincipal } =
-    useReadContract({
-      address: positionAddress,
-      abi: SELF_REPAYING_POSITION_ABI,
-      functionName: 'yieldPrincipal',
-      query: positionQuery,
-    });
+  const { data: yieldPrincipal, refetch: refetchYieldPrincipal } = useReadContract({
+    address: positionAddress,
+    abi: SELF_REPAYING_POSITION_ABI,
+    functionName: 'yieldPrincipal',
+    query: positionQuery,
+  });
 
   const { data: totalRepaid, refetch: refetchTotalRepaid } = useReadContract({
     address: positionAddress,
@@ -132,13 +126,12 @@ export function useSelfRepayingVault() {
     query: positionQuery,
   });
 
-  const { data: currentYieldAssets, refetch: refetchYieldAssets } =
-    useReadContract({
-      address: positionAddress,
-      abi: SELF_REPAYING_POSITION_ABI,
-      functionName: 'currentYieldAssets',
-      query: positionQuery,
-    });
+  const { data: currentYieldAssets, refetch: refetchYieldAssets } = useReadContract({
+    address: positionAddress,
+    abi: SELF_REPAYING_POSITION_ABI,
+    functionName: 'currentYieldAssets',
+    query: positionQuery,
+  });
 
   const { data: harvestableProfit, refetch: refetchProfit } = useReadContract({
     address: positionAddress,
@@ -175,16 +168,13 @@ export function useSelfRepayingVault() {
     }
   }, [collateralAssetAddress]);
 
-  const { data: collateralAllowance, refetch: refetchAllowance } =
-    useReadContract({
-      address: collateralAddress,
-      abi: ERC20_ABI,
-      functionName: 'allowance',
-      args: [address, positionAddress],
-      query: {
-        enabled: walletEnabled && Boolean(positionAddress),
-      },
-    });
+  const { data: collateralAllowance, refetch: refetchAllowance } = useReadContract({
+    address: collateralAddress,
+    abi: ERC20_ABI,
+    functionName: 'allowance',
+    args: [address, positionAddress],
+    query: { enabled: walletEnabled && Boolean(positionAddress) },
+  });
 
   const { data: collateralBalance, refetch: refetchBalance } = useReadContract({
     address: collateralAddress,
@@ -197,17 +187,9 @@ export function useSelfRepayingVault() {
   const { writeContractAsync } = useWriteContract();
 
   const sendAndWait = async (request) => {
-    if (!address) {
-      throw new Error('Connect your wallet before submitting a transaction.');
-    }
-
-    if (!correctNetwork) {
-      throw new Error('Switch your wallet to Arc Testnet before submitting.');
-    }
-
-    if (!publicClient) {
-      throw new Error('Wallet client is not ready. Please reconnect your wallet.');
-    }
+    if (!address) throw new Error('Connect your wallet before submitting a transaction.');
+    if (!correctNetwork) throw new Error('Switch your wallet to Arc Testnet before submitting.');
+    if (!publicClient) throw new Error('Wallet client is not ready. Please reconnect your wallet.');
 
     setTransactionPending(true);
     setTransactionError(null);
@@ -216,11 +198,7 @@ export function useSelfRepayingVault() {
       const hash = await writeContractAsync(request);
       setTransactionHash(hash);
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
-
-      if (receipt.status !== 'success') {
-        throw new Error('The transaction was reverted onchain.');
-      }
-
+      if (receipt.status !== 'success') throw new Error('The transaction was reverted onchain.');
       return hash;
     } catch (error) {
       setTransactionError(error);
@@ -231,9 +209,7 @@ export function useSelfRepayingVault() {
   };
 
   const createPosition = async (asset = selectedCollateral.address) => {
-    if (!factoryAddress || !asset) {
-      throw new Error('Select a collateral asset first.');
-    }
+    if (!factoryAddress || !asset) throw new Error('Select a collateral asset first.');
 
     await sendAndWait({
       address: factoryAddress,
@@ -253,10 +229,7 @@ export function useSelfRepayingVault() {
       address: collateralAddress,
       abi: ERC20_ABI,
       functionName: 'approve',
-      args: [
-        positionAddress,
-        parseUnits(String(amount), selectedCollateral.decimals),
-      ],
+      args: [positionAddress, parseUnits(String(amount), selectedCollateral.decimals)],
     });
 
   const depositCollateral = (amount) =>
@@ -276,9 +249,7 @@ export function useSelfRepayingVault() {
     });
 
   const repay = async (amount) => {
-    if (!positionAddress) {
-      throw new Error('Select a position before repaying debt.');
-    }
+    if (!positionAddress) throw new Error('Select a position before repaying debt.');
 
     const parsedAmount = parseUnits(String(amount), 6);
 
@@ -293,11 +264,7 @@ export function useSelfRepayingVault() {
       address: CONTRACT_ADDRESSES.lendingPool,
       abi: LENDING_POOL_ABI,
       functionName: 'repayFor',
-      args: [
-        CONTRACT_ADDRESSES.USDC,
-        positionAddress,
-        parsedAmount,
-      ],
+      args: [CONTRACT_ADDRESSES.USDC, positionAddress, parsedAmount],
     });
   };
 
@@ -332,31 +299,22 @@ export function useSelfRepayingVault() {
       );
     }
 
-    if (collateralAddress) {
-      requests.push(refetchBalance());
-    }
-
+    if (collateralAddress) requests.push(refetchBalance());
     await Promise.all(requests);
   };
 
   const healthFactorPercent = useMemo(() => {
-    if (!positionAddress || !positionOpen) {
-      return 100;
-    }
+    if (!positionAddress || !positionOpen) return 100;
 
     const debt = currentDebt ?? 0n;
-    if (debt === 0n) {
-      return 100;
-    }
+    if (debt === 0n) return 100;
 
     const health = Number(formatUnits(healthFactor ?? 0n, 18));
-    if (!Number.isFinite(health)) {
-      return 0;
-    }
+    if (!Number.isFinite(health)) return 0;
 
     return Math.round(
       Math.min(
-        Math.max((health - 1) * 100, 0),
+        Math.max(((health - 1) / 2) * 100, 0),
         100,
       ),
     );
