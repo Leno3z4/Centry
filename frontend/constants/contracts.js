@@ -10,7 +10,7 @@ export const CONTRACT_ADDRESSES = Object.freeze({
   ),
   lendingPool: env(
     'NEXT_PUBLIC_CENTRY_LENDING_POOL',
-    '0xd2E73c4aC467e806D20F8316Ee31e89a260f2bFa'
+    '0x90C935687D91b3352b2C55cd79389C92950D94BD'
   ),
   interestRateModel: env(
     'NEXT_PUBLIC_CENTRY_INTEREST_RATE_MODEL',
@@ -18,7 +18,7 @@ export const CONTRACT_ADDRESSES = Object.freeze({
   ),
   oracle: env(
     'NEXT_PUBLIC_CENTRY_ORACLE',
-    '0x4A2384bE6e4727a0187A28075234853b59E05052'
+    '0xC82424D224dbfBF9D41a9cBe5cA2AdF762572fC6'
   ),
   centryToken: env(
     'NEXT_PUBLIC_CENTRY_TOKEN',
