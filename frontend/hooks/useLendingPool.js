@@ -230,18 +230,19 @@ export function useLendingPool() {
         ? '∞'
         : healthFactorNumber.toFixed(2);
 
+  // UI health is a normalized view of the onchain health factor.
+  // It is 0% at the liquidation boundary (HF = 1), approaches 100%
+  // as HF increases, and is exactly 100% when there is no debt (HF = ∞).
   const healthFactorPercent = !hasDebt
     ? 100
-    : healthIsInfinite
-      ? 100
-      : healthFactorNumber === null || !Number.isFinite(healthFactorNumber)
-        ? 0
-        : Math.round(
-            Math.min(
-              Math.max(((healthFactorNumber - 1) / 2) * 100, 0),
-              100,
-            ),
-          );
+    : healthFactorNumber === null || !Number.isFinite(healthFactorNumber)
+      ? 0
+      : Math.round(
+          Math.min(
+            Math.max((1 - 1 / healthFactorNumber) * 100, 0),
+            100,
+          ),
+        );
 
   const totalBorrowPower = Number(format18(borrowPowerRaw));
   const currentDebt = Number(format6(borrowBalanceRaw));
