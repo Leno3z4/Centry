@@ -1,0 +1,388 @@
+.page {
+  display: grid;
+  gap: 24px;
+  max-width: 900px;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.kicker {
+  display: block;
+  margin-bottom: 8px;
+  color: #9277b9;
+  font: 9px 'DM Mono', monospace;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.header h1 {
+  margin: 0;
+  color: #f7f4ff;
+  font-size: clamp(36px, 4vw, 58px);
+  line-height: .98;
+  letter-spacing: -3px;
+}
+
+.header p {
+  max-width: 650px;
+  margin: 10px 0 0;
+  color: #9c92a7;
+  line-height: 1.6;
+}
+
+.destinationPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 11px;
+  border: 1px solid #322542;
+  border-radius: 999px;
+  background: #0e0917;
+  color: #bfb1ca;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.destinationPill i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #9b62ff;
+  box-shadow: 0 0 10px rgba(155,98,255,.7);
+}
+
+.card {
+  padding: 24px;
+  border: 1px solid #282033;
+  border-radius: 20px;
+  background: linear-gradient(145deg, #100b1a, #0b0813);
+  box-shadow: 0 20px 60px rgba(0,0,0,.2);
+}
+
+.fieldBlock,
+.amountBlock {
+  display: grid;
+  gap: 8px;
+}
+
+.fieldBlock label,
+.amountHeader label {
+  color: #756d83;
+  font: 9px 'DM Mono', monospace;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.chainPicker {
+  position: relative;
+}
+
+.chainTrigger,
+.destinationBox {
+  display: flex;
+  width: 100%;
+  min-height: 62px;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #342748;
+  border-radius: 15px;
+  background: #0e0917;
+  color: #f5f0fb;
+}
+
+.chainTrigger {
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.chainTrigger:hover,
+.chainTriggerOpen {
+  border-color: #76509e;
+  background: #151022;
+}
+
+.chainMenu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  display: grid;
+  gap: 4px;
+  padding: 7px;
+  border: 1px solid #3a2a4f;
+  border-radius: 16px;
+  background: #0b0813;
+  box-shadow: 0 24px 60px rgba(0,0,0,.58), 0 0 0 1px rgba(155,98,255,.04);
+}
+
+.chainOption {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 10px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: transparent;
+  color: #e9e2f2;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chainOption:hover,
+.chainOptionActive {
+  border-color: #2f2440;
+  background: #171022;
+}
+
+.chainBadge,
+.arcBadge {
+  display: grid;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid #65458a;
+  border-radius: 50%;
+  background: #1c1229;
+  color: #d4b6ff;
+  font-weight: 800;
+}
+
+.arcBadge {
+  border-color: #8d64bb;
+  background: #2a183c;
+}
+
+.chainText {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 3px;
+}
+
+.chainText strong {
+  font-size: 13px;
+}
+
+.chainText small {
+  color: #71677d;
+  font-size: 9px;
+}
+
+.chevron,
+.check,
+.locked {
+  color: #9e8eac;
+  font-size: 12px;
+}
+
+.check {
+  color: #b38aff;
+  font-weight: 800;
+}
+
+.locked {
+  padding: 6px 9px;
+  border: 1px solid #2b2137;
+  border-radius: 999px;
+  background: #0b0712;
+  font-size: 9px;
+}
+
+.arrow {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  margin: 9px auto;
+  place-items: center;
+  border: 1px solid #362847;
+  border-radius: 50%;
+  background: #0f0a18;
+  color: #c5b5d5;
+}
+
+.amountBlock {
+  margin-top: 20px;
+}
+
+.amountHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.balanceButton,
+.refreshButton {
+  border: 0;
+  background: transparent;
+  color: #a992c0;
+  font: 10px 'DM Mono', monospace;
+  cursor: pointer;
+}
+
+.balanceButton:hover:not(:disabled),
+.refreshButton:hover:not(:disabled) {
+  color: #d4b6ff;
+}
+
+.balanceButton:disabled,
+.refreshButton:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+.amountField {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #292139;
+  border-radius: 16px;
+  background: #0b0712;
+}
+
+.amountField:focus-within {
+  border-color: #65458a;
+  box-shadow: 0 0 0 3px rgba(155,98,255,.08);
+}
+
+.amountField input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #f8f4ff;
+  font: inherit;
+  font-size: 30px;
+}
+
+.amountField span {
+  color: #d4c9df;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.summary {
+  display: grid;
+  gap: 1px;
+  margin-top: 18px;
+  overflow: hidden;
+  border: 1px solid #292039;
+  border-radius: 14px;
+  background: #292039;
+}
+
+.summary div {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 12px 14px;
+  background: #0d0916;
+}
+
+.summary span {
+  color: #766b82;
+  font-size: 11px;
+}
+
+.summary strong {
+  color: #e9e1f3;
+  font-size: 11px;
+  text-align: right;
+}
+
+.primaryButton {
+  width: 100%;
+  min-height: 52px;
+  margin-top: 18px;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  background: linear-gradient(100deg, #8b4eff, #b67cff);
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 10px 35px rgba(108,49,181,.28);
+}
+
+.primaryButton:hover:not(:disabled) {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+.primaryButton:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+.refreshButton {
+  display: block;
+  margin: 13px auto 0;
+}
+
+.notice {
+  display: grid;
+  gap: 6px;
+  margin-top: 15px;
+  padding: 13px 14px;
+  border: 1px solid #34294a;
+  border-radius: 12px;
+  background: #100b19;
+  color: #a594b6;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.notice code {
+  overflow-wrap: anywhere;
+  color: #d8c6ea;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+}
+
+.noticeError {
+  border-color: rgba(255,100,120,.25);
+  color: #e6a3ae;
+}
+
+.noticeSuccess {
+  border-color: rgba(80,220,170,.25);
+  color: #9ce1c5;
+}
+
+.disclaimer {
+  margin: 0;
+  color: #675d71;
+  font-size: 11px;
+}
+
+@media (max-width: 620px) {
+  .header {
+    flex-direction: column;
+  }
+
+  .card {
+    padding: 18px;
+  }
+
+  .amountField {
+    grid-template-columns: 1fr;
+  }
+
+  .locked {
+    display: none;
+  }
+}
