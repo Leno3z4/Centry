@@ -18,44 +18,32 @@ const LIVE_MARKETS = MARKETS.filter(
   (market) => market.status === 'live' && market.address,
 );
 const ARC_CHAIN_ID = 5042002;
-const TOWER_QUOTE_DISPLAY_DECIMALS = 12;
 
-function safeNumber(value) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
+function formatTokenAmount(raw, decimals, symbol) {
+  if (raw == null || decimals == null) return '—';
 
-function formatQuoteAmount(raw, symbol) {
-  if (raw == null) return '—';
   try {
-    const formatted = formatUnits(
-      BigInt(String(raw)),
-      TOWER_QUOTE_DISPLAY_DECIMALS,
-    );
-    return `${Number(formatted).toLocaleString(undefined, {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 8,
-    })} ${symbol}`;
+    const value = formatUnits(BigInt(String(raw)), Number(decimals));
+    return `${value} ${symbol}`;
   } catch {
     return '—';
   }
 }
 
 function formatPriceImpact(value) {
-  const parsed = safeNumber(value);
-  if (parsed == null) return '—';
+  if (value == null || value === '') return '—';
 
-  // Tower's response is surfaced as basis points here:
-  // 2128 -> 21.28%, 250 -> 2.50%, 0 -> 0%.
-  const percent = parsed / 100;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return '—';
 
-  return `${percent.toLocaleString(undefined, {
+  // Tower's Arc testnet response currently exposes this field as bps.
+  return `${(parsed / 100).toLocaleString(undefined, {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   })}%`;
 }
 
-function errorText(error) {
+function getErrorMessage(error) {
   return error?.shortMessage || error?.message || 'The transaction could not be completed.';
 }
 
@@ -65,11 +53,12 @@ function TokenDropdown({ value, markets, onChange, label }) {
   const selected = markets.find((market) => market.id === value) || markets[0];
 
   useEffect(() => {
-    const close = (event) => {
+    const handlePointerDown = (event) => {
       if (!rootRef.current?.contains(event.target)) setOpen(false);
     };
-    document.addEventListener('pointerdown', close);
-    return () => document.removeEventListener('pointerdown', close);
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
   }, []);
 
   return (
@@ -135,6 +124,7 @@ export default function Page() {
 function SwapContent() {
   const { address, isConnected } = useAccount();
   const { sendTransactionAsync, isPending: walletPending } = useSendTransaction();
+
   const [fromId, setFromId] = useState('usdc');
   const [toId, setToId] = useState('eurc');
   const [amount, setAmount] = useState('');
@@ -156,7 +146,15 @@ function SwapContent() {
     query: { enabled: Boolean(fromMarket?.address) },
   });
 
+  const { data: outputDecimals } = useReadContract({
+    address: toMarket?.address,
+    abi: ERC20_ABI,
+    functionName: 'decimals',
+    query: { enabled: Boolean(toMarket?.address) },
+  });
+
   const fromTokenDecimals = Number(inputDecimals ?? fromMarket?.decimals ?? 6);
+  const toTokenDecimals = Number(outputDecimals ?? toMarket?.decimals ?? 6);
 
   const slippageBps = useMemo(() => {
     const parsed = Number(slippage);
@@ -166,12 +164,22 @@ function SwapContent() {
 
   const amountRaw = useMemo(() => {
     if (!amount) return '';
+
     try {
       return parseUnits(amount, fromTokenDecimals).toString();
     } catch {
       return '';
     }
   }, [amount, fromTokenDecimals]);
+
+  const invalidateQuote = () => {
+    requestIdRef.current += 1;
+    setQuote(null);
+    setSwapTx(null);
+    setNotice('');
+    setError('');
+    setStage('idle');
+  };
 
   useEffect(() => {
     const requestId = ++requestIdRef.current;
@@ -208,27 +216,22 @@ function SwapContent() {
           throw new Error(result.error || 'Tower could not find a route.');
         }
 
+        if (!result.data?.outputAmount || !result.data?.minOut) {
+          throw new Error('Tower returned an incomplete quote.');
+        }
+
         setQuote(result.data);
         setStage('quoted');
       } catch (caughtError) {
         if (requestId !== requestIdRef.current) return;
         setQuote(null);
-        setError(errorText(caughtError));
+        setError(getErrorMessage(caughtError));
         setStage('idle');
       }
     }, 450);
 
     return () => window.clearTimeout(timer);
   }, [amountRaw, fromMarket?.address, toMarket?.address, slippageBps]);
-
-  const invalidateQuote = () => {
-    requestIdRef.current += 1;
-    setQuote(null);
-    setSwapTx(null);
-    setNotice('');
-    setError('');
-    setStage('idle');
-  };
 
   const swapTokens = () => {
     const currentFrom = fromId;
@@ -302,7 +305,7 @@ function SwapContent() {
       setStage('submitted');
       setNotice('Swap transaction submitted.');
     } catch (caughtError) {
-      setError(errorText(caughtError));
+      setError(getErrorMessage(caughtError));
       setStage('quoted');
     }
   };
@@ -314,13 +317,17 @@ function SwapContent() {
   });
 
   const isBusy = walletPending || ['quoting', 'building', 'approval', 'swapping'].includes(stage);
-  const outputAmount = quote ? formatQuoteAmount(quote.outputAmount, toMarket.symbol) : '—';
-  const minOutput = quote ? formatQuoteAmount(quote.minOut, toMarket.symbol) : '—';
+  const outputAmount = quote
+    ? formatTokenAmount(quote.outputAmount, toTokenDecimals, toMarket.symbol)
+    : '—';
+  const minOutput = quote
+    ? formatTokenAmount(quote.minOut, toTokenDecimals, toMarket.symbol)
+    : '—';
   const quoteReady = Boolean(
     quote?.outputAmount &&
-    quote?.minOut &&
-    BigInt(String(quote.minOut)) > 0n &&
-    BigInt(String(quote.outputAmount)) >= BigInt(String(quote.minOut)),
+      quote?.minOut &&
+      BigInt(String(quote.minOut)) > 0n &&
+      BigInt(String(quote.outputAmount)) >= BigInt(String(quote.minOut)),
   );
 
   return (
@@ -331,13 +338,19 @@ function SwapContent() {
           <h1>Swap assets</h1>
           <p>Find a routed Arc swap without leaving Centry.</p>
         </div>
-        <span className={styles.routePill}><i className={styles.routeDot} /> Tower routing</span>
+        <span className={styles.routePill}>
+          <i className={styles.routeDot} />
+          Tower routing
+        </span>
       </header>
 
       <div className={styles.panelGrid}>
         <section className={styles.panel}>
           <div className={styles.panelHead}>
-            <div><span className={styles.kicker}>ARC SWAP</span><h2>Exchange</h2></div>
+            <div>
+              <span className={styles.kicker}>ARC SWAP</span>
+              <h2>Exchange</h2>
+            </div>
           </div>
 
           <div className={styles.swapStack}>
@@ -354,14 +367,29 @@ function SwapContent() {
                   value={amount}
                   onChange={(event) => {
                     const value = event.target.value;
-                    if (value === '' || /^\d*(\.\d*)?$/.test(value)) setAmount(value);
+                    if (value === '' || /^\d*(\.\d*)?$/.test(value)) {
+                      setAmount(value);
+                    }
                   }}
                 />
-                <TokenDropdown value={fromId} markets={LIVE_MARKETS} onChange={changeFrom} label="Input token" />
+                <TokenDropdown
+                  value={fromId}
+                  markets={LIVE_MARKETS}
+                  onChange={changeFrom}
+                  label="Input token"
+                />
               </div>
             </div>
 
-            <button type="button" className={styles.switchButton} onClick={swapTokens} disabled={isBusy} aria-label="Switch tokens">↓</button>
+            <button
+              type="button"
+              className={styles.switchButton}
+              onClick={swapTokens}
+              disabled={isBusy}
+              aria-label="Switch tokens"
+            >
+              ↓
+            </button>
 
             <div className={styles.assetField}>
               <label htmlFor="swap-output">You receive</label>
@@ -391,7 +419,9 @@ function SwapContent() {
               value={slippage}
               onChange={(event) => {
                 const value = event.target.value;
-                if (value === '' || /^\d*(\.\d*)?$/.test(value)) setSlippage(value);
+                if (value === '' || /^\d*(\.\d*)?$/.test(value)) {
+                  setSlippage(value);
+                }
               }}
               aria-label="Slippage percentage"
               inputMode="decimal"
@@ -401,42 +431,101 @@ function SwapContent() {
 
           {quote && (
             <div className={styles.quoteCard}>
-              <div className={styles.quoteRow}><span>Expected output</span><strong className={styles.quoteOutput}>{outputAmount}</strong></div>
-              <div className={styles.quoteRow}><span>Minimum received</span><strong>{minOutput}</strong></div>
-              <div className={styles.quoteRow}><span>Price impact</span><strong>{formatPriceImpact(quote.priceImpact)}</strong></div>
-              <div className={styles.quoteRow}><span>Fee</span><strong>{quote.feeBps != null ? `${quote.feeBps} bps` : '—'}</strong></div>
-              <div className={styles.quoteRow}><span>Route</span><strong>{quote.dexName || quote.dexId || 'Tower'}</strong></div>
+              <div className={styles.quoteRow}>
+                <span>Expected output</span>
+                <strong className={styles.quoteOutput}>{outputAmount}</strong>
+              </div>
+              <div className={styles.quoteRow}>
+                <span>Minimum received</span>
+                <strong>{minOutput}</strong>
+              </div>
+              <div className={styles.quoteRow}>
+                <span>Price impact</span>
+                <strong>{formatPriceImpact(quote.priceImpact)}</strong>
+              </div>
+              <div className={styles.quoteRow}>
+                <span>Fee</span>
+                <strong>{quote.feeBps != null ? `${quote.feeBps} bps` : '—'}</strong>
+              </div>
+              <div className={styles.quoteRow}>
+                <span>Route</span>
+                <strong>{quote.dexName || quote.dexId || 'Tower'}</strong>
+              </div>
             </div>
           )}
 
           {error && <div className={`${styles.notice} ${styles.noticeError}`}>{error}</div>}
 
           {quoteReady ? (
-            <button type="button" className={styles.primaryButton} disabled={!isConnected || isBusy || swapReceipt.isLoading} onClick={buildAndSwap}>
-              {!isConnected ? 'Connect wallet to swap' : stage === 'approval' ? 'Approve in wallet…' : stage === 'swapping' ? 'Confirm swap…' : stage === 'building' ? 'Preparing swap…' : stage === 'submitted' && !swapReceipt.isSuccess ? 'Swap submitted' : 'Swap'}
+            <button
+              type="button"
+              className={styles.primaryButton}
+              disabled={!isConnected || isBusy || swapReceipt.isLoading}
+              onClick={buildAndSwap}
+            >
+              {!isConnected
+                ? 'Connect wallet to swap'
+                : stage === 'approval'
+                  ? 'Approve in wallet…'
+                  : stage === 'swapping'
+                    ? 'Confirm swap…'
+                    : stage === 'building'
+                      ? 'Preparing swap…'
+                      : stage === 'submitted' && !swapReceipt.isSuccess
+                        ? 'Swap submitted'
+                        : 'Swap'}
             </button>
           ) : (
             <div className={styles.quoteStatus}>
-              {stage === 'quoting' ? 'Finding the best route…' : amountRaw ? 'Waiting for a quote…' : 'Enter an amount to get a quote.'}
+              {stage === 'quoting'
+                ? 'Finding the best route…'
+                : amountRaw
+                  ? 'Waiting for a quote…'
+                  : 'Enter an amount to get a quote.'}
             </div>
           )}
 
-          {!isConnected && <div className={styles.notice}>Connect your wallet to execute the swap. Quotes can still be requested.</div>}
+          {!isConnected && (
+            <div className={styles.notice}>
+              Connect your wallet to execute the swap. Quotes can still be requested.
+            </div>
+          )}
           {notice && <div className={`${styles.notice} ${styles.noticeSuccess}`}>{notice}</div>}
-          {swapReceipt.isSuccess && <div className={`${styles.notice} ${styles.noticeSuccess}`}>Swap confirmed on Arc.</div>}
+          {swapReceipt.isSuccess && (
+            <div className={`${styles.notice} ${styles.noticeSuccess}`}>Swap confirmed on Arc.</div>
+          )}
         </section>
 
         <section className={`${styles.panel} ${styles.bridgeCard}`}>
           <div className={styles.panelHead}>
-            <div><span className={styles.kicker}>BRING FUNDS TO ARC</span><h2>Cross-chain USDC</h2></div>
+            <div>
+              <span className={styles.kicker}>BRING FUNDS TO ARC</span>
+              <h2>Cross-chain USDC</h2>
+            </div>
           </div>
-          <p className={styles.bridgeDescription}>USDC bridging will use Tower's cross-chain endpoint and Circle's transfer flow. It stays separate from normal swaps.</p>
+
+          <p className={styles.bridgeDescription}>
+            USDC bridging will use Tower&apos;s cross-chain endpoint and Circle&apos;s transfer flow. It stays separate from normal swaps.
+          </p>
+
           <div className={styles.quoteCard}>
-            <div className={styles.bridgeRow}><span>Asset</span><strong>USDC</strong></div>
-            <div className={styles.bridgeRow}><span>Destination</span><strong>Arc Testnet</strong></div>
-            <div className={styles.bridgeRow}><span>Status</span><strong>Bridge integration next</strong></div>
+            <div className={styles.bridgeRow}>
+              <span>Asset</span>
+              <strong>USDC</strong>
+            </div>
+            <div className={styles.bridgeRow}>
+              <span>Destination</span>
+              <strong>Arc Testnet</strong>
+            </div>
+            <div className={styles.bridgeRow}>
+              <span>Status</span>
+              <strong>Bridge integration next</strong>
+            </div>
           </div>
-          <button type="button" className={styles.secondaryButton} disabled>Detect supported USDC balances</button>
+
+          <button type="button" className={styles.secondaryButton} disabled>
+            Detect supported USDC balances
+          </button>
         </section>
       </div>
     </div>
