@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { href: '/app', label: 'Overview', icon: '⌂' },
   { href: '/app/lending', label: 'Lending', icon: '◈' },
   { href: '/app/swap', label: 'Swap', icon: '⇄' },
+  { href: '/app/bridge', label: 'Bridge', icon: '↗' },
   { href: '/app/self-repaying', label: 'Self-Repaying', icon: '↻' },
   { href: '/app/portfolio', label: 'Portfolio', icon: '◒' },
   { href: '/app/governance', label: 'Governance', icon: '♢' },
