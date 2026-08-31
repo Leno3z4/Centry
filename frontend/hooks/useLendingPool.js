@@ -26,14 +26,10 @@ export function useLendingPool(assetAddress = DEFAULT_ASSET, assetDecimals = DEF
 
   const asset = assetAddress || DEFAULT_ASSET;
   const decimals = Number.isInteger(assetDecimals) ? assetDecimals : DEFAULT_DECIMALS;
-  const configured =
-    hasAddress('lendingPool') &&
-    /^0x[a-fA-F0-9]{40}$/.test(asset);
+  const configured = hasAddress('lendingPool') && /^0x[a-fA-F0-9]{40}$/.test(asset);
   const correctNetwork = !address || chainId === arcTestnet.id;
   const commonQuery = { enabled: configured && correctNetwork };
-  const walletQuery = {
-    enabled: configured && Boolean(address) && correctNetwork,
-  };
+  const walletQuery = { enabled: configured && Boolean(address) && correctNetwork };
 
   const { data: reserveConfigRaw, refetch: refetchReserveConfig } = useReadContract({
     address: CONTRACT_ADDRESSES.lendingPool,
@@ -83,6 +79,7 @@ export function useLendingPool(assetAddress = DEFAULT_ASSET, assetDecimals = DEF
     query: walletQuery,
   });
 
+  // Health factor is account-wide in CentryLendingPool.
   const { data: healthFactorRaw, refetch: refetchHealth } = useReadContract({
     address: CONTRACT_ADDRESSES.lendingPool,
     abi: LENDING_POOL_ABI,
@@ -104,9 +101,7 @@ export function useLendingPool(assetAddress = DEFAULT_ASSET, assetDecimals = DEF
     abi: ERC20_ABI,
     functionName: 'balanceOf',
     args: [address],
-    query: {
-      enabled: Boolean(address) && configured && correctNetwork,
-    },
+    query: walletQuery,
   });
 
   const { data: allowanceRaw, refetch: refetchAllowance } = useReadContract({
@@ -120,17 +115,9 @@ export function useLendingPool(assetAddress = DEFAULT_ASSET, assetDecimals = DEF
   const { writeContractAsync, isPending, error } = useWriteContract();
 
   const sendAndWait = async (request) => {
-    if (!address) {
-      throw new Error('Connect your wallet before submitting a transaction.');
-    }
-
-    if (chainId !== arcTestnet.id) {
-      throw new Error('Switch your wallet to Arc Testnet before submitting a transaction.');
-    }
-
-    if (!publicClient) {
-      throw new Error('Wallet client is not ready. Please reconnect your wallet.');
-    }
+    if (!address) throw new Error('Connect your wallet before submitting a transaction.');
+    if (chainId !== arcTestnet.id) throw new Error('Switch your wallet to Arc Testnet before submitting a transaction.');
+    if (!publicClient) throw new Error('Wallet client is not ready. Please reconnect your wallet.');
 
     setTransactionPending(true);
     setTransactionError(null);
@@ -139,11 +126,7 @@ export function useLendingPool(assetAddress = DEFAULT_ASSET, assetDecimals = DEF
       const hash = await writeContractAsync(request);
       setTransactionHash(hash);
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
-
-      if (receipt.status !== 'success') {
-        throw new Error('The transaction was reverted onchain.');
-      }
-
+      if (receipt.status !== 'success') throw new Error('The transaction was reverted onchain.');
       return hash;
     } catch (caughtError) {
       setTransactionError(caughtError);
@@ -158,12 +141,8 @@ export function useLendingPool(assetAddress = DEFAULT_ASSET, assetDecimals = DEF
       address: asset,
       abi: ERC20_ABI,
       functionName: 'approve',
-      args: [
-        CONTRACT_ADDRESSES.lendingPool,
-        parseUnits(String(amount), decimals),
-      ],
+      args: [CONTRACT_ADDRESSES.lendingPool, parseUnits(String(amount), decimals)],
     });
-
     await refetchAllowance();
     return hash;
   };
@@ -172,45 +151,32 @@ export function useLendingPool(assetAddress = DEFAULT_ASSET, assetDecimals = DEF
     address: CONTRACT_ADDRESSES.lendingPool,
     abi: LENDING_POOL_ABI,
     functionName: 'supply',
-    args: [
-      asset,
-      parseUnits(String(amount), decimals),
-    ],
+    args: [asset, parseUnits(String(amount), decimals)],
   });
 
   const withdraw = (amount = 'max') => sendAndWait({
     address: CONTRACT_ADDRESSES.lendingPool,
     abi: LENDING_POOL_ABI,
     functionName: 'withdraw',
-    args: [
-      asset,
-      amount === 'max' ? MAX_UINT256 : parseUnits(String(amount), decimals),
-    ],
+    args: [asset, amount === 'max' ? MAX_UINT256 : parseUnits(String(amount), decimals)],
   });
 
   const borrow = (amount) => sendAndWait({
     address: CONTRACT_ADDRESSES.lendingPool,
     abi: LENDING_POOL_ABI,
     functionName: 'borrow',
-    args: [
-      asset,
-      parseUnits(String(amount), decimals),
-    ],
+    args: [asset, parseUnits(String(amount), decimals)],
   });
 
   const repay = (amount = 'max') => sendAndWait({
     address: CONTRACT_ADDRESSES.lendingPool,
     abi: LENDING_POOL_ABI,
     functionName: 'repay',
-    args: [
-      asset,
-      amount === 'max' ? MAX_UINT256 : parseUnits(String(amount), decimals),
-    ],
+    args: [asset, amount === 'max' ? MAX_UINT256 : parseUnits(String(amount), decimals)],
   });
 
   const refetchAll = async () => {
     if (!correctNetwork) return;
-
     await Promise.all([
       refetchReserveConfig(),
       refetchSupply(),
@@ -227,53 +193,31 @@ export function useLendingPool(assetAddress = DEFAULT_ASSET, assetDecimals = DEF
 
   const formatAsset = (value) => formatUnits(value ?? ZERO, decimals);
   const format18 = (value) => formatUnits(value ?? ZERO, 18);
+  const healthIsInfinite = healthFactorRaw !== undefined && healthFactorRaw >= MAX_UINT256 - 1000n;
+  const healthFactorNumber = healthFactorRaw === undefined || healthIsInfinite ? null : Number(format18(healthFactorRaw));
+  const healthFactor = healthFactorRaw === undefined ? '—' : healthIsInfinite ? '∞' : healthFactorNumber.toFixed(2);
 
-  const supplyAmount = supplyBalanceRaw ?? ZERO;
-  const debtAmount = borrowBalanceRaw ?? ZERO;
-  const hasSupply = supplyAmount > ZERO;
-  const hasDebt = debtAmount > ZERO;
-  const healthIsInfinite =
-    healthFactorRaw !== undefined &&
-    healthFactorRaw >= MAX_UINT256 - 1000n;
-
-  const healthFactorNumber =
-    healthFactorRaw === undefined || healthIsInfinite
-      ? null
-      : Number(format18(healthFactorRaw));
-
-  const healthFactor =
-    healthFactorRaw === undefined
-      ? '—'
-      : healthIsInfinite
-        ? '∞'
-        : healthFactorNumber.toFixed(2);
-
+  // Do not make the visual health depend on the currently selected market.
+  // With no account debt, the contract returns uint256.max, which the UI maps to 100%.
   const healthFactorPercent =
-    !hasSupply || !hasDebt
-      ? 100
-      : healthFactorNumber === null || !Number.isFinite(healthFactorNumber)
-        ? 0
-        : Math.round(
-            Math.min(
-              Math.max((1 - 1 / healthFactorNumber) * 100, 0),
-              100,
-            ),
-          );
+    healthFactorRaw === undefined
+      ? 0
+      : healthIsInfinite
+        ? 100
+        : healthFactorNumber === null || !Number.isFinite(healthFactorNumber)
+          ? 0
+          : Math.round(Math.min(Math.max((1 - 1 / healthFactorNumber) * 100, 0), 100));
 
   const totalBorrowPower = Number(format18(borrowPowerRaw));
   const currentDebt = Number(formatAsset(borrowBalanceRaw));
-  const borrowLimit = Number.isFinite(totalBorrowPower)
-    ? Math.max(totalBorrowPower - currentDebt, 0)
-    : 0;
-
-  const reserveActive = Boolean(reserveConfigRaw?.[0]);
+  const borrowLimit = Number.isFinite(totalBorrowPower) ? Math.max(totalBorrowPower - currentDebt, 0) : 0;
 
   return {
     asset,
     decimals,
     configured,
     correctNetwork,
-    reserveActive,
+    reserveActive: reserveConfigRaw === undefined ? null : Boolean(reserveConfigRaw?.[0]),
     reserveConfig: reserveConfigRaw,
     reserveData: {
       totalLiquidity: formatAsset(totalSupplyRaw),
@@ -297,14 +241,9 @@ export function useLendingPool(assetAddress = DEFAULT_ASSET, assetDecimals = DEF
     refetchAll,
     isPending: isPending || transactionPending,
     isConfirming: transactionPending && !isPending,
-    isConfirmed:
-      Boolean(transactionHash) &&
-      !transactionPending &&
-      !transactionError,
+    isConfirmed: Boolean(transactionHash) && !transactionPending && !transactionError,
     txHash: transactionHash,
     error: transactionError || error,
-
-    // Backward-compatible USDC aliases for the existing dashboard.
     usdcBalance: formatAsset(walletBalanceRaw),
     usdcAllowance: formatAsset(allowanceRaw),
     rawUsdcAllowance: allowanceRaw ?? ZERO,
