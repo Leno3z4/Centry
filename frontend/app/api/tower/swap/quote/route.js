@@ -1,9 +1,17 @@
 import { NextResponse } from 'next/server';
+import { ACTIVE_MARKETS } from '../../../../constants/markets';
 
 const TOWER_BASE_URL = 'https://www.tower.exchange/api/public';
 
-function validAddress(value) {
-  return /^0x[a-fA-F0-9]{40}$/.test(value || '');
+function validToken(value) {
+  if (typeof value !== 'string' || value.length === 0) return false;
+
+  const isAddress = /^0x[a-fA-F0-9]{40}$/.test(value);
+  const isSymbol = ACTIVE_MARKETS.some(
+    (market) => market.symbol.toLowerCase() === value.toLowerCase(),
+  );
+
+  return isAddress || isSymbol;
 }
 
 function isUsableQuote(quote) {
@@ -43,9 +51,9 @@ export async function POST(request) {
     const body = await request.json();
     const { inputToken, outputToken, inputAmount, slippageTolerance = 50 } = body || {};
 
-    if (!validAddress(inputToken) || !validAddress(outputToken)) {
+    if (!validToken(inputToken) || !validToken(outputToken)) {
       return NextResponse.json(
-        { success: false, error: 'Invalid swap token address.' },
+        { success: false, error: 'Unsupported swap token.' },
         { status: 400 },
       );
     }
