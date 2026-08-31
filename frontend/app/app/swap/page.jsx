@@ -8,9 +8,7 @@ import { AppShell } from '../../../components/AppShell';
 import { MARKETS } from '../../../constants/markets';
 import styles from './swap.module.css';
 
-const LIVE_MARKETS = MARKETS.filter(
-  (market) => market.status === 'live' && market.address,
-);
+const LIVE_MARKETS = MARKETS.filter((market) => market.status === 'live' && market.address);
 const ARC_CHAIN_ID = 5042002;
 
 function formatQuoteAmount(raw, decimals, symbol) {
@@ -28,14 +26,35 @@ function errorText(error) {
   return error?.shortMessage || error?.message || 'The transaction could not be completed.';
 }
 
+function isUsableQuote(quote) {
+  if (!quote || typeof quote !== 'object') return false;
+
+  try {
+    const output = BigInt(String(quote.outputAmount || '0'));
+    const minOut = BigInt(String(quote.minOut || '0'));
+    const priceImpact = Number(quote.priceImpact);
+    const feeBps = Number(quote.feeBps);
+
+    return (
+      output > 0n &&
+      minOut > 0n &&
+      minOut <= output &&
+      Number.isFinite(priceImpact) &&
+      priceImpact >= 0 &&
+      priceImpact <= 100 &&
+      (!Number.isFinite(feeBps) || (feeBps >= 0 && feeBps <= 10000))
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isDecimalInput(value) {
+  return /^\d*(\.\d*)?$/.test(value);
+}
+
 export default function Page() {
-  return (
-    <Providers>
-      <AppShell>
-        <SwapContent />
-      </AppShell>
-    </Providers>
-  );
+  return <Providers><AppShell><SwapContent /></AppShell></Providers>;
 }
 
 function SwapContent() {
@@ -97,8 +116,8 @@ function SwapContent() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          inputToken: fromMarket.address,
-          outputToken: toMarket.address,
+          inputToken: fromMarket.symbol,
+          outputToken: toMarket.symbol,
           inputAmount: amountRaw,
           slippageTolerance: slippageBps,
         }),
@@ -107,6 +126,10 @@ function SwapContent() {
       const result = await response.json();
       if (!response.ok || !result.success) {
         throw new Error(result.error || 'Tower could not find a route.');
+      }
+
+      if (!isUsableQuote(result.data)) {
+        throw new Error('Tower returned an invalid or unsafe quote for this trade size. Try a smaller amount or a different pair.');
       }
 
       setQuote(result.data);
@@ -137,7 +160,6 @@ function SwapContent() {
       }
 
       const transactions = result.data || {};
-
       if (!transactions.swap?.to || !transactions.swap?.data) {
         throw new Error('Tower returned an incomplete swap transaction.');
       }
@@ -145,7 +167,6 @@ function SwapContent() {
       if (transactions.approval) {
         setNotice(`Approve ${fromMarket.symbol} in your wallet first.`);
         setStage('approval');
-
         await sendTransactionAsync({
           to: transactions.approval.to,
           data: transactions.approval.data,
@@ -157,7 +178,6 @@ function SwapContent() {
 
       setNotice('Approve the swap transaction in your wallet.');
       setStage('swapping');
-
       const hash = await sendTransactionAsync({
         to: transactions.swap.to,
         data: transactions.swap.data,
@@ -182,12 +202,9 @@ function SwapContent() {
   });
 
   const isBusy = walletPending || ['quoting', 'building', 'approval', 'swapping'].includes(stage);
-  const outputAmount = quote
-    ? formatQuoteAmount(quote.outputAmount, toMarket.decimals, toMarket.symbol)
-    : '—';
-  const minOutput = quote
-    ? formatQuoteAmount(quote.minOut, toMarket.decimals, toMarket.symbol)
-    : '—';
+  const outputAmount = quote ? formatQuoteAmount(quote.outputAmount, toMarket.decimals, toMarket.symbol) : '—';
+  const minOutput = quote ? formatQuoteAmount(quote.minOut, toMarket.decimals, toMarket.symbol) : '—';
+  const quotePriceImpact = quote ? Number(quote.priceImpact) : null;
 
   return (
     <div className={styles.page}>
@@ -197,19 +214,12 @@ function SwapContent() {
           <h1>Swap assets</h1>
           <p>Find a routed Arc swap without leaving Centry.</p>
         </div>
-        <span className={styles.routePill}>
-          <i className={styles.routeDot} /> Tower routing
-        </span>
+        <span className={styles.routePill}><i className={styles.routeDot} /> Tower routing</span>
       </header>
 
       <div className={styles.panelGrid}>
         <section className={styles.panel}>
-          <div className={styles.panelHead}>
-            <div>
-              <span className={styles.kicker}>ARC SWAP</span>
-              <h2>Exchange</h2>
-            </div>
-          </div>
+          <div className={styles.panelHead}><div><span className={styles.kicker}>ARC SWAP</span><h2>Exchange</h2></div></div>
 
           <div className={styles.swapStack}>
             <div className={styles.assetField}>
@@ -218,63 +228,34 @@ function SwapContent() {
                 <input
                   id="swap-amount"
                   className={styles.amountInput}
-                  type="number"
-                  min="0"
-                  step={fromMarket.decimals >= 8 ? '0.00000001' : '0.000001'}
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  spellCheck="false"
                   placeholder="0.00"
                   value={amount}
+                  onWheel={(event) => event.currentTarget.blur()}
                   onChange={(event) => {
-                    setAmount(event.target.value);
+                    const value = event.target.value;
+                    if (!isDecimalInput(value)) return;
+                    setAmount(value);
                     clearQuote();
                   }}
                 />
-                <select
-                  className={styles.tokenSelect}
-                  value={fromId}
-                  onChange={(event) => {
-                    const next = event.target.value;
-                    setFromId(next);
-                    if (next === toId) {
-                      setToId(fromId);
-                    }
-                    clearQuote();
-                  }}
-                  aria-label="Input token"
-                >
-                  {LIVE_MARKETS.map((market) => (
-                    <option key={market.id} value={market.id}>{market.symbol}</option>
-                  ))}
+                <select className={styles.tokenSelect} value={fromId} onChange={(event) => { const next = event.target.value; setFromId(next); if (next === toId) setToId(fromId); clearQuote(); }} aria-label="Input token">
+                  {LIVE_MARKETS.map((market) => <option key={market.id} value={market.id}>{market.symbol}</option>)}
                 </select>
               </div>
             </div>
 
-            <button type="button" className={styles.switchButton} onClick={switchTokens} disabled={isBusy} aria-label="Switch tokens">
-              ↓
-            </button>
+            <button type="button" className={styles.switchButton} onClick={switchTokens} disabled={isBusy} aria-label="Switch tokens">↓</button>
 
             <div className={styles.assetField}>
               <label htmlFor="swap-output">You receive</label>
               <div className={styles.assetRow}>
-                <input
-                  id="swap-output"
-                  className={styles.amountInput}
-                  type="text"
-                  readOnly
-                  placeholder="Quote appears here"
-                  value={quote ? outputAmount : ''}
-                />
-                <select
-                  className={styles.tokenSelect}
-                  value={toId}
-                  onChange={(event) => {
-                    setToId(event.target.value);
-                    clearQuote();
-                  }}
-                  aria-label="Output token"
-                >
-                  {LIVE_MARKETS.filter((market) => market.id !== fromId).map((market) => (
-                    <option key={market.id} value={market.id}>{market.symbol}</option>
-                  ))}
+                <input id="swap-output" className={styles.amountInput} type="text" readOnly placeholder="Quote appears here" value={quote ? outputAmount : ''} />
+                <select className={styles.tokenSelect} value={toId} onChange={(event) => { setToId(event.target.value); clearQuote(); }} aria-label="Output token">
+                  {LIVE_MARKETS.filter((market) => market.id !== fromId).map((market) => <option key={market.id} value={market.id}>{market.symbol}</option>)}
                 </select>
               </div>
             </div>
@@ -282,33 +263,37 @@ function SwapContent() {
 
           <div className={styles.metaRow}>
             <span>Slippage</span>
-            <input
-              value={slippage}
-              onChange={(event) => {
-                setSlippage(event.target.value);
-                clearQuote();
-              }}
-              aria-label="Slippage percentage"
-              inputMode="decimal"
-              style={{ width: 72, textAlign: 'right', background: 'transparent', border: 0, color: 'inherit' }}
-            />
-            <span>%</span>
+            <div className={styles.slippageControl}>
+              <input
+                className={styles.slippageInput}
+                type="text"
+                inputMode="decimal"
+                value={slippage}
+                onWheel={(event) => event.currentTarget.blur()}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  if (!isDecimalInput(value)) return;
+                  setSlippage(value);
+                  clearQuote();
+                }}
+                aria-label="Slippage percentage"
+              />
+              <span>%</span>
+            </div>
           </div>
 
           {quote && (
             <div className={styles.quoteCard}>
               <div className={styles.quoteRow}><span>Expected output</span><strong className={styles.quoteOutput}>{outputAmount}</strong></div>
               <div className={styles.quoteRow}><span>Minimum received</span><strong>{minOutput}</strong></div>
-              <div className={styles.quoteRow}><span>Price impact</span><strong>{quote.priceImpact ?? '—'}%</strong></div>
+              <div className={styles.quoteRow}><span>Price impact</span><strong>{quotePriceImpact.toFixed(2)}%</strong></div>
               <div className={styles.quoteRow}><span>Fee</span><strong>{quote.feeBps != null ? `${quote.feeBps} bps` : '—'}</strong></div>
               <div className={styles.quoteRow}><span>Route</span><strong>{quote.dexName || quote.dexId || 'Tower'}</strong></div>
             </div>
           )}
 
           {!quote ? (
-            <button type="button" className={styles.primaryButton} disabled={!amountRaw || isBusy} onClick={getQuote}>
-              {stage === 'quoting' ? 'Finding best route…' : 'Get quote'}
-            </button>
+            <button type="button" className={styles.primaryButton} disabled={!amountRaw || isBusy} onClick={getQuote}>{stage === 'quoting' ? 'Finding best route…' : 'Get quote'}</button>
           ) : (
             <button type="button" className={styles.primaryButton} disabled={!isConnected || isBusy || swapReceipt.isLoading} onClick={buildAndSwap}>
               {!isConnected ? 'Connect wallet to swap' : stage === 'approval' ? 'Approve in wallet…' : stage === 'swapping' ? 'Confirm swap…' : stage === 'submitted' && !swapReceipt.isSuccess ? 'Swap submitted' : 'Swap'}
@@ -322,15 +307,8 @@ function SwapContent() {
         </section>
 
         <section className={`${styles.panel} ${styles.bridgeCard}`}>
-          <div className={styles.panelHead}>
-            <div>
-              <span className={styles.kicker}>BRING FUNDS TO ARC</span>
-              <h2>Cross-chain USDC</h2>
-            </div>
-          </div>
-          <p className={styles.bridgeDescription}>
-            USDC bridging will use Tower's cross-chain endpoint and Circle's transfer flow. It will be added here separately from normal swaps.
-          </p>
+          <div className={styles.panelHead}><div><span className={styles.kicker}>BRING FUNDS TO ARC</span><h2>Cross-chain USDC</h2></div></div>
+          <p className={styles.bridgeDescription}>USDC bridging will use Tower's cross-chain endpoint and Circle's transfer flow. It will be added here separately from normal swaps.</p>
           <div className={styles.quoteCard}>
             <div className={styles.bridgeRow}><span>Asset</span><strong>USDC</strong></div>
             <div className={styles.bridgeRow}><span>Destination</span><strong>Arc Testnet</strong></div>
