@@ -1,10 +1,32 @@
 import { NextResponse } from 'next/server';
 
 const TOWER_BASE_URL = 'https://www.tower.exchange/api/public';
-const ARC_CHAIN_ID = 5042002;
 
 function validAddress(value) {
   return /^0x[a-fA-F0-9]{40}$/.test(value || '');
+}
+
+function isUsableQuote(quote) {
+  if (!quote || typeof quote !== 'object') return false;
+
+  try {
+    const output = BigInt(String(quote.outputAmount || '0'));
+    const minOut = BigInt(String(quote.minOut || '0'));
+    const priceImpact = Number(quote.priceImpact);
+    const feeBps = Number(quote.feeBps);
+
+    return (
+      output > 0n &&
+      minOut > 0n &&
+      minOut <= output &&
+      Number.isFinite(priceImpact) &&
+      priceImpact >= 0 &&
+      priceImpact <= 100 &&
+      (!Number.isFinite(feeBps) || (feeBps >= 0 && feeBps <= 10000))
+    );
+  } catch {
+    return false;
+  }
 }
 
 export async function POST(request) {
@@ -58,6 +80,17 @@ export async function POST(request) {
     });
 
     const data = await response.json();
+
+    if (response.ok && data?.success === true && !isUsableQuote(data.data)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Tower returned an invalid or unsafe quote for this trade size. Try a smaller amount or another pair.',
+        },
+        { status: 422 },
+      );
+    }
+
     return NextResponse.json(data, { status: response.status });
   } catch {
     return NextResponse.json(
