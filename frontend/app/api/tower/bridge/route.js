@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 
 const TOWER_BASE_URL = 'https://www.tower.exchange/api/public';
+const ARC_CHAIN_ID = 5042002;
 
 const SUPPORTED_CHAINS = new Set([
   11155111,
   84532,
   421614,
-  5042002,
+  ARC_CHAIN_ID,
   43113,
   11155420,
   80002,
@@ -22,7 +23,10 @@ export async function POST(request) {
 
   if (!apiKey) {
     return NextResponse.json(
-      { success: false, error: 'Tower is not configured. Set TOWER_API_KEY on the server.' },
+      {
+        success: false,
+        error: 'Tower is not configured. Set TOWER_API_KEY on the server.',
+      },
       { status: 503 },
     );
   }
@@ -50,14 +54,10 @@ export async function POST(request) {
 
     if (from === to) {
       return NextResponse.json(
-        { success: false, error: 'Source and destination networks must be different.' },
-        { status: 400 },
-      );
-    }
-
-    if (to !== 5042002) {
-      return NextResponse.json(
-        { success: false, error: 'Centry bridge currently targets Arc Testnet.' },
+        {
+          success: false,
+          error: 'Source and destination networks must be different.',
+        },
         { status: 400 },
       );
     }
@@ -69,7 +69,11 @@ export async function POST(request) {
       );
     }
 
-    if (typeof amount !== 'string' || !/^\d+(\.\d{1,6})?$/.test(amount) || Number(amount) <= 0) {
+    if (
+      typeof amount !== 'string' ||
+      !/^\d+(\.\d{1,6})?$/.test(amount) ||
+      Number(amount) <= 0
+    ) {
       return NextResponse.json(
         { success: false, error: 'Enter a valid USDC amount.' },
         { status: 400 },
@@ -98,7 +102,10 @@ export async function POST(request) {
     return NextResponse.json(data, { status: response.status });
   } catch {
     return NextResponse.json(
-      { success: false, error: 'Unable to reach Tower for the bridge request.' },
+      {
+        success: false,
+        error: 'Unable to reach Tower for the bridge request.',
+      },
       { status: 502 },
     );
   }
