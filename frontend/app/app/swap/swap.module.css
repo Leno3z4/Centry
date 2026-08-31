@@ -1,0 +1,265 @@
+.page {
+  display: grid;
+  gap: 24px;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.kicker {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 11px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  opacity: .68;
+}
+
+.header h1 {
+  margin: 0;
+}
+
+.header p {
+  max-width: 680px;
+  margin: 8px 0 0;
+  opacity: .72;
+}
+
+.panelGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr);
+  gap: 20px;
+}
+
+.panel {
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 20px;
+  padding: 24px;
+  background: rgba(15, 10, 28, .62);
+  box-shadow: 0 16px 50px rgba(0,0,0,.16);
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.panelHead h2 {
+  margin: 0;
+}
+
+.swapStack {
+  display: grid;
+  gap: 12px;
+}
+
+.assetField {
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 16px;
+  padding: 14px 16px;
+  background: rgba(255,255,255,.02);
+}
+
+.assetField label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12px;
+  opacity: .65;
+}
+
+.assetRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.amountInput {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 28px;
+  padding: 0;
+}
+
+.amountInput::placeholder {
+  opacity: .32;
+}
+
+.tokenSelect {
+  min-width: 130px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 12px;
+  padding: 11px 12px;
+  background: rgba(255,255,255,.04);
+  color: inherit;
+  font: inherit;
+}
+
+.switchButton {
+  width: 40px;
+  height: 40px;
+  margin: -2px auto;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 999px;
+  background: rgba(255,255,255,.04);
+  color: inherit;
+  cursor: pointer;
+}
+
+.switchButton:hover {
+  background: rgba(255,255,255,.08);
+}
+
+.metaRow,
+.quoteRow,
+.bridgeRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.metaRow {
+  margin-top: 8px;
+  font-size: 12px;
+  opacity: .65;
+}
+
+.quoteCard {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.025);
+}
+
+.quoteRow span:first-child,
+.bridgeRow span:first-child {
+  opacity: .62;
+}
+
+.quoteOutput {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.primaryButton,
+.secondaryButton {
+  width: 100%;
+  border-radius: 14px;
+  padding: 14px 18px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primaryButton {
+  margin-top: 18px;
+  border: 1px solid rgba(169,111,255,.6);
+  background: linear-gradient(135deg, rgba(105,53,190,.95), rgba(135,88,222,.95));
+  color: #fff;
+}
+
+.secondaryButton {
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.03);
+  color: inherit;
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled,
+.switchButton:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+.bridgeCard {
+  display: grid;
+  gap: 18px;
+}
+
+.bridgeDescription {
+  margin: 0;
+  opacity: .68;
+  line-height: 1.6;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.field label {
+  font-size: 12px;
+  opacity: .65;
+}
+
+.field select,
+.field input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 12px;
+  padding: 13px 14px;
+  background: rgba(255,255,255,.03);
+  color: inherit;
+  font: inherit;
+}
+
+.notice {
+  margin-top: 14px;
+  border-radius: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.03);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.noticeError {
+  border-color: rgba(255,100,120,.25);
+}
+
+.noticeSuccess {
+  border-color: rgba(80,220,170,.25);
+}
+
+.routePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 999px;
+  padding: 7px 10px;
+  font-size: 11px;
+}
+
+.routeDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+@media (max-width: 900px) {
+  .panelGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .header {
+    flex-direction: column;
+  }
+}
