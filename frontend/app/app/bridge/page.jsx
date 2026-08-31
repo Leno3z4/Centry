@@ -8,16 +8,43 @@ import styles from './bridge.module.css';
 
 const ARC_CHAIN_ID = 5042002;
 
-const SOURCE_CHAINS = [
-  { id: 'base-sepolia', chainId: 84532, name: 'Base Sepolia', short: 'Base', badge: 'B' },
-  { id: 'arbitrum-sepolia', chainId: 421614, name: 'Arbitrum Sepolia', short: 'Arbitrum', badge: 'A' },
-  { id: 'ethereum-sepolia', chainId: 11155111, name: 'Ethereum Sepolia', short: 'Ethereum', badge: 'E' },
+const BRIDGE_CHAINS = [
+  {
+    id: 'arc-testnet',
+    chainId: ARC_CHAIN_ID,
+    name: 'Arc Testnet',
+    short: 'Arc',
+    badge: 'A',
+  },
+  {
+    id: 'base-sepolia',
+    chainId: 84532,
+    name: 'Base Sepolia',
+    short: 'Base',
+    badge: 'B',
+  },
+  {
+    id: 'arbitrum-sepolia',
+    chainId: 421614,
+    name: 'Arbitrum Sepolia',
+    short: 'Arbitrum',
+    badge: 'A',
+  },
+  {
+    id: 'ethereum-sepolia',
+    chainId: 11155111,
+    name: 'Ethereum Sepolia',
+    short: 'Ethereum',
+    badge: 'E',
+  },
 ];
 
-function ChainPicker({ value, onChange }) {
+const EXTERNAL_CHAINS = BRIDGE_CHAINS.filter((chain) => chain.chainId !== ARC_CHAIN_ID);
+
+function ChainPicker({ value, chains, onChange, label }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
-  const selected = SOURCE_CHAINS.find((chain) => chain.id === value) || SOURCE_CHAINS[0];
+  const selected = chains.find((chain) => chain.id === value) || chains[0];
 
   useEffect(() => {
     const close = (event) => {
@@ -35,6 +62,7 @@ function ChainPicker({ value, onChange }) {
         onClick={() => setOpen((current) => !current)}
         aria-expanded={open}
         aria-haspopup="listbox"
+        aria-label={label}
       >
         <span className={styles.chainBadge}>{selected.badge}</span>
         <span className={styles.chainText}>
@@ -45,8 +73,8 @@ function ChainPicker({ value, onChange }) {
       </button>
 
       {open && (
-        <div className={styles.chainMenu} role="listbox">
-          {SOURCE_CHAINS.map((chain) => (
+        <div className={styles.chainMenu} role="listbox" aria-label={label}>
+          {chains.map((chain) => (
             <button
               key={chain.id}
               type="button"
@@ -84,7 +112,8 @@ export default function Page() {
 
 function BridgeContent() {
   const { address, isConnected } = useAccount();
-  const [sourceId, setSourceId] = useState('base-sepolia');
+  const [fromId, setFromId] = useState('base-sepolia');
+  const [toId, setToId] = useState('arc-testnet');
   const [amount, setAmount] = useState('');
   const [balance, setBalance] = useState(null);
   const [checkingBalance, setCheckingBalance] = useState(false);
@@ -92,15 +121,29 @@ function BridgeContent() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
 
-  const source = SOURCE_CHAINS.find((chain) => chain.id === sourceId) || SOURCE_CHAINS[0];
+  const fromArc = fromId === 'arc-testnet';
+  const toArc = toId === 'arc-testnet';
 
-  const numericAmount = useMemo(() => Number(amount || 0), [amount]);
-  const validAmount = Number.isFinite(numericAmount) && numericAmount > 0;
+  const sourceChains = useMemo(
+    () => (toArc ? EXTERNAL_CHAINS : [BRIDGE_CHAINS.find((chain) => chain.id === 'arc-testnet')]),
+    [toArc],
+  );
+
+  const destinationChains = useMemo(
+    () => (fromArc ? EXTERNAL_CHAINS : [BRIDGE_CHAINS.find((chain) => chain.id === 'arc-testnet')]),
+    [fromArc],
+  );
+
+  const source = BRIDGE_CHAINS.find((chain) => chain.id === fromId) || BRIDGE_CHAINS[1];
+  const destination = BRIDGE_CHAINS.find((chain) => chain.id === toId) || BRIDGE_CHAINS[0];
+
+  const validAmount = Number.isFinite(Number(amount)) && Number(amount) > 0;
 
   const detectBalance = async () => {
-    if (!address) return;
+    if (!address || !source) return;
     setCheckingBalance(true);
     setError('');
+
     try {
       const response = await fetch('/api/tower/wallet/balance', {
         method: 'POST',
@@ -123,11 +166,50 @@ function BridgeContent() {
     setBalance(null);
     setResult(null);
     setError('');
+    setAmount('');
     if (address) detectBalance();
-  }, [address, sourceId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [address, source.id]);
+
+  const switchDirection = () => {
+    const currentFrom = fromId;
+    const currentTo = toId;
+    setFromId(currentTo);
+    setToId(currentFrom);
+    setBalance(null);
+    setAmount('');
+    setResult(null);
+    setError('');
+  };
+
+  const changeFrom = (next) => {
+    setFromId(next);
+    if (next === toId) {
+      setToId(next === 'arc-testnet' ? EXTERNAL_CHAINS[0].id : 'arc-testnet');
+    }
+    setBalance(null);
+    setAmount('');
+    setResult(null);
+    setError('');
+  };
+
+  const changeTo = (next) => {
+    setToId(next);
+    if (next === fromId) {
+      setFromId(next === 'arc-testnet' ? EXTERNAL_CHAINS[0].id : 'arc-testnet');
+    }
+    setBalance(null);
+    setAmount('');
+    setResult(null);
+    setError('');
+  };
+
+  const setMax = () => {
+    if (balance && Number(balance) > 0) setAmount(balance);
+  };
 
   const bridge = async () => {
-    if (!address || !validAmount) return;
+    if (!address || !validAmount || fromId === toId) return;
 
     setLoading(true);
     setError('');
@@ -139,8 +221,9 @@ function BridgeContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           fromChainId: source.chainId,
-          toChainId: ARC_CHAIN_ID,
-          amount,
+          toChainId: destination.chainId,
+          amount: amount.trim(),
+          token: 'USDC',
           recipientAddress: address,
           senderAddress: address,
           useForwarder: true,
@@ -164,30 +247,32 @@ function BridgeContent() {
       <header className={styles.header}>
         <div>
           <span className={styles.kicker}>CENTRY · BRIDGE</span>
-          <h1>Bring USDC to Arc</h1>
-          <p>Move testnet USDC from a supported source chain into your connected Arc wallet.</p>
+          <h1>Move USDC across chains</h1>
+          <p>Bridge testnet USDC into or out of Arc using Circle CCTP via Tower.</p>
         </div>
-        <span className={styles.destinationPill}><i /> Arc Testnet</span>
+        <span className={styles.destinationPill}><i /> Circle CCTP · USDC</span>
       </header>
 
       <section className={styles.card}>
         <div className={styles.fieldBlock}>
           <label>From</label>
-          <ChainPicker value={sourceId} onChange={setSourceId} />
+          <ChainPicker value={fromId} chains={sourceChains} onChange={changeFrom} label="Source chain" />
         </div>
 
-        <div className={styles.arrow}>↓</div>
+        <button
+          type="button"
+          className={styles.arrowButton}
+          onClick={switchDirection}
+          disabled={loading}
+          aria-label="Switch bridge direction"
+          title="Switch bridge direction"
+        >
+          ⇅
+        </button>
 
         <div className={styles.fieldBlock}>
           <label>To</label>
-          <div className={styles.destinationBox}>
-            <span className={styles.arcBadge}>C</span>
-            <span className={styles.chainText}>
-              <strong>Arc Testnet</strong>
-              <small>USDC</small>
-            </span>
-            <span className={styles.locked}>Destination</span>
-          </div>
+          <ChainPicker value={toId} chains={destinationChains} onChange={changeTo} label="Destination chain" />
         </div>
 
         <div className={styles.amountBlock}>
@@ -196,10 +281,10 @@ function BridgeContent() {
             <button
               type="button"
               className={styles.balanceButton}
-              onClick={() => setAmount(balance || '')}
-              disabled={!balance}
+              onClick={setMax}
+              disabled={!balance || Number(balance) <= 0}
             >
-              Balance {balance ? `${balance} USDC` : '—'}
+              Max {balance ? `${balance} USDC` : ''}
             </button>
           </div>
           <div className={styles.amountField}>
@@ -218,18 +303,24 @@ function BridgeContent() {
         </div>
 
         <div className={styles.summary}>
+          <div><span>From</span><strong>{source.name}</strong></div>
+          <div><span>To</span><strong>{destination.name}</strong></div>
           <div><span>Route</span><strong>Circle CCTP via Tower</strong></div>
-          <div><span>Destination wallet</span><strong>{address ? `${address.slice(0, 6)}…${address.slice(-4)}` : 'Connect wallet'}</strong></div>
           <div><span>Transfer type</span><strong>1:1 USDC</strong></div>
+          <div><span>Recipient</span><strong>{address ? `${address.slice(0, 6)}…${address.slice(-4)}` : 'Connect wallet'}</strong></div>
         </div>
 
         <button
           type="button"
           className={styles.primaryButton}
-          disabled={!isConnected || !validAmount || loading}
+          disabled={!isConnected || !validAmount || fromId === toId || loading}
           onClick={bridge}
         >
-          {!isConnected ? 'Connect wallet' : loading ? 'Starting bridge…' : 'Bridge USDC to Arc'}
+          {!isConnected
+            ? 'Connect wallet'
+            : loading
+              ? 'Starting bridge…'
+              : `Bridge USDC to ${destination.short}`}
         </button>
 
         {isConnected && (
@@ -250,7 +341,7 @@ function BridgeContent() {
         )}
       </section>
 
-      <p className={styles.disclaimer}>Bridge support is currently limited to USDC and supported testnet source chains.</p>
+      <p className={styles.disclaimer}>Bridge support is currently limited to USDC and the supported testnet networks shown above.</p>
     </div>
   );
 }
