@@ -105,6 +105,11 @@ export default function MultiMarketLending() {
       return;
     }
 
+    if (action === 'borrow') {
+      setAmount(lending.maxBorrowAmount || '0');
+      return;
+    }
+
     setAmount(lending.walletBalance || '0');
   };
 
@@ -137,8 +142,6 @@ export default function MultiMarketLending() {
       );
     }
   };
-
-  const healthLabel = lending.healthFactor === '∞' ? '∞' : lending.healthFactor || '—';
 
   if (!market) {
     return (
@@ -229,7 +232,7 @@ export default function MultiMarketLending() {
               id="multi-market-amount"
               type="number"
               min="0"
-              max={action === 'repay' ? lending.borrowBalance : undefined}
+              max={action === 'repay' ? lending.borrowBalance : action === 'borrow' ? lending.maxBorrowAmount : undefined}
               step={market.decimals >= 8 ? '0.00000001' : '0.000001'}
               placeholder="0.00"
               value={amount}
@@ -242,7 +245,9 @@ export default function MultiMarketLending() {
             <span>
               {action === 'repay'
                 ? `Owed: ${isConnected ? `${formatNumber(lending.borrowBalance, Math.min(market.decimals, 6))} ${market.symbol}` : 'Connect wallet'}`
-                : `Wallet: ${isConnected ? `${formatNumber(lending.walletBalance)} ${market.symbol}` : 'Connect wallet'}`}
+                : action === 'borrow'
+                  ? `Max: ${isConnected ? `${formatNumber(lending.maxBorrowAmount, Math.min(market.decimals, 8))} ${market.symbol}` : 'Connect wallet'}`
+                  : `Wallet: ${isConnected ? `${formatNumber(lending.walletBalance)} ${market.symbol}` : 'Connect wallet'}`}
             </span>
             {isConnected && <button type="button" onClick={setMax}>Max</button>}
           </div>
@@ -255,7 +260,13 @@ export default function MultiMarketLending() {
             <button
               type="button"
               className="primary-btn full-btn large-btn"
-              disabled={busy || !amount || numericAmount <= 0 || (action === 'repay' && currentDebt <= 0)}
+              disabled={
+                busy ||
+                !amount ||
+                numericAmount <= 0 ||
+                (action === 'repay' && currentDebt <= 0) ||
+                (action === 'borrow' && numericAmount > Number(lending.maxBorrowAmount || 0))
+              }
               onClick={run}
             >
               {busy
@@ -275,7 +286,6 @@ export default function MultiMarketLending() {
               <span className="section-kicker">RISK</span>
               <h2>Position health</h2>
             </div>
-            <strong className={styles.riskHeaderValue}>{healthLabel}</strong>
           </div>
 
           <HealthMeter percent={lending.healthFactorPercent} />
@@ -289,7 +299,7 @@ export default function MultiMarketLending() {
           </div>
 
           <p className={styles.note}>
-            Health factor is read directly from the deployed Centry lending pool. The bar is only a visual normalization of that onchain value.
+            Health is account-wide. It includes all collateral and debt across Centry markets.
           </p>
         </div>
       </section>
