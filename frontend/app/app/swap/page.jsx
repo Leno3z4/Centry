@@ -1,7 +1,12 @@
 'use client';
 
-import { useMemo, useRef, useState, useEffect } from 'react';
-import { useAccount, useReadContract, useSendTransaction, useWaitForTransactionReceipt } from 'wagmi';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useAccount,
+  useReadContract,
+  useSendTransaction,
+  useWaitForTransactionReceipt,
+} from 'wagmi';
 import { formatUnits, parseUnits } from 'viem';
 import { Providers } from '../../../components/Providers';
 import { AppShell } from '../../../components/AppShell';
@@ -14,7 +19,7 @@ const LIVE_MARKETS = MARKETS.filter(
 );
 const ARC_CHAIN_ID = 5042002;
 
-function toSafeNumber(value) {
+function safeNumber(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
@@ -22,9 +27,10 @@ function toSafeNumber(value) {
 function formatTokenAmount(raw, decimals, symbol) {
   if (raw == null || decimals == null) return '—';
   try {
-    const value = Number(formatUnits(BigInt(raw), decimals));
-    if (!Number.isFinite(value)) return '—';
-    return `${value.toLocaleString(undefined, {
+    const formatted = formatUnits(BigInt(String(raw)), Number(decimals));
+    const number = Number(formatted);
+    if (!Number.isFinite(number)) return `${formatted} ${symbol}`;
+    return `${number.toLocaleString(undefined, {
       minimumFractionDigits: 0,
       maximumFractionDigits: Math.min(Number(decimals), 8),
     })} ${symbol}`;
@@ -33,12 +39,12 @@ function formatTokenAmount(raw, decimals, symbol) {
   }
 }
 
-function normalizePriceImpact(value) {
-  const parsed = toSafeNumber(value);
-  if (parsed == null) return null;
-  if (parsed > 100) return parsed / 100;
-  if (parsed >= 1) return parsed;
-  return parsed * 100;
+function formatPriceImpact(value) {
+  const parsed = safeNumber(value);
+  if (parsed == null) return '—';
+  // Tower documents 0.02 as 2%; some responses may surface a bps-style value.
+  const percent = parsed > 100 ? parsed / 100 : parsed < 1 ? parsed * 100 : parsed;
+  return `${percent.toLocaleString(undefined, { maximumFractionDigits: 2 })}%`;
 }
 
 function errorText(error) {
@@ -51,11 +57,11 @@ function TokenDropdown({ value, markets, onChange, label }) {
   const selected = markets.find((market) => market.id === value) || markets[0];
 
   useEffect(() => {
-    const handlePointerDown = (event) => {
+    const close = (event) => {
       if (!rootRef.current?.contains(event.target)) setOpen(false);
     };
-    document.addEventListener('pointerdown', handlePointerDown);
-    return () => document.removeEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
   }, []);
 
   return (
@@ -134,22 +140,22 @@ function SwapContent() {
   const fromMarket = LIVE_MARKETS.find((market) => market.id === fromId) || LIVE_MARKETS[0];
   const toMarket = LIVE_MARKETS.find((market) => market.id === toId) || LIVE_MARKETS[1] || LIVE_MARKETS[0];
 
-  const { data: outputDecimalsOnchain } = useReadContract({
+  const { data: outputDecimals } = useReadContract({
     address: toMarket?.address,
     abi: ERC20_ABI,
     functionName: 'decimals',
     query: { enabled: Boolean(toMarket?.address) },
   });
 
-  const { data: inputDecimalsOnchain } = useReadContract({
+  const { data: inputDecimals } = useReadContract({
     address: fromMarket?.address,
     abi: ERC20_ABI,
     functionName: 'decimals',
     query: { enabled: Boolean(fromMarket?.address) },
   });
 
-  const fromDecimals = Number(inputDecimalsOnchain ?? fromMarket?.decimals ?? 6);
-  const toDecimals = Number(outputDecimalsOnchain ?? toMarket?.decimals ?? 6);
+  const fromTokenDecimals = Number(inputDecimals ?? fromMarket?.decimals ?? 6);
+  const toTokenDecimals = Number(outputDecimals ?? toMarket?.decimals ?? 6);
 
   const slippageBps = useMemo(() => {
     const parsed = Number(slippage);
@@ -158,13 +164,13 @@ function SwapContent() {
   }, [slippage]);
 
   const amountRaw = useMemo(() => {
-    if (!amount || !fromMarket) return '';
+    if (!amount) return '';
     try {
-      return parseUnits(amount, fromDecimals).toString();
+      return parseUnits(amount, fromTokenDecimals).toString();
     } catch {
       return '';
     }
-  }, [amount, fromMarket, fromDecimals]);
+  }, [amount, fromTokenDecimals]);
 
   const clearQuote = () => {
     setQuote(null);
@@ -174,9 +180,18 @@ function SwapContent() {
     setStage('idle');
   };
 
-  const switchTokens = () => {
+  const swapTokens = () => {
     setFromId(toId);
     setToId(fromId);
+    clearQuote();
+  };
+
+  const changeFrom = (next) => {
+    setFromId(next);
+    if (next === toId) {
+      const replacement = LIVE_MARKETS.find((market) => market.id !== next);
+      if (replacement) setToId(replacement.id);
+    }
     clearQuote();
   };
 
@@ -186,7 +201,6 @@ function SwapContent() {
     setNotice('');
     setError('');
     setQuote(null);
-    setSwapTx(null);
     setStage('quoting');
 
     try {
@@ -194,8 +208,9 @@ function SwapContent() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          inputToken: fromMarket.symbol,
-          outputToken: toMarket.symbol,
+          // Keep the known-working address-based Tower request.
+          inputToken: fromMarket.address,
+          outputToken: toMarket.address,
           inputAmount: amountRaw,
           slippageTolerance: slippageBps,
         }),
@@ -277,21 +292,13 @@ function SwapContent() {
   });
 
   const isBusy = walletPending || ['quoting', 'building', 'approval', 'swapping'].includes(stage);
-  const outputAmount = quote
-    ? formatTokenAmount(quote.outputAmount, toDecimals, toMarket.symbol)
-    : '—';
-  const minOutput = quote
-    ? formatTokenAmount(quote.minOut, toDecimals, toMarket.symbol)
-    : '—';
-  const priceImpact = quote ? normalizePriceImpact(quote.priceImpact) : null;
-  const quoteLooksUsable = Boolean(
+  const outputAmount = quote ? formatTokenAmount(quote.outputAmount, toTokenDecimals, toMarket.symbol) : '—';
+  const minOutput = quote ? formatTokenAmount(quote.minOut, toTokenDecimals, toMarket.symbol) : '—';
+  const quoteReady = Boolean(
     quote?.outputAmount &&
     quote?.minOut &&
-    BigInt(quote.minOut) > 0n &&
-    BigInt(quote.outputAmount) >= BigInt(quote.minOut) &&
-    priceImpact != null &&
-    priceImpact >= 0 &&
-    priceImpact < 100,
+    BigInt(String(quote.minOut)) > 0n &&
+    BigInt(String(quote.outputAmount)) >= BigInt(String(quote.minOut)),
   );
 
   return (
@@ -331,27 +338,23 @@ function SwapContent() {
                     }
                   }}
                 />
-                <TokenDropdown
-                  value={fromId}
-                  markets={LIVE_MARKETS}
-                  onChange={(next) => {
-                    setFromId(next);
-                    if (next === toId) {
-                      setToId(fromId);
-                    }
-                    clearQuote();
-                  }}
-                  label="Input token"
-                />
+                <TokenDropdown value={fromId} markets={LIVE_MARKETS} onChange={changeFrom} label="Input token" />
               </div>
             </div>
 
-            <button type="button" className={styles.switchButton} onClick={switchTokens} disabled={isBusy} aria-label="Switch tokens">↓</button>
+            <button type="button" className={styles.switchButton} onClick={swapTokens} disabled={isBusy} aria-label="Switch tokens">↓</button>
 
             <div className={styles.assetField}>
               <label htmlFor="swap-output">You receive</label>
               <div className={styles.assetRow}>
-                <input id="swap-output" className={styles.amountInput} type="text" readOnly placeholder="Quote appears here" value={quote ? outputAmount : ''} />
+                <input
+                  id="swap-output"
+                  className={styles.amountInput}
+                  type="text"
+                  readOnly
+                  placeholder="Quote appears here"
+                  value={quote ? outputAmount : ''}
+                />
                 <TokenDropdown
                   value={toId}
                   markets={LIVE_MARKETS.filter((market) => market.id !== fromId)}
@@ -387,13 +390,13 @@ function SwapContent() {
             <div className={styles.quoteCard}>
               <div className={styles.quoteRow}><span>Expected output</span><strong className={styles.quoteOutput}>{outputAmount}</strong></div>
               <div className={styles.quoteRow}><span>Minimum received</span><strong>{minOutput}</strong></div>
-              <div className={styles.quoteRow}><span>Price impact</span><strong>{priceImpact == null ? '—' : `${priceImpact.toLocaleString(undefined, { maximumFractionDigits: 2 })}%`}</strong></div>
+              <div className={styles.quoteRow}><span>Price impact</span><strong>{formatPriceImpact(quote.priceImpact)}</strong></div>
               <div className={styles.quoteRow}><span>Fee</span><strong>{quote.feeBps != null ? `${quote.feeBps} bps` : '—'}</strong></div>
               <div className={styles.quoteRow}><span>Route</span><strong>{quote.dexName || quote.dexId || 'Tower'}</strong></div>
             </div>
           )}
 
-          {!quote || !quoteLooksUsable ? (
+          {!quote || !quoteReady ? (
             <button type="button" className={styles.primaryButton} disabled={!amountRaw || isBusy} onClick={getQuote}>
               {stage === 'quoting' ? 'Finding best route…' : quote ? 'Refresh quote' : 'Get quote'}
             </button>
@@ -406,7 +409,7 @@ function SwapContent() {
           {!isConnected && <div className={styles.notice}>Connect your wallet to execute the swap. Quotes can still be requested.</div>}
           {notice && <div className={`${styles.notice} ${styles.noticeSuccess}`}>{notice}</div>}
           {error && <div className={`${styles.notice} ${styles.noticeError}`}>{error}</div>}
-          {quote && !quoteLooksUsable && !error && <div className={`${styles.notice} ${styles.noticeError}`}>Tower returned an unusable quote. Refresh the quote or try a smaller amount.</div>}
+          {quote && !quoteReady && !error && <div className={`${styles.notice} ${styles.noticeError}`}>Tower returned an incomplete quote. Refresh the quote or try another pair.</div>}
           {swapReceipt.isSuccess && <div className={`${styles.notice} ${styles.noticeSuccess}`}>Swap confirmed on Arc.</div>}
         </section>
 
