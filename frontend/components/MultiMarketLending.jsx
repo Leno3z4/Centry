@@ -215,7 +215,7 @@ export default function MultiMarketLending() {
               <button
                 key={item}
                 type="button"
-                className={action === item ? 'active' : ''}
+                className={action === item ? styles.actionActive : styles.actionButton}
                 onClick={() => changeAction(item)}
               >
                 {item[0].toUpperCase() + item.slice(1)}
