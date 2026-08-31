@@ -57,6 +57,11 @@ export default function MultiMarketLending() {
   const numericAmount = Number(amount || 0);
   const currentDebt = Number(lending.borrowBalance || 0);
   const allowance = Number(lending.allowance || 0);
+  const maxBorrow = lending.maxBorrowAmount || '0';
+  const maxBorrowNumber = Number(maxBorrow);
+  const marketLiquidityNumber = Number(lending.reserveData?.totalLiquidity || 0);
+  const noBorrowLiquidity = action === 'borrow' && marketLiquidityNumber <= 0;
+  const noBorrowRoom = action === 'borrow' && maxBorrowNumber <= 0 && !noBorrowLiquidity;
   const needsApproval =
     isConnected &&
     ['supply', 'repay'].includes(action) &&
@@ -78,11 +83,6 @@ export default function MultiMarketLending() {
   const changeAmount = (event) => {
     const value = event.target.value;
 
-    if (action !== 'repay') {
-      setAmount(value);
-      return;
-    }
-
     if (value === '') {
       setAmount('');
       return;
@@ -91,7 +91,17 @@ export default function MultiMarketLending() {
     const next = Number(value);
     if (!Number.isFinite(next)) return;
 
-    setAmount(next > currentDebt ? lending.borrowBalance : value);
+    if (action === 'repay' && next > currentDebt) {
+      setAmount(lending.borrowBalance);
+      return;
+    }
+
+    if (action === 'borrow' && next > maxBorrowNumber) {
+      setAmount(maxBorrow);
+      return;
+    }
+
+    setAmount(value);
   };
 
   const setMax = () => {
@@ -106,7 +116,7 @@ export default function MultiMarketLending() {
     }
 
     if (action === 'borrow') {
-      setAmount(lending.maxBorrowAmount || '0');
+      setAmount(maxBorrow);
       return;
     }
 
@@ -244,9 +254,9 @@ export default function MultiMarketLending() {
           <div className={styles.formMeta}>
             <span>
               {action === 'repay'
-                ? `Owed: ${isConnected ? `${formatNumber(lending.borrowBalance, Math.min(market.decimals, 6))} ${market.symbol}` : 'Connect wallet'}`
+                ? `Owed: ${isConnected ? `${formatNumber(lending.borrowBalance, Math.min(market.decimals, 8))} ${market.symbol}` : 'Connect wallet'}`
                 : action === 'borrow'
-                  ? `Max: ${isConnected ? `${formatNumber(lending.maxBorrowAmount, Math.min(market.decimals, 8))} ${market.symbol}` : 'Connect wallet'}`
+                  ? `Max: ${isConnected ? `${formatNumber(maxBorrow, Math.min(market.decimals, 8))} ${market.symbol}` : 'Connect wallet'}`
                   : `Wallet: ${isConnected ? `${formatNumber(lending.walletBalance)} ${market.symbol}` : 'Connect wallet'}`}
             </span>
             {isConnected && <button type="button" onClick={setMax}>Max</button>}
@@ -256,6 +266,10 @@ export default function MultiMarketLending() {
             <div className="connect-prompt">Connect your wallet to interact with this market.</div>
           ) : !lending.reserveActive ? (
             <div className="connect-prompt">{market.symbol} is registered but its lending reserve is not enabled yet.</div>
+          ) : noBorrowLiquidity ? (
+            <div className="connect-prompt">There is no {market.symbol} liquidity available to borrow right now.</div>
+          ) : noBorrowRoom ? (
+            <div className="connect-prompt">You have no remaining borrowing room.</div>
           ) : (
             <button
               type="button"
@@ -265,7 +279,7 @@ export default function MultiMarketLending() {
                 !amount ||
                 numericAmount <= 0 ||
                 (action === 'repay' && currentDebt <= 0) ||
-                (action === 'borrow' && numericAmount > Number(lending.maxBorrowAmount || 0))
+                (action === 'borrow' && numericAmount > maxBorrowNumber)
               }
               onClick={run}
             >
