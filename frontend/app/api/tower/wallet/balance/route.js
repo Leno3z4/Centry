@@ -12,7 +12,10 @@ const SUPPORTED = {
     usdc: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d',
   },
   'ethereum-sepolia': {
-    rpcUrl: 'https://ethereum-sepolia-rpc.publicnode.com',
+    // Use Tower's authenticated RPC proxy instead of a third-party
+    // free-tier Sepolia endpoint that can reject eth_call requests.
+    chainId: 11155111,
+    rpcUrl: `${TOWER_BASE_URL}/rpc/11155111`,
     usdc: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
   },
 };
@@ -23,6 +26,7 @@ function isAddress(value) {
 
 export async function POST(request) {
   const apiKey = process.env.TOWER_API_KEY;
+
   if (!apiKey) {
     return NextResponse.json(
       { success: false, error: 'Tower is not configured. Set TOWER_API_KEY on the server.' },
@@ -32,6 +36,7 @@ export async function POST(request) {
 
   try {
     const { address, chainId } = await request.json();
+
     if (!isAddress(address) || !SUPPORTED[chainId]) {
       return NextResponse.json(
         { success: false, error: 'Unsupported chain or invalid wallet address.' },
@@ -40,6 +45,7 @@ export async function POST(request) {
     }
 
     const network = SUPPORTED[chainId];
+
     const response = await fetch(`${TOWER_BASE_URL}/wallet/balance`, {
       method: 'POST',
       headers: {
