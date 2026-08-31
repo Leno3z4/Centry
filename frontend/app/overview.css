@@ -1,0 +1,8 @@
+/* Overview intentionally focuses on markets and protocol activity. */
+.hero + .stats-grid + .content-grid {
+  grid-template-columns: 1fr;
+}
+
+.hero + .stats-grid + .content-grid > .panel:not(.panel-large) {
+  display: none !important;
+}
