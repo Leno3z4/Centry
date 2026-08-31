@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { ACTIVE_MARKETS } from '../../../../constants/markets';
+import { ACTIVE_MARKETS } from '../../../../../constants/markets';
 
 const TOWER_BASE_URL = 'https://www.tower.exchange/api/public';
 
