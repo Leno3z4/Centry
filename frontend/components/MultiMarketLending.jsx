@@ -4,6 +4,7 @@ import React, { useMemo, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { MARKETS } from '../constants/markets';
 import { useMultiMarketLending } from '../hooks/useMultiMarketLending';
+import styles from '../app/app/markets/markets.module.css';
 
 function formatNumber(value, digits = 2) {
   const number = Number(value || 0);
@@ -18,20 +19,20 @@ function HealthMeter({ percent }) {
   const safe = Math.min(Math.max(Number(percent || 0), 0), 100);
 
   return (
-    <div className="mm-health-meter">
-      <div className="mm-health-head">
+    <div className={styles.riskMeter}>
+      <div className={styles.riskHead}>
         <span>Position health</span>
         <strong>{safe}%</strong>
       </div>
       <div
-        className="mm-health-track"
+        className={styles.riskTrack}
         role="progressbar"
         aria-valuemin="0"
         aria-valuemax="100"
         aria-valuenow={safe}
         aria-label="Position health"
       >
-        <div className="mm-health-fill" style={{ width: `${safe}%` }} />
+        <div className={styles.riskFill} style={{ width: `${safe}%` }} />
       </div>
     </div>
   );
@@ -141,31 +142,31 @@ export default function MultiMarketLending() {
 
   if (!market) {
     return (
-      <div className="mm-page">
+      <div className={styles.page}>
         <div className="connect-prompt">No configured lending markets are available yet.</div>
       </div>
     );
   }
 
   return (
-    <div className="mm-page">
-      <div className="mm-header">
+    <div className={styles.page}>
+      <div className={styles.header}>
         <div>
-          <span className="section-kicker">CENTRY · MARKETS</span>
+          <span className="section-kicker">CENTRY · LENDING</span>
           <h1>Borrow & lend</h1>
-          <p>One interface for every Centry lending market enabled on Arc Testnet.</p>
+          <p>Supply, borrow and manage your position across Centry markets.</p>
         </div>
         <div className="test-badge">ARC TESTNET</div>
       </div>
 
-      <div className="mm-market-tabs" role="tablist" aria-label="Lending markets">
+      <div className={styles.marketTabs} role="tablist" aria-label="Lending markets">
         {supportedMarkets.map((item) => (
           <button
             key={item.id}
             type="button"
             role="tab"
             aria-selected={market.id === item.id}
-            className={market.id === item.id ? 'active' : ''}
+            className={market.id === item.id ? styles.marketTabActive : styles.marketTab}
             onClick={() => changeMarket(item.id)}
           >
             <strong>{item.symbol}</strong>
@@ -174,7 +175,7 @@ export default function MultiMarketLending() {
         ))}
       </div>
 
-      <section className="mm-summary">
+      <section className={styles.summary}>
         <div className="metric">
           <span>Wallet</span>
           <strong>{isConnected ? `${formatNumber(lending.walletBalance)} ${market.symbol}` : '—'}</strong>
@@ -197,7 +198,7 @@ export default function MultiMarketLending() {
         </div>
       </section>
 
-      <section className="mm-grid">
+      <section className={styles.grid}>
         <div className="panel">
           <div className="panel-head">
             <div>
@@ -209,7 +210,7 @@ export default function MultiMarketLending() {
             </span>
           </div>
 
-          <div className="mm-action-tabs">
+          <div className={styles.actions}>
             {['supply', 'withdraw', 'borrow', 'repay'].map((item) => (
               <button
                 key={item}
@@ -237,7 +238,7 @@ export default function MultiMarketLending() {
             <span>{market.symbol}</span>
           </div>
 
-          <div className="form-meta">
+          <div className={styles.formMeta}>
             <span>
               {action === 'repay'
                 ? `Owed: ${isConnected ? `${formatNumber(lending.borrowBalance, Math.min(market.decimals, 6))} ${market.symbol}` : 'Connect wallet'}`
@@ -274,20 +275,20 @@ export default function MultiMarketLending() {
               <span className="section-kicker">RISK</span>
               <h2>Position health</h2>
             </div>
-            <strong className="mm-health-number">{healthLabel}</strong>
+            <strong className={styles.riskHeaderValue}>{healthLabel}</strong>
           </div>
 
           <HealthMeter percent={lending.healthFactorPercent} />
 
-          <div className="mm-risk-list">
-            <div><span>Market</span><strong>{market.symbol}</strong></div>
-            <div><span>Reserve</span><strong>{lending.reserveActive ? 'Active' : 'Not enabled'}</strong></div>
-            <div><span>Market liquidity</span><strong>{formatNumber(lending.reserveData?.totalLiquidity)} {market.symbol}</strong></div>
-            <div><span>Market borrowed</span><strong>{formatNumber(lending.reserveData?.totalBorrows)} {market.symbol}</strong></div>
-            <div><span>Utilization</span><strong>{formatNumber(lending.reserveData?.utilization)}%</strong></div>
+          <div className={styles.riskList}>
+            <div className={styles.riskRow}><span>Market</span><strong>{market.symbol}</strong></div>
+            <div className={styles.riskRow}><span>Reserve</span><strong>{lending.reserveActive ? 'Active' : 'Not enabled'}</strong></div>
+            <div className={styles.riskRow}><span>Market liquidity</span><strong>{formatNumber(lending.reserveData?.totalLiquidity)} {market.symbol}</strong></div>
+            <div className={styles.riskRow}><span>Market borrowed</span><strong>{formatNumber(lending.reserveData?.totalBorrows)} {market.symbol}</strong></div>
+            <div className={styles.riskRow}><span>Utilization</span><strong>{formatNumber(lending.reserveData?.utilization)}%</strong></div>
           </div>
 
-          <p className="mm-note">
+          <p className={styles.note}>
             Health factor is read directly from the deployed Centry lending pool. The bar is only a visual normalization of that onchain value.
           </p>
         </div>
