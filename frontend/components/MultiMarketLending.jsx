@@ -124,7 +124,7 @@ export default function MultiMarketLending() {
   };
 
   const run = async () => {
-    if (!isConnected || !market?.address || !lending.reserveActive) return;
+    if (!isConnected || !market?.address || lending.reserveActive !== true) return;
     if (!amount || numericAmount <= 0 || busy) return;
 
     try {
@@ -160,6 +160,12 @@ export default function MultiMarketLending() {
       </div>
     );
   }
+
+  const reserveStatus = lending.reserveLoading
+    ? 'Checking reserve…'
+    : lending.reserveActive
+      ? 'Reserve live'
+      : 'Reserve not enabled';
 
   return (
     <div className={styles.page}>
@@ -219,7 +225,7 @@ export default function MultiMarketLending() {
               <h2>{action[0].toUpperCase() + action.slice(1)} {market.symbol}</h2>
             </div>
             <span className={lending.reserveActive ? 'live-badge' : 'test-badge'}>
-              {lending.reserveActive ? 'Reserve live' : 'Reserve not enabled'}
+              {reserveStatus}
             </span>
           </div>
 
@@ -264,8 +270,10 @@ export default function MultiMarketLending() {
 
           {!isConnected ? (
             <div className="connect-prompt">Connect your wallet to interact with this market.</div>
-          ) : !lending.reserveActive ? (
-            <div className="connect-prompt">{market.symbol} is registered but its lending reserve is not enabled yet.</div>
+          ) : lending.reserveLoading ? (
+            <div className="connect-prompt">Checking {market.symbol} reserve…</div>
+          ) : lending.reserveActive !== true ? (
+            <div className="connect-prompt">{market.symbol} is not enabled in the connected Centry LendingPool.</div>
           ) : noBorrowLiquidity ? (
             <div className="connect-prompt">There is no {market.symbol} liquidity available to borrow right now.</div>
           ) : noBorrowRoom ? (
@@ -306,7 +314,7 @@ export default function MultiMarketLending() {
 
           <div className={styles.riskList}>
             <div className={styles.riskRow}><span>Market</span><strong>{market.symbol}</strong></div>
-            <div className={styles.riskRow}><span>Reserve</span><strong>{lending.reserveActive ? 'Active' : 'Not enabled'}</strong></div>
+            <div className={styles.riskRow}><span>Reserve</span><strong>{lending.reserveActive ? 'Active' : lending.reserveLoading ? 'Checking…' : 'Not enabled'}</strong></div>
             <div className={styles.riskRow}><span>Market liquidity</span><strong>{formatNumber(lending.reserveData?.totalLiquidity)} {market.symbol}</strong></div>
             <div className={styles.riskRow}><span>Market borrowed</span><strong>{formatNumber(lending.reserveData?.totalBorrows)} {market.symbol}</strong></div>
             <div className={styles.riskRow}><span>Utilization</span><strong>{formatNumber(lending.reserveData?.utilization)}%</strong></div>
