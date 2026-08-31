@@ -100,13 +100,14 @@
 .chainTrigger {
   text-align: left;
   cursor: pointer;
-  transition: border-color 160ms ease, background 160ms ease;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
 
 .chainTrigger:hover,
 .chainTriggerOpen {
   border-color: #76509e;
   background: #151022;
+  box-shadow: 0 0 0 3px rgba(155,98,255,.06);
 }
 
 .chainMenu {
@@ -120,28 +121,36 @@
   padding: 7px;
   border: 1px solid #3a2a4f;
   border-radius: 16px;
-  background: #0b0813;
+  background: rgba(11,8,19,.98);
   box-shadow: 0 24px 60px rgba(0,0,0,.58), 0 0 0 1px rgba(155,98,255,.04);
+  backdrop-filter: blur(14px);
 }
 
 .chainOption {
   display: flex;
   width: 100%;
+  min-height: 52px;
+  box-sizing: border-box;
   align-items: center;
   gap: 12px;
-  padding: 11px 10px;
+  padding: 9px 10px;
   border: 1px solid transparent;
   border-radius: 11px;
   background: transparent;
   color: #e9e2f2;
   text-align: left;
   cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
 }
 
 .chainOption:hover,
 .chainOptionActive {
-  border-color: #2f2440;
-  background: #171022;
+  border-color: #382a4a;
+  background: linear-gradient(120deg, #171022, #120c1b);
+}
+
+.chainOption:hover {
+  transform: translateX(2px);
 }
 
 .chainBadge,
@@ -201,14 +210,51 @@
 
 .arrow {
   display: grid;
-  width: 36px;
-  height: 36px;
-  margin: 9px auto;
+  width: 42px;
+  height: 42px;
+  margin: 10px auto;
   place-items: center;
-  border: 1px solid #362847;
+  border: 1px solid #3d2d52;
   border-radius: 50%;
-  background: #0f0a18;
-  color: #c5b5d5;
+  background: #100b18;
+  color: #cbb8dc;
+  font-size: 21px;
+  line-height: 1;
+}
+
+.arrowButton {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  margin: 12px auto;
+  place-items: center;
+  border: 1px solid #4b3563;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #1f152c, #0f0a17 70%);
+  color: #d6c2e8;
+  font: inherit;
+  font-size: 21px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 12px 28px rgba(0,0,0,.34), 0 0 0 1px rgba(155,98,255,.04);
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+.arrowButton:hover:not(:disabled) {
+  border-color: #8a60b5;
+  background: radial-gradient(circle at 35% 30%, #2a1a3c, #120c1c 72%);
+  color: #f4ebff;
+  transform: translateY(-1px);
+  box-shadow: 0 16px 32px rgba(0,0,0,.38), 0 0 18px rgba(155,98,255,.12);
+}
+
+.arrowButton:active:not(:disabled) {
+  transform: translateY(0) scale(.97);
+}
+
+.arrowButton:disabled {
+  cursor: not-allowed;
+  opacity: .45;
 }
 
 .amountBlock {
