@@ -142,6 +142,19 @@ export const LENDING_POOL_ABI = [
   },
 ];
 
+export const ORACLE_ABI = [
+  {
+    type: 'function',
+    name: 'getPrice',
+    stateMutability: 'view',
+    inputs: [{ name: 'asset', type: 'address' }],
+    outputs: [
+      { name: 'priceE18', type: 'uint256' },
+      { name: 'updatedAt', type: 'uint256' },
+    ],
+  },
+];
+
 export const VE_CENTRY_ABI = [
   {
     type: 'function',
