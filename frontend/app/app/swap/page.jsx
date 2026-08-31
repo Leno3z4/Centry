@@ -18,10 +18,6 @@ const LIVE_MARKETS = MARKETS.filter(
   (market) => market.status === 'live' && market.address,
 );
 const ARC_CHAIN_ID = 5042002;
-
-// Tower's current Arc testnet quote payload is being returned in a
-// 12-decimal display scale for the output values we receive. Keep the raw
-// quote untouched when building the transaction; this constant is display-only.
 const TOWER_QUOTE_DISPLAY_DECIMALS = 12;
 
 function safeNumber(value) {
@@ -32,10 +28,11 @@ function safeNumber(value) {
 function formatQuoteAmount(raw, symbol) {
   if (raw == null) return '—';
   try {
-    const formatted = formatUnits(BigInt(String(raw)), TOWER_QUOTE_DISPLAY_DECIMALS);
-    const number = Number(formatted);
-    if (!Number.isFinite(number)) return `${formatted} ${symbol}`;
-    return `${number.toLocaleString(undefined, {
+    const formatted = formatUnits(
+      BigInt(String(raw)),
+      TOWER_QUOTE_DISPLAY_DECIMALS,
+    );
+    return `${Number(formatted).toLocaleString(undefined, {
       minimumFractionDigits: 0,
       maximumFractionDigits: 8,
     })} ${symbol}`;
@@ -47,7 +44,15 @@ function formatQuoteAmount(raw, symbol) {
 function formatPriceImpact(value) {
   const parsed = safeNumber(value);
   if (parsed == null) return '—';
-  return `${parsed.toLocaleString(undefined, { maximumFractionDigits: 2 })}%`;
+
+  // Tower's response is surfaced as basis points here:
+  // 2128 -> 21.28%, 250 -> 2.50%, 0 -> 0%.
+  const percent = parsed / 100;
+
+  return `${percent.toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })}%`;
 }
 
 function errorText(error) {
