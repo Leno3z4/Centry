@@ -86,7 +86,17 @@ export function useMultiMarketLending(asset, decimals = 18) {
     query: commonQuery,
   });
 
-  // These are account-wide in the CentryLendingPool contract.
+  // Actual ERC-20 cash held by the pool for this reserve. This is the
+  // hard ceiling for borrowing the selected asset.
+  const { data: poolCashRaw, refetch: refetchPoolCash } = useReadContract({
+    address: asset,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: [CONTRACT_ADDRESSES.lendingPool],
+    query: commonQuery,
+  });
+
+  // Account-wide risk values from CentryLendingPool.
   const { data: healthFactorRaw, refetch: refetchHealth } = useReadContract({
     address: CONTRACT_ADDRESSES.lendingPool,
     abi: LENDING_POOL_ABI,
@@ -103,10 +113,10 @@ export function useMultiMarketLending(asset, decimals = 18) {
     query: walletQuery,
   });
 
-  // The pool currently exposes borrowPower(user) and healthFactor(user), but
-  // not totalDebtValue(user). Reconstruct the same account-wide debt value
-  // from every live reserve using the pool's borrowBalance reads and the
-  // same Centry oracle prices.
+  // Reconstruct account-wide debt in USD using the same reserve borrow reads
+  // and Chronicle prices used by the pool. A price is only required when the
+  // user actually has debt in that asset, so an unavailable zero-debt market
+  // cannot incorrectly reduce the selected market's max to zero.
   const globalDebtContracts = ACTIVE_MARKETS.flatMap((market) => [
     {
       address: CONTRACT_ADDRESSES.lendingPool,
@@ -237,6 +247,7 @@ export function useMultiMarketLending(asset, decimals = 18) {
       refetchSupply(),
       refetchBorrow(),
       refetchUtilization(),
+      refetchPoolCash(),
       refetchUserSupply(),
       refetchUserBorrow(),
       refetchHealth(),
@@ -282,67 +293,85 @@ export function useMultiMarketLending(asset, decimals = 18) {
               ),
             );
 
-  let totalDebtValue = 0;
+  let totalDebtValueRaw = ZERO;
   let globalDebtReady = Boolean(address) && Array.isArray(globalDebtResults);
 
   if (Array.isArray(globalDebtResults)) {
     for (let index = 0; index < ACTIVE_MARKETS.length; index += 1) {
       const borrowResult = globalDebtResults[index * 2];
       const priceResult = globalDebtResults[index * 2 + 1];
+      const amountRaw = borrowResult?.result ?? ZERO;
+      const market = ACTIVE_MARKETS[index];
 
-      if (
-        borrowResult?.status !== 'success' ||
-        priceResult?.status !== 'success'
-      ) {
+      if (borrowResult?.status !== 'success') {
         globalDebtReady = false;
         continue;
       }
 
-      const amountRaw = borrowResult.result ?? ZERO;
+      // A market with zero debt does not need a readable price for the
+      // account-wide remaining borrow calculation.
+      if (amountRaw === ZERO) {
+        continue;
+      }
+
+      if (priceResult?.status !== 'success') {
+        globalDebtReady = false;
+        continue;
+      }
+
       const priceRaw = Array.isArray(priceResult.result)
         ? priceResult.result[0]
         : ZERO;
-      const market = ACTIVE_MARKETS[index];
 
-      totalDebtValue += Number(
-        formatUnits(
-          amountRaw * priceRaw,
-          market.decimals + 18,
-        ),
-      );
+      if (priceRaw === ZERO) {
+        globalDebtReady = false;
+        continue;
+      }
+
+      totalDebtValueRaw +=
+        (amountRaw * priceRaw) /
+        (TEN ** BigInt(market.decimals));
     }
   }
 
-  const totalBorrowPower = Number(
-    formatUnits(borrowPowerRaw ?? ZERO, 18),
-  );
+  const totalBorrowPowerRaw = borrowPowerRaw ?? ZERO;
+  const remainingBorrowPowerRaw =
+    totalBorrowPowerRaw > totalDebtValueRaw
+      ? totalBorrowPowerRaw - totalDebtValueRaw
+      : ZERO;
 
+  const totalBorrowPower = Number(formatUnits(totalBorrowPowerRaw, 18));
   const borrowLimit =
     globalDebtReady && Number.isFinite(totalBorrowPower)
-      ? Math.max(totalBorrowPower - totalDebtValue, 0)
-      : totalBorrowPower;
+      ? Number(formatUnits(remainingBorrowPowerRaw, 18))
+      : 0;
 
   const selectedPriceIndex = ACTIVE_MARKETS.findIndex(
     (market) => market.address?.toLowerCase() === asset?.toLowerCase(),
   );
-
   const selectedPriceRaw =
     selectedPriceIndex >= 0
       ? globalDebtResults?.[selectedPriceIndex * 2 + 1]?.result?.[0]
       : undefined;
 
-  const maxBorrowRaw =
+  // Max selected-asset borrow is constrained by BOTH account risk capacity
+  // and actual cash held by that reserve.
+  const riskLimitedBorrowRaw =
     globalDebtReady &&
     selectedPriceRaw &&
     selectedPriceRaw > ZERO
-      ? (
-          BigInt(Math.max(0, Math.floor(borrowLimit * 1e8))) *
-          (TEN ** BigInt(decimals))
-        ) /
-        (selectedPriceRaw * (10n ** 8n))
+      ? (remainingBorrowPowerRaw * (TEN ** BigInt(decimals))) /
+        selectedPriceRaw
       : ZERO;
 
+  const poolCashAmountRaw = poolCashRaw ?? ZERO;
+  const maxBorrowRaw =
+    riskLimitedBorrowRaw < poolCashAmountRaw
+      ? riskLimitedBorrowRaw
+      : poolCashAmountRaw;
+
   const maxBorrowAmount = formatUnits(maxBorrowRaw, decimals);
+  const poolCash = formatDynamic(poolCashRaw, decimals);
 
   return {
     configured,
@@ -354,7 +383,8 @@ export function useMultiMarketLending(asset, decimals = 18) {
     borrowBalance,
     allowance,
     reserveData: {
-      totalLiquidity: formatDynamic(currentSupplyRaw, decimals),
+      totalLiquidity: poolCash,
+      totalSupply: formatDynamic(currentSupplyRaw, decimals),
       totalBorrows: formatDynamic(currentBorrowRaw, decimals),
       utilization: Number(formatUnits(utilizationRaw ?? ZERO, 18)) * 100,
     },
@@ -362,7 +392,7 @@ export function useMultiMarketLending(asset, decimals = 18) {
     healthFactorPercent,
     borrowPower: totalBorrowPower.toFixed(2),
     borrowLimit: borrowLimit.toFixed(2),
-    totalDebtValue: totalDebtValue.toFixed(2),
+    totalDebtValue: Number(formatUnits(totalDebtValueRaw, 18)).toFixed(2),
     maxBorrowAmount,
     approveAsset,
     supply,
