@@ -124,36 +124,34 @@
 }
 
 .tokenTrigger {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0,1fr) auto;
   width: 100%;
-  min-height: 54px;
+  min-height: 58px;
   align-items: center;
-  gap: 9px;
-  padding: 7px 10px;
+  gap: 10px;
+  padding: 8px 11px;
   border: 1px solid #342748;
-  border-radius: 13px;
+  border-radius: 15px;
   background: linear-gradient(145deg, #181021, #110b19);
   color: #f5f0fb;
   text-align: left;
   cursor: pointer;
-  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+  box-shadow: 0 10px 26px rgba(0,0,0,.16);
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
 
 .tokenTrigger:hover,
 .tokenTriggerOpen {
   border-color: #76509e;
   background: linear-gradient(145deg, #21142d, #140d1d);
-}
-
-.tokenTrigger:hover {
-  transform: translateY(-1px);
+  box-shadow: 0 12px 30px rgba(0,0,0,.22), 0 0 0 3px rgba(155,98,255,.05);
 }
 
 .tokenTriggerText {
   display: grid;
   min-width: 0;
   gap: 2px;
-  flex: 1;
 }
 
 .tokenTriggerText strong,
@@ -172,27 +170,35 @@
 }
 
 .tokenChevron {
-  color: #a992c0;
-  font-size: 16px;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 7px;
+  color: #ab98bc;
+  font-size: 13px;
   line-height: 1;
-  transform: translateY(-2px);
-  transition: transform 160ms ease;
+  background: rgba(255,255,255,.035);
+  transition: transform 160ms ease, background 160ms ease, color 160ms ease;
 }
 
 .tokenChevronOpen {
-  transform: rotate(180deg) translateY(2px);
+  transform: rotate(180deg);
+  color: #d4baff;
+  background: rgba(155,98,255,.12);
 }
 
 .tokenIcon {
   display: grid;
   flex: 0 0 auto;
-  width: 31px;
-  height: 31px;
+  width: 34px;
+  height: 34px;
   place-items: center;
   border: 1px solid #3d3150;
   border-radius: 50%;
   font-size: 13px;
   font-weight: 800;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
 }
 
 .tokenIcon_usdc {
@@ -212,37 +218,43 @@
 
 .tokenMenu {
   position: absolute;
-  z-index: 50;
-  top: calc(100% + 7px);
+  z-index: 100;
+  top: calc(100% + 8px);
   right: 0;
-  width: 260px;
-  max-width: min(260px, calc(100vw - 32px));
-  padding: 6px;
+  width: 290px;
+  max-width: min(290px, calc(100vw - 32px));
+  padding: 7px;
   border: 1px solid #3a2a4f;
-  border-radius: 15px;
-  background: #0d0917;
-  box-shadow: 0 22px 55px rgba(0,0,0,.55), 0 0 0 1px rgba(155,98,255,.04);
+  border-radius: 16px;
+  background: rgba(13,9,23,.98);
+  box-shadow: 0 26px 70px rgba(0,0,0,.6), 0 0 0 1px rgba(155,98,255,.04);
+  backdrop-filter: blur(18px);
 }
 
 .tokenOption {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0,1fr) auto;
   width: 100%;
   align-items: center;
-  gap: 10px;
-  padding: 10px;
+  gap: 11px;
+  padding: 11px;
   border: 1px solid transparent;
-  border-radius: 11px;
+  border-radius: 12px;
   background: transparent;
   color: #e9e2f2;
   text-align: left;
   cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease;
+  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
 }
 
 .tokenOption:hover,
 .tokenOptionActive {
-  border-color: #2f2440;
-  background: #171022;
+  border-color: #35274a;
+  background: linear-gradient(135deg, #1a1127, #120c1b);
+}
+
+.tokenOption:hover {
+  transform: translateX(1px);
 }
 
 .tokenOptionText {
@@ -253,8 +265,14 @@
 }
 
 .tokenCheck {
-  color: #b38aff;
-  font-size: 15px;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 7px;
+  background: rgba(155,98,255,.1);
+  color: #c19cff;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -341,6 +359,19 @@
 .quoteOutput {
   color: #d4b6ff !important;
   font-size: 19px !important;
+}
+
+.quoteStatus {
+  display: flex;
+  min-height: 50px;
+  margin-top: 18px;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed #342847;
+  border-radius: 12px;
+  background: #0e0917;
+  color: #786d87;
+  font-size: 11px;
 }
 
 .primaryButton,
