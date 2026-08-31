@@ -15,7 +15,7 @@ import { arcTestnet } from '../config/multiWagmi';
 
 const ZERO = 0n;
 const MAX_UINT256 = maxUint256;
-const WAD = 10n ** 18n;
+const TEN = 10n;
 
 function formatDynamic(value, decimals) {
   return formatUnits(value ?? ZERO, decimals);
@@ -86,7 +86,7 @@ export function useMultiMarketLending(asset, decimals = 18) {
     query: commonQuery,
   });
 
-  // These two values are account-wide in the CentryLendingPool contract.
+  // These are account-wide in the CentryLendingPool contract.
   const { data: healthFactorRaw, refetch: refetchHealth } = useReadContract({
     address: CONTRACT_ADDRESSES.lendingPool,
     abi: LENDING_POOL_ABI,
@@ -103,9 +103,10 @@ export function useMultiMarketLending(asset, decimals = 18) {
     query: walletQuery,
   });
 
-  // The pool does not currently expose totalDebtValue(user), so derive the
-  // same USD debt value from every live reserve using the pool's per-market
-  // borrowBalance values and the same oracle prices used by the pool.
+  // The pool currently exposes borrowPower(user) and healthFactor(user), but
+  // not totalDebtValue(user). Reconstruct the same account-wide debt value
+  // from every live reserve using the pool's borrowBalance reads and the
+  // same Centry oracle prices.
   const globalDebtContracts = ACTIVE_MARKETS.flatMap((market) => [
     {
       address: CONTRACT_ADDRESSES.lendingPool,
@@ -148,9 +149,15 @@ export function useMultiMarketLending(asset, decimals = 18) {
   const { writeContractAsync, isPending, error } = useWriteContract();
 
   const sendAndWait = async (request) => {
-    if (!address) throw new Error('Connect your wallet before submitting a transaction.');
-    if (chainId !== arcTestnet.id) throw new Error('Switch your wallet to Arc Testnet before submitting a transaction.');
-    if (!publicClient) throw new Error('Wallet client is not ready. Please reconnect your wallet.');
+    if (!address) {
+      throw new Error('Connect your wallet before submitting a transaction.');
+    }
+    if (chainId !== arcTestnet.id) {
+      throw new Error('Switch your wallet to Arc Testnet before submitting a transaction.');
+    }
+    if (!publicClient) {
+      throw new Error('Wallet client is not ready. Please reconnect your wallet.');
+    }
 
     setTransactionPending(true);
     setTransactionError(null);
@@ -159,7 +166,9 @@ export function useMultiMarketLending(asset, decimals = 18) {
       const hash = await writeContractAsync(request);
       setTransactionHash(hash);
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
-      if (receipt.status !== 'success') throw new Error('The transaction was reverted onchain.');
+      if (receipt.status !== 'success') {
+        throw new Error('The transaction was reverted onchain.');
+      }
       return hash;
     } catch (caughtError) {
       setTransactionError(caughtError);
@@ -173,7 +182,10 @@ export function useMultiMarketLending(asset, decimals = 18) {
     address: asset,
     abi: ERC20_ABI,
     functionName: 'approve',
-    args: [CONTRACT_ADDRESSES.lendingPool, parseUnits(String(amount), decimals)],
+    args: [
+      CONTRACT_ADDRESSES.lendingPool,
+      parseUnits(String(amount), decimals),
+    ],
   }).then(async (hash) => {
     await refetchAllowance();
     return hash;
@@ -190,7 +202,12 @@ export function useMultiMarketLending(asset, decimals = 18) {
     address: CONTRACT_ADDRESSES.lendingPool,
     abi: LENDING_POOL_ABI,
     functionName: 'withdraw',
-    args: [asset, amount === 'max' ? MAX_UINT256 : parseUnits(String(amount), decimals)],
+    args: [
+      asset,
+      amount === 'max'
+        ? MAX_UINT256
+        : parseUnits(String(amount), decimals),
+    ],
   });
 
   const borrow = (amount) => sendAndWait({
@@ -204,11 +221,17 @@ export function useMultiMarketLending(asset, decimals = 18) {
     address: CONTRACT_ADDRESSES.lendingPool,
     abi: LENDING_POOL_ABI,
     functionName: 'repay',
-    args: [asset, amount === 'max' ? MAX_UINT256 : parseUnits(String(amount), decimals)],
+    args: [
+      asset,
+      amount === 'max'
+        ? MAX_UINT256
+        : parseUnits(String(amount), decimals),
+    ],
   });
 
   const refetchAll = async () => {
     if (!correctNetwork) return;
+
     await Promise.all([
       refetchReserve(),
       refetchSupply(),
@@ -245,8 +268,6 @@ export function useMultiMarketLending(asset, decimals = 18) {
         ? '∞'
         : healthFactorNumber.toFixed(2);
 
-  // The visual percentage is derived only from the account-wide onchain
-  // health factor. It must not depend on the currently selected market.
   const healthFactorPercent =
     healthFactorRaw === undefined
       ? 0
@@ -285,17 +306,43 @@ export function useMultiMarketLending(asset, decimals = 18) {
 
       totalDebtValue += Number(
         formatUnits(
-          (amountRaw * priceRaw),
+          amountRaw * priceRaw,
           market.decimals + 18,
         ),
       );
     }
   }
 
-  const totalBorrowPower = Number(formatUnits(borrowPowerRaw ?? ZERO, 18));
-  const borrowLimit = globalDebtReady && Number.isFinite(totalBorrowPower)
-    ? Math.max(totalBorrowPower - totalDebtValue, 0)
-    : totalBorrowPower;
+  const totalBorrowPower = Number(
+    formatUnits(borrowPowerRaw ?? ZERO, 18),
+  );
+
+  const borrowLimit =
+    globalDebtReady && Number.isFinite(totalBorrowPower)
+      ? Math.max(totalBorrowPower - totalDebtValue, 0)
+      : totalBorrowPower;
+
+  const selectedPriceIndex = ACTIVE_MARKETS.findIndex(
+    (market) => market.address?.toLowerCase() === asset?.toLowerCase(),
+  );
+
+  const selectedPriceRaw =
+    selectedPriceIndex >= 0
+      ? globalDebtResults?.[selectedPriceIndex * 2 + 1]?.result?.[0]
+      : undefined;
+
+  const maxBorrowRaw =
+    globalDebtReady &&
+    selectedPriceRaw &&
+    selectedPriceRaw > ZERO
+      ? (
+          BigInt(Math.max(0, Math.floor(borrowLimit * 1e8))) *
+          (TEN ** BigInt(decimals))
+        ) /
+        (selectedPriceRaw * (10n ** 8n))
+      : ZERO;
+
+  const maxBorrowAmount = formatUnits(maxBorrowRaw, decimals);
 
   return {
     configured,
@@ -316,6 +363,7 @@ export function useMultiMarketLending(asset, decimals = 18) {
     borrowPower: totalBorrowPower.toFixed(2),
     borrowLimit: borrowLimit.toFixed(2),
     totalDebtValue: totalDebtValue.toFixed(2),
+    maxBorrowAmount,
     approveAsset,
     supply,
     withdraw,
@@ -324,7 +372,10 @@ export function useMultiMarketLending(asset, decimals = 18) {
     refetchAll,
     isPending: isPending || transactionPending,
     isConfirming: transactionPending && !isPending,
-    isConfirmed: Boolean(transactionHash) && !transactionPending && !transactionError,
+    isConfirmed:
+      Boolean(transactionHash) &&
+      !transactionPending &&
+      !transactionError,
     txHash: transactionHash,
     error: transactionError || error,
   };
