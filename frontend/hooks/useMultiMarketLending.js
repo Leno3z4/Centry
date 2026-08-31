@@ -4,11 +4,13 @@ import {
   useChainId,
   usePublicClient,
   useReadContract,
+  useReadContracts,
   useWriteContract,
 } from 'wagmi';
 import { formatUnits, maxUint256, parseUnits } from 'viem';
 import { CONTRACT_ADDRESSES, hasAddress } from '../constants/contracts';
-import { ERC20_ABI, LENDING_POOL_ABI } from '../constants/abis';
+import { ACTIVE_MARKETS } from '../constants/markets';
+import { ERC20_ABI, LENDING_POOL_ABI, ORACLE_ABI } from '../constants/abis';
 import { arcTestnet } from '../config/multiWagmi';
 
 const ZERO = 0n;
@@ -84,6 +86,7 @@ export function useMultiMarketLending(asset, decimals = 18) {
     query: commonQuery,
   });
 
+  // These two values are account-wide in the CentryLendingPool contract.
   const { data: healthFactorRaw, refetch: refetchHealth } = useReadContract({
     address: CONTRACT_ADDRESSES.lendingPool,
     abi: LENDING_POOL_ABI,
@@ -97,6 +100,32 @@ export function useMultiMarketLending(asset, decimals = 18) {
     abi: LENDING_POOL_ABI,
     functionName: 'borrowPower',
     args: [address],
+    query: walletQuery,
+  });
+
+  // The pool does not currently expose totalDebtValue(user), so derive the
+  // same USD debt value from every live reserve using the pool's per-market
+  // borrowBalance values and the same oracle prices used by the pool.
+  const globalDebtContracts = ACTIVE_MARKETS.flatMap((market) => [
+    {
+      address: CONTRACT_ADDRESSES.lendingPool,
+      abi: LENDING_POOL_ABI,
+      functionName: 'borrowBalance',
+      args: [address, market.address],
+    },
+    {
+      address: CONTRACT_ADDRESSES.oracle,
+      abi: ORACLE_ABI,
+      functionName: 'getPrice',
+      args: [market.address],
+    },
+  ]);
+
+  const {
+    data: globalDebtResults,
+    refetch: refetchGlobalDebt,
+  } = useReadContracts({
+    contracts: globalDebtContracts,
     query: walletQuery,
   });
 
@@ -189,6 +218,7 @@ export function useMultiMarketLending(asset, decimals = 18) {
       refetchUserBorrow(),
       refetchHealth(),
       refetchBorrowPower(),
+      refetchGlobalDebt(),
       refetchBalance(),
       refetchAllowance(),
     ]);
@@ -198,27 +228,74 @@ export function useMultiMarketLending(asset, decimals = 18) {
   const supplyBalance = formatDynamic(supplyBalanceRaw, decimals);
   const borrowBalance = formatDynamic(borrowBalanceRaw, decimals);
   const allowance = formatDynamic(allowanceRaw, decimals);
-  const healthIsInfinite = healthFactorRaw !== undefined && healthFactorRaw >= MAX_UINT256 - 1000n;
-  const healthFactorNumber = healthFactorRaw === undefined || healthIsInfinite
-    ? null
-    : Number(formatUnits(healthFactorRaw, 18));
-  const healthFactor = healthFactorRaw === undefined
-    ? '—'
-    : healthIsInfinite
-      ? '∞'
-      : healthFactorNumber.toFixed(2);
+
+  const healthIsInfinite =
+    healthFactorRaw !== undefined &&
+    healthFactorRaw >= MAX_UINT256 - 1000n;
+
+  const healthFactorNumber =
+    healthFactorRaw === undefined || healthIsInfinite
+      ? null
+      : Number(formatUnits(healthFactorRaw, 18));
+
+  const healthFactor =
+    healthFactorRaw === undefined
+      ? '—'
+      : healthIsInfinite
+        ? '∞'
+        : healthFactorNumber.toFixed(2);
+
+  // The visual percentage is derived only from the account-wide onchain
+  // health factor. It must not depend on the currently selected market.
   const healthFactorPercent =
-    !supplyBalanceRaw || !borrowBalanceRaw || borrowBalanceRaw === ZERO
-      ? 100
-      : healthFactorNumber === null || !Number.isFinite(healthFactorNumber)
-        ? 0
-        : Math.round(Math.min(Math.max((1 - 1 / healthFactorNumber) * 100, 0), 100));
+    healthFactorRaw === undefined
+      ? 0
+      : healthIsInfinite
+        ? 100
+        : healthFactorNumber === null || !Number.isFinite(healthFactorNumber)
+          ? 0
+          : Math.round(
+              Math.min(
+                Math.max((1 - 1 / healthFactorNumber) * 100, 0),
+                100,
+              ),
+            );
+
+  let totalDebtValue = 0;
+  let globalDebtReady = Boolean(address) && Array.isArray(globalDebtResults);
+
+  if (Array.isArray(globalDebtResults)) {
+    for (let index = 0; index < ACTIVE_MARKETS.length; index += 1) {
+      const borrowResult = globalDebtResults[index * 2];
+      const priceResult = globalDebtResults[index * 2 + 1];
+
+      if (
+        borrowResult?.status !== 'success' ||
+        priceResult?.status !== 'success'
+      ) {
+        globalDebtReady = false;
+        continue;
+      }
+
+      const amountRaw = borrowResult.result ?? ZERO;
+      const priceRaw = Array.isArray(priceResult.result)
+        ? priceResult.result[0]
+        : ZERO;
+      const market = ACTIVE_MARKETS[index];
+
+      totalDebtValue += Number(
+        formatUnits(
+          (amountRaw * priceRaw),
+          market.decimals + 18,
+        ),
+      );
+    }
+  }
 
   const totalBorrowPower = Number(formatUnits(borrowPowerRaw ?? ZERO, 18));
-  const currentDebt = Number(borrowBalance);
-  const borrowLimit = Number.isFinite(totalBorrowPower)
-    ? Math.max(totalBorrowPower - currentDebt, 0)
-    : 0;
+  const borrowLimit = globalDebtReady && Number.isFinite(totalBorrowPower)
+    ? Math.max(totalBorrowPower - totalDebtValue, 0)
+    : totalBorrowPower;
 
   return {
     configured,
@@ -238,6 +315,7 @@ export function useMultiMarketLending(asset, decimals = 18) {
     healthFactorPercent,
     borrowPower: totalBorrowPower.toFixed(2),
     borrowLimit: borrowLimit.toFixed(2),
+    totalDebtValue: totalDebtValue.toFixed(2),
     approveAsset,
     supply,
     withdraw,
