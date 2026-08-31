@@ -38,7 +38,12 @@ export function useMultiMarketLending(asset, decimals = 18) {
     enabled: configured && Boolean(address) && correctNetwork,
   };
 
-  const { data: reserveConfigRaw, refetch: refetchReserve } = useReadContract({
+  const {
+    data: reserveConfigRaw,
+    refetch: refetchReserve,
+    isLoading: reserveLoading,
+    isFetching: reserveFetching,
+  } = useReadContract({
     address: CONTRACT_ADDRESSES.lendingPool,
     abi: LENDING_POOL_ABI,
     functionName: 'getReserveConfig',
@@ -86,8 +91,6 @@ export function useMultiMarketLending(asset, decimals = 18) {
     query: commonQuery,
   });
 
-  // Actual ERC-20 cash held by the pool for this reserve. This is the
-  // hard ceiling for borrowing the selected asset.
   const { data: poolCashRaw, refetch: refetchPoolCash } = useReadContract({
     address: asset,
     abi: ERC20_ABI,
@@ -96,7 +99,6 @@ export function useMultiMarketLending(asset, decimals = 18) {
     query: commonQuery,
   });
 
-  // Account-wide risk values from CentryLendingPool.
   const { data: healthFactorRaw, refetch: refetchHealth } = useReadContract({
     address: CONTRACT_ADDRESSES.lendingPool,
     abi: LENDING_POOL_ABI,
@@ -113,10 +115,6 @@ export function useMultiMarketLending(asset, decimals = 18) {
     query: walletQuery,
   });
 
-  // Reconstruct account-wide debt in USD using the same reserve borrow reads
-  // and Chronicle prices used by the pool. A price is only required when the
-  // user actually has debt in that asset, so an unavailable zero-debt market
-  // cannot incorrectly reduce the selected market's max to zero.
   const globalDebtContracts = ACTIVE_MARKETS.flatMap((market) => [
     {
       address: CONTRACT_ADDRESSES.lendingPool,
@@ -138,6 +136,23 @@ export function useMultiMarketLending(asset, decimals = 18) {
   } = useReadContracts({
     contracts: globalDebtContracts,
     query: walletQuery,
+  });
+
+  const selectedMarket = ACTIVE_MARKETS.find(
+    (market) => market.address?.toLowerCase() === asset?.toLowerCase(),
+  );
+
+  const {
+    data: selectedPriceResult,
+    refetch: refetchSelectedPrice,
+  } = useReadContract({
+    address: CONTRACT_ADDRESSES.oracle,
+    abi: ORACLE_ABI,
+    functionName: 'getPrice',
+    args: [asset],
+    query: {
+      enabled: configured && correctNetwork && Boolean(selectedMarket),
+    },
   });
 
   const { data: walletBalanceRaw, refetch: refetchBalance } = useReadContract({
@@ -253,6 +268,7 @@ export function useMultiMarketLending(asset, decimals = 18) {
       refetchHealth(),
       refetchBorrowPower(),
       refetchGlobalDebt(),
+      refetchSelectedPrice(),
       refetchBalance(),
       refetchAllowance(),
     ]);
@@ -308,8 +324,6 @@ export function useMultiMarketLending(asset, decimals = 18) {
         continue;
       }
 
-      // A market with zero debt does not need a readable price for the
-      // account-wide remaining borrow calculation.
       if (amountRaw === ZERO) {
         continue;
       }
@@ -346,19 +360,12 @@ export function useMultiMarketLending(asset, decimals = 18) {
       ? Number(formatUnits(remainingBorrowPowerRaw, 18))
       : 0;
 
-  const selectedPriceIndex = ACTIVE_MARKETS.findIndex(
-    (market) => market.address?.toLowerCase() === asset?.toLowerCase(),
-  );
-  const selectedPriceRaw =
-    selectedPriceIndex >= 0
-      ? globalDebtResults?.[selectedPriceIndex * 2 + 1]?.result?.[0]
-      : undefined;
+  const selectedPriceRaw = Array.isArray(selectedPriceResult)
+    ? selectedPriceResult[0]
+    : ZERO;
 
-  // Max selected-asset borrow is constrained by BOTH account risk capacity
-  // and actual cash held by that reserve.
   const riskLimitedBorrowRaw =
     globalDebtReady &&
-    selectedPriceRaw &&
     selectedPriceRaw > ZERO
       ? (remainingBorrowPowerRaw * (TEN ** BigInt(decimals))) /
         selectedPriceRaw
@@ -376,7 +383,11 @@ export function useMultiMarketLending(asset, decimals = 18) {
   return {
     configured,
     correctNetwork,
-    reserveActive: Boolean(reserveConfigRaw?.[0]),
+    reserveLoading: reserveLoading || reserveFetching,
+    reserveActive:
+      reserveConfigRaw === undefined
+        ? null
+        : Boolean(reserveConfigRaw[0]),
     reserveConfig: reserveConfigRaw,
     walletBalance,
     supplyBalance,
