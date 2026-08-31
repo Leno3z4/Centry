@@ -19,20 +19,25 @@ const LIVE_MARKETS = MARKETS.filter(
 );
 const ARC_CHAIN_ID = 5042002;
 
+// Tower's current Arc testnet quote payload is being returned in a
+// 12-decimal display scale for the output values we receive. Keep the raw
+// quote untouched when building the transaction; this constant is display-only.
+const TOWER_QUOTE_DISPLAY_DECIMALS = 12;
+
 function safeNumber(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function formatTokenAmount(raw, decimals, symbol) {
-  if (raw == null || decimals == null) return '—';
+function formatQuoteAmount(raw, symbol) {
+  if (raw == null) return '—';
   try {
-    const formatted = formatUnits(BigInt(String(raw)), Number(decimals));
+    const formatted = formatUnits(BigInt(String(raw)), TOWER_QUOTE_DISPLAY_DECIMALS);
     const number = Number(formatted);
     if (!Number.isFinite(number)) return `${formatted} ${symbol}`;
     return `${number.toLocaleString(undefined, {
       minimumFractionDigits: 0,
-      maximumFractionDigits: Math.min(Number(decimals), 8),
+      maximumFractionDigits: 8,
     })} ${symbol}`;
   } catch {
     return '—';
@@ -42,9 +47,7 @@ function formatTokenAmount(raw, decimals, symbol) {
 function formatPriceImpact(value) {
   const parsed = safeNumber(value);
   if (parsed == null) return '—';
-  // Tower documents 0.02 as 2%; some responses may surface a bps-style value.
-  const percent = parsed > 100 ? parsed / 100 : parsed < 1 ? parsed * 100 : parsed;
-  return `${percent.toLocaleString(undefined, { maximumFractionDigits: 2 })}%`;
+  return `${parsed.toLocaleString(undefined, { maximumFractionDigits: 2 })}%`;
 }
 
 function errorText(error) {
@@ -136,16 +139,10 @@ function SwapContent() {
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [stage, setStage] = useState('idle');
+  const requestIdRef = useRef(0);
 
   const fromMarket = LIVE_MARKETS.find((market) => market.id === fromId) || LIVE_MARKETS[0];
   const toMarket = LIVE_MARKETS.find((market) => market.id === toId) || LIVE_MARKETS[1] || LIVE_MARKETS[0];
-
-  const { data: outputDecimals } = useReadContract({
-    address: toMarket?.address,
-    abi: ERC20_ABI,
-    functionName: 'decimals',
-    query: { enabled: Boolean(toMarket?.address) },
-  });
 
   const { data: inputDecimals } = useReadContract({
     address: fromMarket?.address,
@@ -155,7 +152,6 @@ function SwapContent() {
   });
 
   const fromTokenDecimals = Number(inputDecimals ?? fromMarket?.decimals ?? 6);
-  const toTokenDecimals = Number(outputDecimals ?? toMarket?.decimals ?? 6);
 
   const slippageBps = useMemo(() => {
     const parsed = Number(slippage);
@@ -172,7 +168,56 @@ function SwapContent() {
     }
   }, [amount, fromTokenDecimals]);
 
-  const clearQuote = () => {
+  useEffect(() => {
+    const requestId = ++requestIdRef.current;
+
+    if (!amountRaw || !fromMarket?.address || !toMarket?.address) {
+      setQuote(null);
+      setError('');
+      setStage('idle');
+      return undefined;
+    }
+
+    setQuote(null);
+    setError('');
+    setNotice('');
+    setStage('quoting');
+
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch('/api/tower/swap/quote', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            inputToken: fromMarket.address,
+            outputToken: toMarket.address,
+            inputAmount: amountRaw,
+            slippageTolerance: slippageBps,
+          }),
+        });
+
+        const result = await response.json();
+        if (requestId !== requestIdRef.current) return;
+
+        if (!response.ok || !result.success) {
+          throw new Error(result.error || 'Tower could not find a route.');
+        }
+
+        setQuote(result.data);
+        setStage('quoted');
+      } catch (caughtError) {
+        if (requestId !== requestIdRef.current) return;
+        setQuote(null);
+        setError(errorText(caughtError));
+        setStage('idle');
+      }
+    }, 450);
+
+    return () => window.clearTimeout(timer);
+  }, [amountRaw, fromMarket?.address, toMarket?.address, slippageBps]);
+
+  const invalidateQuote = () => {
+    requestIdRef.current += 1;
     setQuote(null);
     setSwapTx(null);
     setNotice('');
@@ -181,9 +226,10 @@ function SwapContent() {
   };
 
   const swapTokens = () => {
+    const currentFrom = fromId;
     setFromId(toId);
-    setToId(fromId);
-    clearQuote();
+    setToId(currentFrom);
+    invalidateQuote();
   };
 
   const changeFrom = (next) => {
@@ -192,41 +238,12 @@ function SwapContent() {
       const replacement = LIVE_MARKETS.find((market) => market.id !== next);
       if (replacement) setToId(replacement.id);
     }
-    clearQuote();
+    invalidateQuote();
   };
 
-  const getQuote = async () => {
-    if (!amountRaw || !fromMarket?.address || !toMarket?.address) return;
-
-    setNotice('');
-    setError('');
-    setQuote(null);
-    setStage('quoting');
-
-    try {
-      const response = await fetch('/api/tower/swap/quote', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          // Keep the known-working address-based Tower request.
-          inputToken: fromMarket.address,
-          outputToken: toMarket.address,
-          inputAmount: amountRaw,
-          slippageTolerance: slippageBps,
-        }),
-      });
-
-      const result = await response.json();
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || 'Tower could not find a route.');
-      }
-
-      setQuote(result.data);
-      setStage('quoted');
-    } catch (caughtError) {
-      setError(errorText(caughtError));
-      setStage('idle');
-    }
+  const changeTo = (next) => {
+    setToId(next);
+    invalidateQuote();
   };
 
   const buildAndSwap = async () => {
@@ -292,8 +309,8 @@ function SwapContent() {
   });
 
   const isBusy = walletPending || ['quoting', 'building', 'approval', 'swapping'].includes(stage);
-  const outputAmount = quote ? formatTokenAmount(quote.outputAmount, toTokenDecimals, toMarket.symbol) : '—';
-  const minOutput = quote ? formatTokenAmount(quote.minOut, toTokenDecimals, toMarket.symbol) : '—';
+  const outputAmount = quote ? formatQuoteAmount(quote.outputAmount, toMarket.symbol) : '—';
+  const minOutput = quote ? formatQuoteAmount(quote.minOut, toMarket.symbol) : '—';
   const quoteReady = Boolean(
     quote?.outputAmount &&
     quote?.minOut &&
@@ -332,10 +349,7 @@ function SwapContent() {
                   value={amount}
                   onChange={(event) => {
                     const value = event.target.value;
-                    if (value === '' || /^\d*(\.\d*)?$/.test(value)) {
-                      setAmount(value);
-                      clearQuote();
-                    }
+                    if (value === '' || /^\d*(\.\d*)?$/.test(value)) setAmount(value);
                   }}
                 />
                 <TokenDropdown value={fromId} markets={LIVE_MARKETS} onChange={changeFrom} label="Input token" />
@@ -352,16 +366,13 @@ function SwapContent() {
                   className={styles.amountInput}
                   type="text"
                   readOnly
-                  placeholder="Quote appears here"
+                  placeholder={stage === 'quoting' ? 'Finding route…' : 'Quote appears here'}
                   value={quote ? outputAmount : ''}
                 />
                 <TokenDropdown
                   value={toId}
                   markets={LIVE_MARKETS.filter((market) => market.id !== fromId)}
-                  onChange={(next) => {
-                    setToId(next);
-                    clearQuote();
-                  }}
+                  onChange={changeTo}
                   label="Output token"
                 />
               </div>
@@ -375,10 +386,7 @@ function SwapContent() {
               value={slippage}
               onChange={(event) => {
                 const value = event.target.value;
-                if (value === '' || /^\d*(\.\d*)?$/.test(value)) {
-                  setSlippage(value);
-                  clearQuote();
-                }
+                if (value === '' || /^\d*(\.\d*)?$/.test(value)) setSlippage(value);
               }}
               aria-label="Slippage percentage"
               inputMode="decimal"
@@ -396,20 +404,20 @@ function SwapContent() {
             </div>
           )}
 
-          {!quote || !quoteReady ? (
-            <button type="button" className={styles.primaryButton} disabled={!amountRaw || isBusy} onClick={getQuote}>
-              {stage === 'quoting' ? 'Finding best route…' : quote ? 'Refresh quote' : 'Get quote'}
+          {error && <div className={`${styles.notice} ${styles.noticeError}`}>{error}</div>}
+
+          {quoteReady ? (
+            <button type="button" className={styles.primaryButton} disabled={!isConnected || isBusy || swapReceipt.isLoading} onClick={buildAndSwap}>
+              {!isConnected ? 'Connect wallet to swap' : stage === 'approval' ? 'Approve in wallet…' : stage === 'swapping' ? 'Confirm swap…' : stage === 'building' ? 'Preparing swap…' : stage === 'submitted' && !swapReceipt.isSuccess ? 'Swap submitted' : 'Swap'}
             </button>
           ) : (
-            <button type="button" className={styles.primaryButton} disabled={!isConnected || isBusy || swapReceipt.isLoading} onClick={buildAndSwap}>
-              {!isConnected ? 'Connect wallet to swap' : stage === 'approval' ? 'Approve in wallet…' : stage === 'swapping' ? 'Confirm swap…' : stage === 'submitted' && !swapReceipt.isSuccess ? 'Swap submitted' : 'Swap'}
-            </button>
+            <div className={styles.quoteStatus}>
+              {stage === 'quoting' ? 'Finding the best route…' : amountRaw ? 'Waiting for a quote…' : 'Enter an amount to get a quote.'}
+            </div>
           )}
 
           {!isConnected && <div className={styles.notice}>Connect your wallet to execute the swap. Quotes can still be requested.</div>}
           {notice && <div className={`${styles.notice} ${styles.noticeSuccess}`}>{notice}</div>}
-          {error && <div className={`${styles.notice} ${styles.noticeError}`}>{error}</div>}
-          {quote && !quoteReady && !error && <div className={`${styles.notice} ${styles.noticeError}`}>Tower returned an incomplete quote. Refresh the quote or try another pair.</div>}
           {swapReceipt.isSuccess && <div className={`${styles.notice} ${styles.noticeSuccess}`}>Swap confirmed on Arc.</div>}
         </section>
 
