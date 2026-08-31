@@ -1,7 +1,9 @@
 .page {
   display: grid;
+  width: 100%;
+  max-width: 920px;
   gap: 24px;
-  max-width: 900px;
+  overflow: visible;
 }
 
 .header {
@@ -57,16 +59,24 @@
 }
 
 .card {
+  position: relative;
+  display: grid;
+  width: 100%;
+  max-width: 920px;
+  box-sizing: border-box;
+  gap: 12px;
   padding: 24px;
   border: 1px solid #282033;
   border-radius: 20px;
   background: linear-gradient(145deg, #100b1a, #0b0813);
   box-shadow: 0 20px 60px rgba(0,0,0,.2);
+  overflow: visible;
 }
 
 .fieldBlock,
 .amountBlock {
   display: grid;
+  min-width: 0;
   gap: 8px;
 }
 
@@ -80,6 +90,8 @@
 
 .chainPicker {
   position: relative;
+  z-index: 2;
+  min-width: 0;
 }
 
 .chainTrigger,
@@ -112,11 +124,13 @@
 
 .chainMenu {
   position: absolute;
-  z-index: 40;
+  z-index: 100;
   top: calc(100% + 8px);
   left: 0;
   right: 0;
   display: grid;
+  max-height: 260px;
+  overflow: auto;
   gap: 4px;
   padding: 7px;
   border: 1px solid #3a2a4f;
@@ -191,6 +205,7 @@
 .chevron,
 .check,
 .locked {
+  flex: 0 0 auto;
   color: #9e8eac;
   font-size: 12px;
 }
@@ -208,31 +223,18 @@
   font-size: 9px;
 }
 
-.arrow {
-  display: grid;
-  width: 42px;
-  height: 42px;
-  margin: 10px auto;
-  place-items: center;
-  border: 1px solid #3d2d52;
-  border-radius: 50%;
-  background: #100b18;
-  color: #cbb8dc;
-  font-size: 21px;
-  line-height: 1;
-}
-
 .arrowButton {
   display: grid;
   width: 46px;
   height: 46px;
-  margin: 12px auto;
+  margin: -2px auto;
   place-items: center;
+  align-self: center;
+  justify-self: center;
   border: 1px solid #4b3563;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #1f152c, #0f0a17 70%);
+  background: radial-gradient(circle at 35% 30%, #21152f, #0f0a17 72%);
   color: #d6c2e8;
-  font: inherit;
   font-size: 21px;
   line-height: 1;
   cursor: pointer;
@@ -258,7 +260,7 @@
 }
 
 .amountBlock {
-  margin-top: 20px;
+  margin-top: 12px;
 }
 
 .amountHeader {
@@ -293,6 +295,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
+  min-width: 0;
   padding: 16px;
   border: 1px solid #292139;
   border-radius: 16px;
@@ -324,7 +327,7 @@
 .summary {
   display: grid;
   gap: 1px;
-  margin-top: 18px;
+  margin-top: 8px;
   overflow: hidden;
   border: 1px solid #292039;
   border-radius: 14px;
@@ -333,6 +336,7 @@
 
 .summary div {
   display: flex;
+  min-width: 0;
   justify-content: space-between;
   gap: 18px;
   padding: 12px 14px;
@@ -345,15 +349,17 @@
 }
 
 .summary strong {
+  min-width: 0;
   color: #e9e1f3;
   font-size: 11px;
   text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .primaryButton {
   width: 100%;
   min-height: 52px;
-  margin-top: 18px;
+  margin-top: 8px;
   border: 1px solid transparent;
   border-radius: 13px;
   background: linear-gradient(100deg, #8b4eff, #b67cff);
@@ -390,6 +396,7 @@
   color: #a594b6;
   font-size: 12px;
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .notice code {
@@ -425,7 +432,7 @@
   }
 
   .amountField {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr auto;
   }
 
   .locked {
