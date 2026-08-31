@@ -1,60 +1,121 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { useAccount, useSendTransaction, useWaitForTransactionReceipt } from 'wagmi';
+import { useMemo, useRef, useState, useEffect } from 'react';
+import { useAccount, useReadContract, useSendTransaction, useWaitForTransactionReceipt } from 'wagmi';
 import { formatUnits, parseUnits } from 'viem';
 import { Providers } from '../../../components/Providers';
 import { AppShell } from '../../../components/AppShell';
 import { MARKETS } from '../../../constants/markets';
+import { ERC20_ABI } from '../../../constants/abis';
 import styles from './swap.module.css';
 
-const LIVE_MARKETS = MARKETS.filter((market) => market.status === 'live' && market.address);
+const LIVE_MARKETS = MARKETS.filter(
+  (market) => market.status === 'live' && market.address,
+);
 const ARC_CHAIN_ID = 5042002;
 
-function formatQuoteAmount(raw, decimals, symbol) {
-  if (raw == null) return '—';
+function toSafeNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatTokenAmount(raw, decimals, symbol) {
+  if (raw == null || decimals == null) return '—';
   try {
-    return `${Number(formatUnits(BigInt(raw), decimals)).toLocaleString(undefined, {
-      maximumFractionDigits: Math.min(decimals, 8),
+    const value = Number(formatUnits(BigInt(raw), decimals));
+    if (!Number.isFinite(value)) return '—';
+    return `${value.toLocaleString(undefined, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: Math.min(Number(decimals), 8),
     })} ${symbol}`;
   } catch {
     return '—';
   }
 }
 
+function normalizePriceImpact(value) {
+  const parsed = toSafeNumber(value);
+  if (parsed == null) return null;
+  if (parsed > 100) return parsed / 100;
+  if (parsed >= 1) return parsed;
+  return parsed * 100;
+}
+
 function errorText(error) {
   return error?.shortMessage || error?.message || 'The transaction could not be completed.';
 }
 
-function isUsableQuote(quote) {
-  if (!quote || typeof quote !== 'object') return false;
+function TokenDropdown({ value, markets, onChange, label }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const selected = markets.find((market) => market.id === value) || markets[0];
 
-  try {
-    const output = BigInt(String(quote.outputAmount || '0'));
-    const minOut = BigInt(String(quote.minOut || '0'));
-    const priceImpact = Number(quote.priceImpact);
-    const feeBps = Number(quote.feeBps);
+  useEffect(() => {
+    const handlePointerDown = (event) => {
+      if (!rootRef.current?.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, []);
 
-    return (
-      output > 0n &&
-      minOut > 0n &&
-      minOut <= output &&
-      Number.isFinite(priceImpact) &&
-      priceImpact >= 0 &&
-      priceImpact <= 100 &&
-      (!Number.isFinite(feeBps) || (feeBps >= 0 && feeBps <= 10000))
-    );
-  } catch {
-    return false;
-  }
-}
+  return (
+    <div className={styles.tokenPicker} ref={rootRef}>
+      <button
+        type="button"
+        className={`${styles.tokenTrigger} ${open ? styles.tokenTriggerOpen : ''}`}
+        onClick={() => setOpen((current) => !current)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={label}
+      >
+        <span className={`${styles.tokenIcon} ${styles[`tokenIcon_${selected?.id || 'usdc'}`]}`}>
+          {selected?.symbol === 'cirBTC' ? '₿' : selected?.symbol === 'EURC' ? '€' : '$'}
+        </span>
+        <span className={styles.tokenTriggerText}>
+          <strong>{selected?.symbol || '—'}</strong>
+          <small>{selected?.name || ''}</small>
+        </span>
+        <span className={`${styles.tokenChevron} ${open ? styles.tokenChevronOpen : ''}`}>⌄</span>
+      </button>
 
-function isDecimalInput(value) {
-  return /^\d*(\.\d*)?$/.test(value);
+      {open && (
+        <div className={styles.tokenMenu} role="listbox" aria-label={label}>
+          {markets.map((market) => (
+            <button
+              key={market.id}
+              type="button"
+              role="option"
+              aria-selected={market.id === value}
+              className={`${styles.tokenOption} ${market.id === value ? styles.tokenOptionActive : ''}`}
+              onClick={() => {
+                onChange(market.id);
+                setOpen(false);
+              }}
+            >
+              <span className={`${styles.tokenIcon} ${styles[`tokenIcon_${market.id}`]}`}>
+                {market.symbol === 'cirBTC' ? '₿' : market.symbol === 'EURC' ? '€' : '$'}
+              </span>
+              <span className={styles.tokenOptionText}>
+                <strong>{market.symbol}</strong>
+                <small>{market.name}</small>
+              </span>
+              {market.id === value ? <span className={styles.tokenCheck}>✓</span> : null}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function Page() {
-  return <Providers><AppShell><SwapContent /></AppShell></Providers>;
+  return (
+    <Providers>
+      <AppShell>
+        <SwapContent />
+      </AppShell>
+    </Providers>
+  );
 }
 
 function SwapContent() {
@@ -73,20 +134,37 @@ function SwapContent() {
   const fromMarket = LIVE_MARKETS.find((market) => market.id === fromId) || LIVE_MARKETS[0];
   const toMarket = LIVE_MARKETS.find((market) => market.id === toId) || LIVE_MARKETS[1] || LIVE_MARKETS[0];
 
+  const { data: outputDecimalsOnchain } = useReadContract({
+    address: toMarket?.address,
+    abi: ERC20_ABI,
+    functionName: 'decimals',
+    query: { enabled: Boolean(toMarket?.address) },
+  });
+
+  const { data: inputDecimalsOnchain } = useReadContract({
+    address: fromMarket?.address,
+    abi: ERC20_ABI,
+    functionName: 'decimals',
+    query: { enabled: Boolean(fromMarket?.address) },
+  });
+
+  const fromDecimals = Number(inputDecimalsOnchain ?? fromMarket?.decimals ?? 6);
+  const toDecimals = Number(outputDecimalsOnchain ?? toMarket?.decimals ?? 6);
+
   const slippageBps = useMemo(() => {
     const parsed = Number(slippage);
     if (!Number.isFinite(parsed) || parsed < 0) return 50;
-    return Math.round(parsed * 100);
+    return Math.min(5000, Math.round(parsed * 100));
   }, [slippage]);
 
   const amountRaw = useMemo(() => {
     if (!amount || !fromMarket) return '';
     try {
-      return parseUnits(amount, fromMarket.decimals).toString();
+      return parseUnits(amount, fromDecimals).toString();
     } catch {
       return '';
     }
-  }, [amount, fromMarket]);
+  }, [amount, fromMarket, fromDecimals]);
 
   const clearQuote = () => {
     setQuote(null);
@@ -126,10 +204,6 @@ function SwapContent() {
       const result = await response.json();
       if (!response.ok || !result.success) {
         throw new Error(result.error || 'Tower could not find a route.');
-      }
-
-      if (!isUsableQuote(result.data)) {
-        throw new Error('Tower returned an invalid or unsafe quote for this trade size. Try a smaller amount or a different pair.');
       }
 
       setQuote(result.data);
@@ -178,6 +252,7 @@ function SwapContent() {
 
       setNotice('Approve the swap transaction in your wallet.');
       setStage('swapping');
+
       const hash = await sendTransactionAsync({
         to: transactions.swap.to,
         data: transactions.swap.data,
@@ -202,9 +277,22 @@ function SwapContent() {
   });
 
   const isBusy = walletPending || ['quoting', 'building', 'approval', 'swapping'].includes(stage);
-  const outputAmount = quote ? formatQuoteAmount(quote.outputAmount, toMarket.decimals, toMarket.symbol) : '—';
-  const minOutput = quote ? formatQuoteAmount(quote.minOut, toMarket.decimals, toMarket.symbol) : '—';
-  const quotePriceImpact = quote ? Number(quote.priceImpact) : null;
+  const outputAmount = quote
+    ? formatTokenAmount(quote.outputAmount, toDecimals, toMarket.symbol)
+    : '—';
+  const minOutput = quote
+    ? formatTokenAmount(quote.minOut, toDecimals, toMarket.symbol)
+    : '—';
+  const priceImpact = quote ? normalizePriceImpact(quote.priceImpact) : null;
+  const quoteLooksUsable = Boolean(
+    quote?.outputAmount &&
+    quote?.minOut &&
+    BigInt(quote.minOut) > 0n &&
+    BigInt(quote.outputAmount) >= BigInt(quote.minOut) &&
+    priceImpact != null &&
+    priceImpact >= 0 &&
+    priceImpact < 100,
+  );
 
   return (
     <div className={styles.page}>
@@ -219,7 +307,9 @@ function SwapContent() {
 
       <div className={styles.panelGrid}>
         <section className={styles.panel}>
-          <div className={styles.panelHead}><div><span className={styles.kicker}>ARC SWAP</span><h2>Exchange</h2></div></div>
+          <div className={styles.panelHead}>
+            <div><span className={styles.kicker}>ARC SWAP</span><h2>Exchange</h2></div>
+          </div>
 
           <div className={styles.swapStack}>
             <div className={styles.assetField}>
@@ -231,20 +321,28 @@ function SwapContent() {
                   type="text"
                   inputMode="decimal"
                   autoComplete="off"
-                  spellCheck="false"
                   placeholder="0.00"
                   value={amount}
-                  onWheel={(event) => event.currentTarget.blur()}
                   onChange={(event) => {
                     const value = event.target.value;
-                    if (!isDecimalInput(value)) return;
-                    setAmount(value);
-                    clearQuote();
+                    if (value === '' || /^\d*(\.\d*)?$/.test(value)) {
+                      setAmount(value);
+                      clearQuote();
+                    }
                   }}
                 />
-                <select className={styles.tokenSelect} value={fromId} onChange={(event) => { const next = event.target.value; setFromId(next); if (next === toId) setToId(fromId); clearQuote(); }} aria-label="Input token">
-                  {LIVE_MARKETS.map((market) => <option key={market.id} value={market.id}>{market.symbol}</option>)}
-                </select>
+                <TokenDropdown
+                  value={fromId}
+                  markets={LIVE_MARKETS}
+                  onChange={(next) => {
+                    setFromId(next);
+                    if (next === toId) {
+                      setToId(fromId);
+                    }
+                    clearQuote();
+                  }}
+                  label="Input token"
+                />
               </div>
             </div>
 
@@ -254,46 +352,51 @@ function SwapContent() {
               <label htmlFor="swap-output">You receive</label>
               <div className={styles.assetRow}>
                 <input id="swap-output" className={styles.amountInput} type="text" readOnly placeholder="Quote appears here" value={quote ? outputAmount : ''} />
-                <select className={styles.tokenSelect} value={toId} onChange={(event) => { setToId(event.target.value); clearQuote(); }} aria-label="Output token">
-                  {LIVE_MARKETS.filter((market) => market.id !== fromId).map((market) => <option key={market.id} value={market.id}>{market.symbol}</option>)}
-                </select>
+                <TokenDropdown
+                  value={toId}
+                  markets={LIVE_MARKETS.filter((market) => market.id !== fromId)}
+                  onChange={(next) => {
+                    setToId(next);
+                    clearQuote();
+                  }}
+                  label="Output token"
+                />
               </div>
             </div>
           </div>
 
           <div className={styles.metaRow}>
             <span>Slippage</span>
-            <div className={styles.slippageControl}>
-              <input
-                className={styles.slippageInput}
-                type="text"
-                inputMode="decimal"
-                value={slippage}
-                onWheel={(event) => event.currentTarget.blur()}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  if (!isDecimalInput(value)) return;
+            <input
+              className={styles.slippageInput}
+              value={slippage}
+              onChange={(event) => {
+                const value = event.target.value;
+                if (value === '' || /^\d*(\.\d*)?$/.test(value)) {
                   setSlippage(value);
                   clearQuote();
-                }}
-                aria-label="Slippage percentage"
-              />
-              <span>%</span>
-            </div>
+                }
+              }}
+              aria-label="Slippage percentage"
+              inputMode="decimal"
+            />
+            <span>%</span>
           </div>
 
           {quote && (
             <div className={styles.quoteCard}>
               <div className={styles.quoteRow}><span>Expected output</span><strong className={styles.quoteOutput}>{outputAmount}</strong></div>
               <div className={styles.quoteRow}><span>Minimum received</span><strong>{minOutput}</strong></div>
-              <div className={styles.quoteRow}><span>Price impact</span><strong>{quotePriceImpact.toFixed(2)}%</strong></div>
+              <div className={styles.quoteRow}><span>Price impact</span><strong>{priceImpact == null ? '—' : `${priceImpact.toLocaleString(undefined, { maximumFractionDigits: 2 })}%`}</strong></div>
               <div className={styles.quoteRow}><span>Fee</span><strong>{quote.feeBps != null ? `${quote.feeBps} bps` : '—'}</strong></div>
               <div className={styles.quoteRow}><span>Route</span><strong>{quote.dexName || quote.dexId || 'Tower'}</strong></div>
             </div>
           )}
 
-          {!quote ? (
-            <button type="button" className={styles.primaryButton} disabled={!amountRaw || isBusy} onClick={getQuote}>{stage === 'quoting' ? 'Finding best route…' : 'Get quote'}</button>
+          {!quote || !quoteLooksUsable ? (
+            <button type="button" className={styles.primaryButton} disabled={!amountRaw || isBusy} onClick={getQuote}>
+              {stage === 'quoting' ? 'Finding best route…' : quote ? 'Refresh quote' : 'Get quote'}
+            </button>
           ) : (
             <button type="button" className={styles.primaryButton} disabled={!isConnected || isBusy || swapReceipt.isLoading} onClick={buildAndSwap}>
               {!isConnected ? 'Connect wallet to swap' : stage === 'approval' ? 'Approve in wallet…' : stage === 'swapping' ? 'Confirm swap…' : stage === 'submitted' && !swapReceipt.isSuccess ? 'Swap submitted' : 'Swap'}
@@ -303,12 +406,15 @@ function SwapContent() {
           {!isConnected && <div className={styles.notice}>Connect your wallet to execute the swap. Quotes can still be requested.</div>}
           {notice && <div className={`${styles.notice} ${styles.noticeSuccess}`}>{notice}</div>}
           {error && <div className={`${styles.notice} ${styles.noticeError}`}>{error}</div>}
+          {quote && !quoteLooksUsable && !error && <div className={`${styles.notice} ${styles.noticeError}`}>Tower returned an unusable quote. Refresh the quote or try a smaller amount.</div>}
           {swapReceipt.isSuccess && <div className={`${styles.notice} ${styles.noticeSuccess}`}>Swap confirmed on Arc.</div>}
         </section>
 
         <section className={`${styles.panel} ${styles.bridgeCard}`}>
-          <div className={styles.panelHead}><div><span className={styles.kicker}>BRING FUNDS TO ARC</span><h2>Cross-chain USDC</h2></div></div>
-          <p className={styles.bridgeDescription}>USDC bridging will use Tower's cross-chain endpoint and Circle's transfer flow. It will be added here separately from normal swaps.</p>
+          <div className={styles.panelHead}>
+            <div><span className={styles.kicker}>BRING FUNDS TO ARC</span><h2>Cross-chain USDC</h2></div>
+          </div>
+          <p className={styles.bridgeDescription}>USDC bridging will use Tower's cross-chain endpoint and Circle's transfer flow. It stays separate from normal swaps.</p>
           <div className={styles.quoteCard}>
             <div className={styles.bridgeRow}><span>Asset</span><strong>USDC</strong></div>
             <div className={styles.bridgeRow}><span>Destination</span><strong>Arc Testnet</strong></div>
