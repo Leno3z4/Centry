@@ -14,24 +14,14 @@ function validToken(value) {
   return isAddress || isSymbol;
 }
 
-function isUsableQuote(quote) {
+function isStructurallyValidQuote(quote) {
   if (!quote || typeof quote !== 'object') return false;
 
   try {
     const output = BigInt(String(quote.outputAmount || '0'));
     const minOut = BigInt(String(quote.minOut || '0'));
-    const priceImpact = Number(quote.priceImpact);
-    const feeBps = Number(quote.feeBps);
 
-    return (
-      output > 0n &&
-      minOut > 0n &&
-      minOut <= output &&
-      Number.isFinite(priceImpact) &&
-      priceImpact >= 0 &&
-      priceImpact <= 100 &&
-      (!Number.isFinite(feeBps) || (feeBps >= 0 && feeBps <= 10000))
-    );
+    return output > 0n && minOut > 0n && minOut <= output;
   } catch {
     return false;
   }
@@ -58,7 +48,7 @@ export async function POST(request) {
       );
     }
 
-    if (inputToken.toLowerCase() === outputToken.toLowerCase()) {
+    if (String(inputToken).toLowerCase() === String(outputToken).toLowerCase()) {
       return NextResponse.json(
         { success: false, error: 'Input and output tokens must be different.' },
         { status: 400 },
@@ -89,11 +79,11 @@ export async function POST(request) {
 
     const data = await response.json();
 
-    if (response.ok && data?.success === true && !isUsableQuote(data.data)) {
+    if (response.ok && data?.success === true && !isStructurallyValidQuote(data.data)) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Tower returned an invalid or unsafe quote for this trade size. Try a smaller amount or another pair.',
+          error: 'Tower returned an incomplete quote. Try refreshing the quote or using a smaller amount.',
         },
         { status: 422 },
       );
