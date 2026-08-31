@@ -12,13 +12,20 @@ function PreventInputWheelChanges() {
   useEffect(() => {
     const handleWheel = (event) => {
       const target = event.target;
-      if (target instanceof HTMLInputElement && target.type === 'number') {
-        target.blur();
-      }
+      if (!(target instanceof HTMLInputElement)) return;
+      if (target.type !== 'number') return;
+
+      // Do not let a wheel/trackpad gesture mutate a focused numeric field.
+      event.preventDefault();
+      target.blur();
     };
 
-    document.addEventListener('wheel', handleWheel, { passive: true });
-    return () => document.removeEventListener('wheel', handleWheel);
+    document.addEventListener('wheel', handleWheel, {
+      capture: true,
+      passive: false,
+    });
+
+    return () => document.removeEventListener('wheel', handleWheel, true);
   }, []);
 
   return null;
