@@ -24,7 +24,8 @@ interface ICentryVeCENTRevenueTransferHook {
 /// @dev A keeper computes the epoch allocation from realized protocol revenue and
 ///      the protocol's published voting-power accounting, then commits a Merkle
 ///      root. The contract only pays funded, proven allocations and never mints
-///      rewards or stores a fixed emission rate.
+///      rewards or stores a fixed emission rate. The NFT id is the position key,
+///      so an already-earned allocation follows the transferable position.
 contract CentryVeCENTRevenueRewards is Ownable2Step, ReentrancyGuard, ICentryVeCENTRevenueTransferHook {
     using SafeERC20 for IERC20;
 
@@ -65,10 +66,7 @@ contract CentryVeCENTRevenueRewards is Ownable2Step, ReentrancyGuard, ICentryVeC
     error TransferHookUnauthorized();
     error InvalidProof();
 
-    event Funded(
-        address indexed from,
-        uint256 amount
-    );
+    event Funded(address indexed from, uint256 amount);
 
     event EpochQueued(
         uint256 indexed epoch,
@@ -358,7 +356,6 @@ contract CentryVeCENTRevenueRewards is Ownable2Step, ReentrancyGuard, ICentryVeC
                 keccak256(
                     abi.encode(
                         tokenId,
-                        owner,
                         amount
                     )
                 )
