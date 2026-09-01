@@ -17,6 +17,15 @@ import "../interfaces/ICentrySwapAdapter.sol";
 contract CentryTowerSwapAdapter is Ownable2Step, ReentrancyGuard, ICentrySwapAdapter {
     using SafeERC20 for IERC20;
 
+    struct SwapParams {
+        address tokenIn;
+        address tokenOut;
+        uint256 amountIn;
+        uint256 minAmountOut;
+        address recipient;
+        bytes data;
+    }
+
     address public immutable towerSwapExecutor;
     address public authorizedCaller;
 
@@ -96,40 +105,37 @@ contract CentryTowerSwapAdapter is Ownable2Step, ReentrancyGuard, ICentrySwapAda
             revert InvalidAmount();
         }
 
-        amountOut = _executeSwap(
-            tokenIn,
-            tokenOut,
-            amountIn,
-            minAmountOut,
-            recipient,
-            data
-        );
+        SwapParams memory params = SwapParams({
+            tokenIn: tokenIn,
+            tokenOut: tokenOut,
+            amountIn: amountIn,
+            minAmountOut: minAmountOut,
+            recipient: recipient,
+            data: data
+        });
+
+        amountOut = _executeSwap(params);
     }
 
     function _executeSwap(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 minAmountOut,
-        address recipient,
-        bytes calldata data
+        SwapParams memory params
     ) internal returns (uint256 amountOut) {
-        IERC20 input = IERC20(tokenIn);
-        IERC20 output = IERC20(tokenOut);
+        IERC20 input = IERC20(params.tokenIn);
+        IERC20 output = IERC20(params.tokenOut);
 
         uint256 inputBalanceBefore = input.balanceOf(address(this));
         uint256 outputBalanceBefore = output.balanceOf(address(this));
 
-        if (inputBalanceBefore < amountIn) {
+        if (inputBalanceBefore < params.amountIn) {
             revert InvalidAmount();
         }
 
         input.forceApprove(
             towerSwapExecutor,
-            amountIn
+            params.amountIn
         );
 
-        (bool success, ) = towerSwapExecutor.call(data);
+        (bool success, ) = towerSwapExecutor.call(params.data);
 
         input.forceApprove(
             towerSwapExecutor,
@@ -149,21 +155,28 @@ contract CentryTowerSwapAdapter is Ownable2Step, ReentrancyGuard, ICentrySwapAda
 
         amountOut = outputBalanceAfter - outputBalanceBefore;
 
-        if (amountOut < minAmountOut) {
+        if (amountOut < params.minAmountOut) {
             revert MinOutputNotMet();
         }
 
         output.safeTransfer(
-            recipient,
+            params.recipient,
             amountOut
         );
 
+        _emitSwapExecuted(params, amountOut);
+    }
+
+    function _emitSwapExecuted(
+        SwapParams memory params,
+        uint256 amountOut
+    ) internal {
         emit TowerSwapExecuted(
-            tokenIn,
-            tokenOut,
-            amountIn,
+            params.tokenIn,
+            params.tokenOut,
+            params.amountIn,
             amountOut,
-            recipient
+            params.recipient
         );
     }
 }
