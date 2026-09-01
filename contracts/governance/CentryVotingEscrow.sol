@@ -10,10 +10,6 @@ interface ICentryRewardsCheckpoint {
     function checkpoint(uint256 tokenId) external returns (uint256);
 }
 
-/// @title Centry Voting Escrow
-/// @notice Transferable veCENT NFTs. Every NFT is an independent locked CENT position.
-/// @dev Wallets may own multiple positions. The lock, expiry and voting power
-///      belong to the NFT and move with it when transferred.
 contract CentryVotingEscrow is ERC721, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -88,9 +84,7 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
         admin = msg.sender;
     }
 
-    function setRewardsController(
-        address controller
-    ) external {
+    function setRewardsController(address controller) external {
         if (msg.sender != admin) {
             revert NotAdmin();
         }
@@ -153,6 +147,10 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
             msg.sender,
             tokenId
         );
+
+        // Initialize reward accounting at the exact moment the position is
+        // minted. Future voting-power seconds will then accrue normally.
+        _checkpointRewards(tokenId);
 
         emit LockCreated(
             msg.sender,
@@ -253,9 +251,7 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
         );
     }
 
-    function withdraw(
-        uint256 tokenId
-    ) external nonReentrant {
+    function withdraw(uint256 tokenId) external nonReentrant {
         if (ownerOf(tokenId) != msg.sender) {
             revert NoLock();
         }
@@ -392,9 +388,7 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
         _checkpointVotingPower(tokenId);
     }
 
-    function _checkpointRewards(
-        uint256 tokenId
-    ) internal {
+    function _checkpointRewards(uint256 tokenId) internal {
         address controller = rewardsController;
 
         if (controller == address(0)) {
@@ -404,9 +398,7 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
         ICentryRewardsCheckpoint(controller).checkpoint(tokenId);
     }
 
-    function _checkpointVotingPower(
-        uint256 tokenId
-    ) internal {
+    function _checkpointVotingPower(uint256 tokenId) internal {
         Lock memory lock = locks[tokenId];
         uint256 checkpoint = lastVotingPowerCheckpoint[tokenId];
 
