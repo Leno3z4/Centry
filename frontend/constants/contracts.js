@@ -12,6 +12,7 @@ export const CONTRACT_ADDRESSES = Object.freeze({
   oracle: '0xC82424D224dbfBF9D41a9cBe5cA2AdF762572fC6',
   centryToken: '0x9DCa0659D4625949eCE5B73CFb826B2c8eD287cB',
   veCentry: '0xb9cC70321317b92B45bd8813E54F1f3BcfACfA38',
+  veCentryRewards: '',
   revenueDistributor: '0xc54A67aBF5a5697F2dDCd75d6165a17E73048271',
 
   collateralAssets: Object.freeze({
