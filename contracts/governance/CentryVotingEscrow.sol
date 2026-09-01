@@ -6,6 +6,10 @@ import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5
 import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/token/ERC20/utils/SafeERC20.sol";
 import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/utils/ReentrancyGuard.sol";
 
+interface ICentryRewardsCheckpoint {
+    function checkpoint(uint256 tokenId) external returns (uint256);
+}
+
 /// @title Centry Voting Escrow
 /// @notice Transferable veCENT NFTs. Every NFT is an independent locked CENT position.
 /// @dev Wallets may own multiple positions. The lock, expiry and voting power
@@ -23,6 +27,8 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
     }
 
     IERC20 public immutable token;
+    address public immutable admin;
+    address public rewardsController;
 
     uint256 public nextTokenId = 1;
 
@@ -30,9 +36,6 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
     mapping(address => uint256[]) private _ownedTokenIds;
     mapping(uint256 => uint256) private _ownedTokenIndex;
 
-    // Integral of voting power over time, measured in voting-power seconds.
-    // Reward contracts can use this value to distribute rewards accurately
-    // even when a position's amount or expiry changes between claims.
     mapping(uint256 => uint256) public cumulativeVotingPowerTime;
     mapping(uint256 => uint64) public lastVotingPowerCheckpoint;
 
@@ -41,8 +44,12 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
     error LockExpired();
     error LockNotExpired();
     error NoLock();
+    error NotAdmin();
+    error RewardsControllerAlreadySet();
     error ZeroAmount();
     error ZeroToken();
+
+    event RewardsControllerSet(address indexed controller);
 
     event LockCreated(
         address indexed user,
@@ -78,6 +85,23 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
         }
 
         token = IERC20(token_);
+        admin = msg.sender;
+    }
+
+    function setRewardsController(
+        address controller
+    ) external {
+        if (msg.sender != admin) {
+            revert NotAdmin();
+        }
+
+        if (rewardsController != address(0)) {
+            revert RewardsControllerAlreadySet();
+        }
+
+        rewardsController = controller;
+
+        emit RewardsControllerSet(controller);
     }
 
     function createLock(
@@ -156,6 +180,7 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
             revert LockExpired();
         }
 
+        _checkpointRewards(tokenId);
         _checkpointVotingPower(tokenId);
 
         if (
@@ -216,6 +241,7 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
             revert InvalidDuration();
         }
 
+        _checkpointRewards(tokenId);
         _checkpointVotingPower(tokenId);
 
         lock.end = uint64(newEnd);
@@ -240,6 +266,7 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
             revert LockNotExpired();
         }
 
+        _checkpointRewards(tokenId);
         _checkpointVotingPower(tokenId);
 
         delete locks[tokenId];
@@ -315,8 +342,6 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
         }
     }
 
-    /// @notice Returns the accumulated voting-power seconds including the
-    ///         current uncheckpointed interval.
     function votingPowerTime(
         uint256 tokenId
     ) public view returns (uint256) {
@@ -367,6 +392,18 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
         _checkpointVotingPower(tokenId);
     }
 
+    function _checkpointRewards(
+        uint256 tokenId
+    ) internal {
+        address controller = rewardsController;
+
+        if (controller == address(0)) {
+            return;
+        }
+
+        ICentryRewardsCheckpoint(controller).checkpoint(tokenId);
+    }
+
     function _checkpointVotingPower(
         uint256 tokenId
     ) internal {
@@ -408,6 +445,15 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
         uint256 tokenId,
         address auth
     ) internal override returns (address previousOwner) {
+        previousOwner = _ownerOf(tokenId);
+
+        if (
+            previousOwner != address(0) &&
+            to != previousOwner
+        ) {
+            _checkpointRewards(tokenId);
+        }
+
         previousOwner = super._update(
             to,
             tokenId,
