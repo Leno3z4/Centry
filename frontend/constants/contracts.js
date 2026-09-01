@@ -13,9 +13,6 @@ export const CONTRACT_ADDRESSES = Object.freeze({
   centryToken: '0x9DCa0659D4625949eCE5B73CFb826B2c8eD287cB',
   veCentry: '0xb9cC70321317b92B45bd8813E54F1f3BcfACfA38',
   revenueDistributor: '0xc54A67aBF5a5697F2dDCd75d6165a17E73048271',
-  selfRepayingFactory: '0xB5988B4A0D8E9e3AF491B987b9F7c0150397999E',
-  yieldVault: '0x58d5b2d559895EF8446f2a38Dde1D29CE6d00E41',
-  testYieldStrategy: '0x5cF01Da1F06b602E3315678a88F605305fE58029',
 
   collateralAssets: Object.freeze({
     ETH: '0x54a4dd95bf4ABb6cF02014ca62C3FbbDeE040B6a',
