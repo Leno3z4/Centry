@@ -9,18 +9,19 @@ import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5
 interface ICentryVeCENT {
     function ownerOf(uint256 tokenId) external view returns (address);
 
-    function votingPowerTime(uint256 tokenId)
+    function votingPower(uint256 tokenId)
         external
         view
         returns (uint256);
 }
 
 /// @title Centry veCENT Rewards
-/// @notice Distributes funded CENT rewards according to the time-integral of
-///         each veCENT position's voting power.
-/// @dev Rewards follow the NFT, not the wallet. The reward amount is derived
-///      from on-chain voting-power seconds, so transfers do not reset accrual.
-///      A future self-repay vault can be configured as the reward recipient.
+/// @notice Emits CENT to veCENT positions according to time-weighted voting
+///         power.
+/// @dev Reward accrual is checkpointed before lock mutations and transfers by
+///      the veCENT contract. The reward rate is fixed for the lifetime of this
+///      distributor, while funding determines how long rewards remain payable.
+///      A future self-repay vault can receive rewards directly.
 contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -29,15 +30,19 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
     IERC20 public immutable rewardToken;
     ICentryVeCENT public immutable veCENT;
 
-    // Reward token wei emitted for one WAD of voting-power per second,
-    // represented with WAD precision.
+    // CENT wei emitted per 1 WAD of voting power per second.
     uint256 public immutable rewardRate;
 
-    mapping(uint256 => uint256) public rewardIntegralPaid;
+    // The first funding transaction starts the reward program. Positions do
+    // not earn anything before this timestamp.
+    uint256 public programStart;
+
+    mapping(uint256 => uint256) public lastCheckpoint;
+    mapping(uint256 => uint256) public accruedRewards;
     mapping(uint256 => uint256) public claimedRewards;
 
-    // Optional self-repay recipient. The configured owner is recorded so a
-    // transfer automatically invalidates the old self-repay configuration.
+    // Optional self-repay recipient. It is valid only while the same address
+    // remains the owner of the veCENT NFT.
     mapping(uint256 => address) public selfRepayRecipient;
     mapping(uint256 => address) public selfRepayOwner;
 
@@ -49,24 +54,24 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
     error RewardRateZero();
     error RecipientZero();
 
-    event Funded(
-        address indexed from,
+    event Funded(address indexed from, uint256 amount);
+    event RewardsCheckpointed(
+        uint256 indexed tokenId,
+        uint256 votingPower,
+        uint256 elapsed,
         uint256 amount
     );
-
     event RewardsClaimed(
         uint256 indexed tokenId,
         address indexed owner,
         address indexed recipient,
         uint256 amount
     );
-
     event SelfRepayConfigured(
         uint256 indexed tokenId,
         address indexed owner,
         address indexed recipient
     );
-
     event SelfRepayDisabled(
         uint256 indexed tokenId,
         address indexed owner
@@ -95,7 +100,7 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
         rewardRate = rewardRate_;
     }
 
-    /// @notice Fund the controller with CENT that can be claimed by lockers.
+    /// @notice Fund future rewards. The first funding starts the program.
     function fund(uint256 amount) external nonReentrant {
         if (amount == 0) {
             revert AmountZero();
@@ -107,34 +112,55 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
             amount
         );
 
-        emit Funded(
-            msg.sender,
-            amount
-        );
+        if (programStart == 0) {
+            programStart = block.timestamp;
+        }
+
+        emit Funded(msg.sender, amount);
     }
 
-    /// @notice Current gross reward accrued by a veCENT position.
+    /// @notice Checkpoint a position's currently accrued rewards.
+    /// @dev Anyone may call this. It is also called by veCENT before any lock
+    ///      mutation or transfer, preserving the reward history of the old
+    ///      position state.
+    function checkpoint(uint256 tokenId)
+        external
+        returns (uint256 amount)
+    {
+        amount = _checkpoint(tokenId);
+    }
+
     function earned(uint256 tokenId)
         public
         view
         returns (uint256)
     {
-        veCENT.ownerOf(tokenId);
+        address owner = veCENT.ownerOf(tokenId);
+        owner;
 
-        uint256 integral = veCENT.votingPowerTime(tokenId);
-        uint256 paid = rewardIntegralPaid[tokenId];
+        uint256 accrued = accruedRewards[tokenId];
+        uint256 checkpointTime = lastCheckpoint[tokenId];
 
-        if (integral <= paid) {
-            return 0;
+        if (programStart == 0) {
+            return accrued;
         }
 
-        return (
-            (integral - paid) *
-            rewardRate
+        uint256 start = checkpointTime > programStart
+            ? checkpointTime
+            : programStart;
+
+        if (start == 0 || block.timestamp <= start) {
+            return accrued;
+        }
+
+        uint256 elapsed = block.timestamp - start;
+        uint256 power = veCENT.votingPower(tokenId);
+
+        return accrued + (
+            power * elapsed * rewardRate
         ) / WAD;
     }
 
-    /// @notice Claim rewards to the current veCENT owner.
     function claim(uint256 tokenId)
         external
         nonReentrant
@@ -146,12 +172,33 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
             revert NotOwner();
         }
 
-        amount = _claim(tokenId, owner);
+        _checkpoint(tokenId);
+        amount = accruedRewards[tokenId];
+
+        if (amount == 0) {
+            revert AmountZero();
+        }
+
+        if (rewardToken.balanceOf(address(this)) < amount) {
+            revert InsufficientRewards();
+        }
+
+        accruedRewards[tokenId] = 0;
+        claimedRewards[tokenId] += amount;
+
+        rewardToken.safeTransfer(
+            owner,
+            amount
+        );
+
+        emit RewardsClaimed(
+            tokenId,
+            owner,
+            owner,
+            amount
+        );
     }
 
-    /// @notice Claim rewards to a caller-selected recipient.
-    /// @dev Intended for the user's own wallet or a future Centry self-repay
-    ///      vault. The caller must still own the veCENT NFT.
     function claimTo(
         uint256 tokenId,
         address recipient
@@ -166,12 +213,33 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
             revert RecipientZero();
         }
 
-        amount = _claim(tokenId, recipient);
+        _checkpoint(tokenId);
+        amount = accruedRewards[tokenId];
+
+        if (amount == 0) {
+            revert AmountZero();
+        }
+
+        if (rewardToken.balanceOf(address(this)) < amount) {
+            revert InsufficientRewards();
+        }
+
+        accruedRewards[tokenId] = 0;
+        claimedRewards[tokenId] += amount;
+
+        rewardToken.safeTransfer(
+            recipient,
+            amount
+        );
+
+        emit RewardsClaimed(
+            tokenId,
+            owner,
+            recipient,
+            amount
+        );
     }
 
-    /// @notice Configure a recipient for automated self-repay reward routing.
-    /// @dev The configuration becomes invalid automatically if the NFT is
-    ///      transferred because the recorded owner no longer matches ownerOf.
     function setSelfRepayRecipient(
         uint256 tokenId,
         address recipient
@@ -214,10 +282,10 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
         );
     }
 
-    /// @notice Claim to the configured self-repay recipient.
-    /// @dev The recipient itself is only a destination. A later Centry vault
-    ///      will be responsible for swapping CENT into the user's debt asset
-    ///      and calling LendingPool.repayFor(user, amount).
+    /// @notice Claim to the configured self-repay destination.
+    /// @dev The destination is intentionally separate from the reward
+    ///      distributor. A later executor/vault will swap CENT into the user's
+    ///      debt asset and call LendingPool.repayFor().
     function claimForSelfRepay(
         uint256 tokenId
     ) external nonReentrant returns (uint256 amount) {
@@ -231,24 +299,8 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
             revert NotSelfRepayOwner();
         }
 
-        amount = _claim(tokenId, recipient);
-    }
-
-    function _claim(
-        uint256 tokenId,
-        address recipient
-    ) internal returns (uint256 amount) {
-        uint256 integral = veCENT.votingPowerTime(tokenId);
-        uint256 paid = rewardIntegralPaid[tokenId];
-
-        if (integral <= paid) {
-            revert AmountZero();
-        }
-
-        amount = (
-            (integral - paid) *
-            rewardRate
-        ) / WAD;
+        _checkpoint(tokenId);
+        amount = accruedRewards[tokenId];
 
         if (amount == 0) {
             revert AmountZero();
@@ -258,7 +310,7 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
             revert InsufficientRewards();
         }
 
-        rewardIntegralPaid[tokenId] = integral;
+        accruedRewards[tokenId] = 0;
         claimedRewards[tokenId] += amount;
 
         rewardToken.safeTransfer(
@@ -268,8 +320,48 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
 
         emit RewardsClaimed(
             tokenId,
-            veCENT.ownerOf(tokenId),
+            owner,
             recipient,
+            amount
+        );
+    }
+
+    function _checkpoint(
+        uint256 tokenId
+    ) internal returns (uint256 amount) {
+        veCENT.ownerOf(tokenId);
+
+        uint256 nowTime = block.timestamp;
+        uint256 previous = lastCheckpoint[tokenId];
+
+        if (programStart == 0) {
+            lastCheckpoint[tokenId] = nowTime;
+            return 0;
+        }
+
+        uint256 start = previous > programStart
+            ? previous
+            : programStart;
+
+        if (nowTime <= start) {
+            lastCheckpoint[tokenId] = nowTime;
+            return 0;
+        }
+
+        uint256 elapsed = nowTime - start;
+        uint256 power = veCENT.votingPower(tokenId);
+
+        amount = (
+            power * elapsed * rewardRate
+        ) / WAD;
+
+        accruedRewards[tokenId] += amount;
+        lastCheckpoint[tokenId] = nowTime;
+
+        emit RewardsCheckpointed(
+            tokenId,
+            power,
+            elapsed,
             amount
         );
     }
