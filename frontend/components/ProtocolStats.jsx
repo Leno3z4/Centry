@@ -6,16 +6,6 @@ import { formatUnits } from 'viem';
 import { CONTRACT_ADDRESSES } from '../constants/contracts';
 import { LENDING_POOL_ABI } from '../constants/abis';
 
-const factoryAbi = [
-  {
-    type: 'function',
-    name: 'allPositionsLength',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-];
-
 const formatUsdc = (value) => {
   if (value === undefined) return '—';
   const amount = Number(formatUnits(value, 6));
@@ -43,13 +33,6 @@ export default function ProtocolStats() {
     functionName: 'currentBorrow',
     args: [CONTRACT_ADDRESSES.USDC],
     query: { enabled },
-  });
-
-  const { data: positions } = useReadContract({
-    address: CONTRACT_ADDRESSES.selfRepayingFactory,
-    abi: factoryAbi,
-    functionName: 'allPositionsLength',
-    query: { enabled: Boolean(CONTRACT_ADDRESSES.selfRepayingFactory) },
   });
 
   const supplyNumber = supply === undefined ? null : Number(formatUnits(supply, 6));
@@ -81,11 +64,6 @@ export default function ProtocolStats() {
           <span>Utilization</span>
           <strong>{utilization}</strong>
           <em>Borrowed / supplied</em>
-        </article>
-        <article className="protocol-stat">
-          <span>Self-repaying positions</span>
-          <strong>{positions === undefined ? '—' : positions.toString()}</strong>
-          <em>Created by the factory</em>
         </article>
       </div>
     </section>
