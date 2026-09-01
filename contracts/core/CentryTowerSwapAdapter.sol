@@ -88,10 +88,32 @@ contract CentryTowerSwapAdapter is Ownable2Step, ReentrancyGuard, ICentrySwapAda
             revert InvalidAddress();
         }
 
+        if (tokenIn == tokenOut) {
+            revert InvalidOutput();
+        }
+
         if (amountIn == 0) {
             revert InvalidAmount();
         }
 
+        amountOut = _executeSwap(
+            tokenIn,
+            tokenOut,
+            amountIn,
+            minAmountOut,
+            recipient,
+            data
+        );
+    }
+
+    function _executeSwap(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minAmountOut,
+        address recipient,
+        bytes calldata data
+    ) internal returns (uint256 amountOut) {
         IERC20 input = IERC20(tokenIn);
         IERC20 output = IERC20(tokenOut);
 
