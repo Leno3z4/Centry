@@ -28,6 +28,13 @@ interface ICentryVeCENTOwnership {
 contract CentrySelfRepayExecutor is Ownable2Step, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
+    struct RepayResult {
+        uint256 rewardAmount;
+        uint256 debtAssetReceived;
+        uint256 debtRepaid;
+        uint256 leftover;
+    }
+
     ICentryLendingPool public immutable lendingPool;
     ICentryVeCENTRewards public immutable rewardsController;
     IERC20 public immutable rewardToken;
@@ -137,65 +144,67 @@ contract CentrySelfRepayExecutor is Ownable2Step, ReentrancyGuard {
             revert NotTokenOwner();
         }
 
+        _validateExecution(debtAsset);
+
+        RepayResult memory result = _executeRepay(
+            tokenId,
+            borrower,
+            debtAsset,
+            minDebtAssetOut,
+            swapData
+        );
+
+        emit SelfRepayExecuted(
+            tokenId,
+            borrower,
+            debtAsset,
+            result.rewardAmount,
+            result.debtAssetReceived,
+            result.debtRepaid,
+            result.leftover
+        );
+
+        return (
+            result.rewardAmount,
+            result.debtAssetReceived,
+            result.debtRepaid,
+            result.leftover
+        );
+    }
+
+    function _validateExecution(
+        address debtAsset
+    ) internal view {
         if (!supportedDebtAsset[debtAsset]) {
             revert UnsupportedDebtAsset();
         }
 
-        address adapter = swapAdapter;
-
-        if (adapter == address(0)) {
+        if (swapAdapter == address(0)) {
             revert InvalidAdapter();
         }
+    }
 
-        rewardAmount = rewardsController.claimForSelfRepay(
+    function _executeRepay(
+        uint256 tokenId,
+        address borrower,
+        address debtAsset,
+        uint256 minDebtAssetOut,
+        bytes calldata swapData
+    ) internal returns (RepayResult memory result) {
+        result.rewardAmount = rewardsController.claimForSelfRepay(
             tokenId
         );
 
-        if (rewardAmount == 0) {
+        if (result.rewardAmount == 0) {
             revert AmountZero();
         }
 
-        rewardToken.forceApprove(
-            adapter,
-            rewardAmount
+        result.debtAssetReceived = _swapRewards(
+            debtAsset,
+            result.rewardAmount,
+            minDebtAssetOut,
+            swapData
         );
-
-        uint256 debtAssetBalanceBefore = IERC20(debtAsset)
-            .balanceOf(address(this));
-
-        uint256 reportedAmountOut = ICentrySwapAdapter(adapter)
-            .swap(
-                address(rewardToken),
-                debtAsset,
-                rewardAmount,
-                minDebtAssetOut,
-                address(this),
-                swapData
-            );
-
-        rewardToken.forceApprove(
-            adapter,
-            0
-        );
-
-        uint256 debtAssetBalanceAfter = IERC20(debtAsset)
-            .balanceOf(address(this));
-
-        if (debtAssetBalanceAfter <= debtAssetBalanceBefore) {
-            revert SwapOutputInvalid();
-        }
-
-        debtAssetReceived = (
-            debtAssetBalanceAfter -
-            debtAssetBalanceBefore
-        );
-
-        if (
-            debtAssetReceived < minDebtAssetOut ||
-            reportedAmountOut < minDebtAssetOut
-        ) {
-            revert MinOutputNotMet();
-        }
 
         uint256 currentDebt = lendingPool.borrowBalance(
             borrower,
@@ -205,27 +214,85 @@ contract CentrySelfRepayExecutor is Ownable2Step, ReentrancyGuard {
         if (currentDebt == 0) {
             IERC20(debtAsset).safeTransfer(
                 borrower,
-                debtAssetReceived
+                result.debtAssetReceived
             );
 
-            emit SelfRepayExecuted(
-                tokenId,
-                borrower,
-                debtAsset,
-                rewardAmount,
-                debtAssetReceived,
-                0,
-                debtAssetReceived
-            );
-
-            return (
-                rewardAmount,
-                debtAssetReceived,
-                0,
-                debtAssetReceived
-            );
+            result.leftover = result.debtAssetReceived;
+            return result;
         }
 
+        result.debtRepaid = _repayDebt(
+            debtAsset,
+            borrower,
+            result.debtAssetReceived,
+            currentDebt
+        );
+
+        result.leftover = result.debtAssetReceived - result.debtRepaid;
+
+        if (result.leftover > 0) {
+            IERC20(debtAsset).safeTransfer(
+                borrower,
+                result.leftover
+            );
+        }
+    }
+
+    function _swapRewards(
+        address debtAsset,
+        uint256 rewardAmount,
+        uint256 minDebtAssetOut,
+        bytes calldata swapData
+    ) internal returns (uint256 debtAssetReceived) {
+        address adapter = swapAdapter;
+
+        rewardToken.forceApprove(
+            adapter,
+            rewardAmount
+        );
+
+        uint256 balanceBefore = IERC20(debtAsset).balanceOf(
+            address(this)
+        );
+
+        uint256 reportedAmountOut = ICentrySwapAdapter(adapter).swap(
+            address(rewardToken),
+            debtAsset,
+            rewardAmount,
+            minDebtAssetOut,
+            address(this),
+            swapData
+        );
+
+        rewardToken.forceApprove(
+            adapter,
+            0
+        );
+
+        uint256 balanceAfter = IERC20(debtAsset).balanceOf(
+            address(this)
+        );
+
+        if (balanceAfter <= balanceBefore) {
+            revert SwapOutputInvalid();
+        }
+
+        debtAssetReceived = balanceAfter - balanceBefore;
+
+        if (
+            debtAssetReceived < minDebtAssetOut ||
+            reportedAmountOut < minDebtAssetOut
+        ) {
+            revert MinOutputNotMet();
+        }
+    }
+
+    function _repayDebt(
+        address debtAsset,
+        address borrower,
+        uint256 debtAssetReceived,
+        uint256 currentDebt
+    ) internal returns (uint256 debtRepaid) {
         debtRepaid = debtAssetReceived < currentDebt
             ? debtAssetReceived
             : currentDebt;
@@ -244,25 +311,6 @@ contract CentrySelfRepayExecutor is Ownable2Step, ReentrancyGuard {
         IERC20(debtAsset).forceApprove(
             address(lendingPool),
             0
-        );
-
-        leftover = debtAssetReceived - debtRepaid;
-
-        if (leftover > 0) {
-            IERC20(debtAsset).safeTransfer(
-                borrower,
-                leftover
-            );
-        }
-
-        emit SelfRepayExecuted(
-            tokenId,
-            borrower,
-            debtAsset,
-            rewardAmount,
-            debtAssetReceived,
-            debtRepaid,
-            leftover
         );
     }
 }
