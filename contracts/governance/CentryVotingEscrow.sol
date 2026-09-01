@@ -10,6 +10,14 @@ interface ICentryRewardsCheckpoint {
     function checkpoint(uint256 tokenId) external returns (uint256);
 }
 
+interface ICentryVeCENTTransferHook {
+    function onVeCENTTransfer(
+        uint256 tokenId,
+        address from,
+        address to
+    ) external;
+}
+
 contract CentryVotingEscrow is ERC721, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -25,6 +33,7 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
     IERC20 public immutable token;
     address public immutable admin;
     address public rewardsController;
+    address public transferHook;
 
     uint256 public nextTokenId = 1;
 
@@ -37,15 +46,18 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
 
     error AmountTooLarge();
     error InvalidDuration();
+    error InvalidHook();
     error LockExpired();
     error LockNotExpired();
     error NoLock();
     error NotAdmin();
     error RewardsControllerAlreadySet();
+    error TransferHookAlreadySet();
     error ZeroAmount();
     error ZeroToken();
 
     event RewardsControllerSet(address indexed controller);
+    event TransferHookSet(address indexed hook);
 
     event LockCreated(
         address indexed user,
@@ -98,6 +110,24 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
         emit RewardsControllerSet(controller);
     }
 
+    function setTransferHook(address hook) external {
+        if (msg.sender != admin) {
+            revert NotAdmin();
+        }
+
+        if (transferHook != address(0)) {
+            revert TransferHookAlreadySet();
+        }
+
+        if (hook == address(0)) {
+            revert InvalidHook();
+        }
+
+        transferHook = hook;
+
+        emit TransferHookSet(hook);
+    }
+
     function createLock(
         uint256 amount,
         uint256 duration
@@ -148,8 +178,6 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
             tokenId
         );
 
-        // Initialize reward accounting at the exact moment the position is
-        // minted. Future voting-power seconds will then accrue normally.
         _checkpointRewards(tokenId);
 
         emit LockCreated(
@@ -470,6 +498,20 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
         if (to != address(0)) {
             _ownedTokenIndex[tokenId] = _ownedTokenIds[to].length;
             _ownedTokenIds[to].push(tokenId);
+        }
+
+        address hook = transferHook;
+
+        if (
+            hook != address(0) &&
+            previousOwner != address(0) &&
+            to != previousOwner
+        ) {
+            ICentryVeCENTTransferHook(hook).onVeCENTTransfer(
+                tokenId,
+                previousOwner,
+                to
+            );
         }
     }
 }

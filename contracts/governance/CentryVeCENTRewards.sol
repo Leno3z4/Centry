@@ -8,13 +8,12 @@ import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5
 
 interface ICentryVeCENT {
     function ownerOf(uint256 tokenId) external view returns (address);
-
-    function votingPowerTime(uint256 tokenId)
-        external
-        view
-        returns (uint256);
+    function votingPowerTime(uint256 tokenId) external view returns (uint256);
 }
 
+/// @title Centry veCENT Rewards (Legacy)
+/// @notice Legacy fixed-rate controller retained for backwards compatibility.
+/// @dev New deployments should use CentryVeCENTRevenueRewards instead.
 contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -41,26 +40,10 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
     error RecipientZero();
 
     event Funded(address indexed from, uint256 amount);
-    event RewardsCheckpointed(
-        uint256 indexed tokenId,
-        uint256 votingPowerSeconds,
-        uint256 amount
-    );
-    event RewardsClaimed(
-        uint256 indexed tokenId,
-        address indexed owner,
-        address indexed recipient,
-        uint256 amount
-    );
-    event SelfRepayConfigured(
-        uint256 indexed tokenId,
-        address indexed owner,
-        address indexed recipient
-    );
-    event SelfRepayDisabled(
-        uint256 indexed tokenId,
-        address indexed owner
-    );
+    event RewardsCheckpointed(uint256 indexed tokenId, uint256 votingPowerSeconds, uint256 amount);
+    event RewardsClaimed(uint256 indexed tokenId, address indexed owner, address indexed recipient, uint256 amount);
+    event SelfRepayConfigured(uint256 indexed tokenId, address indexed owner, address indexed recipient);
+    event SelfRepayDisabled(uint256 indexed tokenId, address indexed owner);
 
     constructor(
         IERC20 rewardToken_,
@@ -99,18 +82,11 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
         emit Funded(msg.sender, amount);
     }
 
-    function checkpoint(uint256 tokenId)
-        external
-        returns (uint256 amount)
-    {
-        amount = _checkpoint(tokenId);
+    function checkpoint(uint256 tokenId) external returns (uint256 amount) {
+        return _checkpoint(tokenId);
     }
 
-    function earned(uint256 tokenId)
-        public
-        view
-        returns (uint256)
-    {
+    function earned(uint256 tokenId) public view returns (uint256) {
         veCENT.ownerOf(tokenId);
 
         uint256 current = veCENT.votingPowerTime(tokenId);
@@ -130,11 +106,7 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
         ) / WAD;
     }
 
-    function claim(uint256 tokenId)
-        external
-        nonReentrant
-        returns (uint256 amount)
-    {
+    function claim(uint256 tokenId) external nonReentrant returns (uint256 amount) {
         address owner = veCENT.ownerOf(tokenId);
 
         if (owner != msg.sender) {
@@ -144,18 +116,10 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
         _checkpoint(tokenId);
         amount = _pay(tokenId, owner);
 
-        emit RewardsClaimed(
-            tokenId,
-            owner,
-            owner,
-            amount
-        );
+        emit RewardsClaimed(tokenId, owner, owner, amount);
     }
 
-    function claimTo(
-        uint256 tokenId,
-        address recipient
-    ) external nonReentrant returns (uint256 amount) {
+    function claimTo(uint256 tokenId, address recipient) external nonReentrant returns (uint256 amount) {
         address owner = veCENT.ownerOf(tokenId);
 
         if (owner != msg.sender) {
@@ -169,18 +133,10 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
         _checkpoint(tokenId);
         amount = _pay(tokenId, recipient);
 
-        emit RewardsClaimed(
-            tokenId,
-            owner,
-            recipient,
-            amount
-        );
+        emit RewardsClaimed(tokenId, owner, recipient, amount);
     }
 
-    function setSelfRepayRecipient(
-        uint256 tokenId,
-        address recipient
-    ) external {
+    function setSelfRepayRecipient(uint256 tokenId, address recipient) external {
         address owner = veCENT.ownerOf(tokenId);
 
         if (owner != msg.sender) {
@@ -194,16 +150,10 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
         selfRepayRecipient[tokenId] = recipient;
         selfRepayOwner[tokenId] = owner;
 
-        emit SelfRepayConfigured(
-            tokenId,
-            owner,
-            recipient
-        );
+        emit SelfRepayConfigured(tokenId, owner, recipient);
     }
 
-    function disableSelfRepay(
-        uint256 tokenId
-    ) external {
+    function disableSelfRepay(uint256 tokenId) external {
         address owner = veCENT.ownerOf(tokenId);
 
         if (owner != msg.sender) {
@@ -213,15 +163,10 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
         delete selfRepayRecipient[tokenId];
         delete selfRepayOwner[tokenId];
 
-        emit SelfRepayDisabled(
-            tokenId,
-            owner
-        );
+        emit SelfRepayDisabled(tokenId, owner);
     }
 
-    function claimForSelfRepay(
-        uint256 tokenId
-    ) external nonReentrant returns (uint256 amount) {
+    function claimForSelfRepay(uint256 tokenId) external nonReentrant returns (uint256 amount) {
         address owner = veCENT.ownerOf(tokenId);
         address recipient = selfRepayRecipient[tokenId];
 
@@ -235,17 +180,10 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
         _checkpoint(tokenId);
         amount = _pay(tokenId, recipient);
 
-        emit RewardsClaimed(
-            tokenId,
-            owner,
-            recipient,
-            amount
-        );
+        emit RewardsClaimed(tokenId, owner, recipient, amount);
     }
 
-    function _checkpoint(
-        uint256 tokenId
-    ) internal returns (uint256 amount) {
+    function _checkpoint(uint256 tokenId) internal returns (uint256 amount) {
         veCENT.ownerOf(tokenId);
 
         uint256 current = veCENT.votingPowerTime(tokenId);
@@ -271,26 +209,17 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
         accruedRewards[tokenId] += amount;
         lastVotingPowerTime[tokenId] = current;
 
-        emit RewardsCheckpointed(
-            tokenId,
-            delta,
-            amount
-        );
+        emit RewardsCheckpointed(tokenId, delta, amount);
     }
 
-    function _pay(
-        uint256 tokenId,
-        address recipient
-    ) internal returns (uint256 amount) {
+    function _pay(uint256 tokenId, address recipient) internal returns (uint256 amount) {
         amount = accruedRewards[tokenId];
 
         if (amount == 0) {
             revert AmountZero();
         }
 
-        if (
-            rewardToken.balanceOf(address(this)) < amount
-        ) {
+        if (rewardToken.balanceOf(address(this)) < amount) {
             revert InsufficientRewards();
         }
 
