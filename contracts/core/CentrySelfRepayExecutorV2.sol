@@ -64,7 +64,6 @@ contract CentrySelfRepayExecutorV2 is Ownable2Step, ReentrancyGuard {
     error InvalidAddress();
     error InvalidAdapter();
     error UnsupportedDebtAsset();
-    error NotTokenOwner();
     error AmountZero();
     error NoSwapInstructions();
     error RewardAmountExceeded();
@@ -195,72 +194,19 @@ contract CentrySelfRepayExecutorV2 is Ownable2Step, ReentrancyGuard {
         for (uint256 i = 0; i < instructions.length; i++) {
             SwapInstruction calldata instruction = instructions[i];
 
-            if (
-                instruction.debtAsset == address(0) ||
-                !supportedDebtAsset[instruction.debtAsset]
-            ) {
-                revert UnsupportedDebtAsset();
-            }
+            uint256 rewardUsed = _processInstruction(
+                tokenId,
+                borrower,
+                instruction,
+                results,
+                i
+            );
 
-            if (instruction.rewardAmountIn == 0) {
-                revert AmountZero();
-            }
-
-            totalRewardInput += instruction.rewardAmountIn;
+            totalRewardInput += rewardUsed;
 
             if (totalRewardInput > rewardAmount) {
                 revert RewardAmountExceeded();
             }
-
-            uint256 debtAssetReceived = _swap(
-                instruction.debtAsset,
-                instruction.rewardAmountIn,
-                instruction.minDebtAssetOut,
-                instruction.swapData
-            );
-
-            uint256 currentDebt = lendingPool.borrowBalance(
-                borrower,
-                instruction.debtAsset
-            );
-
-            uint256 debtRepaid;
-
-            if (currentDebt != 0) {
-                debtRepaid = _repayDebt(
-                    instruction.debtAsset,
-                    borrower,
-                    debtAssetReceived,
-                    currentDebt
-                );
-            }
-
-            uint256 leftover = debtAssetReceived - debtRepaid;
-
-            if (leftover > 0) {
-                IERC20(instruction.debtAsset).safeTransfer(
-                    borrower,
-                    leftover
-                );
-            }
-
-            results[i] = RepayResult({
-                debtAsset: instruction.debtAsset,
-                rewardAmountIn: instruction.rewardAmountIn,
-                debtAssetReceived: debtAssetReceived,
-                debtRepaid: debtRepaid,
-                leftover: leftover
-            });
-
-            emit DebtRepaidBySelfRepay(
-                tokenId,
-                borrower,
-                instruction.debtAsset,
-                instruction.rewardAmountIn,
-                debtAssetReceived,
-                debtRepaid,
-                leftover
-            );
         }
 
         uint256 rewardLeftover = rewardAmount - totalRewardInput;
@@ -280,6 +226,77 @@ contract CentrySelfRepayExecutorV2 is Ownable2Step, ReentrancyGuard {
             totalRewardInput,
             rewardLeftover
         );
+    }
+
+    function _processInstruction(
+        uint256 tokenId,
+        address borrower,
+        SwapInstruction calldata instruction,
+        RepayResult[] memory results,
+        uint256 index
+    ) internal returns (uint256 rewardUsed) {
+        if (
+            instruction.debtAsset == address(0) ||
+            !supportedDebtAsset[instruction.debtAsset]
+        ) {
+            revert UnsupportedDebtAsset();
+        }
+
+        if (instruction.rewardAmountIn == 0) {
+            revert AmountZero();
+        }
+
+        uint256 debtAssetReceived = _swap(
+            instruction.debtAsset,
+            instruction.rewardAmountIn,
+            instruction.minDebtAssetOut,
+            instruction.swapData
+        );
+
+        uint256 currentDebt = lendingPool.borrowBalance(
+            borrower,
+            instruction.debtAsset
+        );
+
+        uint256 debtRepaid;
+
+        if (currentDebt != 0) {
+            debtRepaid = _repayDebt(
+                instruction.debtAsset,
+                borrower,
+                debtAssetReceived,
+                currentDebt
+            );
+        }
+
+        uint256 leftover = debtAssetReceived - debtRepaid;
+
+        if (leftover > 0) {
+            IERC20(instruction.debtAsset).safeTransfer(
+                borrower,
+                leftover
+            );
+        }
+
+        results[index] = RepayResult({
+            debtAsset: instruction.debtAsset,
+            rewardAmountIn: instruction.rewardAmountIn,
+            debtAssetReceived: debtAssetReceived,
+            debtRepaid: debtRepaid,
+            leftover: leftover
+        });
+
+        emit DebtRepaidBySelfRepay(
+            tokenId,
+            borrower,
+            instruction.debtAsset,
+            instruction.rewardAmountIn,
+            debtAssetReceived,
+            debtRepaid,
+            leftover
+        );
+
+        return instruction.rewardAmountIn;
     }
 
     function _swap(
@@ -346,7 +363,7 @@ contract CentrySelfRepayExecutorV2 is Ownable2Step, ReentrancyGuard {
             debtRepaid
         );
 
-        debtRepaid = lendingPool.repayFor(
+        lendingPool.repayFor(
             debtAsset,
             borrower,
             debtRepaid
