@@ -15,12 +15,6 @@ interface ICentryVeCENT {
         returns (uint256);
 }
 
-/// @title Centry veCENT Rewards
-/// @notice Emits CENT to veCENT positions according to their exact
-///         time-integrated voting power.
-/// @dev The veCENT contract checkpoints this distributor before lock changes,
-///      transfers and withdrawals. A fixed emission rate is used for this
-///      deployment; protocol funding controls how much can actually be paid.
 contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -28,13 +22,10 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
 
     IERC20 public immutable rewardToken;
     ICentryVeCENT public immutable veCENT;
-
-    // CENT wei emitted per 1 WAD of voting-power-second.
     uint256 public immutable rewardRate;
 
-    // Reward accounting uses the cumulative voting-power-second counter from
-    // veCENT. This avoids using a stale instantaneous voting-power snapshot.
     mapping(uint256 => uint256) public lastVotingPowerTime;
+    mapping(uint256 => bool) public rewardInitialized;
     mapping(uint256 => uint256) public accruedRewards;
     mapping(uint256 => uint256) public claimedRewards;
 
@@ -50,26 +41,22 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
     error RecipientZero();
 
     event Funded(address indexed from, uint256 amount);
-
     event RewardsCheckpointed(
         uint256 indexed tokenId,
         uint256 votingPowerSeconds,
         uint256 amount
     );
-
     event RewardsClaimed(
         uint256 indexed tokenId,
         address indexed owner,
         address indexed recipient,
         uint256 amount
     );
-
     event SelfRepayConfigured(
         uint256 indexed tokenId,
         address indexed owner,
         address indexed recipient
     );
-
     event SelfRepayDisabled(
         uint256 indexed tokenId,
         address indexed owner
@@ -95,7 +82,6 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
 
         rewardToken = rewardToken_;
         veCENT = veCENT_;
-    
         rewardRate = rewardRate_;
     }
 
@@ -113,9 +99,6 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
         emit Funded(msg.sender, amount);
     }
 
-    /// @notice Checkpoint a position's exact accumulated voting-power seconds.
-    /// @dev Called automatically by veCENT before state changes, and callable
-    ///      by anyone so a keeper can settle inactive positions.
     function checkpoint(uint256 tokenId)
         external
         returns (uint256 amount)
@@ -131,6 +114,11 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
         veCENT.ownerOf(tokenId);
 
         uint256 current = veCENT.votingPowerTime(tokenId);
+
+        if (!rewardInitialized[tokenId]) {
+            return accruedRewards[tokenId];
+        }
+
         uint256 paid = lastVotingPowerTime[tokenId];
 
         if (current <= paid) {
@@ -261,15 +249,14 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
         veCENT.ownerOf(tokenId);
 
         uint256 current = veCENT.votingPowerTime(tokenId);
-        uint256 previous = lastVotingPowerTime[tokenId];
 
-        if (previous == 0) {
-            // New positions are initialized by the veCENT hook immediately
-            // after minting, so this branch also safely initializes positions
-            // created before a controller was attached.
+        if (!rewardInitialized[tokenId]) {
+            rewardInitialized[tokenId] = true;
             lastVotingPowerTime[tokenId] = current;
             return 0;
         }
+
+        uint256 previous = lastVotingPowerTime[tokenId];
 
         if (current <= previous) {
             return 0;
