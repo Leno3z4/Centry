@@ -1,5 +1,11 @@
 import { useState } from 'react';
-import { useAccount, useChainId, usePublicClient, useReadContract, useWriteContract } from 'wagmi';
+import {
+  useAccount,
+  useChainId,
+  usePublicClient,
+  useReadContract,
+  useWriteContract,
+} from 'wagmi';
 import { parseUnits, formatUnits } from 'viem';
 import { CONTRACT_ADDRESSES, hasAddress } from '../constants/contracts';
 import { VE_CENTRY_ABI, ERC20_ABI } from '../constants/abis';
@@ -24,10 +30,10 @@ export function useVeGovernance() {
     query: { enabled: !!address && configured && correctNetwork },
   });
 
-  const { data: tokenId } = useReadContract({
+  const { data: tokenIds, refetch: refetchTokenIds } = useReadContract({
     address: CONTRACT_ADDRESSES.veCentry,
     abi: VE_CENTRY_ABI,
-    functionName: 'tokenIdOf',
+    functionName: 'getOwnedTokenIds',
     args: address && configured ? [address] : undefined,
     query: { enabled: !!address && configured && correctNetwork },
   });
@@ -43,15 +49,7 @@ export function useVeGovernance() {
   const { data: lockedAmount } = useReadContract({
     address: CONTRACT_ADDRESSES.veCentry,
     abi: VE_CENTRY_ABI,
-    functionName: 'lockedAmount',
-    args: address && configured ? [address] : undefined,
-    query: { enabled: !!address && configured && correctNetwork },
-  });
-
-  const { data: lockEnd } = useReadContract({
-    address: CONTRACT_ADDRESSES.veCentry,
-    abi: VE_CENTRY_ABI,
-    functionName: 'lockEnd',
+    functionName: 'totalLocked',
     args: address && configured ? [address] : undefined,
     query: { enabled: !!address && configured && correctNetwork },
   });
@@ -68,7 +66,9 @@ export function useVeGovernance() {
     address: CONTRACT_ADDRESSES.centryToken,
     abi: ERC20_ABI,
     functionName: 'allowance',
-    args: address && configured ? [address, CONTRACT_ADDRESSES.veCentry] : undefined,
+    args: address && configured
+      ? [address, CONTRACT_ADDRESSES.veCentry]
+      : undefined,
     query: { enabled: !!address && configured && correctNetwork },
   });
 
@@ -113,7 +113,10 @@ export function useVeGovernance() {
       address: CONTRACT_ADDRESSES.centryToken,
       abi: ERC20_ABI,
       functionName: 'approve',
-      args: [CONTRACT_ADDRESSES.veCentry, parseUnits(amount.toString(), 18)],
+      args: [
+        CONTRACT_ADDRESSES.veCentry,
+        parseUnits(amount.toString(), 18),
+      ],
     });
 
     await refetchCentAllowance();
@@ -124,37 +127,46 @@ export function useVeGovernance() {
     address: CONTRACT_ADDRESSES.veCentry,
     abi: VE_CENTRY_ABI,
     functionName: 'createLock',
-    args: [parseUnits(amount.toString(), 18), BigInt(weeks) * 7n * 24n * 60n * 60n],
+    args: [
+      parseUnits(amount.toString(), 18),
+      BigInt(weeks) * 7n * 24n * 60n * 60n,
+    ],
   });
 
-  const increaseLock = (amount) => sendAndWait({
+  const increaseLock = (tokenId, amount) => sendAndWait({
     address: CONTRACT_ADDRESSES.veCentry,
     abi: VE_CENTRY_ABI,
     functionName: 'increaseAmount',
-    args: [parseUnits(amount.toString(), 18)],
+    args: [tokenId, parseUnits(amount.toString(), 18)],
   });
 
-  const extendLock = (weeks) => sendAndWait({
+  const extendLock = (tokenId, weeks) => sendAndWait({
     address: CONTRACT_ADDRESSES.veCentry,
     abi: VE_CENTRY_ABI,
     functionName: 'extendLock',
-    args: [BigInt(weeks) * 7n * 24n * 60n * 60n],
+    args: [
+      tokenId,
+      BigInt(weeks) * 7n * 24n * 60n * 60n,
+    ],
   });
 
   const refetchAll = () => Promise.all([
     refetchVeBalance(),
+    refetchTokenIds(),
     refetchCentBalance(),
     refetchCentAllowance(),
   ]);
+
+  const ownedIds = (tokenIds || []).map((id) => Number(id));
 
   return {
     configured,
     correctNetwork,
     veBalance: Number(veBalance ?? 0n),
-    tokenId: Number(tokenId ?? 0n),
+    tokenIds: ownedIds,
+    tokenId: ownedIds[0] ?? 0,
     votingPower: formatUnits(votingPower ?? 0n, 18),
     lockedAmount: formatUnits(lockedAmount ?? 0n, 18),
-    lockEnd: lockEnd ? new Date(Number(lockEnd) * 1000) : null,
     centBalance: formatUnits(centBalance ?? 0n, 18),
     centAllowance: formatUnits(centAllowance ?? 0n, 18),
     approveCENT,
