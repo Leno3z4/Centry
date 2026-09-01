@@ -6,6 +6,8 @@ import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5
 import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/token/ERC20/utils/SafeERC20.sol";
 import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/utils/ReentrancyGuard.sol";
 
+import "../interfaces/ICentryVeCENTTransferHook.sol";
+
 interface ICentryVeCENT {
     function ownerOf(uint256 tokenId) external view returns (address);
 
@@ -15,48 +17,90 @@ interface ICentryVeCENT {
         returns (uint256);
 }
 
-contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
+/// @title Centry veCENT Rewards
+/// @notice Revenue-funded epoch rewards for veCENT positions.
+/// @dev The owner/keeper supplies an epoch budget after protocol revenue has
+///      been realized. The contract never mints rewards and never uses a
+///      hard-coded emission rate.
+contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard, ICentryVeCENTTransferHook {
     using SafeERC20 for IERC20;
 
     uint256 public constant WAD = 1e18;
+    uint256 public constant MAX_EPOCH_DURATION = 30 days;
 
     IERC20 public immutable rewardToken;
     ICentryVeCENT public immutable veCENT;
-    uint256 public immutable rewardRate;
 
-    mapping(uint256 => uint256) public lastVotingPowerTime;
-    mapping(uint256 => bool) public rewardInitialized;
+    uint256 public epochDuration;
+    uint256 public currentEpoch;
+    uint256 public epochStart;
+    uint256 public epochEnd;
+    uint256 public epochRewardBudget;
+    uint256 public totalVotingPowerTime;
+
+    mapping(uint256 => uint256) public epochRewardBudgetById;
+    mapping(uint256 => uint256) public epochTotalVotingPowerTime;
+    mapping(uint256 => mapping(uint256 => uint256)) public tokenVotingPowerTime;
+    mapping(uint256 => mapping(uint256 => bool)) public epochClaimed;
+
     mapping(uint256 => uint256) public accruedRewards;
     mapping(uint256 => uint256) public claimedRewards;
+    mapping(uint256 => uint256) public lastVotingPowerTime;
+    mapping(uint256 => bool) public rewardInitialized;
 
     mapping(uint256 => address) public selfRepayRecipient;
     mapping(uint256 => address) public selfRepayOwner;
 
     error AmountZero();
-    error InsufficientRewards();
+    error EpochNotEnded();
+    error EpochNotStarted();
     error InvalidAddress();
+    error InvalidEpochDuration();
+    error InvalidEpochBudget();
+    error InsufficientRewards();
     error NotOwner();
     error NotSelfRepayOwner();
-    error RewardRateZero();
     error RecipientZero();
+    error TokenNotInEpoch();
 
-    event Funded(address indexed from, uint256 amount);
-    event RewardsCheckpointed(
-        uint256 indexed tokenId,
-        uint256 votingPowerSeconds,
+    event Funded(
+        address indexed from,
         uint256 amount
     );
+
+    event EpochStarted(
+        uint256 indexed epoch,
+        uint256 start,
+        uint256 end,
+        uint256 rewardBudget
+    );
+
+    event EpochCheckpointed(
+        uint256 indexed epoch,
+        uint256 indexed tokenId,
+        uint256 votingPowerTime
+    );
+
+    event EpochFinalized(
+        uint256 indexed epoch,
+        uint256 rewardBudget,
+        uint256 totalVotingPowerTime
+    );
+
     event RewardsClaimed(
+        uint256 indexed epoch,
         uint256 indexed tokenId,
         address indexed owner,
-        address indexed recipient,
+        address recipient,
         uint256 amount
     );
+
     event SelfRepayConfigured(
         uint256 indexed tokenId,
         address indexed owner,
         address indexed recipient
     );
+
     event SelfRepayDisabled(
         uint256 indexed tokenId,
         address indexed owner
@@ -65,7 +109,7 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
     constructor(
         IERC20 rewardToken_,
         ICentryVeCENT veCENT_,
-        uint256 rewardRate_,
+        uint256 epochDuration_,
         address initialOwner
     ) Ownable(initialOwner) {
         if (
@@ -76,13 +120,16 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
             revert InvalidAddress();
         }
 
-        if (rewardRate_ == 0) {
-            revert RewardRateZero();
+        if (
+            epochDuration_ == 0 ||
+            epochDuration_ > MAX_EPOCH_DURATION
+        ) {
+            revert InvalidEpochDuration();
         }
 
         rewardToken = rewardToken_;
         veCENT = veCENT_;
-        rewardRate = rewardRate_;
+        epochDuration = epochDuration_;
     }
 
     function fund(uint256 amount) external nonReentrant {
@@ -96,38 +143,104 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
             amount
         );
 
-        emit Funded(msg.sender, amount);
+        emit Funded(
+            msg.sender,
+            amount
+        );
+    }
+
+    function startEpoch(uint256 rewardBudget) external onlyOwner {
+        if (
+            currentEpoch != 0 &&
+            block.timestamp < epochEnd
+        ) {
+            revert EpochNotEnded();
+        }
+
+        if (rewardBudget == 0) {
+            revert InvalidEpochBudget();
+        }
+
+        if (
+            rewardToken.balanceOf(address(this)) <
+            rewardBudget
+        ) {
+            revert InsufficientRewards();
+        }
+
+        currentEpoch += 1;
+        epochStart = block.timestamp;
+        epochEnd = block.timestamp + epochDuration;
+        epochRewardBudget = rewardBudget;
+        totalVotingPowerTime = 0;
+
+        epochRewardBudgetById[currentEpoch] = rewardBudget;
+
+        emit EpochStarted(
+            currentEpoch,
+            epochStart,
+            epochEnd,
+            rewardBudget
+        );
     }
 
     function checkpoint(uint256 tokenId)
         external
         returns (uint256 amount)
     {
-        amount = _checkpoint(tokenId);
+        return _checkpointCurrentEpoch(tokenId);
+    }
+
+    function finalizeEpoch() external {
+        if (currentEpoch == 0) {
+            revert EpochNotStarted();
+        }
+
+        if (block.timestamp < epochEnd) {
+            revert EpochNotEnded();
+        }
+
+        epochTotalVotingPowerTime[currentEpoch] =
+            totalVotingPowerTime;
+
+        emit EpochFinalized(
+            currentEpoch,
+            epochRewardBudget,
+            totalVotingPowerTime
+        );
     }
 
     function earned(uint256 tokenId)
         public
         view
-        returns (uint256)
+        returns (uint256 amount)
     {
-        veCENT.ownerOf(tokenId);
+        address owner = veCENT.ownerOf(tokenId);
 
-        uint256 current = veCENT.votingPowerTime(tokenId);
-
-        if (!rewardInitialized[tokenId]) {
-            return accruedRewards[tokenId];
+        if (owner == address(0)) {
+            revert NotOwner();
         }
 
-        uint256 paid = lastVotingPowerTime[tokenId];
+        amount = accruedRewards[tokenId];
 
-        if (current <= paid) {
-            return accruedRewards[tokenId];
+        if (currentEpoch == 0) {
+            return amount;
         }
 
-        return accruedRewards[tokenId] + (
-            (current - paid) * rewardRate
-        ) / WAD;
+        uint256 currentVotingPowerTime = veCENT.votingPowerTime(
+            tokenId
+        );
+
+        uint256 previous = lastVotingPowerTime[tokenId];
+
+        if (
+            rewardInitialized[tokenId] &&
+            currentVotingPowerTime > previous &&
+            block.timestamp <= epochEnd
+        ) {
+            uint256 delta = currentVotingPowerTime - previous;
+            amount += delta;
+        }
     }
 
     function claim(uint256 tokenId)
@@ -141,10 +254,11 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
             revert NotOwner();
         }
 
-        _checkpoint(tokenId);
-        amount = _pay(tokenId, owner);
+        _checkpointCurrentEpoch(tokenId);
+        amount = _claimAvailable(tokenId, owner);
 
         emit RewardsClaimed(
+            currentEpoch,
             tokenId,
             owner,
             owner,
@@ -166,10 +280,11 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
             revert RecipientZero();
         }
 
-        _checkpoint(tokenId);
-        amount = _pay(tokenId, recipient);
+        _checkpointCurrentEpoch(tokenId);
+        amount = _claimAvailable(tokenId, recipient);
 
         emit RewardsClaimed(
+            currentEpoch,
             tokenId,
             owner,
             recipient,
@@ -201,27 +316,21 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
         );
     }
 
-    function disableSelfRepay(
-        uint256 tokenId
-    ) external {
+    function disableSelfRepay(uint256 tokenId) external {
         address owner = veCENT.ownerOf(tokenId);
 
         if (owner != msg.sender) {
             revert NotOwner();
         }
 
-        delete selfRepayRecipient[tokenId];
-        delete selfRepayOwner[tokenId];
-
-        emit SelfRepayDisabled(
-            tokenId,
-            owner
-        );
+        _clearSelfRepay(tokenId, owner);
     }
 
-    function claimForSelfRepay(
-        uint256 tokenId
-    ) external nonReentrant returns (uint256 amount) {
+    function claimForSelfRepay(uint256 tokenId)
+        external
+        nonReentrant
+        returns (uint256 amount)
+    {
         address owner = veCENT.ownerOf(tokenId);
         address recipient = selfRepayRecipient[tokenId];
 
@@ -232,10 +341,11 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
             revert NotSelfRepayOwner();
         }
 
-        _checkpoint(tokenId);
-        amount = _pay(tokenId, recipient);
+        _checkpointCurrentEpoch(tokenId);
+        amount = _claimAvailable(tokenId, recipient);
 
         emit RewardsClaimed(
+            currentEpoch,
             tokenId,
             owner,
             recipient,
@@ -243,10 +353,48 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
         );
     }
 
-    function _checkpoint(
+    function onVeCENTTransfer(
+        uint256 tokenId,
+        address from,
+        address to
+    ) external override {
+        if (msg.sender != address(veCENT)) {
+            revert NotOwner();
+        }
+
+        if (from != address(0) && from != to) {
+            _clearSelfRepay(tokenId, from);
+        }
+    }
+
+    function setEpochDuration(
+        uint256 newDuration
+    ) external onlyOwner {
+        if (
+            newDuration == 0 ||
+            newDuration > MAX_EPOCH_DURATION
+        ) {
+            revert InvalidEpochDuration();
+        }
+
+        if (
+            currentEpoch != 0 &&
+            block.timestamp < epochEnd
+        ) {
+            revert EpochNotEnded();
+        }
+
+        epochDuration = newDuration;
+    }
+
+    function _checkpointCurrentEpoch(
         uint256 tokenId
     ) internal returns (uint256 amount) {
         veCENT.ownerOf(tokenId);
+
+        if (currentEpoch == 0) {
+            revert EpochNotStarted();
+        }
 
         uint256 current = veCENT.votingPowerTime(tokenId);
 
@@ -263,43 +411,96 @@ contract CentryVeCENTRewards is Ownable2Step, ReentrancyGuard {
         }
 
         uint256 delta = current - previous;
+        uint256 effectiveCurrent = block.timestamp;
 
-        amount = (
-            delta * rewardRate
-        ) / WAD;
+        if (effectiveCurrent > epochEnd) {
+            effectiveCurrent = epochEnd;
+        }
 
-        accruedRewards[tokenId] += amount;
+        if (effectiveCurrent < epochStart) {
+            lastVotingPowerTime[tokenId] = current;
+            return 0;
+        }
+
+        uint256 epochStartVotingPowerTime = veCENT.votingPowerTime(
+            tokenId
+        );
+
+        epochStartVotingPowerTime;
+
+        tokenVotingPowerTime[currentEpoch][tokenId] += delta;
+        totalVotingPowerTime += delta;
         lastVotingPowerTime[tokenId] = current;
 
-        emit RewardsCheckpointed(
+        emit EpochCheckpointed(
+            currentEpoch,
             tokenId,
-            delta,
-            amount
+            delta
         );
+
+        amount = delta;
     }
 
-    function _pay(
+    function _claimAvailable(
         uint256 tokenId,
         address recipient
     ) internal returns (uint256 amount) {
-        amount = accruedRewards[tokenId];
+        if (currentEpoch == 0) {
+            revert EpochNotStarted();
+        }
+
+        uint256 votingTime = tokenVotingPowerTime[
+            currentEpoch
+        ][tokenId];
+
+        uint256 totalTime = epochTotalVotingPowerTime[
+            currentEpoch
+        ];
+
+        if (totalTime == 0 || votingTime == 0) {
+            revert TokenNotInEpoch();
+        }
+
+        if (epochClaimed[currentEpoch][tokenId]) {
+            revert TokenNotInEpoch();
+        }
+
+        amount = (
+            epochRewardBudget *
+            votingTime
+        ) / totalTime;
 
         if (amount == 0) {
             revert AmountZero();
         }
 
         if (
-            rewardToken.balanceOf(address(this)) < amount
+            rewardToken.balanceOf(address(this)) <
+            amount
         ) {
             revert InsufficientRewards();
         }
 
+        epochClaimed[currentEpoch][tokenId] = true;
         accruedRewards[tokenId] = 0;
         claimedRewards[tokenId] += amount;
 
         rewardToken.safeTransfer(
             recipient,
             amount
+        );
+    }
+
+    function _clearSelfRepay(
+        uint256 tokenId,
+        address owner
+    ) internal {
+        delete selfRepayRecipient[tokenId];
+        delete selfRepayOwner[tokenId];
+
+        emit SelfRepayDisabled(
+            tokenId,
+            owner
         );
     }
 }
