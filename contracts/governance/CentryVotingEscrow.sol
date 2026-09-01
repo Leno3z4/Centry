@@ -30,6 +30,12 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
     mapping(address => uint256[]) private _ownedTokenIds;
     mapping(uint256 => uint256) private _ownedTokenIndex;
 
+    // Integral of voting power over time, measured in voting-power seconds.
+    // Reward contracts can use this value to distribute rewards accurately
+    // even when a position's amount or expiry changes between claims.
+    mapping(uint256 => uint256) public cumulativeVotingPowerTime;
+    mapping(uint256 => uint64) public lastVotingPowerCheckpoint;
+
     error AmountTooLarge();
     error InvalidDuration();
     error LockExpired();
@@ -115,6 +121,10 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
             end: uint64(end)
         });
 
+        lastVotingPowerCheckpoint[tokenId] = uint64(
+            block.timestamp
+        );
+
         _mint(
             msg.sender,
             tokenId
@@ -145,6 +155,8 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
         if (block.timestamp >= lock.end) {
             revert LockExpired();
         }
+
+        _checkpointVotingPower(tokenId);
 
         if (
             uint256(lock.amount) + amount >
@@ -204,6 +216,8 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
             revert InvalidDuration();
         }
 
+        _checkpointVotingPower(tokenId);
+
         lock.end = uint64(newEnd);
 
         emit LockExtended(
@@ -226,7 +240,10 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
             revert LockNotExpired();
         }
 
+        _checkpointVotingPower(tokenId);
+
         delete locks[tokenId];
+        delete lastVotingPowerCheckpoint[tokenId];
 
         _burn(tokenId);
 
@@ -296,6 +313,94 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
         for (uint256 i = 0; i < tokenIds.length; i++) {
             total += locks[tokenIds[i]].amount;
         }
+    }
+
+    /// @notice Returns the accumulated voting-power seconds including the
+    ///         current uncheckpointed interval.
+    function votingPowerTime(
+        uint256 tokenId
+    ) public view returns (uint256) {
+        Lock memory lock = locks[tokenId];
+        uint256 accumulated = cumulativeVotingPowerTime[tokenId];
+        uint256 checkpoint = lastVotingPowerCheckpoint[tokenId];
+
+        if (
+            lock.amount == 0 ||
+            checkpoint == 0 ||
+            block.timestamp <= checkpoint
+        ) {
+            return accumulated;
+        }
+
+        uint256 current = block.timestamp;
+        uint256 effectiveEnd = uint256(lock.end);
+
+        if (checkpoint >= effectiveEnd) {
+            return accumulated;
+        }
+
+        uint256 to = current < effectiveEnd
+            ? current
+            : effectiveEnd;
+
+        if (to <= checkpoint) {
+            return accumulated;
+        }
+
+        uint256 delta = to - checkpoint;
+        uint256 remainingAtCheckpoint = effectiveEnd - checkpoint;
+        uint256 remainingAtEnd = effectiveEnd - to;
+
+        uint256 area = (
+            uint256(lock.amount) *
+            delta *
+            (remainingAtCheckpoint + remainingAtEnd)
+        ) / (2 * MAX_LOCK);
+
+        return accumulated + area;
+    }
+
+    function checkpointVotingPower(
+        uint256 tokenId
+    ) external {
+        ownerOf(tokenId);
+        _checkpointVotingPower(tokenId);
+    }
+
+    function _checkpointVotingPower(
+        uint256 tokenId
+    ) internal {
+        Lock memory lock = locks[tokenId];
+        uint256 checkpoint = lastVotingPowerCheckpoint[tokenId];
+
+        if (checkpoint == 0 || block.timestamp <= checkpoint) {
+            return;
+        }
+
+        uint256 effectiveEnd = uint256(lock.end);
+
+        if (checkpoint < effectiveEnd) {
+            uint256 to = block.timestamp < effectiveEnd
+                ? block.timestamp
+                : effectiveEnd;
+
+            if (to > checkpoint) {
+                uint256 delta = to - checkpoint;
+                uint256 remainingAtCheckpoint =
+                    effectiveEnd - checkpoint;
+                uint256 remainingAtEnd = effectiveEnd - to;
+
+                cumulativeVotingPowerTime[tokenId] += (
+                    uint256(lock.amount) *
+                    delta *
+                    (remainingAtCheckpoint + remainingAtEnd)
+                ) / (2 * MAX_LOCK);
+            }
+        }
+
+        lastVotingPowerCheckpoint[tokenId] = uint64(
+            block.timestamp
+        );
     }
 
     function _update(
