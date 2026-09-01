@@ -7,9 +7,9 @@ import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5
 import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/utils/ReentrancyGuard.sol";
 
 /// @title Centry Voting Escrow
-/// @notice Transferable veCENT NFT with linearly decaying voting power.
-/// @dev The locked CENT position, expiry and voting power move with the NFT.
-///      A wallet may own at most one veCENT position at a time.
+/// @notice Transferable veCENT NFTs. Every NFT is an independent locked CENT position.
+/// @dev Wallets may own multiple positions. The lock, expiry and voting power
+///      belong to the NFT and move with it when transferred.
 contract CentryVotingEscrow is ERC721, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -26,16 +26,15 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
 
     uint256 public nextTokenId = 1;
 
-    mapping(address => uint256) public tokenIdOf;
     mapping(uint256 => Lock) public locks;
+    mapping(address => uint256[]) private _ownedTokenIds;
+    mapping(uint256 => uint256) private _ownedTokenIndex;
 
     error AmountTooLarge();
-    error ExistingLock();
     error InvalidDuration();
     error LockExpired();
     error LockNotExpired();
     error NoLock();
-    error RecipientHasLock();
     error ZeroAmount();
     error ZeroToken();
 
@@ -90,10 +89,6 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
             revert InvalidDuration();
         }
 
-        if (tokenIdOf[msg.sender] != 0) {
-            revert ExistingLock();
-        }
-
         if (amount > type(uint128).max) {
             revert AmountTooLarge();
         }
@@ -134,16 +129,11 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
     }
 
     function increaseAmount(
+        uint256 tokenId,
         uint256 amount
     ) external nonReentrant {
         if (amount == 0) {
             revert ZeroAmount();
-        }
-
-        uint256 tokenId = tokenIdOf[msg.sender];
-
-        if (tokenId == 0) {
-            revert NoLock();
         }
 
         if (ownerOf(tokenId) != msg.sender) {
@@ -182,14 +172,9 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
     }
 
     function extendLock(
+        uint256 tokenId,
         uint256 newDuration
     ) external {
-        uint256 tokenId = tokenIdOf[msg.sender];
-
-        if (tokenId == 0) {
-            revert NoLock();
-        }
-
         if (ownerOf(tokenId) != msg.sender) {
             revert NoLock();
         }
@@ -228,13 +213,9 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
         );
     }
 
-    function withdraw() external nonReentrant {
-        uint256 tokenId = tokenIdOf[msg.sender];
-
-        if (tokenId == 0) {
-            revert NoLock();
-        }
-
+    function withdraw(
+        uint256 tokenId
+    ) external nonReentrant {
         if (ownerOf(tokenId) != msg.sender) {
             revert NoLock();
         }
@@ -281,81 +262,71 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
 
     function votingPowerOf(
         address account
-    ) external view returns (uint256) {
-        uint256 tokenId = tokenIdOf[account];
+    ) public view returns (uint256 total) {
+        uint256[] memory tokenIds = _ownedTokenIds[account];
 
-        if (tokenId == 0) {
-            return 0;
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            total += votingPower(tokenIds[i]);
         }
-
-        return votingPower(tokenId);
     }
 
     function lockedAmount(
-        address account
+        uint256 tokenId
     ) external view returns (uint256) {
-        uint256 tokenId = tokenIdOf[account];
-
-        if (tokenId == 0) {
-            return 0;
-        }
-
         return locks[tokenId].amount;
     }
 
     function lockEnd(
-        address account
+        uint256 tokenId
     ) external view returns (uint256) {
-        uint256 tokenId = tokenIdOf[account];
-
-        if (tokenId == 0) {
-            return 0;
-        }
-
         return locks[tokenId].end;
     }
 
-    /// @dev Keeps the address-to-position index synchronized when a veCENT
-    ///      NFT is minted, transferred or burned. Transfers to an address
-    ///      that already owns a position are rejected because the rest of
-    ///      the escrow intentionally exposes one position per wallet.
+    function getOwnedTokenIds(
+        address account
+    ) external view returns (uint256[] memory) {
+        return _ownedTokenIds[account];
+    }
+
+    function totalLocked(
+        address account
+    ) external view returns (uint256 total) {
+        uint256[] memory tokenIds = _ownedTokenIds[account];
+
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            total += locks[tokenIds[i]].amount;
+        }
+    }
+
     function _update(
         address to,
         uint256 tokenId,
         address auth
     ) internal override returns (address previousOwner) {
-        address from = _ownerOf(tokenId);
-
-        if (
-            to != address(0) &&
-            to != from
-        ) {
-            uint256 existingTokenId = tokenIdOf[to];
-
-            if (
-                existingTokenId != 0 &&
-                existingTokenId != tokenId
-            ) {
-                revert RecipientHasLock();
-            }
-        }
-
         previousOwner = super._update(
             to,
             tokenId,
             auth
         );
 
-        if (
-            previousOwner != address(0) &&
-            previousOwner != to &&
-            tokenIdOf[previousOwner] == tokenId
-        ) {
-            tokenIdOf[previousOwner] = 0;
+        if (previousOwner != address(0)) {
+            uint256[] storage fromTokens = _ownedTokenIds[previousOwner];
+            uint256 index = _ownedTokenIndex[tokenId];
+            uint256 lastIndex = fromTokens.length - 1;
+
+            if (index != lastIndex) {
+                uint256 movedTokenId = fromTokens[lastIndex];
+                fromTokens[index] = movedTokenId;
+                _ownedTokenIndex[movedTokenId] = index;
+            }
+
+            fromTokens.pop();
+            delete _ownedTokenIndex[tokenId];
         }
 
         if (to != address(0)) {
-            tokenIdOf[to] = tokenId;
+            _ownedTokenIndex[tokenId] = _ownedTokenIds[to].length;
+            _ownedTokenIds[to].push(tokenId);
         }
     }
 }
