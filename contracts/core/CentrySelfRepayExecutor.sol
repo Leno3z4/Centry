@@ -44,7 +44,6 @@ contract CentrySelfRepayExecutor is Ownable2Step, ReentrancyGuard {
     error AmountZero();
     error MinOutputNotMet();
     error SwapOutputInvalid();
-    error DebtAssetMismatch();
 
     event SwapAdapterSet(address indexed adapter);
     event DebtAssetSupportUpdated(
@@ -161,23 +160,41 @@ contract CentrySelfRepayExecutor is Ownable2Step, ReentrancyGuard {
             rewardAmount
         );
 
-        debtAssetReceived = ICentrySwapAdapter(adapter).swap(
-            address(rewardToken),
-            debtAsset,
-            rewardAmount,
-            minDebtAssetOut,
-            address(this),
-            swapData
+        uint256 debtAssetBalanceBefore = IERC20(debtAsset)
+            .balanceOf(address(this));
+
+        uint256 reportedAmountOut = ICentrySwapAdapter(adapter)
+            .swap(
+                address(rewardToken),
+                debtAsset,
+                rewardAmount,
+                minDebtAssetOut,
+                address(this),
+                swapData
+            );
+
+        rewardToken.forceApprove(
+            adapter,
+            0
         );
 
-        rewardToken.forceApprove(adapter, 0);
+        uint256 debtAssetBalanceAfter = IERC20(debtAsset)
+            .balanceOf(address(this));
 
-        if (debtAssetReceived < minDebtAssetOut) {
-            revert MinOutputNotMet();
+        if (debtAssetBalanceAfter <= debtAssetBalanceBefore) {
+            revert SwapOutputInvalid();
         }
 
-        if (debtAssetReceived == 0) {
-            revert SwapOutputInvalid();
+        debtAssetReceived = (
+            debtAssetBalanceAfter -
+            debtAssetBalanceBefore
+        );
+
+        if (
+            debtAssetReceived < minDebtAssetOut ||
+            reportedAmountOut < minDebtAssetOut
+        ) {
+            revert MinOutputNotMet();
         }
 
         uint256 currentDebt = lendingPool.borrowBalance(
