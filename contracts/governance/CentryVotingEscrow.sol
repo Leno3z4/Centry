@@ -7,7 +7,9 @@ import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5
 import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/utils/ReentrancyGuard.sol";
 
 /// @title Centry Voting Escrow
-/// @notice Non-transferable veCENT NFT with linearly decaying voting power.
+/// @notice Transferable veCENT NFT with linearly decaying voting power.
+/// @dev The locked CENT position, expiry and voting power move with the NFT.
+///      A wallet may own at most one veCENT position at a time.
 contract CentryVotingEscrow is ERC721, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -33,7 +35,7 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
     error LockExpired();
     error LockNotExpired();
     error NoLock();
-    error NonTransferable();
+    error RecipientHasLock();
     error ZeroAmount();
     error ZeroToken();
 
@@ -63,7 +65,9 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
         uint256 amount
     );
 
-    constructor(address token_) ERC721("Centry Vote Escrow", "veCENT") {
+    constructor(address token_)
+        ERC721("Centry Vote Escrow", "veCENT")
+    {
         if (token_ == address(0)) {
             revert ZeroToken();
         }
@@ -110,14 +114,16 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
         );
 
         tokenId = nextTokenId++;
-        tokenIdOf[msg.sender] = tokenId;
 
         locks[tokenId] = Lock({
             amount: uint128(amount),
             end: uint64(end)
         });
 
-        _mint(msg.sender, tokenId);
+        _mint(
+            msg.sender,
+            tokenId
+        );
 
         emit LockCreated(
             msg.sender,
@@ -240,7 +246,6 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
         }
 
         delete locks[tokenId];
-        delete tokenIdOf[msg.sender];
 
         _burn(tokenId);
 
@@ -310,38 +315,47 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
         return locks[tokenId].end;
     }
 
-    function approve(
-        address,
-        uint256
-    ) public pure override {
-        revert NonTransferable();
-    }
-
-    function setApprovalForAll(
-        address,
-        bool
-    ) public pure override {
-        revert NonTransferable();
-    }
-
+    /// @dev Keeps the address-to-position index synchronized when a veCENT
+    ///      NFT is minted, transferred or burned. Transfers to an address
+    ///      that already owns a position are rejected because the rest of
+    ///      the escrow intentionally exposes one position per wallet.
     function _update(
         address to,
         uint256 tokenId,
         address auth
-    ) internal override returns (address) {
+    ) internal override returns (address previousOwner) {
         address from = _ownerOf(tokenId);
 
         if (
-            from != address(0) &&
-            to != address(0)
+            to != address(0) &&
+            to != from
         ) {
-            revert NonTransferable();
+            uint256 existingTokenId = tokenIdOf[to];
+
+            if (
+                existingTokenId != 0 &&
+                existingTokenId != tokenId
+            ) {
+                revert RecipientHasLock();
+            }
         }
 
-        return super._update(
+        previousOwner = super._update(
             to,
             tokenId,
             auth
         );
+
+        if (
+            previousOwner != address(0) &&
+            previousOwner != to &&
+            tokenIdOf[previousOwner] == tokenId
+        ) {
+            tokenIdOf[previousOwner] = 0;
+        }
+
+        if (to != address(0)) {
+            tokenIdOf[to] = tokenId;
+        }
     }
 }
