@@ -8,22 +8,24 @@ import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5
 
 import "../interfaces/ICentrySwapAdapter.sol";
 
-interface IUnitFlowSwapRouter {
-    function swapExactTokensForTokens(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
+interface IUnitFlowUniversalRouter {
+    function execute(
+        bytes calldata commands,
+        bytes[] calldata inputs,
         uint256 deadline
-    ) external returns (uint256 amountOut);
+    ) external;
 }
 
 /// @title Centry UnitFlow Swap Adapter
 /// @notice Restricted UnitFlow adapter for CENT reward -> debt-asset swaps.
-/// @dev This adapter intentionally exposes only UnitFlow's token-swap router.
-///      The self-repay executor remains responsible for reward accounting and
-///      LendingPool repayment accounting. The adapter measures the actual token
-///      output and only supports configured paths rooted at CENT.
+/// @dev Uses the live UnitFlow UniversalRouter command flow validated by the
+///      Centry CENT -> WUSDC -> native USDC transaction:
+///      0x08 = V2 exact-input swap
+///      0x0c = WUSDC unwrap
+///
+///      The adapter deliberately builds the command payload itself. Callers
+///      cannot provide arbitrary UniversalRouter calldata, targets, commands,
+///      or token paths.
 contract CentryUnitFlowSwapAdapter is
     Ownable2Step,
     ReentrancyGuard,
@@ -31,22 +33,28 @@ contract CentryUnitFlowSwapAdapter is
 {
     using SafeERC20 for IERC20;
 
-    address public immutable unitFlowSwapRouter;
+    bytes1 private constant CMD_V2_SWAP_EXACT_IN = 0x08;
+    bytes1 private constant CMD_UNWRAP_WUSDC = 0x0c;
+
+    address public immutable unitFlowUniversalRouter;
     address public immutable centToken;
+    address public immutable wusdcToken;
 
     mapping(address => bool) public supportedOutput;
+
+    address public authorizedCaller;
 
     error InvalidAddress();
     error InvalidCaller();
     error InvalidAmount();
-    error InvalidPath();
+    error InvalidTokenPath();
     error InvalidRecipient();
+    error InvalidDeadline();
     error MinOutputNotMet();
     error SwapFailed();
     error UnsupportedOutput();
     error RouterDidNotConsumeInput();
-
-    address public authorizedCaller;
+    error UnexpectedOutputToken();
 
     event AuthorizedCallerSet(address indexed caller);
 
@@ -64,20 +72,23 @@ contract CentryUnitFlowSwapAdapter is
     );
 
     constructor(
-        address unitFlowSwapRouter_,
+        address unitFlowUniversalRouter_,
         address centToken_,
+        address wusdcToken_,
         address initialOwner
     ) Ownable(initialOwner) {
         if (
-            unitFlowSwapRouter_ == address(0) ||
+            unitFlowUniversalRouter_ == address(0) ||
             centToken_ == address(0) ||
+            wusdcToken_ == address(0) ||
             initialOwner == address(0)
         ) {
             revert InvalidAddress();
         }
 
-        unitFlowSwapRouter = unitFlowSwapRouter_;
+        unitFlowUniversalRouter = unitFlowUniversalRouter_;
         centToken = centToken_;
+        wusdcToken = wusdcToken_;
     }
 
     function setAuthorizedCaller(
@@ -140,27 +151,42 @@ contract CentryUnitFlowSwapAdapter is
         }
 
         if (tokenIn != centToken) {
-            revert InvalidPath();
+            revert InvalidTokenPath();
         }
 
         if (!supportedOutput[tokenOut]) {
             revert UnsupportedOutput();
         }
 
-        (
-            uint256 deadline,
-            address[] memory path
-        ) = abi.decode(
-            data,
-            (uint256, address[])
-        );
+        uint256 deadline;
+        address[] memory path;
+
+        if (data.length == 0) {
+            deadline = block.timestamp + 5 minutes;
+            path = new address[](2);
+            path[0] = centToken;
+            path[1] = wusdcToken;
+        } else {
+            (deadline, path) = abi.decode(
+                data,
+                (uint256, address[])
+            );
+        }
+
+        if (deadline < block.timestamp) {
+            revert InvalidDeadline();
+        }
 
         if (
-            path.length < 2 ||
+            path.length != 2 ||
             path[0] != centToken ||
-            path[path.length - 1] != tokenOut
+            path[1] != wusdcToken
         ) {
-            revert InvalidPath();
+            revert InvalidTokenPath();
+        }
+
+        if (tokenOut != address(0x3600000000000000000000000000000000000000)) {
+            revert UnexpectedOutputToken();
         }
 
         IERC20 input = IERC20(tokenIn);
@@ -174,23 +200,39 @@ contract CentryUnitFlowSwapAdapter is
         }
 
         input.forceApprove(
-            unitFlowSwapRouter,
+            unitFlowUniversalRouter,
             amountIn
         );
 
-        uint256 reportedAmountOut;
+        bytes memory commands = abi.encodePacked(
+            CMD_V2_SWAP_EXACT_IN,
+            CMD_UNWRAP_WUSDC
+        );
 
-        try IUnitFlowSwapRouter(unitFlowSwapRouter).swapExactTokensForTokens(
+        bytes[] memory inputs = new bytes[](2);
+
+        inputs[0] = abi.encode(
+            address(2),
             amountIn,
             minAmountOut,
             path,
+            true
+        );
+
+        inputs[1] = abi.encode(
             address(this),
+            minAmountOut
+        );
+
+        try IUnitFlowUniversalRouter(unitFlowUniversalRouter).execute(
+            commands,
+            inputs,
             deadline
-        ) returns (uint256 amountOutReported) {
-            reportedAmountOut = amountOutReported;
+        ) {
+            // Expected successful return.
         } catch {
             input.forceApprove(
-                unitFlowSwapRouter,
+                unitFlowUniversalRouter,
                 0
             );
 
@@ -198,7 +240,7 @@ contract CentryUnitFlowSwapAdapter is
         }
 
         input.forceApprove(
-            unitFlowSwapRouter,
+            unitFlowUniversalRouter,
             0
         );
 
@@ -211,10 +253,7 @@ contract CentryUnitFlowSwapAdapter is
 
         amountOut = outputAfter - outputBefore;
 
-        if (
-            amountOut < minAmountOut ||
-            reportedAmountOut < minAmountOut
-        ) {
+        if (amountOut < minAmountOut) {
             revert MinOutputNotMet();
         }
 
