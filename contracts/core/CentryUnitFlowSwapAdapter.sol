@@ -36,6 +36,9 @@ contract CentryUnitFlowSwapAdapter is
     bytes1 private constant CMD_V2_SWAP_EXACT_IN = 0x08;
     bytes1 private constant CMD_UNWRAP_WUSDC = 0x0c;
 
+    address private constant ARC_NATIVE_USDC =
+        0x3600000000000000000000000000000000000000;
+
     address public immutable unitFlowUniversalRouter;
     address public immutable centToken;
     address public immutable wusdcToken;
@@ -131,7 +134,72 @@ contract CentryUnitFlowSwapAdapter is
         address recipient,
         bytes calldata data
     ) external nonReentrant returns (uint256 amountOut) {
-        if (msg.sender != authorizedCaller) {
+        _validateSwapRequest(
+            tokenIn,
+            tokenOut,
+            amountIn,
+            recipient
+        );
+
+        if (!supportedOutput[tokenOut]) {
+            revert UnsupportedOutput();
+        }
+
+        (
+            uint256 deadline,
+            address[] memory path
+        ) = _decodeSwapData(data);
+
+        if (deadline < block.timestamp) {
+            revert InvalidDeadline();
+        }
+
+        if (
+            path.length != 2 ||
+            path[0] != centToken ||
+            path[1] != wusdcToken
+        ) {
+            revert InvalidTokenPath();
+        }
+
+        if (tokenOut != ARC_NATIVE_USDC) {
+            revert UnexpectedOutputToken();
+        }
+
+        amountOut = _executeUnitFlowSwap(
+            amountIn,
+            minAmountOut,
+            path,
+            deadline
+        );
+
+        if (amountOut < minAmountOut) {
+            revert MinOutputNotMet();
+        }
+
+        IERC20(tokenOut).safeTransfer(
+            recipient,
+            amountOut
+        );
+
+        emit UnitFlowSwapExecuted(
+            tokenIn,
+            tokenOut,
+            amountIn,
+            amountOut,
+            recipient
+        );
+    }
+
+    function _validateSwapRequest(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        address recipient
+    ) internal view {
+        if (
+            msg.sender != authorizedCaller
+        ) {
             revert InvalidCaller();
         }
 
@@ -153,44 +221,36 @@ contract CentryUnitFlowSwapAdapter is
         if (tokenIn != centToken) {
             revert InvalidTokenPath();
         }
+    }
 
-        if (!supportedOutput[tokenOut]) {
-            revert UnsupportedOutput();
-        }
-
-        uint256 deadline;
-        address[] memory path;
-
+    function _decodeSwapData(
+        bytes calldata data
+    ) internal view returns (
+        uint256 deadline,
+        address[] memory path
+    ) {
         if (data.length == 0) {
             deadline = block.timestamp + 5 minutes;
             path = new address[](2);
             path[0] = centToken;
             path[1] = wusdcToken;
-        } else {
-            (deadline, path) = abi.decode(
-                data,
-                (uint256, address[])
-            );
+            return (deadline, path);
         }
 
-        if (deadline < block.timestamp) {
-            revert InvalidDeadline();
-        }
+        return abi.decode(
+            data,
+            (uint256, address[])
+        );
+    }
 
-        if (
-            path.length != 2 ||
-            path[0] != centToken ||
-            path[1] != wusdcToken
-        ) {
-            revert InvalidTokenPath();
-        }
-
-        if (tokenOut != address(0x3600000000000000000000000000000000000000)) {
-            revert UnexpectedOutputToken();
-        }
-
-        IERC20 input = IERC20(tokenIn);
-        IERC20 output = IERC20(tokenOut);
+    function _executeUnitFlowSwap(
+        uint256 amountIn,
+        uint256 minAmountOut,
+        address[] memory path,
+        uint256 deadline
+    ) internal returns (uint256 amountOut) {
+        IERC20 input = IERC20(centToken);
+        IERC20 output = IERC20(ARC_NATIVE_USDC);
 
         uint256 inputBefore = input.balanceOf(address(this));
         uint256 outputBefore = output.balanceOf(address(this));
@@ -224,7 +284,9 @@ contract CentryUnitFlowSwapAdapter is
             minAmountOut
         );
 
-        try IUnitFlowUniversalRouter(unitFlowUniversalRouter).execute(
+        try IUnitFlowUniversalRouter(
+            unitFlowUniversalRouter
+        ).execute(
             commands,
             inputs,
             deadline
@@ -245,29 +307,17 @@ contract CentryUnitFlowSwapAdapter is
         );
 
         uint256 inputAfter = input.balanceOf(address(this));
-        uint256 outputAfter = output.balanceOf(address(this));
 
         if (inputAfter > inputBefore) {
             revert RouterDidNotConsumeInput();
         }
 
-        amountOut = outputAfter - outputBefore;
+        uint256 outputAfter = output.balanceOf(address(this));
 
-        if (amountOut < minAmountOut) {
+        if (outputAfter < outputBefore) {
             revert MinOutputNotMet();
         }
 
-        output.safeTransfer(
-            recipient,
-            amountOut
-        );
-
-        emit UnitFlowSwapExecuted(
-            tokenIn,
-            tokenOut,
-            amountIn,
-            amountOut,
-            recipient
-        );
+        amountOut = outputAfter - outputBefore;
     }
 }
