@@ -31,9 +31,10 @@ interface ICentryVeCENTOwner {
 /// @title Centry Self-Repay Executor V2
 /// @notice Converts funded veCENT rewards through a configured swap adapter and
 ///         repays any number of supported debt assets in one automation call.
-/// @dev The keeper supplies fresh Tower quotes/calldata off-chain. This contract
-///      enforces the reward budget, per-swap minimum output, measured outputs,
-///      supported debt assets and repayment accounting on-chain.
+/// @dev Only addresses explicitly authorized as keepers may execute self-repay.
+///      The keeper supplies fresh route data and minimum outputs off-chain.
+///      This contract enforces reward accounting, supported debt assets,
+///      measured swap outputs, and LendingPool repayment accounting on-chain.
 contract CentrySelfRepayExecutorV2 is Ownable2Step, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -60,6 +61,7 @@ contract CentrySelfRepayExecutorV2 is Ownable2Step, ReentrancyGuard {
     address public swapAdapter;
 
     mapping(address => bool) public supportedDebtAsset;
+    mapping(address => bool) public isKeeper;
 
     error InvalidAddress();
     error InvalidAdapter();
@@ -69,12 +71,18 @@ contract CentrySelfRepayExecutorV2 is Ownable2Step, ReentrancyGuard {
     error RewardAmountExceeded();
     error MinOutputNotMet();
     error SwapOutputInvalid();
+    error NotKeeper();
 
     event SwapAdapterSet(address indexed adapter);
 
     event DebtAssetSupportUpdated(
         address indexed asset,
         bool supported
+    );
+
+    event KeeperSet(
+        address indexed keeper,
+        bool allowed
     );
 
     event SelfRepayExecuted(
@@ -140,6 +148,22 @@ contract CentrySelfRepayExecutorV2 is Ownable2Step, ReentrancyGuard {
         emit SwapAdapterSet(adapter);
     }
 
+    function setKeeper(
+        address keeper_,
+        bool allowed
+    ) external onlyOwner {
+        if (keeper_ == address(0)) {
+            revert InvalidAddress();
+        }
+
+        isKeeper[keeper_] = allowed;
+
+        emit KeeperSet(
+            keeper_,
+            allowed
+        );
+    }
+
     function setDebtAssetSupported(
         address asset,
         bool supported
@@ -163,6 +187,10 @@ contract CentrySelfRepayExecutorV2 is Ownable2Step, ReentrancyGuard {
         bytes32[] calldata rewardProof,
         SwapInstruction[] calldata instructions
     ) external nonReentrant returns (RepayResult[] memory results) {
+        if (!isKeeper[msg.sender]) {
+            revert NotKeeper();
+        }
+
         address borrower = veCENT.ownerOf(tokenId);
 
         if (borrower == address(0)) {
