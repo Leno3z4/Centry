@@ -14,7 +14,7 @@ export const CONTRACT_ADDRESSES = Object.freeze({
   veCentryRewards: '0x2fA236D227cb139FbA6E43396614cf8E23CF3050',
   selfRepayExecutor: '0xfCDBA35d9255927E9226f371761c1A9Ad82cF831',
   unitFlowSwapAdapter: '0xDc99c84B8B58d0E0f2dA5E29567Be5325b4b3545',
-  revenueDistributor: '0x2fA236D227cb139FbA6E43396614cf8E23CF3050',
+  revenueDistributor: '0xc54A67aBF5a5697F2dDCd75d6165a17E73048271',
 
   collateralAssets: Object.freeze({
     ETH: '0x54a4dd95bf4ABb6cF02014ca62C3FbbDeE040B6a',
