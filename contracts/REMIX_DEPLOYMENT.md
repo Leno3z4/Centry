@@ -1,187 +1,249 @@
-# Centry — Remix IDE deployment (Arc testnet)
+# Centry — Remix deployment (Arc Testnet)
 
-> This is the deployment order for the current MVP. **Do not use mainnet funds.** Deploy and test on Arc testnet first, and only proceed to mainnet after independent audit/review.
+> Test on Arc Testnet first. A successful testnet deployment is not a security audit.
 
-## 1. Open Remix
+## 1. Compiler
 
-Go to https://remix.ethereum.org.
+Use Solidity `0.8.24`.
 
-Create/open a workspace and import the `contracts/` directory from this repository. If you are using GitHub directly, the easiest path is to clone/download the repo locally and open the folder in Remix's File Explorers.
+Compile with the optimizer enabled after the source compiles cleanly without errors.
 
-The contracts use pinned OpenZeppelin v5.4.0 GitHub imports, so Remix can resolve dependencies from the source URLs.
+## 2. Existing live Centry deployments
 
-## 2. Compiler
+Do not redeploy or edit these unless a separate architectural blocker is identified.
 
-Open **Solidity Compiler**.
+```text
+RATE_STRATEGY
+0x0e33c05cc844914155B7300aA93085DBB32d4FBE
 
-- Compiler: **0.8.24**
-- EVM version: leave at the compiler default unless Arc specifically documents a required target.
-- Enable optimization for deployment builds after successful test compilation.
+LENDING_POOL
+0x90C935687D91b3352b2C55cd79389C92950D94BD
 
-Compile the contracts individually as needed. Start with `CentryMockERC20.sol`, `CentryMockOracle.sol`, `CentryInterestRateStrategy.sol`, `CentryToken.sol`, `CentryLendingPool.sol`, `CentryVotingEscrow.sol`, and `CentryRevenueDistributor.sol`.
+CENTRY_ORACLE
+0xC82424D224dbfBF9D41a9cBe5cA2AdF762572fC6
 
-## 3. Connect MetaMask to Arc testnet
+CENT
+0x76e6d50D3151f0B4645ac0E53584F4204Fc6f0e3
 
-Use the **current Arc testnet network parameters from the official Arc documentation** rather than copying old RPC/chain-ID values from a random tutorial. Arc's network configuration can change during testnet phases.
+veCENT
+0xb39411595eD14991377411bcE52677C05AcE978D
 
-Your wallet needs enough Arc testnet USDC for transaction fees/funding as specified by Arc's current faucet/testnet instructions.
+veCENT REWARDS
+0x2fA236D227cb139FbA6E43396614cf8E23CF3050
 
-In Remix, open **Deploy & Run Transactions** and select **Injected Provider - MetaMask**.
+SELF-REPAY EXECUTOR V2
+0xfCDBA35d9255927E9226f371761c1A9Ad82cF831
+```
 
-Confirm the account shown in Remix is the intended deployer.
+## 3. UnitFlow deployment
 
-## 4. Test-only deployment order
+The verified Arc Testnet UnitFlow UniversalRouter is:
 
-For a first local/testnet smoke test:
+```text
+0xEaF3195bE51861632cd32850973C9515DA48e76F
+```
 
-### A. Deploy mock USDC
+WUSDC:
 
-Contract: `CentryMockERC20`
+```text
+0x911b4000D3422F482F4062a913885f7b035382Df
+```
 
-Example constructor:
+Arc native USDC ERC-20 interface:
 
-- `name`: `Mock USDC`
-- `symbol`: `mUSDC`
-- `decimals`: `6`
-- `initialOwner`: your deployer address
+```text
+0x3600000000000000000000000000000000000000
+```
 
-Deploy it, copy the contract address.
+The live tested route is:
 
-### B. Deploy mock oracle
+```text
+CENT
+  -> UnitFlow V2 exact-input (command 0x08)
+  -> WUSDC
+  -> UnitFlow WUSDC unwrap (command 0x0c)
+  -> native USDC
+```
 
-Contract: `CentryMockOracle`
+### Deploy `CentryUnitFlowSwapAdapter`
 
-Constructor:
+Constructor arguments:
 
-- `owner_`: your deployer address
+```text
+unitFlowUniversalRouter_
+0xEaF3195bE51861632cd32850973C9515DA48e76F
 
-Copy the address.
+centToken_
+0x76e6d50D3151f0B4645ac0E53584F4204Fc6f0e3
 
-### C. Deploy rate strategy
+wusdcToken_
+0x911b4000D3422F482F4062a913885f7b035382Df
 
-Contract: `CentryInterestRateStrategy`
+initialOwner_
+YOUR ADMIN / DEPLOYER WALLET
+```
 
-A conservative test configuration in 1e18 units:
+The adapter deployed for the current testnet configuration is:
 
-- `baseRatePerYear`: `0`
-- `slope1PerYear`: `40000000000000000` (4%)
-- `slope2PerYear`: `750000000000000000` (75%)
-- `kink`: `800000000000000000` (80%)
-- `maxRatePerYear`: `800000000000000000` (80%)
+```text
+0xDc99c84B8B58d0E0f2dA5E29567Be5325b4b3545
+```
 
-Copy the address.
+## 4. Configure the UnitFlow adapter
 
-### D. Deploy the lending pool
+On `CentryUnitFlowSwapAdapter`:
 
-Contract: `CentryLendingPool`
+### A. Authorize SelfRepayExecutorV2
 
-Constructor:
+```text
+setAuthorizedCaller(
+    0xfCDBA35d9255927E9226f371761c1A9Ad82cF831
+)
+```
 
-1. `initialOwner`: your deployer/multisig address
-2. `oracle_`: mock oracle address
-3. `rateStrategy_`: rate strategy address
-4. `treasury_`: treasury address
+### B. Enable native USDC output
 
-For the first test, using the deployer as treasury is acceptable only for a disposable test deployment. For anything persistent, use a separate multisig.
+```text
+setOutputSupported(
+    0x3600000000000000000000000000000000000000,
+    true
+)
+```
 
-Copy the pool address.
+Do not enable other output assets until their real UnitFlow routes have been tested.
 
-### E. Configure the mock oracle
+## 5. Configure SelfRepayExecutorV2
 
-Call `setPrice` on the mock oracle:
+On `CentrySelfRepayExecutorV2`:
 
-- `asset`: mock USDC address
-- `priceE18`: `1000000000000000000` (=$1.00)
+### A. Set the UnitFlow adapter
 
-### F. Add the reserve
+```text
+setSwapAdapter(
+    0xDc99c84B8B58d0E0f2dA5E29567Be5325b4b3545
+)
+```
 
-Call `addReserve` on the lending pool.
+### B. Enable USDC as a supported debt asset
 
-Conservative test values:
+```text
+setDebtAssetSupported(
+    0x3600000000000000000000000000000000000000,
+    true
+)
+```
 
-- `asset`: mock USDC
-- `ltv`: `8000` (80%)
-- `threshold`: `8500` (85%)
-- `bonus`: `10500` (5% liquidation bonus)
-- `reserveFactor`: `1000` (10%)
-- `supplyCap`: `1000000000000` (1,000,000 mUSDC = 1,000 USDC with 6 decimals)
-- `borrowCap`: `800000000000` (800 USDC)
+EURC and CIRBTC should be enabled only after their actual swap routes and minimum-output handling have been tested.
 
-These are test values, not recommended production risk parameters.
+## 6. Configure veCENT
 
-## 5. Smoke-test lending
+`CentryVotingEscrow` creates transferable ERC-721 veCENT positions. The NFT owner is the current position owner, and the locked CENT is returned to that owner after the lock expires and `withdraw` succeeds.
 
-1. Call `mint` on `CentryMockERC20` to give the test wallet mUSDC.
-2. Call `approve(pool, amount)` from the token.
-3. Call `supply(mockUSDC, amount)` on the pool.
-4. Confirm `supplyBalance(user, mockUSDC)`.
-5. Call `borrow(mockUSDC, amount)` only within the configured LTV and available liquidity.
-6. Confirm `borrowBalance(user, mockUSDC)` and `healthFactor(user)`.
-7. Approve the pool and call `repay(mockUSDC, amount)`.
-8. Call `withdraw(mockUSDC, amount)`.
+Set the rewards controller once:
 
-## 6. Real Arc USDC deployment
+```text
+setRewardsController(
+    0x2fA236D227cb139FbA6E43396614cf8E23CF3050
+)
+```
 
-Do **not** deploy the mock token or mock oracle as production infrastructure.
+Set the transfer hook once, pointing at the rewards controller:
 
-Before using real Arc USDC:
+```text
+setTransferHook(
+    0x2fA236D227cb139FbA6E43396614cf8E23CF3050
+)
+```
 
-1. Obtain the canonical Arc USDC ERC-20 contract address from current official Arc documentation/explorer.
-2. Obtain a production-grade oracle feed that is actually deployed and supported on Arc.
-3. Confirm the feed's decimals and heartbeat.
-4. Deploy `CentryOracle` with the multisig/timelock as owner.
-5. Configure the USDC/USD feed with an explicit maximum staleness interval.
-6. Verify the oracle returns 1e18-normalized prices.
-7. Deploy the lending pool with the production oracle and immutable rate strategy.
-8. Start with very small caps.
-9. Verify source code and deployment addresses on the Arc explorer.
+These setters are one-time configuration points.
 
-## 7. Governance/tokenomics
+## 7. Self-repay configuration per veCENT NFT
 
-Deploy `CentryToken` with:
+The current owner of a veCENT NFT enables self-repay by calling the rewards controller:
 
-- `initialRecipient`: treasury/multisig
-- `initialSupply`: your fixed total supply in 18-decimal units
+```text
+setSelfRepayRecipient(
+    tokenId,
+    0xfCDBA35d9255927E9226f371761c1A9Ad82cF831
+)
+```
 
-There is intentionally no public mint function.
+This makes the executor the recipient of claimed CENT rewards for that NFT.
 
-Then deploy `CentryVotingEscrow` with the CENT address.
+A veCENT transfer clears the old self-repay configuration through the transfer hook.
 
-The user must approve the veCENT contract to spend CENT before calling `createLock`.
+## 8. Reward funding and epochs
 
-The current MVP supports one lock per wallet and a non-transferable veCENT NFT with linearly decaying voting power.
+The rewards controller does not mint CENT. It distributes only funded CENT.
 
-## 8. Revenue distributor
+The reward flow is:
 
-Deploy `CentryRevenueDistributor` with the multisig/timelock owner.
+```text
+protocol revenue
+    -> approved reward funding
+    -> veCENT reward epoch
+    -> CENT reward claim
+    -> UnitFlow CENT swap
+    -> debt-asset repayment
+```
 
-Fund it with an approved ERC-20 revenue asset, then queue a Merkle root. Roots have a two-day activation delay. Users claim with their Merkle proof.
+Fund the rewards controller with CENT using:
 
-The Merkle tree generation is intentionally kept off-chain; do not fabricate roots or proofs manually for production.
+```text
+CENT.approve(
+    0x2fA236D227cb139FbA6E43396614cf8E23CF3050,
+    amount
+)
 
-## 9. Production owner security
+fund(amount)
+```
 
-After deployment, the contract owner should not remain a normal hot wallet.
+Epochs are queued with a Merkle root and have a two-day activation delay.
 
-Recommended structure:
+## 9. Self-repay execution
 
-`Multisig -> Timelock (where appropriate) -> protocol administration`
+`CentrySelfRepayExecutorV2` supports multiple debt assets in one call.
 
-Keep the deployer wallet separate from the treasury. Never commit a seed phrase/private key to GitHub, Remix, `.env`, or frontend code.
+The keeper must provide:
 
-## 10. Before mainnet
+- epoch
+- veCENT tokenId
+- exact reward amount
+- Merkle proof
+- one or more swap instructions
 
-A successful Remix deployment is **not** a security audit. Before mainnet:
+Each instruction contains:
 
-- Run Slither/static analysis.
-- Add unit, fuzz and invariant tests.
-- Test liquidation economics with adversarial price moves.
-- Test stale and manipulated oracle scenarios.
-- Test cap/rate overflow boundaries.
-- Test ERC-20 edge cases.
-- Perform an independent smart-contract audit.
-- Perform an economic/risk review.
-- Use multisig/timelock administration.
-- Establish monitoring and an emergency pause process.
+```text
+debtAsset
+rewardAmountIn
+minDebtAssetOut
+swapData
+```
 
-See `SECURITY.md` for the security gate checklist.
+The executor claims the proven reward, swaps CENT through the configured adapter, repays the borrower's debt with `repayFor`, and returns unused debt tokens or unused reward CENT to the borrower.
+
+The keeper must not invent reward amounts or proofs. Those values must come from the published epoch distribution data.
+
+## 10. Keeper
+
+The old factory/vault keeper is legacy and should not be used for the current veCENT architecture.
+
+The current keeper design should discover active veCENT NFTs, determine current ownership, read self-repay configuration and debt state, consume the published reward-claim data, evaluate viable swap routes, and call `executeSelfRepay` only when the route and minimum output are acceptable.
+
+A keeper wallet only submits transactions; it does not own user funds or determine reward entitlement.
+
+## 11. Security gate
+
+Before mainnet:
+
+- independent smart-contract audit
+- unit/fuzz/invariant testing
+- oracle manipulation and stale-feed testing
+- liquidation edge-case testing
+- ERC-20 behavior testing
+- route/min-output/slippage testing
+- multisig/timelock administration
+- monitoring and emergency pause procedures
+
+Never commit private keys, seed phrases, or provider credentials to GitHub or frontend code.
