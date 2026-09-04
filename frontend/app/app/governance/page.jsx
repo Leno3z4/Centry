@@ -96,6 +96,7 @@ function GovernanceContent() {
   const [positionAmount, setPositionAmount] = useState({});
   const [positionWeeks, setPositionWeeks] = useState({});
   const [busyPosition, setBusyPosition] = useState(null);
+  const [earlyExitPosition, setEarlyExitPosition] = useState(null);
 
   const busy = governance.isPending || governance.isConfirming;
   const needsApproval = isConnected && Number(amount || 0) > Number(governance.centAllowance || 0);
@@ -185,15 +186,21 @@ function GovernanceContent() {
     }
   };
 
-  const withdrawPosition = async (tokenId) => {
-    if (busyPosition) return;
-    if (!window.confirm('Early withdrawal returns 75% of locked CENT. The 25% fee is split 60% to RevenueRewards and 40% to treasury. Already-earned rewards remain claimable.')) return;
+  const openEarlyExit = (position) => {
+    if (busyPosition || busy || position.weeksLeft <= 0) return;
+    setEarlyExitPosition(position);
+  };
+
+  const withdrawPosition = async () => {
+    const position = earlyExitPosition;
+    if (!position || busyPosition) return;
     try {
       setNotice('');
-      setBusyPosition(`withdraw-${tokenId}`);
-      await governance.withdrawLock(BigInt(tokenId));
+      setBusyPosition(`withdraw-${position.tokenId}`);
+      await governance.withdrawLock(BigInt(position.tokenId));
       await governance.refetchAll();
-      setNotice(`veCENT #${tokenId} withdrawn. Earned rewards remain claimable.`);
+      setEarlyExitPosition(null);
+      setNotice(`veCENT #${position.tokenId} withdrawn. Earned rewards remain claimable.`);
     } catch (error) {
       setNotice(error?.shortMessage || error?.message || 'Transaction failed.');
     } finally {
@@ -280,12 +287,6 @@ function GovernanceContent() {
                     <div><span>Unlocks</span><strong>{formatDate(position.end)}</strong></div>
                   </div>
 
-                  <div className="position-early-exit">
-                    <div><span>Early exit</span><strong>25% fee · 75% returned</strong></div>
-                    <button type="button" className="secondary-btn early-exit-btn" disabled={busyPosition !== null || position.weeksLeft <= 0} onClick={() => withdrawPosition(position.tokenId)}>
-                      {busyPosition === `withdraw-${position.tokenId}` ? 'Working…' : 'Exit early'}
-                    </button>
-                  </div>
                   <div className="position-actions-grid">
                     <div className="position-action-block">
                       <label className="field-label" htmlFor={`add-${position.tokenId}`}>Add CENT</label>
@@ -299,11 +300,57 @@ function GovernanceContent() {
                       <button type="button" className="secondary-btn full-btn" disabled={extending} onClick={() => extendPosition(position.tokenId, position.weeksLeft)}>{extending ? 'Working…' : `Extend to ${selectedWeeks} weeks`}</button>
                     </div>
                   </div>
+
+                  <button
+                    type="button"
+                    className="early-exit-link"
+                    disabled={busyPosition !== null || position.weeksLeft <= 0}
+                    onClick={() => openEarlyExit(position)}
+                  >
+                    Exit early
+                  </button>
                 </article>
               );
             })}
           </div>
         </section>
+      ) : null}
+
+      {earlyExitPosition ? (
+        <div className="early-exit-modal-backdrop" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !busyPosition) setEarlyExitPosition(null);
+        }}>
+          <div className="early-exit-modal" role="dialog" aria-modal="true" aria-labelledby="early-exit-title">
+            <div className="early-exit-modal-head">
+              <div>
+                <span className="modal-kicker">veCENT position</span>
+                <h2 id="early-exit-title">Exit veCENT #{earlyExitPosition.tokenId} early?</h2>
+              </div>
+              <button type="button" className="modal-close" disabled={busyPosition !== null} onClick={() => setEarlyExitPosition(null)} aria-label="Close">×</button>
+            </div>
+
+            <div className="modal-position-grid">
+              <div><span>Locked</span><strong>{formatCENT(earlyExitPosition.locked)} CENT</strong></div>
+              <div><span>Voting power</span><strong>{formatCENT(earlyExitPosition.power)}</strong></div>
+              <div><span>Unlock date</span><strong>{formatDate(earlyExitPosition.end)}</strong></div>
+              <div><span>Time remaining</span><strong>{earlyExitPosition.weeksLeft} weeks</strong></div>
+            </div>
+
+            <div className="modal-consequences">
+              <h3>What happens</h3>
+              <div className="consequence-row"><span>Early withdrawal fee</span><strong>25%</strong></div>
+              <div className="consequence-row"><span>Returned to you</span><strong>75% of locked CENT</strong></div>
+              <div className="consequence-row"><span>Fee to rewards</span><strong>60%</strong></div>
+              <div className="consequence-row"><span>Fee to treasury</span><strong>40%</strong></div>
+              <div className="consequence-note">Your voting power becomes zero and this veCENT position closes immediately. Any rewards already earned and published for this position remain claimable after the withdrawal.</div>
+            </div>
+
+            <div className="modal-actions">
+              <button type="button" className="secondary-btn" disabled={busyPosition !== null} onClick={() => setEarlyExitPosition(null)}>Keep lock</button>
+              <button type="button" className="primary-btn" disabled={busyPosition !== null} onClick={withdrawPosition}>{busyPosition === `withdraw-${earlyExitPosition.tokenId}` ? 'Waiting for confirmation…' : 'Confirm early exit'}</button>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       <style jsx global>{`
@@ -319,12 +366,16 @@ function GovernanceContent() {
         .position-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:16px}
         .position-detail-grid>div{padding:12px;border:1px solid #2a2235;border-radius:10px;background:rgba(11,8,18,.48)}
         .position-detail-grid span{display:block;color:#8f849d;font-size:11px}.position-detail-grid strong{display:block;margin-top:5px;font-size:13px}
-        .position-early-exit{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:16px;padding:13px 14px;border:1px solid #3a2a48;border-radius:11px;background:rgba(48,24,35,.34)}
-        .position-early-exit span{display:block;color:#8f849d;font-size:11px}.position-early-exit strong{display:block;margin-top:4px;font-size:13px}
-        .early-exit-btn{white-space:nowrap}
-        .position-actions-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:14px}
+        .position-actions-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:16px}
         .position-action-block{display:grid;gap:8px}.position-action-block .field-label{margin-top:0}
         .secondary-btn{border:1px solid #3a3047;background:#14101d;color:#e7ddf2;border-radius:10px;padding:11px 14px;font-weight:700;cursor:pointer}.secondary-btn:hover{border-color:#66567d;background:#1a1424}.secondary-btn:disabled{opacity:.48;cursor:not-allowed}
+        .early-exit-link{display:inline-flex;margin-top:14px;padding:0;border:0;background:none;color:#a995bb;font-size:12px;font-weight:700;cursor:pointer}.early-exit-link:hover{text-decoration:underline;color:#d7c7e6}.early-exit-link:disabled{opacity:.38;cursor:not-allowed;text-decoration:none}
+        .early-exit-modal-backdrop{position:fixed;inset:0;z-index:200;display:grid;place-items:center;padding:22px;background:rgba(5,3,9,.72);backdrop-filter:blur(10px)}
+        .early-exit-modal{width:min(520px,100%);max-height:min(760px,calc(100vh - 44px));overflow:auto;border:1px solid #3a2b4d;border-radius:18px;background:linear-gradient(145deg,rgba(20,14,29,.99),rgba(10,7,16,.99));box-shadow:0 30px 100px rgba(0,0,0,.62),0 0 0 1px rgba(168,85,247,.04);padding:20px}
+        .early-exit-modal-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.modal-kicker{display:block;color:#8f849d;font-size:10px;text-transform:uppercase;letter-spacing:.12em}.early-exit-modal h2{margin:5px 0 0;font-size:20px;line-height:1.2}.modal-close{width:32px;height:32px;border:1px solid #30253b;border-radius:9px;background:#110c19;color:#9d90a9;font-size:20px;line-height:1;cursor:pointer}.modal-close:hover{color:#eee7f3;border-color:#514161}.modal-close:disabled{opacity:.45;cursor:not-allowed}
+        .modal-position-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:18px}.modal-position-grid>div{padding:12px;border:1px solid #2d2438;border-radius:10px;background:rgba(11,8,18,.5)}.modal-position-grid span{display:block;color:#8f849d;font-size:10px}.modal-position-grid strong{display:block;margin-top:5px;font-size:13px}
+        .modal-consequences{margin-top:16px;padding:15px;border:1px solid #3a2b43;border-radius:12px;background:rgba(43,21,31,.24)}.modal-consequences h3{margin:0 0 10px;font-size:13px}.consequence-row{display:flex;justify-content:space-between;gap:16px;padding:8px 0;border-bottom:1px solid #292031;font-size:12px}.consequence-row:last-of-type{border-bottom:0}.consequence-row span{color:#a196ad}.consequence-row strong{color:#ece4f3}.consequence-note{margin-top:11px;color:#b1a6bb;font-size:11px;line-height:1.55}
+        .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}.modal-actions .primary-btn,.modal-actions .secondary-btn{min-width:130px}
         .duration-picker{position:relative;z-index:1;min-width:0}
         .duration-picker-open{z-index:30}
         .duration-trigger{display:flex;width:100%;min-height:44px;align-items:center;justify-content:space-between;gap:10px;padding:0 13px;border:1px solid var(--line);border-radius:11px;background:#0b0712;color:var(--text);text-align:left;cursor:pointer}
@@ -334,7 +385,7 @@ function GovernanceContent() {
         .duration-option{display:flex;width:100%;min-height:42px;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px;border:1px solid transparent;border-radius:10px;background:transparent;color:#e9e2f2;text-align:left;cursor:pointer}
         .duration-option:hover,.duration-option-active{border-color:#382a4a;background:linear-gradient(120deg,#171022,#120c1b)}
         .duration-check{color:#b38aff;font-weight:800}
-        @media (max-width:700px){.position-actions-grid,.position-detail-grid{grid-template-columns:1fr}.position-topline{align-items:flex-start;flex-direction:column}.position-power{text-align:left}}
+        @media (max-width:700px){.position-actions-grid,.position-detail-grid,.modal-position-grid{grid-template-columns:1fr}.position-topline{align-items:flex-start;flex-direction:column}.position-power{text-align:left}.modal-actions{flex-direction:column-reverse}.modal-actions .primary-btn,.modal-actions .secondary-btn{width:100%}}
       `}</style>
     </div>
   );
