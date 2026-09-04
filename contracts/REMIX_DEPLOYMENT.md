@@ -8,9 +8,9 @@ Use Solidity `0.8.24`.
 
 Compile with the optimizer enabled after the source compiles cleanly without errors.
 
-## 2. Existing live Centry deployments
+## 2. Current live Centry deployments
 
-Do not redeploy or edit these unless a separate architectural blocker is identified.
+Do not redeploy or edit an already-working live contract unless a separate architectural blocker is identified.
 
 ```text
 RATE_STRATEGY
@@ -26,18 +26,27 @@ CENT
 0x76e6d50D3151f0B4645ac0E53584F4204Fc6f0e3
 
 veCENT
-0xb39411595eD14991377411bcE52677C05AcE978D
+0xF8B71bAed42c28e7e376C4DbD4A137047B92a503
 
-veCENT REWARDS
-0x2fA236D227cb139FbA6E43396614cf8E23CF3050
+RevenueRewards
+0x06e627ce43F2ddd37e8f196824f7049416c3025b
 
-SELF-REPAY EXECUTOR V2
-0xfCDBA35d9255927E9226f371761c1A9Ad82cF831
+SelfRepayExecutorV2
+0x02356D1E4557b8D656cE1493D751C914EA84efe7
+
+RevenueEngine
+0x6AA8F37c3cAcb31aCa8cB631E618E38425275ea7
+
+CentryRevenueToCENTUnitFlowAdapter
+0x27B20DcF9bbD080E992B7CADFd617e7DB3438D8E
+
+Existing self-repay UnitFlow adapter
+0x8430a1cF22C1cd09F7B7eD2C3dB0D66020f6F020
 ```
 
 ## 3. UnitFlow deployment
 
-The verified Arc Testnet UnitFlow UniversalRouter is:
+The Arc Testnet UnitFlow UniversalRouter is:
 
 ```text
 0xEaF3195bE51861632cd32850973C9515DA48e76F
@@ -55,19 +64,45 @@ Arc native USDC ERC-20 interface:
 0x3600000000000000000000000000000000000000
 ```
 
-The live tested route is:
+The existing tested self-repay route is:
 
 ```text
 CENT
-  -> UnitFlow V2 exact-input (command 0x08)
+  -> UnitFlow V2 exact-input (0x08)
   -> WUSDC
-  -> UnitFlow WUSDC unwrap (command 0x0c)
+  -> UnitFlow unwrap (0x0c)
   -> native USDC
 ```
 
-### Deploy `CentryUnitFlowSwapAdapter`
+The revenue-side route is:
 
-Constructor arguments:
+```text
+native USDC
+  -> UnitFlow wrap native (0x0b)
+  -> WUSDC
+  -> UnitFlow V2 exact-input (0x08)
+  -> CENT
+```
+
+## 4. Existing self-repay UnitFlow adapter
+
+Adapter:
+
+```text
+0x8430a1cF22C1cd09F7B7eD2C3dB0D66020f6F020
+```
+
+It remains dedicated to the self-repay direction and must not be replaced by the revenue-side adapter.
+
+## 5. Revenue-side UnitFlow adapter
+
+`CentryRevenueToCENTUnitFlowAdapter`:
+
+```text
+0x27B20DcF9bbD080E992B7CADFd617e7DB3438D8E
+```
+
+Constructor configuration used for the deployment:
 
 ```text
 unitFlowUniversalRouter_
@@ -83,48 +118,159 @@ initialOwner_
 YOUR ADMIN / DEPLOYER WALLET
 ```
 
-The adapter deployed for the current testnet configuration is:
-
-```text
-0xDc99c84B8B58d0E0f2dA5E29567Be5325b4b3545
-```
-
-## 4. Configure the UnitFlow adapter
-
-On `CentryUnitFlowSwapAdapter`:
-
-### A. Authorize SelfRepayExecutorV2
+Authorize the RevenueEngine once:
 
 ```text
 setAuthorizedCaller(
-    0xfCDBA35d9255927E9226f371761c1A9Ad82cF831
+    0x6AA8F37c3cAcb31aCa8cB631E618E38425275ea7
 )
 ```
 
-### B. Enable native USDC output
+The adapter accepts Arc native USDC as `tokenIn` and CENT as `tokenOut` only.
+
+## 6. RevenueEngine configuration
+
+RevenueEngine:
 
 ```text
-setOutputSupported(
+0x6AA8F37c3cAcb31aCa8cB631E618E38425275ea7
+```
+
+Set the revenue-side acquisition adapter:
+
+```text
+setCENTAcquisitionAdapter(
+    0x27B20DcF9bbD080E992B7CADFd617e7DB3438D8E
+)
+```
+
+Enable native USDC as a supported revenue asset:
+
+```text
+setRevenueAssetSupported(
     0x3600000000000000000000000000000000000000,
     true
 )
 ```
 
-Do not enable other output assets until their real UnitFlow routes have been tested.
-
-## 5. Configure SelfRepayExecutorV2
-
-On `CentrySelfRepayExecutorV2`:
-
-### A. Set the UnitFlow adapter
+Set the reward allocation percentage in BPS:
 
 ```text
-setSwapAdapter(
-    0xDc99c84B8B58d0E0f2dA5E29567Be5325b4b3545
+10_000 = 100%
+2_000  = 20%
+```
+
+Treasury must approve RevenueEngine for the ERC-20 USDC before `pullRevenue()`.
+
+The live tested flow is:
+
+```text
+Treasury
+  -> RevenueEngine.pullRevenue()
+  -> RevenueEngine.allocateRevenue()
+  -> RevenueEngine.acquireCENT()
+  -> revenue-side UnitFlow adapter
+  -> CENT
+```
+
+## 7. Reward funding
+
+RevenueRewards:
+
+```text
+0x06e627ce43F2ddd37e8f196824f7049416c3025b
+```
+
+The rewards contract distributes funded CENT and does not mint reward tokens.
+
+RevenueEngine can fund acquired CENT with:
+
+```text
+fundAcquiredCENT(amount)
+```
+
+## 8. Reward epoch generation
+
+The repository generates allocations from on-chain state by default.
+
+Run:
+
+```text
+npm run generate:rewards
+```
+
+The allocation generator automatically reads:
+
+```text
+RevenueRewards.latestEpoch()
+RevenueRewards.rewardToken()
+RevenueRewards.veCENT()
+CENT.balanceOf(RevenueRewards)
+```
+
+It selects the next free epoch, subtracts outstanding active/pending reward obligations, uses the remaining funded CENT as the default budget, scans active veCENT positions, and allocates proportionally to voting power.
+
+Optional overrides remain available for controlled tests:
+
+```text
+CENTRY_REWARD_EPOCH
+CENTRY_REWARD_BUDGET
+```
+
+Normal operation does not require either variable.
+
+The output is:
+
+```text
+keeper/reward-allocations.json
+```
+
+Then generate the Merkle manifest:
+
+```text
+npm run generate:manifest
+```
+
+or both in one command:
+
+```text
+npm run generate:rewards
+```
+
+## 9. Queue and activate an epoch
+
+After reviewing the generated allocation/manifest, commit the manifest root with:
+
+```text
+queueEpoch(
+    epoch,
+    root,
+    rewardBudget
 )
 ```
 
-### B. Enable USDC as a supported debt asset
+The reward contract requires the reward-token balance to cover the budget and enforces a two-day root delay.
+
+After the delay:
+
+```text
+activateEpoch(epoch)
+```
+
+## 10. Self-repay configuration
+
+For veCENT token ID `tokenId`, the current NFT owner enables self-repay with:
+
+```text
+setSelfRepayRecipient(
+    tokenId,
+    0x02356D1E4557b8D656cE1493D751C914EA84efe7
+)
+```
+
+The existing self-repay adapter remains configured on `SelfRepayExecutorV2`.
+
+USDC debt asset:
 
 ```text
 setDebtAssetSupported(
@@ -133,107 +279,38 @@ setDebtAssetSupported(
 )
 ```
 
-EURC and CIRBTC should be enabled only after their actual swap routes and minimum-output handling have been tested.
+## 11. Keeper
 
-## 6. Configure veCENT
+The current keeper uses the veCENT/RevenueRewards/SelfRepayExecutorV2 architecture.
 
-`CentryVotingEscrow` creates transferable ERC-721 veCENT positions. The NFT owner is the current position owner, and the locked CENT is returned to that owner after the lock expires and `withdraw` succeeds.
+It consumes the published reward manifest and does not invent reward amounts or proofs.
 
-Set the rewards controller once:
-
-```text
-setRewardsController(
-    0x2fA236D227cb139FbA6E43396614cf8E23CF3050
-)
-```
-
-Set the transfer hook once, pointing at the rewards controller:
+Required GitHub secrets:
 
 ```text
-setTransferHook(
-    0x2fA236D227cb139FbA6E43396614cf8E23CF3050
-)
+KEEPER_PRIVATE_KEY
+ARC_RPC_URL
 ```
 
-These setters are one-time configuration points.
-
-## 7. Self-repay configuration per veCENT NFT
-
-The current owner of a veCENT NFT enables self-repay by calling the rewards controller:
+Optional GitHub variables:
 
 ```text
-setSelfRepayRecipient(
-    tokenId,
-    0xfCDBA35d9255927E9226f371761c1A9Ad82cF831
-)
+CENTRY_MAX_TOKEN_SCAN
+CENTRY_MIN_NATIVE_BALANCE
 ```
 
-This makes the executor the recipient of claimed CENT rewards for that NFT.
+The keeper wallet must already be authorized on `SelfRepayExecutorV2`.
 
-A veCENT transfer clears the old self-repay configuration through the transfer hook.
-
-## 8. Reward funding and epochs
-
-The rewards controller does not mint CENT. It distributes only funded CENT.
-
-The reward flow is:
+## 12. Verification commands
 
 ```text
-protocol revenue
-    -> approved reward funding
-    -> veCENT reward epoch
-    -> CENT reward claim
-    -> UnitFlow CENT swap
-    -> debt-asset repayment
+npm run read:reward-epoch
+npm run validate:manifest
 ```
 
-Fund the rewards controller with CENT using:
+`validate:manifest` checks the manifest structure, Merkle proofs, and—when an RPC URL is available—the active on-chain epoch/root.
 
-```text
-CENT.approve(
-    0x2fA236D227cb139FbA6E43396614cf8E23CF3050,
-    amount
-)
-
-fund(amount)
-```
-
-Epochs are queued with a Merkle root and have a two-day activation delay.
-
-## 9. Self-repay execution
-
-`CentrySelfRepayExecutorV2` supports multiple debt assets in one call.
-
-The keeper must provide:
-
-- epoch
-- veCENT tokenId
-- exact reward amount
-- Merkle proof
-- one or more swap instructions
-
-Each instruction contains:
-
-```text
-debtAsset
-rewardAmountIn
-minDebtAssetOut
-swapData
-```
-
-The executor claims the proven reward, swaps CENT through the configured adapter, repays the borrower's debt with `repayFor`, and returns unused debt tokens or unused reward CENT to the borrower.
-
-The keeper must not invent reward amounts or proofs. Those values must come from the published epoch distribution data.
-
-## 10. Keeper
-
-The old factory/vault keeper is legacy and should not be used for the current veCENT architecture.
-
-The current keeper design should discover active veCENT NFTs, determine current ownership, read self-repay configuration and debt state, consume the published reward-claim data, evaluate viable swap routes, and call `executeSelfRepay` only when the route and minimum output are acceptable.
-
-A keeper wallet only submits transactions; it does not own user funds or determine reward entitlement.
-
-## 11. Security gate
+## 13. Security gate
 
 Before mainnet:
 
