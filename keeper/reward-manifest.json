@@ -1,7 +1,15 @@
 {
   "version": 1,
-  "epoch": 0,
-  "root": "0x0000000000000000000000000000000000000000000000000000000000000000",
-  "source": "PLACEHOLDER",
-  "positions": []
+  "generatedAt": "2026-09-04T13:01:09.758Z",
+  "epoch": 1,
+  "root": "0x79e1365799b5976b7d4d6c8d662ba29d486dd6bd7742bf5130d910b2ac9903e2",
+  "source": "Centry deterministic voting-power reward allocation",
+  "positions": [
+    {
+      "tokenId": "1",
+      "amount": "200034243965223974",
+      "proof": [],
+      "instructions": []
+    }
+  ]
 }

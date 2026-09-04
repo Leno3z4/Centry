@@ -1,18 +1,22 @@
 {
+  "version": 1,
+  "generatedAt": "2026-09-04T13:01:09.523Z",
   "epoch": 1,
-  "source": "Centry authoritative reward allocation",
+  "rewardBudget": "200034243965223974",
+  "totalVotingPower": "1711201414326414326",
+  "rewardToken": "0x76e6d50D3151f0B4645ac0E53584F4204Fc6f0e3",
+  "revenueRewards": "0x06e627ce43F2ddd37e8f196824f7049416c3025b",
+  "veCENT": "0xF8B71bAed42c28e7e376C4DbD4A137047B92a503",
+  "source": "Centry deterministic voting-power reward allocation",
   "positions": [
     {
       "tokenId": "1",
-      "amount": "0",
-      "instructions": [
-        {
-          "debtAsset": "0x3600000000000000000000000000000000000000",
-          "rewardAmountIn": "0",
-          "minDebtAssetOut": "0",
-          "swapData": "0x"
-        }
-      ]
+      "owner": "0xd422fc040ad9294d553150Cf5646Ab0B1729E443",
+      "votingPower": "1711201414326414326",
+      "lockedAmount": "0",
+      "lockEnd": "0",
+      "amount": "200034243965223974",
+      "instructions": []
     }
   ]
 }
