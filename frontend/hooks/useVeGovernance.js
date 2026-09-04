@@ -54,6 +54,15 @@ export function useVeGovernance() {
     query: { enabled: !!address && configured && correctNetwork },
   });
 
+  const firstTokenId = tokenIds?.[0];
+  const { data: firstLockEnd } = useReadContract({
+    address: CONTRACT_ADDRESSES.veCentry,
+    abi: VE_CENTRY_ABI,
+    functionName: 'lockEnd',
+    args: firstTokenId !== undefined ? [firstTokenId] : undefined,
+    query: { enabled: firstTokenId !== undefined && configured && correctNetwork },
+  });
+
   const { data: centBalance, refetch: refetchCentBalance } = useReadContract({
     address: CONTRACT_ADDRESSES.centryToken,
     abi: ERC20_ABI,
@@ -75,17 +84,9 @@ export function useVeGovernance() {
   const { writeContractAsync, isPending, error } = useWriteContract();
 
   const sendAndWait = async (request) => {
-    if (!address) {
-      throw new Error('Connect your wallet before submitting a transaction.');
-    }
-
-    if (chainId !== arcTestnet.id) {
-      throw new Error('Switch your wallet to Arc Testnet before submitting a transaction.');
-    }
-
-    if (!publicClient) {
-      throw new Error('Wallet client is not ready. Please reconnect your wallet.');
-    }
+    if (!address) throw new Error('Connect your wallet before submitting a transaction.');
+    if (chainId !== arcTestnet.id) throw new Error('Switch your wallet to Arc Testnet before submitting a transaction.');
+    if (!publicClient) throw new Error('Wallet client is not ready. Please reconnect your wallet.');
 
     setTransactionPending(true);
     setTransactionError(null);
@@ -94,11 +95,7 @@ export function useVeGovernance() {
       const hash = await writeContractAsync(request);
       setTransactionHash(hash);
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
-
-      if (receipt.status !== 'success') {
-        throw new Error('The transaction was reverted onchain.');
-      }
-
+      if (receipt.status !== 'success') throw new Error('The transaction was reverted onchain.');
       return hash;
     } catch (caughtError) {
       setTransactionError(caughtError);
@@ -113,12 +110,8 @@ export function useVeGovernance() {
       address: CONTRACT_ADDRESSES.centryToken,
       abi: ERC20_ABI,
       functionName: 'approve',
-      args: [
-        CONTRACT_ADDRESSES.veCentry,
-        parseUnits(amount.toString(), 18),
-      ],
+      args: [CONTRACT_ADDRESSES.veCentry, parseUnits(amount.toString(), 18)],
     });
-
     await refetchCentAllowance();
     return hash;
   };
@@ -127,10 +120,7 @@ export function useVeGovernance() {
     address: CONTRACT_ADDRESSES.veCentry,
     abi: VE_CENTRY_ABI,
     functionName: 'createLock',
-    args: [
-      parseUnits(amount.toString(), 18),
-      BigInt(weeks) * 7n * 24n * 60n * 60n,
-    ],
+    args: [parseUnits(amount.toString(), 18), BigInt(weeks) * 7n * 24n * 60n * 60n],
   });
 
   const increaseLock = (tokenId, amount) => sendAndWait({
@@ -144,10 +134,7 @@ export function useVeGovernance() {
     address: CONTRACT_ADDRESSES.veCentry,
     abi: VE_CENTRY_ABI,
     functionName: 'extendLock',
-    args: [
-      tokenId,
-      BigInt(weeks) * 7n * 24n * 60n * 60n,
-    ],
+    args: [tokenId, BigInt(weeks) * 7n * 24n * 60n * 60n],
   });
 
   const refetchAll = () => Promise.all([
@@ -167,6 +154,7 @@ export function useVeGovernance() {
     tokenId: ownedIds[0] ?? 0,
     votingPower: formatUnits(votingPower ?? 0n, 18),
     lockedAmount: formatUnits(lockedAmount ?? 0n, 18),
+    lockEnd: Number(firstLockEnd ?? 0n) * 1000,
     centBalance: formatUnits(centBalance ?? 0n, 18),
     centAllowance: formatUnits(centAllowance ?? 0n, 18),
     approveCENT,
