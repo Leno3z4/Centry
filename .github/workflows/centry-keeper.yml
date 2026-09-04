@@ -2,6 +2,7 @@ name: Centry V2 Self-Repay Keeper
 
 on:
   workflow_dispatch:
+
   schedule:
     - cron: "*/5 * * * *"
 
@@ -27,31 +28,39 @@ jobs:
           node-version: 20
 
       - name: Install ethers
-        run: npm install --no-save ethers@6
+        run: |
+          npm install --no-save ethers@6
+
+      - name: Validate reward manifest
+        env:
+          ARC_RPC_URL_SECRET: ${{ secrets.ARC_RPC_URL }}
+          ARC_RPC_URL_VARIABLE: ${{ vars.ARC_RPC_URL }}
+        run: |
+          node scripts/validate-reward-manifest.js
 
       - name: Run Centry V2 keeper
         env:
           ARC_RPC_URL_SECRET: ${{ secrets.ARC_RPC_URL }}
           ARC_RPC_URL_VARIABLE: ${{ vars.ARC_RPC_URL }}
+
           KEEPER_PRIVATE_KEY: ${{ secrets.KEEPER_PRIVATE_KEY }}
 
           CENTRY_VECENT: "0xF8B71bAed42c28e7e376C4DbD4A137047B92a503"
+
           CENTRY_REVENUE_REWARDS: "0x06e627ce43F2ddd37e8f196824f7049416c3025b"
+
           CENTRY_SELF_REPAY_EXECUTOR: "0x02356D1E4557b8D656cE1493D751C914EA84efe7"
+
           CENTRY_LENDING_POOL: "0x90C935687D91b3352b2C55cd79389C92950D94BD"
 
-          CENTRY_REWARD_MANIFEST_URL_SECRET: ${{ secrets.CENTRY_REWARD_MANIFEST_URL }}
-          CENTRY_REWARD_MANIFEST_URL_VARIABLE: ${{ vars.CENTRY_REWARD_MANIFEST_URL }}
+          CENTRY_MAX_TOKEN_SCAN: ${{ vars.CENTRY_MAX_TOKEN_SCAN || '1000' }}
 
-          CENTRY_MAX_TOKEN_SCAN_SECRET: ${{ secrets.CENTRY_MAX_TOKEN_SCAN }}
-          CENTRY_MAX_TOKEN_SCAN_VARIABLE: ${{ vars.CENTRY_MAX_TOKEN_SCAN }}
-
-          CENTRY_MIN_NATIVE_BALANCE_SECRET: ${{ secrets.CENTRY_MIN_NATIVE_BALANCE }}
-          CENTRY_MIN_NATIVE_BALANCE_VARIABLE: ${{ vars.CENTRY_MIN_NATIVE_BALANCE }}
+          CENTRY_MIN_NATIVE_BALANCE: ${{ vars.CENTRY_MIN_NATIVE_BALANCE || '0.001' }}
 
         run: |
           node <<'NODE'
-          const { ethers } = require('ethers');
+          const fs = require("fs");
+          const { ethers } = require("ethers");
 
           const RPC_URL =
             process.env.ARC_RPC_URL_SECRET ||
@@ -72,654 +81,606 @@ jobs:
           const LENDING_POOL =
             process.env.CENTRY_LENDING_POOL;
 
-          const MANIFEST_URL =
-            process.env.CENTRY_REWARD_MANIFEST_URL_SECRET ||
-            process.env.CENTRY_REWARD_MANIFEST_URL_VARIABLE;
+          const MANIFEST_PATH =
+            "keeper/reward-manifest.json";
 
-          const MAX_TOKEN_SCAN = BigInt(
-            process.env.CENTRY_MAX_TOKEN_SCAN_SECRET ||
-            process.env.CENTRY_MAX_TOKEN_SCAN_VARIABLE ||
-            '1000'
-          );
+          const MAX_TOKEN_SCAN =
+            BigInt(
+              process.env.CENTRY_MAX_TOKEN_SCAN ||
+              "1000"
+            );
 
-          const MIN_NATIVE_BALANCE = BigInt(
-            process.env.CENTRY_MIN_NATIVE_BALANCE_SECRET ||
-            process.env.CENTRY_MIN_NATIVE_BALANCE_VARIABLE ||
-            '1000000000000000'
-          );
+          const MIN_NATIVE_BALANCE =
+            ethers.parseEther(
+              process.env.CENTRY_MIN_NATIVE_BALANCE ||
+              "0.001"
+            );
 
-          const EXPECTED_CHAIN_ID = 5042002n;
+          const EXPECTED_CHAIN_ID =
+            5042002n;
 
-          const required = [
-            ['ARC_RPC_URL', RPC_URL],
-            ['KEEPER_PRIVATE_KEY', PRIVATE_KEY],
-            ['CENTRY_REWARD_MANIFEST_URL', MANIFEST_URL]
+          if (!RPC_URL) {
+            throw new Error(
+              "Missing ARC_RPC_URL"
+            );
+          }
+
+          if (!PRIVATE_KEY) {
+            throw new Error(
+              "Missing KEEPER_PRIVATE_KEY"
+            );
+          }
+
+          const addresses = [
+            [
+              "CENTRY_VECENT",
+              VECENT
+            ],
+            [
+              "CENTRY_REVENUE_REWARDS",
+              REWARDS
+            ],
+            [
+              "CENTRY_SELF_REPAY_EXECUTOR",
+              EXECUTOR
+            ],
+            [
+              "CENTRY_LENDING_POOL",
+              LENDING_POOL
+            ]
           ];
 
-          const missing = required
-            .filter(([, value]) => !value)
-            .map(([name]) => name);
-
-          if (missing.length > 0) {
-            throw new Error(
-              `Missing keeper configuration: ${missing.join(', ')}`
-            );
-          }
-
-          for (const [name, address] of [
-            ['CENTRY_VECENT', VECENT],
-            ['CENTRY_REVENUE_REWARDS', REWARDS],
-            ['CENTRY_SELF_REPAY_EXECUTOR', EXECUTOR],
-            ['CENTRY_LENDING_POOL', LENDING_POOL]
-          ]) {
+          for (const [
+            name,
+            address
+          ] of addresses) {
             if (!ethers.isAddress(address)) {
-              throw new Error(`${name} is not a valid address`);
-            }
-          }
-
-          const provider = new ethers.JsonRpcProvider(RPC_URL);
-          const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
-
-          const veCENT = new ethers.Contract(
-            VECENT,
-            [
-              'function nextTokenId() view returns (uint256)',
-              'function ownerOf(uint256 tokenId) view returns (address)'
-            ],
-            provider
-          );
-
-          const rewards = new ethers.Contract(
-            REWARDS,
-            [
-              'function rewardToken() view returns (address)',
-              'function veCENT() view returns (address)',
-              'function epochRoots(uint256 epoch) view returns (bytes32)',
-              'function latestEpoch() view returns (uint256)',
-              'function selfRepayRecipient(uint256 tokenId) view returns (address)',
-              'function selfRepayOwner(uint256 tokenId) view returns (address)',
-              'function claimed(uint256 epoch, uint256 tokenId) view returns (bool)'
-            ],
-            provider
-          );
-
-          const lendingPool = new ethers.Contract(
-            LENDING_POOL,
-            [
-              'function borrowBalance(address borrower, address asset) view returns (uint256)'
-            ],
-            provider
-          );
-
-          const executor = new ethers.Contract(
-            EXECUTOR,
-            [
-              'function isKeeper(address keeper) view returns (bool)',
-              'function swapAdapter() view returns (address)',
-              'function supportedDebtAsset(address asset) view returns (bool)',
-              'function executeSelfRepay(uint256 epoch, uint256 tokenId, uint256 rewardAmount, bytes32[] rewardProof, tuple(address debtAsset,uint256 rewardAmountIn,uint256 minDebtAssetOut,bytes swapData)[] instructions)'
-            ],
-            wallet
-          );
-
-          function normalizeAddress(value, label) {
-            if (!ethers.isAddress(value)) {
-              throw new Error(`${label} is not a valid address: ${value}`);
-            }
-
-            return ethers.getAddress(value);
-          }
-
-          function isMeaningfulHex(value) {
-            return typeof value === 'string' &&
-              value.startsWith('0x') &&
-              value.length % 2 === 0;
-          }
-
-          function assertBytes32(value, label) {
-            if (
-              typeof value !== 'string' ||
-              !/^0x[0-9a-fA-F]{64}$/.test(value)
-            ) {
               throw new Error(
-                `${label} must be a 32-byte hex value`
+                `${name} is not a valid address`
               );
             }
           }
 
-          function parseManifestPayload(payload) {
-            if (payload && typeof payload === 'object') {
-              return payload;
-            }
-
-            if (typeof payload === 'string') {
-              return JSON.parse(payload);
-            }
-
-            throw new Error('Reward manifest is not a JSON object');
+          if (
+            !fs.existsSync(
+              MANIFEST_PATH
+            )
+          ) {
+            throw new Error(
+              `${MANIFEST_PATH} does not exist`
+            );
           }
 
-          async function fetchManifest(url) {
-            const response = await fetch(url, {
-              headers: {
-                accept: 'application/json'
-              }
-            });
+          const manifest =
+            JSON.parse(
+              fs.readFileSync(
+                MANIFEST_PATH,
+                "utf8"
+              )
+            );
 
-            if (!response.ok) {
-              throw new Error(
-                `Reward manifest request failed: ${response.status} ${response.statusText}`
+          const provider =
+            new ethers.JsonRpcProvider(
+              RPC_URL
+            );
+
+          const wallet =
+            new ethers.Wallet(
+              PRIVATE_KEY,
+              provider
+            );
+
+          const veCENT =
+            new ethers.Contract(
+              VECENT,
+              [
+                "function nextTokenId() view returns (uint256)",
+
+                "function ownerOf(uint256 tokenId) view returns (address)"
+              ],
+              provider
+            );
+
+          const rewards =
+            new ethers.Contract(
+              REWARDS,
+              [
+                "function rewardToken() view returns (address)",
+
+                "function veCENT() view returns (address)",
+
+                "function epochRoots(uint256 epoch) view returns (bytes32)",
+
+                "function latestEpoch() view returns (uint256)",
+
+                "function selfRepayRecipient(uint256 tokenId) view returns (address)",
+
+                "function selfRepayOwner(uint256 tokenId) view returns (address)",
+
+                "function claimed(uint256 epoch, uint256 tokenId) view returns (bool)"
+              ],
+              provider
+            );
+
+          const lendingPool =
+            new ethers.Contract(
+              LENDING_POOL,
+              [
+                "function borrowBalance(address borrower, address asset) view returns (uint256)"
+              ],
+              provider
+            );
+
+          const executor =
+            new ethers.Contract(
+              EXECUTOR,
+              [
+                "function isKeeper(address keeper) view returns (bool)",
+
+                "function swapAdapter() view returns (address)",
+
+                "function supportedDebtAsset(address asset) view returns (bool)",
+
+                "function executeSelfRepay(uint256 epoch,uint256 tokenId,uint256 rewardAmount,bytes32[] rewardProof,tuple(address debtAsset,uint256 rewardAmountIn,uint256 minDebtAssetOut,bytes swapData)[] instructions)"
+              ],
+              wallet
+            );
+
+          const network =
+            await provider.getNetwork();
+
+          console.log(
+            `Connected chain ID: ${network.chainId.toString()}`
+          );
+
+          if (
+            network.chainId !==
+            EXPECTED_CHAIN_ID
+          ) {
+            throw new Error(
+              `Wrong network. Expected Arc Testnet ${EXPECTED_CHAIN_ID}, got ${network.chainId}`
+            );
+          }
+
+          console.log(
+            `Keeper wallet: ${wallet.address}`
+          );
+
+          const nativeBalance =
+            await provider.getBalance(
+              wallet.address
+            );
+
+          console.log(
+            `Keeper gas balance: ${ethers.formatEther(nativeBalance)}`
+          );
+
+          if (
+            nativeBalance <
+            MIN_NATIVE_BALANCE
+          ) {
+            throw new Error(
+              "Keeper native balance is below configured minimum"
+            );
+          }
+
+          const keeperAuthorized =
+            await executor.isKeeper(
+              wallet.address
+            );
+
+          if (!keeperAuthorized) {
+            throw new Error(
+              "Keeper wallet is not authorized on SelfRepayExecutorV2"
+            );
+          }
+
+          const adapter =
+            await executor.swapAdapter();
+
+          if (
+            adapter === ethers.ZeroAddress
+          ) {
+            throw new Error(
+              "SelfRepayExecutorV2 has no swap adapter configured"
+            );
+          }
+
+          console.log(
+            `Swap adapter: ${adapter}`
+          );
+
+          const rewardsVeCENT =
+            await rewards.veCENT();
+
+          if (
+            ethers.getAddress(
+              rewardsVeCENT
+            ) !==
+            ethers.getAddress(
+              VECENT
+            )
+          ) {
+            throw new Error(
+              "RevenueRewards.veCENT() does not match configured veCENT"
+            );
+          }
+
+          const manifestEpoch =
+            BigInt(
+              manifest.epoch
+            );
+
+          const latestEpoch =
+            await rewards.latestEpoch();
+
+          console.log(
+            `Manifest epoch: ${manifestEpoch.toString()}`
+          );
+
+          console.log(
+            `Latest active epoch: ${latestEpoch.toString()}`
+          );
+
+          if (
+            manifestEpoch >
+            latestEpoch
+          ) {
+            throw new Error(
+              "Manifest epoch is not active yet"
+            );
+          }
+
+          const onChainRoot =
+            await rewards.epochRoots(
+              manifestEpoch
+            );
+
+          if (
+            onChainRoot === ethers.ZeroHash
+          ) {
+            throw new Error(
+              "Manifest epoch has no active Merkle root"
+            );
+          }
+
+          if (
+            manifest.root &&
+            manifest.root.toLowerCase() !==
+            onChainRoot.toLowerCase()
+          ) {
+            throw new Error(
+              "Manifest root does not match on-chain root"
+            );
+          }
+
+          const nextTokenId =
+            await veCENT.nextTokenId();
+
+          const upperBound =
+            nextTokenId <
+            MAX_TOKEN_SCAN + 1n
+              ? nextTokenId
+              : MAX_TOKEN_SCAN + 1n;
+
+          console.log(
+            `veCENT next token ID: ${nextTokenId.toString()}`
+          );
+
+          console.log(
+            `Keeper scan upper bound: ${upperBound.toString()}`
+          );
+
+          let executed = 0;
+
+          let skipped = 0;
+
+          for (
+            const position of
+            manifest.positions
+          ) {
+            const tokenId =
+              BigInt(
+                position.tokenId
               );
-            }
-
-            return parseManifestPayload(await response.json());
-          }
-
-          function validateManifestShape(manifest) {
-            if (
-              !manifest ||
-              typeof manifest !== 'object'
-            ) {
-              throw new Error('Invalid reward manifest');
-            }
 
             if (
-              !Number.isInteger(manifest.epoch) &&
-              typeof manifest.epoch !== 'string'
+              tokenId <= 0n ||
+              tokenId >= upperBound
             ) {
-              throw new Error('Manifest epoch is missing');
+              skipped++;
+
+              continue;
             }
 
-            if (!Array.isArray(manifest.positions)) {
-              throw new Error(
-                'Manifest positions array is missing'
-              );
-            }
+            let owner;
 
-            for (const position of manifest.positions) {
-              if (!position || typeof position !== 'object') {
-                throw new Error('Invalid manifest position');
-              }
-
-              if (
-                position.tokenId === undefined ||
-                position.amount === undefined
-              ) {
-                throw new Error(
-                  'Manifest position requires tokenId and amount'
-                );
-              }
-
-              if (!Array.isArray(position.proof)) {
-                throw new Error(
-                  `Manifest proof missing for tokenId ${position.tokenId}`
-                );
-              }
-
-              for (const proofItem of position.proof) {
-                assertBytes32(
-                  proofItem,
-                  `proof for tokenId ${position.tokenId}`
-                );
-              }
-
-              if (!Array.isArray(position.instructions)) {
-                throw new Error(
-                  `Manifest instructions missing for tokenId ${position.tokenId}`
-                );
-              }
-
-              for (const instruction of position.instructions) {
-                if (
-                  !instruction ||
-                  typeof instruction !== 'object'
-                ) {
-                  throw new Error(
-                    `Invalid swap instruction for tokenId ${position.tokenId}`
-                  );
-                }
-
-                normalizeAddress(
-                  instruction.debtAsset,
-                  `debtAsset for tokenId ${position.tokenId}`
-                );
-
-                if (
-                  instruction.rewardAmountIn === undefined ||
-                  instruction.minDebtAssetOut === undefined
-                ) {
-                  throw new Error(
-                    `Swap instruction missing amounts for tokenId ${position.tokenId}`
-                  );
-                }
-
-                if (!isMeaningfulHex(instruction.swapData || '0x')) {
-                  throw new Error(
-                    `swapData for tokenId ${position.tokenId} is invalid`
-                  );
-                }
-              }
-            }
-          }
-
-          function toBigInt(value, label) {
             try {
-              return BigInt(value);
-            } catch {
-              throw new Error(
-                `${label} is not a valid integer`
-              );
-            }
-          }
-
-          async function main() {
-            const network = await provider.getNetwork();
-
-            console.log(
-              `Connected chainId: ${network.chainId.toString()}`
-            );
-
-            if (network.chainId !== EXPECTED_CHAIN_ID) {
-              throw new Error(
-                `Wrong network: expected Arc Testnet (${EXPECTED_CHAIN_ID}), got ${network.chainId}`
-              );
-            }
-
-            console.log(
-              `Keeper address: ${wallet.address}`
-            );
-
-            const nativeBalance =
-              await provider.getBalance(wallet.address);
-
-            console.log(
-              `Keeper gas balance: ${ethers.formatEther(nativeBalance)} native`
-            );
-
-            if (nativeBalance < MIN_NATIVE_BALANCE) {
-              throw new Error(
-                'Keeper native balance is below configured minimum'
-              );
-            }
-
-            const keeperAllowed =
-              await executor.isKeeper(wallet.address);
-
-            if (!keeperAllowed) {
-              throw new Error(
-                `Keeper ${wallet.address} is not authorized on SelfRepayExecutorV2`
-              );
-            }
-
-            const configuredAdapter =
-              await executor.swapAdapter();
-
-            if (!ethers.isAddress(configuredAdapter) ||
-              configuredAdapter === ethers.ZeroAddress) {
-              throw new Error(
-                'SelfRepayExecutorV2 has no swap adapter configured'
-              );
-            }
-
-            const rewardsToken =
-              await rewards.rewardToken();
-
-            const rewardsVeCENT =
-              await rewards.veCENT();
-
-            if (
-              ethers.getAddress(rewardsVeCENT) !==
-              ethers.getAddress(VECENT)
-            ) {
-              throw new Error(
-                'RevenueRewards.veCENT() does not match configured veCENT'
-              );
-            }
-
-            console.log(
-              `Reward token: ${rewardsToken}`
-            );
-
-            console.log(
-              `Swap adapter: ${configuredAdapter}`
-            );
-
-            const manifest = await fetchManifest(MANIFEST_URL);
-
-            validateManifestShape(manifest);
-
-            const epoch = toBigInt(
-              manifest.epoch,
-              'manifest epoch'
-            );
-
-            const onChainLatestEpoch =
-              await rewards.latestEpoch();
-
-            console.log(
-              `Manifest epoch: ${epoch.toString()}`
-            );
-
-            console.log(
-              `On-chain latest epoch: ${onChainLatestEpoch.toString()}`
-            );
-
-            if (epoch > onChainLatestEpoch) {
-              throw new Error(
-                'Manifest epoch is not activated on-chain'
-              );
-            }
-
-            const onChainRoot =
-              await rewards.epochRoots(epoch);
-
-            if (
-              onChainRoot === ethers.ZeroHash
-            ) {
-              throw new Error(
-                `No active Merkle root for epoch ${epoch}`
-              );
-            }
-
-            if (
-              manifest.root &&
-              manifest.root.toLowerCase() !==
-              onChainRoot.toLowerCase()
-            ) {
-              throw new Error(
-                'Manifest root does not match on-chain epoch root'
-              );
-            }
-
-            let scanned = 0n;
-            let eligible = 0;
-            let skipped = 0;
-
-            const nextTokenId =
-              await veCENT.nextTokenId();
-
-            console.log(
-              `veCENT nextTokenId: ${nextTokenId.toString()}`
-            );
-
-            const upperBound =
-              nextTokenId < MAX_TOKEN_SCAN + 1n
-                ? nextTokenId
-                : MAX_TOKEN_SCAN + 1n;
-
-            const manifestByTokenId =
-              new Map();
-
-            for (const position of manifest.positions) {
-              const tokenId =
-                toBigInt(
-                  position.tokenId,
-                  'manifest tokenId'
+              owner =
+                await veCENT.ownerOf(
+                  tokenId
                 );
-
-              manifestByTokenId.set(
-                tokenId.toString(),
-                position
+            } catch {
+              console.log(
+                `tokenId ${tokenId}: NFT does not exist`
               );
+
+              skipped++;
+
+              continue;
             }
+
+            if (
+              owner === ethers.ZeroAddress
+            ) {
+              skipped++;
+
+              continue;
+            }
+
+            const configuredRecipient =
+              await rewards.selfRepayRecipient(
+                tokenId
+              );
+
+            const configuredOwner =
+              await rewards.selfRepayOwner(
+                tokenId
+              );
+
+            if (
+              configuredRecipient ===
+              ethers.ZeroAddress
+            ) {
+              console.log(
+                `tokenId ${tokenId}: self-repay disabled`
+              );
+
+              skipped++;
+
+              continue;
+            }
+
+            if (
+              ethers.getAddress(
+                configuredOwner
+              ) !==
+              ethers.getAddress(
+                owner
+              )
+            ) {
+              console.log(
+                `tokenId ${tokenId}: owner changed, self-repay configuration is stale`
+              );
+
+              skipped++;
+
+              continue;
+            }
+
+            if (
+              ethers.getAddress(
+                configuredRecipient
+              ) !==
+              ethers.getAddress(
+                EXECUTOR
+              )
+            ) {
+              console.log(
+                `tokenId ${tokenId}: self-repay recipient is not executor`
+              );
+
+              skipped++;
+
+              continue;
+            }
+
+            const alreadyClaimed =
+              await rewards.claimed(
+                manifestEpoch,
+                tokenId
+              );
+
+            if (
+              alreadyClaimed
+            ) {
+              console.log(
+                `tokenId ${tokenId}: reward already claimed`
+              );
+
+              skipped++;
+
+              continue;
+            }
+
+            const rewardAmount =
+              BigInt(
+                position.amount
+              );
+
+            if (
+              rewardAmount <= 0n
+            ) {
+              console.log(
+                `tokenId ${tokenId}: reward amount is zero`
+              );
+
+              skipped++;
+
+              continue;
+            }
+
+            const instructions = [];
 
             for (
-              let tokenId = 1n;
-              tokenId < upperBound;
-              tokenId++
+              const rawInstruction of
+              position.instructions
             ) {
-              scanned++;
-
-              const position =
-                manifestByTokenId.get(
-                  tokenId.toString()
-                );
-
-              if (!position) {
-                continue;
-              }
-
-              let owner;
-
-              try {
-                owner =
-                  await veCENT.ownerOf(tokenId);
-              } catch {
-                console.log(
-                  `tokenId ${tokenId}: does not exist, skipping`
-                );
-                skipped++;
-                continue;
-              }
-
-              if (
-                !owner ||
-                owner === ethers.ZeroAddress
-              ) {
-                skipped++;
-                continue;
-              }
-
-              const selfRepayRecipient =
-                await rewards.selfRepayRecipient(
-                  tokenId
-                );
-
-              const selfRepayOwner =
-                await rewards.selfRepayOwner(
-                  tokenId
-                );
-
-              if (
-                selfRepayRecipient === ethers.ZeroAddress ||
-                ethers.getAddress(selfRepayOwner) !==
-                ethers.getAddress(owner)
-              ) {
-                console.log(
-                  `tokenId ${tokenId}: self-repay not configured for current owner, skipping`
-                );
-                skipped++;
-                continue;
-              }
-
-              if (
+              const debtAsset =
                 ethers.getAddress(
-                  selfRepayRecipient
-                ) !==
-                ethers.getAddress(
-                  EXECUTOR
-                )
+                  rawInstruction.debtAsset
+                );
+
+              const supported =
+                await executor.supportedDebtAsset(
+                  debtAsset
+                );
+
+              if (!supported) {
+                console.log(
+                  `tokenId ${tokenId}: ${debtAsset} is not a supported debt asset`
+                );
+
+                continue;
+              }
+
+              const currentDebt =
+                await lendingPool.borrowBalance(
+                  owner,
+                  debtAsset
+                );
+
+              if (
+                currentDebt === 0n
               ) {
-                console.log(
-                  `tokenId ${tokenId}: self-repay recipient is not executor, skipping`
-                );
-                skipped++;
                 continue;
               }
 
-              const alreadyClaimed =
-                await rewards.claimed(
-                  epoch,
-                  tokenId
+              const rewardAmountIn =
+                BigInt(
+                  rawInstruction.rewardAmountIn
                 );
 
-              if (alreadyClaimed) {
-                console.log(
-                  `tokenId ${tokenId}: epoch allocation already claimed, skipping`
-                );
-                skipped++;
-                continue;
-              }
-
-              const rewardAmount =
-                toBigInt(
-                  position.amount,
-                  `reward amount for tokenId ${tokenId}`
+              const minDebtAssetOut =
+                BigInt(
+                  rawInstruction.minDebtAssetOut
                 );
 
-              if (rewardAmount <= 0n) {
-                console.log(
-                  `tokenId ${tokenId}: reward amount is zero, skipping`
-                );
-                skipped++;
-                continue;
-              }
-
-              const instructions = [];
-
-              for (
-                const rawInstruction of
-                position.instructions
+              if (
+                rewardAmountIn <= 0n
               ) {
-                const debtAsset =
-                  normalizeAddress(
-                    rawInstruction.debtAsset,
-                    'debtAsset'
-                  );
-
-                const supported =
-                  await executor.supportedDebtAsset(
-                    debtAsset
-                  );
-
-                if (!supported) {
-                  console.log(
-                    `tokenId ${tokenId}: debt asset ${debtAsset} is not supported, skipping entire position`
-                  );
-                  instructions.length = 0;
-                  break;
-                }
-
-                const debt =
-                  await lendingPool.borrowBalance(
-                    owner,
-                    debtAsset
-                  );
-
-                if (debt === 0n) {
-                  continue;
-                }
-
-                const rewardAmountIn =
-                  toBigInt(
-                    rawInstruction.rewardAmountIn,
-                    'rewardAmountIn'
-                  );
-
-                const minDebtAssetOut =
-                  toBigInt(
-                    rawInstruction.minDebtAssetOut,
-                    'minDebtAssetOut'
-                  );
-
-                if (
-                  rewardAmountIn <= 0n ||
-                  minDebtAssetOut <= 0n
-                ) {
-                  continue;
-                }
-
-                instructions.push({
-                  debtAsset,
-                  rewardAmountIn,
-                  minDebtAssetOut,
-                  swapData:
-                    rawInstruction.swapData || '0x'
-                });
-              }
-
-              if (instructions.length === 0) {
-                console.log(
-                  `tokenId ${tokenId}: no executable debt instructions, skipping`
-                );
-                skipped++;
                 continue;
               }
 
-              const totalInput =
-                instructions.reduce(
-                  (sum, item) =>
-                    sum + item.rewardAmountIn,
-                  0n
-                );
-
-              if (totalInput > rewardAmount) {
-                console.log(
-                  `tokenId ${tokenId}: instruction inputs exceed reward allocation, skipping`
-                );
-                skipped++;
+              if (
+                minDebtAssetOut <= 0n
+              ) {
                 continue;
               }
 
+              instructions.push({
+                debtAsset,
+
+                rewardAmountIn,
+
+                minDebtAssetOut,
+
+                swapData:
+                  rawInstruction.swapData ||
+                  "0x"
+              });
+            }
+
+            if (
+              instructions.length === 0
+            ) {
               console.log(
-                `tokenId ${tokenId}: owner=${owner}, reward=${rewardAmount.toString()}, instructions=${instructions.length}`
+                `tokenId ${tokenId}: no executable debt remains`
               );
 
-              const populated =
-                await executor.executeSelfRepay.populateTransaction(
-                  epoch,
-                  tokenId,
-                  rewardAmount,
-                  position.proof,
-                  instructions
-                );
+              skipped++;
 
-              const gasEstimate =
-                await provider.estimateGas({
-                  ...populated,
-                  from: wallet.address
-                });
+              continue;
+            }
 
-              const feeData =
-                await provider.getFeeData();
-
-              const overrides = {
-                gasLimit:
-                  gasEstimate * 120n / 100n
-              };
-
-              if (feeData.maxFeePerGas) {
-                overrides.maxFeePerGas =
-                  feeData.maxFeePerGas;
-
-                overrides.maxPriorityFeePerGas =
-                  feeData.maxPriorityFeePerGas ?? 0n;
-              } else if (feeData.gasPrice) {
-                overrides.gasPrice =
-                  feeData.gasPrice;
-              }
-
-              const tx =
-                await executor.executeSelfRepay(
-                  epoch,
-                  tokenId,
-                  rewardAmount,
-                  position.proof,
-                  instructions,
-                  overrides
-                );
-
-              console.log(
-                `tokenId ${tokenId}: submitted ${tx.hash}`
+            const totalRewardInput =
+              instructions.reduce(
+                (
+                  total,
+                  instruction
+                ) =>
+                  total +
+                  instruction.rewardAmountIn,
+                0n
               );
 
-              const receipt =
-                await tx.wait();
-
+            if (
+              totalRewardInput >
+              rewardAmount
+            ) {
               console.log(
-                `tokenId ${tokenId}: confirmed in block ${receipt.blockNumber}`
+                `tokenId ${tokenId}: instructions use more reward than allocation`
               );
 
-              eligible++;
+              skipped++;
+
+              continue;
             }
 
             console.log(
-              `V2 keeper summary: scanned=${scanned}, executed=${eligible}, skipped=${skipped}`
+              `tokenId ${tokenId}: executing ${rewardAmount.toString()} reward across ${instructions.length} debt route(s)`
             );
+
+            const gasEstimate =
+              await executor.executeSelfRepay.estimateGas(
+                manifestEpoch,
+                tokenId,
+                rewardAmount,
+                position.proof,
+                instructions
+              );
+
+            const feeData =
+              await provider.getFeeData();
+
+            const overrides = {
+              gasLimit:
+                gasEstimate *
+                120n /
+                100n
+            };
+
+            if (
+              feeData.maxFeePerGas
+            ) {
+              overrides.maxFeePerGas =
+                feeData.maxFeePerGas;
+
+              overrides.maxPriorityFeePerGas =
+                feeData.maxPriorityFeePerGas ??
+                0n;
+            } else if (
+              feeData.gasPrice
+            ) {
+              overrides.gasPrice =
+                feeData.gasPrice;
+            }
+
+            const tx =
+              await executor.executeSelfRepay(
+                manifestEpoch,
+                tokenId,
+                rewardAmount,
+                position.proof,
+                instructions,
+                overrides
+              );
+
+            console.log(
+              `tokenId ${tokenId}: submitted ${tx.hash}`
+            );
+
+            const receipt =
+              await tx.wait();
+
+            console.log(
+              `tokenId ${tokenId}: confirmed in block ${receipt.blockNumber}`
+            );
+
+            executed++;
           }
 
-          main().catch((error) => {
-            console.error(error);
-            process.exit(1);
-          });
+          console.log(
+            `Centry V2 keeper complete: executed=${executed}, skipped=${skipped}`
+          );
           NODE
