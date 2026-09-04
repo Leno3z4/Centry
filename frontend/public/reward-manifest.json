@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "generatedAt": "2026-09-04T13:01:09.758Z",
+  "epoch": 1,
+  "root": "0x79e1365799b5976b7d4d6c8d662ba29d486dd6bd7742bf5130d910b2ac9903e2",
+  "source": "Centry deterministic voting-power reward allocation",
+  "positions": [
+    {
+      "tokenId": "1",
+      "amount": "200034243965223974",
+      "proof": [],
+      "instructions": [
+        {
+          "debtAsset": "0x3600000000000000000000000000000000000000",
+          "rewardAmountIn": "200034243965223974",
+          "minDebtAssetOut": "19681",
+          "swapData": "0x"
+        }
+      ]
+    }
+  ],
+  "selfRepay": {
+    "debtAsset": "0x3600000000000000000000000000000000000000",
+    "quoteSource": "UnitFlow v2.5 swap router",
+    "slippageBps": "100",
+    "generatedAt": "2026-09-04T13:29:05.032Z"
+  }
+}
