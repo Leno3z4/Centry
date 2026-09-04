@@ -16,6 +16,7 @@ import { CONTRACT_ADDRESSES } from '../../../constants/contracts';
 import { VE_CENTRY_ABI } from '../../../constants/abis';
 
 const ARC_CHAIN_ID = 5042002;
+const ROOT_DELAY_SECONDS = 2 * 24 * 60 * 60;
 const REWARDS_ABI = [
   { type: 'function', name: 'latestEpoch', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'epochRoots', stateMutability: 'view', inputs: [{ name: 'epoch', type: 'uint256' }], outputs: [{ type: 'bytes32' }] },
@@ -182,6 +183,11 @@ function RewardsContent() {
     manifest && pendingRoot !== ZERO_ROOT && String(pendingRoot).toLowerCase() === String(manifestRoot).toLowerCase(),
   );
   const pendingCountdown = pendingForManifest ? Math.max(0, readyAt - now) : 0;
+  const progressPercent = active
+    ? 100
+    : pendingForManifest
+      ? Math.min(100, Math.max(0, ((ROOT_DELAY_SECONDS - pendingCountdown) / ROOT_DELAY_SECONDS) * 100))
+      : 0;
 
   const claimPosition = async (position, index) => {
     if (!isConnected || chainId !== ARC_CHAIN_ID || !active || !rootMatches) return;
@@ -315,8 +321,13 @@ function RewardsContent() {
             <div><span>Timelock</span><strong>{pendingForManifest ? formatCountdown(pendingCountdown) : active ? 'Complete' : '—'}</strong></div>
           </div>
           <div className="reward-progress">
-            <div className="reward-progress-head"><span>Distribution progress</span><strong>{active ? 'Live' : pendingForManifest ? 'In progress' : 'Waiting'}</strong></div>
-            <div className="reward-progress-track"><div className={`reward-progress-fill ${active ? 'complete' : pendingForManifest ? 'running' : ''}`} /></div>
+            <div className="reward-progress-head"><span>Distribution progress</span><strong>{active ? 'Live' : pendingForManifest ? `${progressPercent.toFixed(0)}%` : 'Waiting'}</strong></div>
+            <div className="reward-progress-track">
+              <div
+                className={`reward-progress-fill ${active ? 'complete' : pendingForManifest ? 'running' : ''}`}
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
             <p>{pendingForManifest ? 'The epoch has been queued and is moving through its safety delay before activation.' : active ? 'The epoch is active and rewards can be claimed.' : 'The protocol is waiting for the next distribution to be queued.'}</p>
           </div>
         </div>
@@ -334,9 +345,31 @@ function RewardsContent() {
         .rewards-stats-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
         .reward-metric strong{font-variant-numeric:tabular-nums}
         .reward-status-metric strong{letter-spacing:.02em}
-        .reward-position-list{display:grid;gap:12px}.reward-position{padding:17px;border:1px solid #2d233b;border-radius:14px;background:rgba(13,9,21,.76)}
-        .reward-position-main{display:flex;justify-content:space-between;gap:20px;align-items:center}.reward-position-title{display:flex;align-items:center;gap:12px}.reward-position-title .token{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:#241938;color:#d9c8ff;font-weight:800}.reward-position-title strong,.reward-position-amount strong{display:block}.reward-position-title small,.reward-position-amount span{display:block;margin-top:4px;color:#8f849d;font-size:11px}.reward-position-amount{text-align:right}.reward-position-actions{display:flex;justify-content:flex-end;margin-top:15px}.reward-position-actions .primary-btn{min-width:150px}.reward-position-actions .primary-btn:disabled{opacity:.48;cursor:not-allowed}
-        .reward-status-card{display:grid;gap:0;border:1px solid #2d233b;border-radius:14px;overflow:hidden;background:rgba(13,9,21,.52)}.reward-status-card>div{display:flex;justify-content:space-between;align-items:center;padding:15px 16px;border-bottom:1px solid #2a2235}.reward-status-card>div:last-child{border-bottom:0}.reward-status-card span{color:#91869f;font-size:12px}.reward-status-card strong{font-size:13px}.reward-progress{margin-top:16px;padding:16px;border:1px solid #2d233b;border-radius:14px;background:rgba(15,10,24,.56)}.reward-progress-head{display:flex;justify-content:space-between;gap:16px;font-size:12px}.reward-progress-head span{color:#8f849d}.reward-progress-head strong{font-size:11px;text-transform:uppercase;letter-spacing:.08em}.reward-progress-track{height:5px;margin-top:12px;border-radius:999px;background:#251c30;overflow:hidden}.reward-progress-fill{height:100%;width:8%;border-radius:999px;background:#51405f}.reward-progress-fill.running{width:58%;background:#a992c7;box-shadow:0 0 14px rgba(169,146,199,.2)}.reward-progress-fill.complete{width:100%;background:#55dca1;box-shadow:0 0 14px rgba(85,220,161,.18)}.reward-progress p{margin:12px 0 0;color:#8f849d;font-size:11px;line-height:1.6}
+        .reward-position-list{display:grid;gap:12px}
+        .reward-position{padding:17px;border:1px solid #2d233b;border-radius:14px;background:rgba(13,9,21,.76)}
+        .reward-position-main{display:flex;justify-content:space-between;gap:20px;align-items:center}
+        .reward-position-title{display:flex;align-items:center;gap:12px}
+        .reward-position-title .token{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:#241938;color:#d9c8ff;font-weight:800}
+        .reward-position-title strong,.reward-position-amount strong{display:block}
+        .reward-position-title small,.reward-position-amount span{display:block;margin-top:4px;color:#8f849d;font-size:11px}
+        .reward-position-amount{text-align:right}
+        .reward-position-actions{display:flex;justify-content:flex-end;margin-top:15px}
+        .reward-position-actions .primary-btn{min-width:150px}
+        .reward-position-actions .primary-btn:disabled{opacity:.48;cursor:not-allowed}
+        .reward-status-card{display:grid;gap:0;border:1px solid #2d233b;border-radius:14px;overflow:hidden;background:rgba(13,9,21,.52)}
+        .reward-status-card>div{display:flex;justify-content:space-between;align-items:center;padding:15px 16px;border-bottom:1px solid #2a2235}
+        .reward-status-card>div:last-child{border-bottom:0}
+        .reward-status-card span{color:#91869f;font-size:12px}
+        .reward-status-card strong{font-size:13px}
+        .reward-progress{margin-top:16px;padding:16px;border:1px solid #2d233b;border-radius:14px;background:rgba(15,10,24,.56)}
+        .reward-progress-head{display:flex;justify-content:space-between;gap:16px;font-size:12px}
+        .reward-progress-head span{color:#8f849d}
+        .reward-progress-head strong{font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-variant-numeric:tabular-nums}
+        .reward-progress-track{height:5px;margin-top:12px;border-radius:999px;background:#251c30;overflow:hidden}
+        .reward-progress-fill{height:100%;width:0;border-radius:999px;background:#51405f;transition:width .85s linear,background .2s ease}
+        .reward-progress-fill.running{background:#a992c7;box-shadow:0 0 14px rgba(169,146,199,.2)}
+        .reward-progress-fill.complete{background:#55dca1;box-shadow:0 0 14px rgba(85,220,161,.18)}
+        .reward-progress p{margin:12px 0 0;color:#8f849d;font-size:11px;line-height:1.6}
         @media (max-width:900px){.rewards-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
         @media (max-width:640px){.rewards-stats-grid{grid-template-columns:1fr}.reward-position-main{align-items:flex-start;flex-direction:column}.reward-position-amount{text-align:left}.reward-header-status{display:none}}
       `}</style>
