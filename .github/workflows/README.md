@@ -13,16 +13,12 @@ Network: Arc Testnet, chain ID `5042002`.
 
 ## GitHub Actions configuration
 
-Required GitHub secret:
+Required GitHub secrets:
 
 - `KEEPER_PRIVATE_KEY`
 - `ARC_RPC_URL`
 
-Required GitHub variable or secret:
-
-- `CENTRY_REWARD_MANIFEST_URL`
-
-Optional GitHub variable or secret:
+Optional GitHub variables:
 
 - `CENTRY_MAX_TOKEN_SCAN` (default `1000`)
 - `CENTRY_MIN_NATIVE_BALANCE` (default `0.001` native token)
@@ -37,25 +33,55 @@ The executor must already have a swap adapter configured and each supported debt
 
 The keeper intentionally does not invent reward amounts or Merkle proofs.
 
-The manifest is an externally published JSON document containing:
+The repository now generates the reward allocation and Merkle manifest from on-chain state by default:
 
-- an activated `epoch`
-- the optional `root` (the keeper also reads the root from-chain)
-- each veCENT `tokenId`
-- the exact reward `amount`
-- the exact Merkle `proof`
-- swap instructions for supported debt assets
+```text
+npm run generate:rewards
+```
 
-The workflow checks the manifest epoch/root against on-chain RevenueRewards before executing.
+The allocation generator automatically:
 
-See `reward-manifest.example.json`.
+- reads `latestEpoch()` from RevenueRewards and selects the next free epoch
+- reads `rewardToken()` and the funded reward-token balance from RevenueRewards
+- subtracts outstanding active and pending epoch obligations before selecting a new budget
+- reads the deployed `veCENT()` address from RevenueRewards
+- scans active veCENT positions and uses current voting power
+- writes `keeper/reward-allocations.json`
+
+`CENTRY_REWARD_EPOCH` and `CENTRY_REWARD_BUDGET` remain optional safety overrides. Normal operation does not require them.
+
+The manifest generator then converts the allocation file into `keeper/reward-manifest.json` with the exact Merkle leaf format expected by RevenueRewards.
+
+Validation remains separate:
+
+```text
+npm run validate:manifest
+```
+
+Validation requires the epoch to already be active when an RPC URL is supplied; before activation it can still perform structural validation when run without RPC configuration.
+
+## Manual reward workflow
+
+For a newly funded reward epoch:
+
+```text
+npm run generate:rewards
+```
+
+Then inspect `keeper/reward-allocations.json` and `keeper/reward-manifest.json` before publishing or queuing the root.
+
+The reward root must be queued on RevenueRewards and allowed to pass the two-day root delay before the keeper can execute claims.
 
 ## Important
 
 Do not use the old:
 
+`CENTRY_REWARD_MANIFEST_URL`
+
+or:
+
 `CENTRY_SELF_REPAYING_FACTORY`
 
-setting. It is no longer used by this V2 keeper.
+settings. They are no longer part of the current V2 keeper flow.
 
 The revenue engine and reward-root generation remain separate from the keeper. The keeper only executes already-authorized, already-funded, already-proven reward allocations.
