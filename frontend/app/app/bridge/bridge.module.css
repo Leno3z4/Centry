@@ -90,8 +90,12 @@
 
 .chainPicker {
   position: relative;
-  z-index: 2;
+  z-index: 1;
   min-width: 0;
+}
+
+.chainPickerOpen {
+  z-index: 30;
 }
 
 .chainTrigger,
