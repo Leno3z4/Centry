@@ -41,6 +41,9 @@ jobs:
           ARC_RPC_URL_VARIABLE: ""
         run: npm run validate:manifest
 
+      - name: Publish manifest to frontend
+        run: cp keeper/reward-manifest.json frontend/public/reward-manifest.json
+
       - name: Show generated reward summary
         run: |
           node - <<'NODE'
@@ -72,7 +75,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add keeper/reward-allocations.json keeper/reward-manifest.json
+          git add keeper/reward-allocations.json keeper/reward-manifest.json frontend/public/reward-manifest.json
 
           if git diff --cached --quiet; then
             echo "No reward-file changes to commit."
