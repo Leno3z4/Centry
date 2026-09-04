@@ -161,12 +161,6 @@ export default function MultiMarketLending() {
     );
   }
 
-  const reserveStatus = lending.reserveLoading
-    ? 'Checking reserve…'
-    : lending.reserveActive
-      ? 'Reserve live'
-      : 'Reserve not enabled';
-
   return (
     <div className={styles.page}>
       <div className={styles.header}>

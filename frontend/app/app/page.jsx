@@ -161,7 +161,6 @@ function OverviewContent() {
               <a key={market.id} href="/app/lending" className="market-list-item">
                 <div className="asset"><span className="token usdc">{market.symbol === 'cirBTC' ? '₿' : market.symbol === 'EURC' ? '€' : '$'}</span><div><strong>{market.symbol}</strong><small>{market.name}</small></div></div>
                 <div><span>Status</span><strong className="status-live">Live</strong></div>
-                <div><span>Network</span><strong>Arc Testnet</strong></div>
                 <span className="market-arrow">Open</span>
               </a>
             ))}

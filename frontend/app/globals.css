@@ -128,7 +128,7 @@ select option { background: #0d0a18; color: #f7f4ff; }
 .panel h2 { margin: 6px 0 0; font-size: 20px; letter-spacing: -0.4px; }
 .panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; margin-bottom: 20px; }
 .market-list { display: grid; gap: 8px; }
-.market-list-item { display: grid; width: 100%; grid-template-columns: minmax(180px, 1.5fr) minmax(80px, 0.7fr) minmax(150px, 1fr) auto; align-items: center; gap: 15px; padding: 15px; border: 1px solid var(--line-soft); border-radius: 12px; background: #0c0814; color: inherit; text-align: left; transition: border-color 160ms ease, background 160ms ease, transform 160ms ease; }
+.market-list-item { display: grid; width: 100%; grid-template-columns: minmax(180px, 1.5fr) minmax(80px, 0.7fr) auto; align-items: center; gap: 15px; padding: 15px; border: 1px solid var(--line-soft); border-radius: 12px; background: #0c0814; color: inherit; text-align: left; transition: border-color 160ms ease, background 160ms ease, transform 160ms ease; }
 .market-list-item:hover { border-color: #51327d; background: #100b19; transform: translateY(-1px); }
 .market-list-item > div:not(.asset) span { display: block; margin-bottom: 4px; color: #635a6d; font-size: 9px; }
 .market-list-item > div:not(.asset) strong { font-size: 11px; }
