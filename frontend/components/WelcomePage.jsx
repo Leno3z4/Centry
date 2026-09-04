@@ -1,8 +1,13 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import Link from 'next/link';
+import { useReadContracts } from 'wagmi';
+import { formatUnits } from 'viem';
 import ProtocolStats from './ProtocolStats';
+import { ACTIVE_MARKETS } from '../constants/markets';
+import { CONTRACT_ADDRESSES } from '../constants/contracts';
+import { LENDING_POOL_ABI, ORACLE_ABI } from '../constants/abis';
 
 const FLOW = [
     {
@@ -28,7 +33,71 @@ const PRINCIPLES = [
     ['Simple by design', 'A focused protocol surface without pretending to be bigger than the current deployment.'],
 ];
 
+function formatUsd(value) {
+    const number = Number(value ?? 0);
+    if (!Number.isFinite(number)) return '—';
+    return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    }).format(number);
+}
+
+function formatUsdFromPrice(amountRaw, priceRaw, decimals) {
+    try {
+        const amount = Number(formatUnits(amountRaw ?? 0n, decimals));
+        const price = Number(formatUnits(priceRaw ?? 0n, 18));
+        return Number.isFinite(amount) && Number.isFinite(price) ? amount * price : null;
+    } catch {
+        return null;
+    }
+}
+
 export default function WelcomePage() {
+    const suppliedContracts = useMemo(
+        () => ACTIVE_MARKETS.flatMap((market) => [
+            {
+                address: CONTRACT_ADDRESSES.lendingPool,
+                abi: LENDING_POOL_ABI,
+                functionName: 'currentSupply',
+                args: [market.address],
+            },
+            {
+                address: CONTRACT_ADDRESSES.oracle,
+                abi: ORACLE_ABI,
+                functionName: 'getPrice',
+                args: [market.address],
+            },
+        ]),
+        [],
+    );
+
+    const { data: suppliedResults, isLoading: suppliedLoading } = useReadContracts({
+        contracts: suppliedContracts,
+        query: { enabled: Boolean(CONTRACT_ADDRESSES.lendingPool && CONTRACT_ADDRESSES.oracle) },
+    });
+
+    const suppliedAssets = ACTIVE_MARKETS.map((market, index) => {
+        const supplyResult = suppliedResults?.[index * 2];
+        const priceResult = suppliedResults?.[index * 2 + 1];
+        const supplyRaw = supplyResult?.result ?? 0n;
+        const priceResultRaw = Array.isArray(priceResult?.result) ? priceResult.result[0] : 0n;
+        const valueUsd = formatUsdFromPrice(supplyRaw, priceResultRaw, market.decimals);
+
+        return {
+            ...market,
+            valueUsd,
+            supplied: supplyRaw > 0n,
+            ready: supplyResult?.status === 'success' && priceResult?.status === 'success',
+        };
+    }).filter((market) => market.supplied);
+
+    const suppliedTotalUsd = suppliedAssets.reduce(
+        (total, market) => total + (market.valueUsd ?? 0),
+        0,
+    );
+
     return (
         <main className="landing-page">
             <nav className="landing-nav">
@@ -63,26 +132,24 @@ export default function WelcomePage() {
 
                 <div className="landing-hero-panel">
                     <div className="landing-hero-panel-top">
-                        <span>THE MARKET</span>
-                        <strong>USDC</strong>
+                        <span>SUPPLIED LIQUIDITY</span>
+                        <strong>{suppliedLoading ? '—' : formatUsd(suppliedTotalUsd)}</strong>
                     </div>
-                    <div className="landing-market-line">
-                        <span>Current deployment</span>
-                        <b>Arc Testnet</b>
+                    <div className="landing-supplied-list">
+                        {suppliedLoading && (
+                            <div className="landing-supplied-empty">Reading live supplied assets…</div>
+                        )}
+                        {!suppliedLoading && suppliedAssets.map((market) => (
+                            <div className="landing-supplied-row" key={market.id}>
+                                <span>{market.symbol}</span>
+                                <b>{market.valueUsd === null ? '—' : formatUsd(market.valueUsd)}</b>
+                            </div>
+                        ))}
+                        {!suppliedLoading && suppliedAssets.length === 0 && (
+                            <div className="landing-supplied-empty">No supplied assets yet.</div>
+                        )}
                     </div>
-                    <div className="landing-market-line">
-                        <span>Asset</span>
-                        <b>Native USDC</b>
-                    </div>
-                    <div className="landing-market-line">
-                        <span>Risk</span>
-                        <b>Onchain health factor</b>
-                    </div>
-                    <div className="landing-market-line">
-                        <span>Rewards</span>
-                        <b>Revenue-funded CENT</b>
-                    </div>
-                    <Link className="landing-panel-link" href="/app">View live market <span>→</span></Link>
+                    <Link className="landing-panel-link" href="/app">View portfolio <span>→</span></Link>
                 </div>
             </section>
 
@@ -282,12 +349,14 @@ export default function WelcomePage() {
                     box-shadow: 0 30px 90px rgba(0,0,0,.25);
                 }
 
-                .landing-hero-panel-top { display: flex; justify-content: space-between; align-items: center; padding-bottom: 22px; border-bottom: 1px solid #231a2f; }
+                .landing-hero-panel-top { display: flex; justify-content: space-between; align-items: baseline; gap: 18px; padding-bottom: 22px; border-bottom: 1px solid #231a2f; }
                 .landing-hero-panel-top span { color: #756d83; font: 9px 'DM Mono', monospace; letter-spacing: 1.5px; }
-                .landing-hero-panel-top strong { font-family: var(--display-font, Georgia, serif); font-size: 28px; }
-                .landing-market-line { display: flex; justify-content: space-between; gap: 20px; padding: 17px 0; border-bottom: 1px solid #1b1425; font-size: 11px; }
-                .landing-market-line span { color: #645b6d; }
-                .landing-market-line b { color: #d7cde1; text-align: right; font-weight: 500; }
+                .landing-hero-panel-top strong { font-family: var(--display-font, Georgia, serif); font-size: 28px; font-weight: 400; white-space: nowrap; }
+                .landing-supplied-list { min-height: 155px; }
+                .landing-supplied-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 17px 0; border-bottom: 1px solid #1b1425; font-size: 11px; }
+                .landing-supplied-row span { color: #9b91a4; }
+                .landing-supplied-row b { color: #e4dcf0; font-weight: 500; font-variant-numeric: tabular-nums; }
+                .landing-supplied-empty { display: flex; min-height: 155px; align-items: center; color: #645b6d; font-size: 11px; }
                 .landing-panel-link { display: flex; justify-content: space-between; margin-top: 20px; color: #c6adff; font-size: 11px; }
 
                 .protocol-stats { width: min(1240px, 100%); margin: 0 auto; }
