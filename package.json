@@ -12,7 +12,8 @@
     "read:reward-epoch": "node scripts/read-reward-epoch.js",
     "validate:manifest": "node scripts/validate-reward-manifest.js",
     "queue:reward-epoch": "node scripts/queue-reward-epoch.js",
-    "activate:reward-epoch": "node scripts/activate-reward-epoch.js"
+    "activate:reward-epoch": "node scripts/activate-reward-epoch.js",
+    "generate:self-repay-instructions": "node scripts/generate-self-repay-instructions.js"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.85.0",
