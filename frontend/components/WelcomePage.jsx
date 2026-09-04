@@ -42,6 +42,20 @@ export default function WelcomePage() {
                     <div className="landing-ring ring-one" />
                     <div className="landing-ring ring-two" />
                     <div className="landing-ring ring-three" />
+
+                    <div className="landing-particle-track landing-particle-track-one">
+                        <span className="landing-particle landing-particle-a" />
+                        <span className="landing-particle landing-particle-b" />
+                    </div>
+                    <div className="landing-particle-track landing-particle-track-two">
+                        <span className="landing-particle landing-particle-a" />
+                        <span className="landing-particle landing-particle-b" />
+                    </div>
+                    <div className="landing-particle-track landing-particle-track-three">
+                        <span className="landing-particle landing-particle-a" />
+                        <span className="landing-particle landing-particle-b" />
+                    </div>
+
                     <div className="landing-usdc">
                         <svg viewBox="0 0 2000 2000" role="img" aria-label="USDC" preserveAspectRatio="xMidYMid meet">
                             <path d="M1000 2000c554.17 0 1000-445.83 1000-1000S1554.17 0 1000 0 0 445.83 0 1000s445.83 1000 1000 1000z" fill="#2775ca" />
@@ -135,10 +149,115 @@ export default function WelcomePage() {
                     height: 100%;
                 }
 
+                .landing-particle-track {
+                    position: absolute;
+                    z-index: 3;
+                    top: 50%;
+                    left: 50%;
+                    width: 360px;
+                    height: 190px;
+                    transform: translate(-50%, -50%);
+                    border-radius: 50%;
+                    pointer-events: none;
+                }
+
+                .landing-particle-track-one {
+                    transform: translate(-50%, -50%) rotate(16deg) scaleX(1.08);
+                }
+
+                .landing-particle-track-two {
+                    width: 330px;
+                    height: 235px;
+                    transform: translate(-50%, -50%) rotate(-22deg) scaleX(1.06);
+                }
+
+                .landing-particle-track-three {
+                    width: 390px;
+                    height: 155px;
+                    transform: translate(-50%, -50%) rotate(43deg) scaleX(.98);
+                }
+
+                .landing-particle {
+                    position: absolute;
+                    inset: 0;
+                    display: block;
+                    transform-origin: 50% 50%;
+                    animation: landing-particle-orbit 9s linear infinite;
+                }
+
+                .landing-particle::before {
+                    content: '';
+                    position: absolute;
+                    top: 0;
+                    left: 50%;
+                    width: 5px;
+                    height: 5px;
+                    transform: translate(-50%, -50%);
+                    border-radius: 50%;
+                    background: #d8c8ff;
+                    box-shadow: 0 0 10px rgba(155, 98, 255, .75);
+                }
+
+                .landing-particle-b {
+                    animation-duration: 12s;
+                    animation-delay: -5.5s;
+                }
+
+                .landing-particle-track-two .landing-particle-a {
+                    animation-duration: 10.5s;
+                }
+
+                .landing-particle-track-two .landing-particle-b {
+                    animation-duration: 14s;
+                    animation-delay: -7s;
+                }
+
+                .landing-particle-track-three .landing-particle-a {
+                    animation-duration: 13s;
+                    animation-direction: reverse;
+                }
+
+                .landing-particle-track-three .landing-particle-b {
+                    animation-duration: 8.5s;
+                    animation-delay: -3.5s;
+                    animation-direction: reverse;
+                }
+
+                @keyframes landing-particle-orbit {
+                    from {
+                        transform: rotate(0deg);
+                    }
+                    to {
+                        transform: rotate(360deg);
+                    }
+                }
+
+                @media (prefers-reduced-motion: reduce) {
+                    .landing-particle {
+                        animation: none;
+                    }
+                }
+
                 @media (max-width: 800px) {
                     .landing-usdc {
                         width: 136px;
                         height: 136px;
+                    }
+
+                    .landing-particle-track {
+                        transform: translate(-50%, -50%) scale(.82);
+                    }
+
+                    .landing-particle-track-one {
+                        transform: translate(-50%, -50%) rotate(16deg) scale(.82) scaleX(1.08);
+                    }
+
+                    .landing-particle-track-two {
+                        transform: translate(-50%, -50%) rotate(-22deg) scale(.82) scaleX(1.06);
+                    }
+
+                    .landing-particle-track-three {
+                        transform: translate(-50%, -50%) rotate(43deg) scale(.82) scaleX(.98);
                     }
                 }
             `}</style>
