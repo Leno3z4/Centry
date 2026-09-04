@@ -8,6 +8,7 @@
     "start": "next start",
     "generate:manifest": "node scripts/generate-reward-manifest.js",
     "validate:manifest": "node scripts/validate-reward-manifest.js"
+    "generate:allocations": "node scripts/generate-reward-allocations.js"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.85.0",
