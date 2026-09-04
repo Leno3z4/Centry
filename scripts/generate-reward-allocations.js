@@ -4,26 +4,48 @@ const { ethers } = require("ethers");
 
 const RPC_URL =
   process.env.ARC_RPC_URL ||
-  process.env.ARC_RPC_URL_SECRET;
+  process.env.ARC_RPC_URL_SECRET ||
+  process.env.ARC_RPC_URL_VARIABLE;
 
-const VECENT_ADDRESS =
-  "0xF8B71bAed42c28e7e376C4DbD4A137047B92a503";
+const DEFAULT_REWARDS_ADDRESS =
+  "0x06e627ce43F2ddd37e8f196824f7049416c3025b";
+
+const REWARDS_ADDRESS =
+  process.env.CENTRY_REVENUE_REWARDS ||
+  process.env.CENTRY_REWARD_REWARDS_ADDRESS ||
+  DEFAULT_REWARDS_ADDRESS;
 
 const OUTPUT_PATH =
   process.env.CENTRY_REWARD_ALLOCATIONS_PATH ||
   "keeper/reward-allocations.json";
-
-const EPOCH =
-  process.env.CENTRY_REWARD_EPOCH;
-
-const REWARD_BUDGET =
-  process.env.CENTRY_REWARD_BUDGET;
 
 const MAX_TOKEN_SCAN =
   BigInt(
     process.env.CENTRY_MAX_TOKEN_SCAN ||
     "1000"
   );
+
+const MAX_EPOCH_SCAN =
+  BigInt(
+    process.env.CENTRY_MAX_EPOCH_SCAN ||
+    "1000"
+  );
+
+const EPOCH_LOOKAHEAD =
+  BigInt(
+    process.env.CENTRY_REWARD_EPOCH_LOOKAHEAD ||
+    "100"
+  );
+
+const REWARDS_ABI = [
+  "function latestEpoch() view returns (uint256)",
+  "function rewardToken() view returns (address)",
+  "function veCENT() view returns (address)",
+  "function epochRewardBudget(uint256 epoch) view returns (uint256)",
+  "function epochClaimed(uint256 epoch) view returns (uint256)",
+  "function epochRoots(uint256 epoch) view returns (bytes32)",
+  "function pendingEpochs(uint256 epoch) view returns (bytes32 root,uint256 rewardBudget,uint40 readyAt)"
+];
 
 const VECENT_ABI = [
   "function nextTokenId() view returns (uint256)",
@@ -36,10 +58,10 @@ const VECENT_ABI = [
 const ZERO_ADDRESS =
   ethers.ZeroAddress;
 
-function requireValue(
-  value,
-  name
-) {
+const ZERO_HASH =
+  ethers.ZeroHash;
+
+function requireValue(value, name) {
   if (
     value === undefined ||
     value === null ||
@@ -53,10 +75,7 @@ function requireValue(
   return value;
 }
 
-function toBigInt(
-  value,
-  name
-) {
+function toBigInt(value, name) {
   try {
     return BigInt(value);
   } catch {
@@ -66,49 +85,240 @@ function toBigInt(
   }
 }
 
+function normalizeAddress(address, name) {
+  if (!ethers.isAddress(address)) {
+    throw new Error(
+      `${name} is not a valid address`
+    );
+  }
+
+  return ethers.getAddress(address);
+}
+
+async function findNextEpoch(
+  rewards,
+  latestEpoch
+) {
+  let epoch =
+    latestEpoch + 1n;
+
+  for (
+    let checked = 0n;
+    checked <= EPOCH_LOOKAHEAD;
+    checked++
+  ) {
+    const activeRoot =
+      await rewards.epochRoots(
+        epoch
+      );
+
+    const pending =
+      await rewards.pendingEpochs(
+        epoch
+      );
+
+    if (
+      activeRoot === ZERO_HASH &&
+      pending.root === ZERO_HASH
+    ) {
+      return epoch;
+    }
+
+    epoch++;
+  }
+
+  throw new Error(
+    `Unable to find a free reward epoch within ${EPOCH_LOOKAHEAD.toString()} epochs`
+  );
+}
+
+async function getOutstandingActiveObligations(
+  rewards,
+  latestEpoch
+) {
+  if (
+    latestEpoch === 0n
+  ) {
+    return 0n;
+  }
+
+  if (
+    latestEpoch > MAX_EPOCH_SCAN
+  ) {
+    throw new Error(
+      `There are ${latestEpoch.toString()} active epochs; increase CENTRY_MAX_EPOCH_SCAN to account for them safely`
+    );
+  }
+
+  let outstanding =
+    0n;
+
+  for (
+    let epoch = 1n;
+    epoch <= latestEpoch;
+    epoch++
+  ) {
+    const budget =
+      await rewards.epochRewardBudget(
+        epoch
+      );
+
+    const claimed =
+      await rewards.epochClaimed(
+        epoch
+      );
+
+    if (
+      budget > claimed
+    ) {
+      outstanding +=
+        budget - claimed;
+    }
+  }
+
+  return outstanding;
+}
+
+async function getPendingObligations(
+  rewards,
+  nextEpoch
+) {
+  let outstanding =
+    0n;
+
+  const lastEpoch =
+    nextEpoch +
+    EPOCH_LOOKAHEAD;
+
+  for (
+    let epoch = 1n;
+    epoch <= lastEpoch;
+    epoch++
+  ) {
+    const pending =
+      await rewards.pendingEpochs(
+        epoch
+      );
+
+    if (
+      pending.root !== ZERO_HASH
+    ) {
+      outstanding +=
+        BigInt(
+          pending.rewardBudget
+        );
+    }
+  }
+
+  return outstanding;
+}
+
+async function resolveRewardBudget(
+  rewards,
+  rewardToken,
+  latestEpoch,
+  nextEpoch
+) {
+  const balance =
+    await rewardToken.balanceOf(
+      REWARDS_ADDRESS
+    );
+
+  const outstandingActive =
+    await getOutstandingActiveObligations(
+      rewards,
+      latestEpoch
+    );
+
+  const outstandingPending =
+    await getPendingObligations(
+      rewards,
+      nextEpoch
+    );
+
+  const outstanding =
+    outstandingActive +
+    outstandingPending;
+
+  if (
+    balance < outstanding
+  ) {
+    throw new Error(
+      `Reward token balance ${balance.toString()} is below outstanding epoch obligations ${outstanding.toString()}`
+    );
+  }
+
+  const available =
+    balance - outstanding;
+
+  if (
+    available <= 0n
+  ) {
+    throw new Error(
+      "No uncommitted reward balance is available for a new epoch"
+    );
+  }
+
+  const configuredBudget =
+    process.env.CENTRY_REWARD_BUDGET;
+
+  if (
+    configuredBudget !== undefined &&
+    configuredBudget !== ""
+  ) {
+    const requested =
+      toBigInt(
+        configuredBudget,
+        "CENTRY_REWARD_BUDGET"
+      );
+
+    if (
+      requested <= 0n
+    ) {
+      throw new Error(
+        "CENTRY_REWARD_BUDGET must be greater than zero"
+      );
+    }
+
+    if (
+      requested > available
+    ) {
+      throw new Error(
+        `CENTRY_REWARD_BUDGET ${requested.toString()} exceeds available uncommitted reward balance ${available.toString()}`
+      );
+    }
+
+    console.log(
+      `Reward budget override: ${requested.toString()}`
+    );
+
+    return requested;
+  }
+
+  console.log(
+    `Funded reward balance: ${balance.toString()}`
+  );
+
+  console.log(
+    `Outstanding active obligations: ${outstandingActive.toString()}`
+  );
+
+  console.log(
+    `Outstanding pending obligations: ${outstandingPending.toString()}`
+  );
+
+  console.log(
+    `Automatically selected uncommitted reward budget: ${available.toString()}`
+  );
+
+  return available;
+}
+
 async function main() {
   requireValue(
     RPC_URL,
     "ARC_RPC_URL"
   );
-
-  requireValue(
-    EPOCH,
-    "CENTRY_REWARD_EPOCH"
-  );
-
-  requireValue(
-    REWARD_BUDGET,
-    "CENTRY_REWARD_BUDGET"
-  );
-
-  const epoch =
-    toBigInt(
-      EPOCH,
-      "CENTRY_REWARD_EPOCH"
-    );
-
-  const rewardBudget =
-    toBigInt(
-      REWARD_BUDGET,
-      "CENTRY_REWARD_BUDGET"
-    );
-
-  if (
-    epoch <= 0n
-  ) {
-    throw new Error(
-      "Epoch must be greater than zero"
-    );
-  }
-
-  if (
-    rewardBudget <= 0n
-  ) {
-    throw new Error(
-      "Reward budget must be greater than zero"
-    );
-  }
 
   const provider =
     new ethers.JsonRpcProvider(
@@ -127,11 +337,117 @@ async function main() {
     );
   }
 
+  const rewardsAddress =
+    normalizeAddress(
+      REWARDS_ADDRESS,
+      "Rewards contract"
+    );
+
+  const rewards =
+    new ethers.Contract(
+      rewardsAddress,
+      REWARDS_ABI,
+      provider
+    );
+
+  const latestEpoch =
+    await rewards.latestEpoch();
+
+  const rewardTokenAddress =
+    normalizeAddress(
+      await rewards.rewardToken(),
+      "rewardToken()"
+    );
+
+  const veCENTAddress =
+    normalizeAddress(
+      await rewards.veCENT(),
+      "veCENT()"
+    );
+
+  const rewardToken =
+    new ethers.Contract(
+      rewardTokenAddress,
+      [
+        "function balanceOf(address account) view returns (uint256)"
+      ],
+      provider
+    );
+
   const veCENT =
     new ethers.Contract(
-      VECENT_ADDRESS,
+      veCENTAddress,
       VECENT_ABI,
       provider
+    );
+
+  const configuredEpoch =
+    process.env.CENTRY_REWARD_EPOCH;
+
+  let epoch;
+
+  if (
+    configuredEpoch !== undefined &&
+    configuredEpoch !== ""
+  ) {
+    epoch =
+      toBigInt(
+        configuredEpoch,
+        "CENTRY_REWARD_EPOCH"
+      );
+
+    if (
+      epoch <= 0n
+    ) {
+      throw new Error(
+        "CENTRY_REWARD_EPOCH must be greater than zero"
+      );
+    }
+
+    const activeRoot =
+      await rewards.epochRoots(
+        epoch
+      );
+
+    const pending =
+      await rewards.pendingEpochs(
+        epoch
+      );
+
+    if (
+      activeRoot !== ZERO_HASH ||
+      pending.root !== ZERO_HASH
+    ) {
+      throw new Error(
+        `Requested epoch ${epoch.toString()} is already active or queued`
+      );
+    }
+
+    console.log(
+      `Reward epoch override: ${epoch.toString()}`
+    );
+  } else {
+    epoch =
+      await findNextEpoch(
+        rewards,
+        latestEpoch
+      );
+
+    console.log(
+      `Latest active epoch: ${latestEpoch.toString()}`
+    );
+
+    console.log(
+      `Automatically selected next free epoch: ${epoch.toString()}`
+    );
+  }
+
+  const rewardBudget =
+    await resolveRewardBudget(
+      rewards,
+      rewardToken,
+      latestEpoch,
+      epoch
     );
 
   const nextTokenId =
@@ -144,9 +460,7 @@ async function main() {
       : MAX_TOKEN_SCAN + 1n;
 
   console.log(
-    `Scanning token IDs 1 through ${
-      scanLimit - 1n
-    }`
+    `Scanning token IDs 1 through ${scanLimit - 1n}`
   );
 
   const positions = [];
@@ -171,8 +485,7 @@ async function main() {
     }
 
     if (
-      owner ===
-      ZERO_ADDRESS
+      owner === ZERO_ADDRESS
     ) {
       continue;
     }
@@ -227,7 +540,11 @@ async function main() {
       tokenId:
         tokenId.toString(),
 
-      owner,
+      owner:
+        normalizeAddress(
+          owner,
+          `owner for token ${tokenId}`
+        ),
 
       votingPower:
         votingPower.toString(),
@@ -241,7 +558,9 @@ async function main() {
 
       lockEnd:
         locked
-          ? locked.end.toString()
+          ? BigInt(
+              locked.end
+            ).toString()
           : "0"
     });
 
@@ -250,19 +569,10 @@ async function main() {
   }
 
   if (
-    positions.length ===
-    0
+    positions.length === 0
   ) {
     throw new Error(
       "No active veCENT positions with voting power were found"
-    );
-  }
-
-  if (
-    totalVotingPower <= 0n
-  ) {
-    throw new Error(
-      "Total voting power is zero"
     );
   }
 
@@ -278,44 +588,30 @@ async function main() {
     `Reward budget: ${rewardBudget.toString()}`
   );
 
-  /*
-      Allocate reward budget proportionally
-      to voting power.
-
-      Integer division can leave a remainder.
-      We keep track of it and distribute the
-      remainder deterministically to the
-      highest-voting-power positions.
-  */
-
   const allocations =
     positions.map(
-      (
-        position
-      ) => {
+      (position) => {
         const votingPower =
           BigInt(
             position.votingPower
           );
 
-        const amount =
+        const scaled =
           rewardBudget *
-          votingPower /
-          totalVotingPower;
-
-        const remainder =
-          rewardBudget *
-          votingPower %
-          totalVotingPower;
+          votingPower;
 
         return {
           ...position,
 
-          amount:
-            amount.toString(),
+          amount: (
+            scaled /
+            totalVotingPower
+          ).toString(),
 
-          remainder:
-            remainder.toString(),
+          remainder: (
+            scaled %
+            totalVotingPower
+          ).toString(),
 
           instructions: []
         };
@@ -324,10 +620,7 @@ async function main() {
 
   let allocated =
     allocations.reduce(
-      (
-        total,
-        position
-      ) =>
+      (total, position) =>
         total +
         BigInt(
           position.amount
@@ -340,10 +633,7 @@ async function main() {
     allocated;
 
   allocations.sort(
-    (
-      a,
-      b
-    ) => {
+    (a, b) => {
       const remainderA =
         BigInt(
           a.remainder
@@ -392,16 +682,31 @@ async function main() {
         return 1;
       }
 
-      return (
+      const tokenA =
         BigInt(
           a.tokenId
-        ) <
+        );
+
+      const tokenB =
         BigInt(
           b.tokenId
-        )
-          ? -1
-          : 1
-      );
+        );
+
+      if (
+        tokenA <
+        tokenB
+      ) {
+        return -1;
+      }
+
+      if (
+        tokenA >
+        tokenB
+      ) {
+        return 1;
+      }
+
+      return 0;
     }
   );
 
@@ -411,18 +716,15 @@ async function main() {
   while (
     remainder > 0n
   ) {
-    allocations[index]
-      .amount =
+    allocations[index].amount =
       (
         BigInt(
-          allocations[index]
-            .amount
+          allocations[index].amount
         ) +
         1n
       ).toString();
 
     remainder--;
-
     index++;
 
     if (
@@ -435,10 +737,7 @@ async function main() {
 
   allocated =
     allocations.reduce(
-      (
-        total,
-        position
-      ) =>
+      (total, position) =>
         total +
         BigInt(
           position.amount
@@ -455,31 +754,39 @@ async function main() {
     );
   }
 
-  /*
-      Remove internal calculation-only fields
-      from the final file.
-  */
-
   const outputPositions =
     allocations
       .sort(
-        (
-          a,
-          b
-        ) =>
-          BigInt(
-            a.tokenId
-          ) <
-          BigInt(
-            b.tokenId
-          )
-            ? -1
-            : 1
+        (a, b) => {
+          const left =
+            BigInt(
+              a.tokenId
+            );
+
+          const right =
+            BigInt(
+              b.tokenId
+            );
+
+          if (
+            left <
+            right
+          ) {
+            return -1;
+          }
+
+          if (
+            left >
+            right
+          ) {
+            return 1;
+          }
+
+          return 0;
+        }
       )
       .map(
-        (
-          position
-        ) => ({
+        (position) => ({
           tokenId:
             position.tokenId,
 
@@ -519,6 +826,15 @@ async function main() {
     totalVotingPower:
       totalVotingPower.toString(),
 
+    rewardToken:
+      rewardTokenAddress,
+
+    revenueRewards:
+      rewardsAddress,
+
+    veCENT:
+      veCENTAddress,
+
     source:
       "Centry deterministic voting-power reward allocation",
 
@@ -552,9 +868,7 @@ async function main() {
 }
 
 main().catch(
-  (
-    error
-  ) => {
+  (error) => {
     console.error(
       error
     );
