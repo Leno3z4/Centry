@@ -1,4 +1,6 @@
-const { ethers } = require("ethers");
+const {
+  ethers
+} = require("ethers");
 
 const RPC_URL =
   process.env.ARC_RPC_URL ||
@@ -12,10 +14,25 @@ const EXPECTED_CHAIN_ID =
 
 const REWARDS_ABI = [
   "function latestEpoch() view returns (uint256)",
+
   "function rewardToken() view returns (address)",
+
   "function veCENT() view returns (address)",
-  "function epochRoots(uint256 epoch) view returns (bytes32)"
+
+  "function epochRoots(uint256 epoch) view returns (bytes32)",
+
+  "function epochRewardBudget(uint256 epoch) view returns (uint256)",
+
+  "function epochClaimed(uint256 epoch) view returns (uint256)",
+
+  "function pendingEpochs(uint256 epoch) view returns (bytes32 root,uint256 rewardBudget,uint40 readyAt)"
 ];
+
+function printSeparator() {
+  console.log(
+    "========================================"
+  );
+}
 
 async function main() {
   if (!RPC_URL) {
@@ -57,40 +74,37 @@ async function main() {
   const veCENT =
     await rewards.veCENT();
 
-  console.log("");
-  console.log(
-    "=============================="
-  );
+  printSeparator();
+
   console.log(
     "CENTRY REVENUE REWARDS"
   );
+
+  printSeparator();
+
   console.log(
-    "=============================="
+    `Contract:      ${REWARDS_ADDRESS}`
   );
+
+  console.log(
+    `Reward token:  ${rewardToken}`
+  );
+
+  console.log(
+    `veCENT:        ${veCENT}`
+  );
+
+  console.log(
+    `Latest epoch:  ${latestEpoch.toString()}`
+  );
+
   console.log("");
-
-  console.log(
-    `Contract: ${REWARDS_ADDRESS}`
-  );
-
-  console.log(
-    `Reward token: ${rewardToken}`
-  );
-
-  console.log(
-    `veCENT: ${veCENT}`
-  );
-
-  console.log(
-    `Latest epoch: ${latestEpoch.toString()}`
-  );
 
   if (
     latestEpoch === 0n
   ) {
-    console.log("");
     console.log(
-      "No reward epoch has been activated yet."
+      "No activated reward epoch exists yet."
     );
 
     return;
@@ -101,22 +115,73 @@ async function main() {
       latestEpoch
     );
 
+  const rewardBudget =
+    await rewards.epochRewardBudget(
+      latestEpoch
+    );
+
+  const amountClaimed =
+    await rewards.epochClaimed(
+      latestEpoch
+    );
+
+  printSeparator();
+
   console.log(
-    `Latest epoch root: ${root}`
+    `ACTIVE EPOCH ${latestEpoch.toString()}`
   );
 
-  if (
-    root === ethers.ZeroHash
-  ) {
-    console.log("");
-    console.log(
-      "WARNING: latestEpoch has no active Merkle root."
-    );
-  }
+  printSeparator();
+
+  console.log(
+    `Merkle root:   ${root}`
+  );
+
+  console.log(
+    `Reward budget: ${rewardBudget.toString()}`
+  );
+
+  console.log(
+    `Reward claimed:${amountClaimed.toString()}`
+  );
+
+  console.log(
+    `Remaining:     ${
+      rewardBudget > amountClaimed
+        ? (
+            rewardBudget -
+            amountClaimed
+          ).toString()
+        : "0"
+    }`
+  );
 
   console.log("");
+
+  if (
+    root ===
+    ethers.ZeroHash
+  ) {
+    console.log(
+      "WARNING: The latest epoch has no active Merkle root."
+    );
+
+    return;
+  }
+
+  if (
+    rewardBudget ===
+    0n
+  ) {
+    console.log(
+      "WARNING: The latest epoch has a zero reward budget."
+    );
+
+    return;
+  }
+
   console.log(
-    "Epoch data read successfully."
+    "Epoch is active and funded."
   );
 }
 
