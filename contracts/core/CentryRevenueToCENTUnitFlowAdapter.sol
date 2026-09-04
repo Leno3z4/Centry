@@ -6,58 +6,89 @@ import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5
 import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/token/ERC20/utils/SafeERC20.sol";
 import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/utils/ReentrancyGuard.sol";
 
-/// @notice Minimal UnitFlow UniversalRouter interface used by Centry.
-interface IUnitFlowUniversalRouterRevenue {
+import "../interfaces/ICentrySwapAdapter.sol";
+
+interface IUnitFlowUniversalRouter {
     function execute(
         bytes calldata commands,
         bytes[] calldata inputs,
         uint256 deadline
-    ) external payable;
+    )
+        external
+        payable;
 }
 
 /// @title CentryRevenueToCENTUnitFlowAdapter
-/// @notice Restricted UnitFlow adapter for protocol-revenue asset -> CENT swaps.
-/// @dev Designed for Arc Testnet native USDC -> WUSDC -> CENT.
+/// @notice Converts Arc native USDC revenue into CENT through UnitFlow.
 ///
-///      The route is intentionally fixed:
-///          native USDC -> WUSDC -> CENT
+/// Route:
 ///
-///      Callers cannot provide arbitrary router calldata, commands, or paths.
-///      Only the configured RevenueEngine may invoke the swap.
-contract CentryRevenueToCENTUnitFlowAdapter is
-    Ownable2Step,
-    ReentrancyGuard
+///     Native USDC
+///         ↓
+///       WUSDC
+///         ↓
+///        CENT
+///
+/// This adapter is separate from the existing self-repay UnitFlow adapter.
+///
+/// Existing adapter:
+///     CENT → WUSDC → native USDC
+///
+/// This adapter:
+///     native USDC → WUSDC → CENT
+///
+/// The adapter only accepts calls from the configured RevenueEngine.
+/// It does not accept arbitrary token pairs or arbitrary router commands.
+contract CentryRevenueToCENTUnitFlowAdapter
+    is Ownable2Step, ReentrancyGuard, ICentrySwapAdapter
 {
     using SafeERC20 for IERC20;
 
-    bytes1 private constant CMD_V2_SWAP_EXACT_IN = 0x08;
-    bytes1 private constant CMD_WRAP_NATIVE_USDC = 0x0b;
+    bytes1 private constant CMD_WRAP_NATIVE =
+        0x0b;
 
+    bytes1 private constant CMD_V2_SWAP_EXACT_IN =
+        0x08;
+
+    /// @notice Arc Testnet native USDC ERC20 interface.
     address public constant ARC_NATIVE_USDC =
         0x3600000000000000000000000000000000000000;
 
     address public immutable unitFlowUniversalRouter;
+
     address public immutable centToken;
+
     address public immutable wusdcToken;
 
     address public authorizedCaller;
 
     error InvalidAddress();
+
     error InvalidCaller();
+
     error InvalidAmount();
-    error InvalidRecipient();
-    error InvalidDeadline();
+
     error InvalidTokenPath();
-    error SwapFailed();
+
+    error InvalidRecipient();
+
+    error InvalidDeadline();
+
     error MinOutputNotMet();
-    error InputNotReceived();
-    error InputNotConsumed();
-    error UnexpectedCENTBalance();
 
-    event AuthorizedCallerSet(address indexed caller);
+    error SwapFailed();
 
-    event RevenueSwapExecuted(
-        address indexed revenueAsset,
+    error RouterDidNotConsumeInput();
+
+    error InputTransferMismatch();
+
+    event AuthorizedCallerSet(
+        address indexed caller
+    );
+
+    event UnitFlowRevenueSwapExecuted(
+        address indexed tokenIn,
+        address indexed tokenOut,
         uint256 amountIn,
         uint256 amountOut,
         address indexed recipient
@@ -68,44 +99,89 @@ contract CentryRevenueToCENTUnitFlowAdapter is
         address centToken_,
         address wusdcToken_,
         address initialOwner
-    ) Ownable(initialOwner) {
+    )
+        Ownable(initialOwner)
+    {
         if (
-            unitFlowUniversalRouter_ == address(0) ||
-            centToken_ == address(0) ||
-            wusdcToken_ == address(0) ||
-            initialOwner == address(0)
+            unitFlowUniversalRouter_ ==
+            address(0)
         ) {
             revert InvalidAddress();
         }
 
-        unitFlowUniversalRouter = unitFlowUniversalRouter_;
-        centToken = centToken_;
-        wusdcToken = wusdcToken_;
+        if (
+            centToken_ ==
+            address(0)
+        ) {
+            revert InvalidAddress();
+        }
+
+        if (
+            wusdcToken_ ==
+            address(0)
+        ) {
+            revert InvalidAddress();
+        }
+
+        if (
+            initialOwner ==
+            address(0)
+        ) {
+            revert InvalidAddress();
+        }
+
+        unitFlowUniversalRouter =
+            unitFlowUniversalRouter_;
+
+        centToken =
+            centToken_;
+
+        wusdcToken =
+            wusdcToken_;
     }
 
-    /// @notice Set the RevenueEngine once.
-    /// @dev Deliberately immutable after the first configuration to prevent
-    ///      the adapter from being redirected to an arbitrary caller.
+    /// @notice Sets the RevenueEngine as the only caller.
+    /// @dev This is intentionally one-time.
     function setAuthorizedCaller(
         address caller
-    ) external onlyOwner {
+    )
+        external
+        onlyOwner
+    {
         if (
-            authorizedCaller != address(0) ||
-            caller == address(0)
+            authorizedCaller !=
+            address(0)
         ) {
             revert InvalidCaller();
         }
 
-        authorizedCaller = caller;
+        if (
+            caller ==
+            address(0)
+        ) {
+            revert InvalidCaller();
+        }
 
-        emit AuthorizedCallerSet(caller);
+        authorizedCaller =
+            caller;
+
+        emit AuthorizedCallerSet(
+            caller
+        );
     }
 
-    /// @notice Swap Arc Testnet native USDC into CENT through UnitFlow.
-    /// @dev The RevenueEngine approves the adapter for ARC_NATIVE_USDC before
-    ///      this call. Because Arc Testnet exposes native USDC as the chain's
-    ///      native asset, the adapter forwards the received amount as msg.value
-    ///      to UnitFlow's WRAP_ETH command, which wraps it into WUSDC.
+    /// @notice Swap Arc native USDC revenue into CENT.
+    ///
+    /// tokenIn:
+    ///     Arc native USDC ERC20 address
+    ///
+    /// tokenOut:
+    ///     CENT
+    ///
+    /// data:
+    ///     optional ABI-encoded uint256 deadline
+    ///
+    /// Empty data defaults to five minutes from execution.
     function swap(
         address tokenIn,
         address tokenOut,
@@ -113,141 +189,313 @@ contract CentryRevenueToCENTUnitFlowAdapter is
         uint256 minAmountOut,
         address recipient,
         bytes calldata data
-    ) external payable nonReentrant returns (uint256 amountOut) {
-        if (msg.sender != authorizedCaller) {
-            revert InvalidCaller();
-        }
+    )
+        external
+        override
+        nonReentrant
+        returns (
+            uint256 amountOut
+        )
+    {
+        _validateSwapRequest(
+            tokenIn,
+            tokenOut,
+            amountIn,
+            recipient
+        );
 
-        if (
-            tokenIn != ARC_NATIVE_USDC ||
-            tokenOut != centToken
-        ) {
-            revert InvalidTokenPath();
-        }
+        uint256 deadline =
+            _decodeDeadline(
+                data
+            );
 
-        if (
-            amountIn == 0 ||
-            recipient == address(0)
-        ) {
-            revert InvalidAmount();
-        }
+        IERC20 inputToken =
+            IERC20(
+                ARC_NATIVE_USDC
+            );
 
-        if (msg.value != 0) {
-            revert InputNotReceived();
-        }
+        IERC20 outputToken =
+            IERC20(
+                centToken
+            );
 
-        IERC20(ARC_NATIVE_USDC).safeTransferFrom(
+        uint256 inputBefore =
+            inputToken.balanceOf(
+                address(this)
+            );
+
+        uint256 outputBefore =
+            outputToken.balanceOf(
+                address(this)
+            );
+
+        inputToken.safeTransferFrom(
             msg.sender,
             address(this),
             amountIn
         );
 
-        (
-            uint256 deadline,
-            address[] memory path
-        ) = _decodeSwapData(data);
+        uint256 inputAfter =
+            inputToken.balanceOf(
+                address(this)
+            );
 
-        if (deadline < block.timestamp) {
-            revert InvalidDeadline();
+        if (
+            inputAfter <
+            inputBefore
+        ) {
+            revert InputTransferMismatch();
         }
 
         if (
-            path.length != 2 ||
-            path[0] != wusdcToken ||
-            path[1] != centToken
+            inputAfter -
+            inputBefore !=
+            amountIn
         ) {
-            revert InvalidTokenPath();
+            revert InputTransferMismatch();
         }
 
-        uint256 centBefore =
-            IERC20(centToken).balanceOf(address(this));
-
-        bytes memory commands = abi.encodePacked(
-            CMD_WRAP_NATIVE_USDC,
-            CMD_V2_SWAP_EXACT_IN
-        );
-
-        bytes[] memory inputs = new bytes[](2);
-
-        // UnitFlow's WRAP command wraps the chain-native USDC into WUSDC.
-        // Keep the wrapped balance inside the UniversalRouter for the next
-        // V2 swap command.
-        //
-        // The adapter received native USDC through its ERC-20 interface above;
-        // on Arc Testnet the same asset is the chain-native value transferred
-        // to the UniversalRouter by this payable call.
-        inputs[0] = abi.encode(
-            address(2),
-            amountIn
-        );
-
-        // payerIsUser = false because the WRAP command has already supplied
-        // the WUSDC to the UniversalRouter itself.
-        inputs[1] = abi.encode(
-            address(this),
+        _executeUnitFlowSwap(
             amountIn,
             minAmountOut,
-            path,
-            false
+            deadline
         );
 
-        try IUnitFlowUniversalRouterRevenue(
-            unitFlowUniversalRouter
-        ).execute{value: amountIn}(
-            commands,
-            inputs,
-            deadline
+        uint256 outputAfter =
+            outputToken.balanceOf(
+                address(this)
+            );
+
+        if (
+            outputAfter <
+            outputBefore
         ) {
-            // Expected successful return.
-        } catch {
-            revert SwapFailed();
-        }
-
-        uint256 centAfter =
-            IERC20(centToken).balanceOf(address(this));
-
-        if (centAfter < centBefore) {
-            revert UnexpectedCENTBalance();
-        }
-
-        amountOut = centAfter - centBefore;
-
-        if (amountOut < minAmountOut) {
             revert MinOutputNotMet();
         }
 
-        IERC20(centToken).safeTransfer(
+        amountOut =
+            outputAfter -
+            outputBefore;
+
+        if (
+            amountOut <
+            minAmountOut
+        ) {
+            revert MinOutputNotMet();
+        }
+
+        outputToken.safeTransfer(
             recipient,
             amountOut
         );
 
-        emit RevenueSwapExecuted(
+        emit UnitFlowRevenueSwapExecuted(
             tokenIn,
+            tokenOut,
             amountIn,
             amountOut,
             recipient
         );
     }
 
-    function _decodeSwapData(
-        bytes calldata data
-    ) internal view returns (
-        uint256 deadline,
-        address[] memory path
-    ) {
-        if (data.length == 0) {
-            deadline = block.timestamp + 5 minutes;
-
-            path = new address[](2);
-            path[0] = wusdcToken;
-            path[1] = centToken;
-
-            return (deadline, path);
+    function _validateSwapRequest(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        address recipient
+    )
+        internal
+        view
+    {
+        if (
+            msg.sender !=
+            authorizedCaller
+        ) {
+            revert InvalidCaller();
         }
 
-        return abi.decode(
-            data,
-            (uint256, address[])
-        );
+        if (
+            authorizedCaller ==
+            address(0)
+        ) {
+            revert InvalidCaller();
+        }
+
+        if (
+            tokenIn !=
+            ARC_NATIVE_USDC
+        ) {
+            revert InvalidTokenPath();
+        }
+
+        if (
+            tokenOut !=
+            centToken
+        ) {
+            revert InvalidTokenPath();
+        }
+
+        if (
+            amountIn == 0
+        ) {
+            revert InvalidAmount();
+        }
+
+        if (
+            recipient == address(0)
+        ) {
+            revert InvalidRecipient();
+        }
+    }
+
+    function _decodeDeadline(
+        bytes calldata data
+    )
+        internal
+        view
+        returns (
+            uint256 deadline
+        )
+    {
+        if (
+            data.length == 0
+        ) {
+            return
+                block.timestamp +
+                5 minutes;
+        }
+
+        if (
+            data.length != 32
+        ) {
+            revert InvalidDeadline();
+        }
+
+        deadline =
+            abi.decode(
+                data,
+                (uint256)
+            );
+
+        if (
+            deadline <
+            block.timestamp
+        ) {
+            revert InvalidDeadline();
+        }
+    }
+
+    function _executeUnitFlowSwap(
+        uint256 amountIn,
+        uint256 minAmountOut,
+        uint256 deadline
+    )
+        internal
+    {
+        /*
+            UnitFlow command sequence:
+
+                0x0b
+                WRAP_NATIVE
+
+                0x08
+                V2_SWAP_EXACT_IN
+        */
+        bytes memory commands =
+            abi.encodePacked(
+                CMD_WRAP_NATIVE,
+                CMD_V2_SWAP_EXACT_IN
+            );
+
+        bytes[] memory inputs =
+            new bytes[](2);
+
+        /*
+            WRAP_NATIVE
+
+            address(2) is the UniversalRouter's internal
+            router-recipient sentinel.
+
+            The router receives the native USDC supplied
+            through msg.value and wraps it into WUSDC.
+        */
+        inputs[0] =
+            abi.encode(
+                address(2),
+                amountIn
+            );
+
+        address[] memory path =
+            new address[](2);
+
+        path[0] =
+            wusdcToken;
+
+        path[1] =
+            centToken;
+
+        /*
+            V2 exact-input swap:
+
+                WUSDC → CENT
+
+            recipient:
+                this adapter
+
+            amountIn:
+                same 18-decimal native amount
+
+            payerIsUser:
+                false
+
+            Therefore the UniversalRouter spends the
+            WUSDC it just created during WRAP_NATIVE.
+        */
+        inputs[1] =
+            abi.encode(
+                address(this),
+                amountIn,
+                minAmountOut,
+                path,
+                false
+            );
+
+        uint256 nativeBefore =
+            address(this).balance;
+
+        try
+            IUnitFlowUniversalRouter(
+                unitFlowUniversalRouter
+            ).execute{
+                value: amountIn
+            }(
+                commands,
+                inputs,
+                deadline
+            )
+        {
+            // Expected successful execution.
+        }
+        catch {
+            revert SwapFailed();
+        }
+
+        uint256 nativeAfter =
+            address(this).balance;
+
+        if (
+            nativeAfter >
+            nativeBefore
+        ) {
+            revert RouterDidNotConsumeInput();
+        }
+
+        if (
+            nativeBefore -
+            nativeAfter <
+            amountIn
+        ) {
+            revert RouterDidNotConsumeInput();
+        }
     }
 }
