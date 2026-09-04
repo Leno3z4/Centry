@@ -55,7 +55,7 @@ function ChainPicker({ value, chains, onChange, label }) {
   }, []);
 
   return (
-    <div className={styles.chainPicker} ref={rootRef}>
+    <div className={`${styles.chainPicker} ${open ? styles.chainPickerOpen : ''}`} ref={rootRef}>
       <button
         type="button"
         className={`${styles.chainTrigger} ${open ? styles.chainTriggerOpen : ''}`}
