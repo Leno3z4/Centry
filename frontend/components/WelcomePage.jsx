@@ -182,35 +182,6 @@ export default function WelcomePage() {
                 </div>
             </section>
 
-            <section id="markets" className="landing-market-section">
-                <div className="landing-section-heading">
-                    <span className="landing-kicker">MARKETS</span>
-                    <h2>Live liquidity, shown in dollars.</h2>
-                    <p>Values are read from the deployed lending pool and oracle for every supported market.</p>
-                </div>
-
-                <div className="landing-market-list">
-                    {markets.map((market) => (
-                        <div className="landing-market-row" key={market.id}>
-                            <div className="landing-market-name">
-                                <strong>{market.symbol}</strong>
-                                <span>{market.name}</span>
-                            </div>
-                            <div className="landing-market-value">
-                                <span>Supplied</span>
-                                <strong>{isLoading ? '—' : formatUsd(market.suppliedUsd)}</strong>
-                            </div>
-                            <div className="landing-market-value">
-                                <span>Borrowed</span>
-                                <strong>{isLoading ? '—' : formatUsd(market.borrowedUsd)}</strong>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-
-                <Link className="secondary-btn" href="/app">Open markets</Link>
-            </section>
-
             <section id="governance" className="landing-governance-section">
                 <div className="landing-governance-copy">
                     <span className="landing-kicker">GOVERNANCE</span>
@@ -307,7 +278,6 @@ export default function WelcomePage() {
                 .landing-data-heading span,
                 .landing-metric span,
                 .landing-metric-note,
-                .landing-market-value span {
                     font-family: 'DM Mono', monospace;
                     text-transform: uppercase;
                     letter-spacing: 1.3px;
