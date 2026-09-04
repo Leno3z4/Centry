@@ -80,4 +80,9 @@ jobs:
           fi
 
           git commit -m "chore: generate reward epoch manifest"
-          git push
+
+          # The repository may have received another commit while this workflow ran
+          # (for example, a keeper/config fix). Rebase the generated commit onto the
+          # current remote main instead of failing with a non-fast-forward push.
+          git pull --rebase origin main
+          git push origin HEAD:main
