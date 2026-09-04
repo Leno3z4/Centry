@@ -2,6 +2,19 @@ name: Centry Reward Generation
 
 on:
   workflow_dispatch:
+    inputs:
+      rewards_contract:
+        description: "RevenueRewards contract address"
+        required: true
+        default: "0xFE791C5141ef417100Ce56624bc975DA1fBE9815"
+      reward_epoch:
+        description: "Reward epoch (leave blank to auto-select next free epoch)"
+        required: false
+        default: ""
+      reward_budget:
+        description: "Reward budget in raw token units (leave blank to use all uncommitted balance)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -33,6 +46,9 @@ jobs:
         env:
           ARC_RPC_URL_SECRET: ${{ secrets.ARC_RPC_URL }}
           ARC_RPC_URL_VARIABLE: ${{ vars.ARC_RPC_URL }}
+          CENTRY_REVENUE_REWARDS: ${{ inputs.rewards_contract }}
+          CENTRY_REWARD_EPOCH: ${{ inputs.reward_epoch }}
+          CENTRY_REWARD_BUDGET: ${{ inputs.reward_budget }}
         run: npm run generate:rewards
 
       - name: Validate generated manifest structure
@@ -57,6 +73,7 @@ jobs:
             fs.readFileSync("keeper/reward-manifest.json", "utf8")
           );
 
+          console.log(`Rewards contract: ${{ inputs.rewards_contract }}`);
           console.log(`Epoch: ${allocations.epoch}`);
           console.log(`Reward budget: ${allocations.rewardBudget}`);
           console.log(`Total voting power: ${allocations.totalVotingPower}`);
