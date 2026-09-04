@@ -1,0 +1,57 @@
+name: Remove landing markets section
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  remove:
+    if: ${{ !contains(github.event.head_commit.message, '[skip landing markets]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Remove markets section from landing page
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('frontend/components/WelcomePage.jsx')
+          text = path.read_text()
+
+          text = text.replace('                    <a href="#markets">Markets</a>\n', '')
+
+          start = text.find('            <section id="markets" className="landing-market-section">')
+          end = text.find('            <section id="governance" className="landing-section landing-governance-section">', start)
+          if start != -1 and end != -1:
+              text = text[:start] + text[end:]
+
+          for line in [
+              '                .landing-market-section,\n',
+              '                    .landing-market-section,\n',
+              '                    .landing-market-section .secondary-btn,\n',
+              '                    .landing-market-section { padding: 66px 0 88px; }\n',
+              '                    .landing-market-row { grid-template-columns: 1fr 1fr; gap: 15px; }\n',
+              '                    .landing-market-name { grid-column: 1 / -1; }\n',
+              '                    .landing-market-value { align-items: flex-start; }\n',
+              '                    .landing-market-name strong { font-size: 12px; }\n',
+              '                    .landing-market-value strong { font-size: 11px; }\n',
+          ]:
+              text = text.replace(line, '')
+
+          start = text.find('                .landing-market-section { position: relative;')
+          if start != -1:
+              end = text.find('\n\n                .landing-governance-section', start)
+              if end != -1:
+                  text = text[:start] + text[end + 2:]
+
+          path.write_text(text)
+          PY
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/components/WelcomePage.jsx
+          git commit -m "refactor: remove landing markets section [skip landing markets]"
+          git push
