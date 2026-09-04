@@ -11,5 +11,11 @@
       "proof": [],
       "instructions": []
     }
-  ]
+  ],
+  "selfRepay": {
+    "debtAsset": "0x3600000000000000000000000000000000000000",
+    "quoteSource": "UnitFlow v2.5 swap router",
+    "slippageBps": "100",
+    "generatedAt": "2026-09-04T13:23:35.646Z"
+  }
 }
