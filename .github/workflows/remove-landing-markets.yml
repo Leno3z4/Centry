@@ -17,41 +17,41 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
+
           path = Path('frontend/components/WelcomePage.jsx')
           text = path.read_text()
+          text = re.sub(r'\s*<a href="#markets">Markets</a>', '', text, count=1)
+          text = re.sub(
+              r'\n\s*<section id="markets" className="landing-market-section">.*?\n\s*</section>\n',
+              '\n', text, count=1, flags=re.S
+          )
+          text = re.sub(r'\n\s*\.landing-market-section,', '', text)
+          text = re.sub(
+              r'\n\s*\.landing-market-section \{.*?\n\s*\.landing-governance-section',
+              '\n\n                .landing-governance-section', text, count=1, flags=re.S
+          )
+          text = re.sub(r'\n\s*\.landing-market-section[^\n]*\n', '\n', text)
+          text = re.sub(r'\n\s*\.landing-market-row[^\n]*\n', '\n', text)
+          text = re.sub(r'\n\s*\.landing-market-name[^\n]*\n', '\n', text)
+          text = re.sub(r'\n\s*\.landing-market-value[^\n]*\n', '\n', text)
 
-          text = text.replace('                    <a href="#markets">Markets</a>\n', '')
-
-          start = text.find('            <section id="markets" className="landing-market-section">')
-          end = text.find('            <section id="governance" className="landing-section landing-governance-section">', start)
-          if start != -1 and end != -1:
-              text = text[:start] + text[end:]
-
-          for line in [
-              '                .landing-market-section,\n',
-              '                    .landing-market-section,\n',
-              '                    .landing-market-section .secondary-btn,\n',
-              '                    .landing-market-section { padding: 66px 0 88px; }\n',
-              '                    .landing-market-row { grid-template-columns: 1fr 1fr; gap: 15px; }\n',
-              '                    .landing-market-name { grid-column: 1 / -1; }\n',
-              '                    .landing-market-value { align-items: flex-start; }\n',
-              '                    .landing-market-name strong { font-size: 12px; }\n',
-              '                    .landing-market-value strong { font-size: 11px; }\n',
-          ]:
-              text = text.replace(line, '')
-
-          start = text.find('                .landing-market-section { position: relative;')
-          if start != -1:
-              end = text.find('\n\n                .landing-governance-section', start)
-              if end != -1:
-                  text = text[:start] + text[end + 2:]
-
+          if 'id="markets"' in text or 'landing-market-section' in text:
+              raise SystemExit('Markets cleanup verification failed')
           path.write_text(text)
           PY
-      - name: Commit
+      - name: Verify and commit
         run: |
+          if grep -n 'id="markets"\|landing-market-section' frontend/components/WelcomePage.jsx; then
+            echo "Markets section still present"
+            exit 1
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add frontend/components/WelcomePage.jsx
+          if git diff --cached --quiet; then
+            echo "Nothing to commit"
+            exit 0
+          fi
           git commit -m "refactor: remove landing markets section [skip landing markets]"
           git push
