@@ -9,10 +9,10 @@ export const CONTRACT_ADDRESSES = Object.freeze({
   interestRateModel: '0x0e33c05cc844914155B7300aA93085DBB32d4FBE',
   oracle: '0xC82424D224dbfBF9D41a9cBe5cA2AdF762572fC6',
   centryToken: '0x76e6d50D3151f0B4645ac0E53584F4204Fc6f0e3',
-  veCentry: '0xF8B71bAed42c28e7e376C4DbD4A137047B92a503',
-  veCentryRewards: '0x06e627ce43F2ddd37e8f196824f7049416c3025b',
-  selfRepayExecutor: '0x02356D1E4557b8D656cE1493D751C914EA84efe7',
-  unitFlowSwapAdapter: '0x8430a1cF22C1cd09F7B7eD2C3dB0D66020f6F020',
+  veCentry: '0xdcb00Ea10FBeaaB66b88C208Ad09b58E38D6f04e',
+  veCentryRewards: '0xFE791C5141ef417100Ce56624bc975DA1fBE9815',
+  selfRepayExecutor: '0x1672667EdB27fDF687A0Fe485EeE1240650dF4a9',
+  unitFlowSwapAdapter: '',
 
   collateralAssets: Object.freeze({
     ETH: '0x54a4dd95bf4ABb6cF02014ca62C3FbbDeE040B6a',
