@@ -5,7 +5,6 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useReadContracts } from 'wagmi';
 import { formatUnits } from 'viem';
-import ProtocolStats from './ProtocolStats';
 import { ACTIVE_MARKETS } from '../constants/markets';
 import { CONTRACT_ADDRESSES } from '../constants/contracts';
 import { LENDING_POOL_ABI, ORACLE_ABI } from '../constants/abis';
@@ -15,28 +14,10 @@ const AeroShards = dynamic(() => import('./AeroShards'), {
     loading: () => null,
 });
 
-const FLOW = [
-    {
-        number: '01',
-        title: 'Supply liquidity',
-        text: 'Put supported assets to work and earn market-driven interest as liquidity is used across the protocol.',
-    },
-    {
-        number: '02',
-        title: 'Borrow against collateral',
-        text: 'Use eligible collateral to access liquidity while Centry continuously tracks account risk onchain.',
-    },
-    {
-        number: '03',
-        title: 'Coordinate with veCENT',
-        text: 'Lock CENT for veCENT voting power and participate in the protocol\'s governance layer.',
-    },
-];
-
-const PRINCIPLES = [
-    ['Onchain first', 'Balances, risk, rates, and governance state come from the deployed contracts.'],
-    ['Built for Arc', 'A stablecoin-native lending experience designed around Arc Testnet today.'],
-    ['Simple by design', 'A focused protocol surface without pretending to be bigger than the current deployment.'],
+const HOW_IT_WORKS = [
+    ['01', 'Supply liquidity', 'Deposit a supported asset and earn interest as borrowers use available liquidity.'],
+    ['02', 'Borrow against collateral', 'Supply eligible collateral, stay within the live risk limits, and borrow available liquidity.'],
+    ['03', 'Coordinate with veCENT', 'Lock CENT into veCENT to build voting power and participate in Centry governance.'],
 ];
 
 function formatUsd(value) {
@@ -50,23 +31,29 @@ function formatUsd(value) {
     }).format(number);
 }
 
-function formatUsdFromPrice(amountRaw, priceRaw, decimals) {
+function usdFromPrice(amountRaw, priceRaw, decimals) {
     try {
         const amount = Number(formatUnits(amountRaw ?? 0n, decimals));
         const price = Number(formatUnits(priceRaw ?? 0n, 18));
-        return Number.isFinite(amount) && Number.isFinite(price) ? amount * price : null;
+        return Number.isFinite(amount) && Number.isFinite(price) ? amount * price : 0;
     } catch {
-        return null;
+        return 0;
     }
 }
 
 export default function WelcomePage() {
-    const suppliedContracts = useMemo(
+    const marketContracts = useMemo(
         () => ACTIVE_MARKETS.flatMap((market) => [
             {
                 address: CONTRACT_ADDRESSES.lendingPool,
                 abi: LENDING_POOL_ABI,
                 functionName: 'currentSupply',
+                args: [market.address],
+            },
+            {
+                address: CONTRACT_ADDRESSES.lendingPool,
+                abi: LENDING_POOL_ABI,
+                functionName: 'currentBorrow',
                 args: [market.address],
             },
             {
@@ -79,33 +66,63 @@ export default function WelcomePage() {
         [],
     );
 
-    const { data: suppliedResults, isLoading: suppliedLoading } = useReadContracts({
-        contracts: suppliedContracts,
+    const { data: marketResults, isLoading } = useReadContracts({
+        contracts: marketContracts,
         query: { enabled: Boolean(CONTRACT_ADDRESSES.lendingPool && CONTRACT_ADDRESSES.oracle) },
     });
 
-    const suppliedAssets = ACTIVE_MARKETS.map((market, index) => {
-        const supplyResult = suppliedResults?.[index * 2];
-        const priceResult = suppliedResults?.[index * 2 + 1];
-        const supplyRaw = supplyResult?.result ?? 0n;
-        const priceResultRaw = Array.isArray(priceResult?.result) ? priceResult.result[0] : 0n;
-        const valueUsd = formatUsdFromPrice(supplyRaw, priceResultRaw, market.decimals);
+    const markets = ACTIVE_MARKETS.map((market, index) => {
+        const offset = index * 3;
+        const supplyRaw = marketResults?.[offset]?.result ?? 0n;
+        const borrowRaw = marketResults?.[offset + 1]?.result ?? 0n;
+        const priceResult = marketResults?.[offset + 2]?.result;
+        const priceRaw = Array.isArray(priceResult) ? priceResult[0] : 0n;
 
         return {
             ...market,
-            valueUsd,
-            supplied: supplyRaw > 0n,
-            ready: supplyResult?.status === 'success' && priceResult?.status === 'success',
+            suppliedUsd: usdFromPrice(supplyRaw, priceRaw, market.decimals),
+            borrowedUsd: usdFromPrice(borrowRaw, priceRaw, market.decimals),
         };
-    }).filter((market) => market.supplied);
+    });
 
-    const suppliedTotalUsd = suppliedAssets.reduce(
-        (total, market) => total + (market.valueUsd ?? 0),
-        0,
-    );
+    const totalSuppliedUsd = markets.reduce((sum, market) => sum + market.suppliedUsd, 0);
+    const totalBorrowedUsd = markets.reduce((sum, market) => sum + market.borrowedUsd, 0);
 
     return (
         <main className="landing-page">
+            <div className="landing-aero-background" aria-hidden="true">
+                <AeroShards
+                    backgroundColor="#120F17"
+                    shardColor="#896ABD"
+                    accentColor="#A855F7"
+                    placement="full"
+                    flow="stream"
+                    material="pearl"
+                    detail="balanced"
+                    effect="none"
+                    scale={1}
+                    spread={1}
+                    depth={1}
+                    speed={1}
+                    spin={1}
+                    interaction="repel"
+                    density={1.5}
+                    shardSize={1.1}
+                    stretch={1}
+                    turbulence={1}
+                    glow={1}
+                    edgeSoftness={2}
+                    bloom={0.5}
+                    grain={0.05}
+                    chromaticAberration={0.0075}
+                    transitionDuration={1}
+                    interactionRadius={1.5}
+                    interactionStrength={0.5}
+                    rippleIntensity={1}
+                    holdToGather={true}
+                />
+            </div>
+
             <nav className="landing-nav">
                 <Link href="/" className="landing-brand">Centry</Link>
                 <div className="landing-nav-links">
@@ -118,46 +135,10 @@ export default function WelcomePage() {
             </nav>
 
             <section className="landing-hero">
-                <div className="landing-aero-shards" aria-hidden="true">
-                    <AeroShards
-                        backgroundColor="#120F17"
-                        shardColor="#896ABD"
-                        accentColor="#A855F7"
-                        placement="full"
-                        flow="stream"
-                        material="pearl"
-                        detail="balanced"
-                        effect="none"
-                        scale={1}
-                        spread={1}
-                        depth={1}
-                        speed={1}
-                        spin={1}
-                        interaction="repel"
-                        density={1.5}
-                        shardSize={1.1}
-                        stretch={1}
-                        turbulence={1}
-                        glow={1}
-                        edgeSoftness={2}
-                        bloom={0.5}
-                        grain={0.05}
-                        chromaticAberration={0.0075}
-                        transitionDuration={1}
-                        interactionRadius={1.5}
-                        interactionStrength={0.5}
-                        rippleIntensity={1}
-                        holdToGather={true}
-                    />
-                </div>
-
                 <div className="landing-hero-copy">
                     <span className="landing-status"><i /> ARC TESTNET · ONCHAIN</span>
                     <h1>Lending, without the noise.</h1>
-                    <p>
-                        Centry is an Arc-native money market for supplying liquidity, borrowing against supported collateral,
-                        and coordinating the protocol through veCENT governance.
-                    </p>
+                    <p>Supply liquidity, borrow against supported collateral, and coordinate the protocol through veCENT governance.</p>
                     <div className="landing-actions">
                         <Link className="primary-btn" href="/app">Enter Centry</Link>
                         <a className="secondary-btn" href="#how-it-works">Explore the protocol</a>
@@ -169,105 +150,76 @@ export default function WelcomePage() {
                     </div>
                 </div>
 
-                <div className="landing-hero-panel">
-                    <div className="landing-hero-panel-top">
-                        <span>SUPPLIED LIQUIDITY</span>
-                        <strong>{suppliedLoading ? '—' : formatUsd(suppliedTotalUsd)}</strong>
+                <div className="landing-hero-metrics" aria-label="Live protocol totals">
+                    <div className="landing-metric">
+                        <span>Total supplied</span>
+                        <strong>{isLoading ? '—' : formatUsd(totalSuppliedUsd)}</strong>
                     </div>
-                    <div className="landing-supplied-list">
-                        {suppliedLoading && (
-                            <div className="landing-supplied-empty">Reading live supplied assets…</div>
-                        )}
-                        {!suppliedLoading && suppliedAssets.map((market) => (
-                            <div className="landing-supplied-row" key={market.id}>
-                                <span>{market.symbol}</span>
-                                <b>{market.valueUsd === null ? '—' : formatUsd(market.valueUsd)}</b>
+                    <div className="landing-metric">
+                        <span>Total borrowed</span>
+                        <strong>{isLoading ? '—' : formatUsd(totalBorrowedUsd)}</strong>
+                    </div>
+                    <div className="landing-metric-note">Live dollar values across the supported markets.</div>
+                </div>
+            </section>
+
+            <section id="how-it-works" className="landing-how-section">
+                <div className="landing-how-copy">
+                    <span className="landing-kicker">HOW CENTRY WORKS</span>
+                    <h2>A lending system you can understand at a glance.</h2>
+                    <p>Three core actions connect liquidity, borrowing, risk, rewards, and governance.</p>
+
+                    <div className="landing-how-list">
+                        {HOW_IT_WORKS.map(([number, title, text]) => (
+                            <div className="landing-how-item" key={number}>
+                                <span className="landing-how-number">{number}</span>
+                                <div>
+                                    <h3>{title}</h3>
+                                    <p>{text}</p>
+                                </div>
                             </div>
                         ))}
-                        {!suppliedLoading && suppliedAssets.length === 0 && (
-                            <div className="landing-supplied-empty">No supplied assets yet.</div>
-                        )}
                     </div>
-                    <Link className="landing-panel-link" href="/app">View portfolio <span>→</span></Link>
                 </div>
             </section>
 
-            <ProtocolStats />
-
-            <section id="how-it-works" className="landing-section">
+            <section id="markets" className="landing-market-section">
                 <div className="landing-section-heading">
-                    <span className="landing-kicker">HOW IT WORKS</span>
-                    <h2>A focused lending system.</h2>
-                    <p>Everything that matters is kept close to the core: liquidity, borrowing, risk, rewards, and governance.</p>
-                </div>
-                <div className="landing-flow-grid">
-                    {FLOW.map((item) => (
-                        <article key={item.number} className="landing-flow-card">
-                            <span className="landing-flow-number">{item.number}</span>
-                            <h3>{item.title}</h3>
-                            <p>{item.text}</p>
-                        </article>
-                    ))}
-                </div>
-            </section>
-
-            <section className="landing-section landing-principles-section">
-                <div className="landing-section-heading">
-                    <span className="landing-kicker">THE CENTRY MODEL</span>
-                    <h2>Transparent where it counts.</h2>
-                </div>
-                <div className="landing-principles-grid">
-                    {PRINCIPLES.map(([title, text]) => (
-                        <article key={title} className="landing-principle-card">
-                            <h3>{title}</h3>
-                            <p>{text}</p>
-                        </article>
-                    ))}
-                </div>
-            </section>
-
-            <section id="markets" className="landing-section landing-market-section">
-                <div className="landing-market-copy">
                     <span className="landing-kicker">MARKETS</span>
-                    <h2>Start with the market that is actually live.</h2>
-                    <p>
-                        Centry currently keeps the market surface intentionally focused on native USDC on Arc Testnet.
-                        That means the interface can show real liquidity, utilization, rates, and risk data rather than placeholder numbers.
-                    </p>
-                    <Link className="secondary-btn" href="/app">Open markets</Link>
+                    <h2>Live liquidity, shown in dollars.</h2>
+                    <p>Values are read from the deployed lending pool and oracle for every supported market.</p>
                 </div>
-                <div className="landing-live-card">
-                    <div className="landing-live-card-head">
-                        <div>
-                            <span className="landing-usdc-badge">$</span>
-                            <div>
-                                <strong>USDC</strong>
-                                <small>USD Coin · Arc Testnet</small>
+
+                <div className="landing-market-list">
+                    {markets.map((market) => (
+                        <div className="landing-market-row" key={market.id}>
+                            <div className="landing-market-name">
+                                <strong>{market.symbol}</strong>
+                                <span>{market.name}</span>
+                            </div>
+                            <div className="landing-market-value">
+                                <span>Supplied</span>
+                                <strong>{isLoading ? '—' : formatUsd(market.suppliedUsd)}</strong>
+                            </div>
+                            <div className="landing-market-value">
+                                <span>Borrowed</span>
+                                <strong>{isLoading ? '—' : formatUsd(market.borrowedUsd)}</strong>
                             </div>
                         </div>
-                        <span className="live-badge"><i /> Live</span>
-                    </div>
-                    <div className="landing-live-grid">
-                        <div><span>Asset model</span><strong>Native USDC</strong></div>
-                        <div><span>Network</span><strong>Arc Testnet</strong></div>
-                        <div><span>Risk model</span><strong>Health factor</strong></div>
-                        <div><span>Protocol state</span><strong>Onchain</strong></div>
-                    </div>
+                    ))}
                 </div>
+
+                <Link className="secondary-btn" href="/app">Open markets</Link>
             </section>
 
-            <section id="governance" className="landing-section landing-governance-section">
-                <div>
+            <section id="governance" className="landing-governance-section">
+                <div className="landing-governance-copy">
                     <span className="landing-kicker">GOVERNANCE</span>
                     <h2>CENT becomes influence through time.</h2>
                     <p>Lock CENT into veCENT, build voting power over time, and manage your position directly from the app.</p>
+                    <Link className="secondary-btn" href="/app">Open governance</Link>
                 </div>
-                <div className="landing-governance-card">
-                    <div><span>Lock</span><strong>CENT</strong></div>
-                    <div><span>Receive</span><strong>veCENT</strong></div>
-                    <div><span>Use</span><strong>Governance</strong></div>
-                    <Link className="primary-btn" href="/app">Open governance</Link>
-                </div>
+                <div className="landing-governance-rule" aria-hidden="true" />
             </section>
 
             <section className="landing-cta">
@@ -276,7 +228,7 @@ export default function WelcomePage() {
                     <h2>Enter the live protocol.</h2>
                     <p>Supply, borrow, manage your position, and follow rewards from one interface.</p>
                 </div>
-                <Link className="primary-btn" href="/app">Launch app <span>→</span></Link>
+                <Link className="primary-btn" href="/app">Launch app</Link>
             </section>
 
             <footer className="landing-footer">
@@ -286,24 +238,52 @@ export default function WelcomePage() {
 
             <style jsx global>{`
                 .landing-page {
+                    --landing-content: min(1180px, calc(100vw - 48px));
+                    position: relative;
                     min-height: 100vh;
-                    padding: 0 42px 42px;
-                    background:
-                        radial-gradient(circle at 78% 16%, rgba(119, 66, 208, .14), transparent 28%),
-                        radial-gradient(circle at 10% 52%, rgba(70, 52, 112, .08), transparent 30%),
-                        var(--bg);
+                    overflow-x: clip;
+                    padding: 0 24px 36px;
+                    background: #090711;
                     color: var(--text);
+                    isolation: isolate;
+                }
+
+                .landing-aero-background {
+                    position: fixed;
+                    inset: 0;
+                    z-index: -1;
+                    width: 100vw;
+                    height: 100vh;
+                    opacity: .14;
+                    pointer-events: none;
+                    overflow: hidden;
+                }
+
+                .landing-aero-background > * {
+                    width: 100%;
+                    height: 100%;
+                }
+
+                .landing-nav,
+                .landing-hero,
+                .landing-how-section,
+                .landing-market-section,
+                .landing-governance-section,
+                .landing-cta,
+                .landing-footer {
+                    width: var(--landing-content);
+                    margin-inline: auto;
                 }
 
                 .landing-nav {
-                    width: min(1240px, 100%);
-                    height: 82px;
-                    margin: 0 auto;
-                    display: flex;
+                    position: relative;
+                    z-index: 2;
+                    min-height: 76px;
+                    display: grid;
+                    grid-template-columns: auto 1fr auto;
                     align-items: center;
-                    justify-content: space-between;
                     gap: 28px;
-                    border-bottom: 1px solid #211a2e;
+                    border-bottom: 1px solid rgba(139, 113, 171, .16);
                 }
 
                 .landing-brand {
@@ -313,10 +293,10 @@ export default function WelcomePage() {
                 }
 
                 .landing-nav-links {
+                    justify-self: center;
                     display: flex;
                     align-items: center;
-                    gap: 28px;
-                    margin-left: auto;
+                    gap: 24px;
                     color: #91869f;
                     font-size: 11px;
                 }
@@ -325,45 +305,27 @@ export default function WelcomePage() {
 
                 .landing-network,
                 .landing-status,
-                .landing-kicker {
-                    font: 9px 'DM Mono', monospace;
-                    letter-spacing: 1.5px;
+                .landing-kicker,
+                .landing-data-heading span,
+                .landing-metric span,
+                .landing-metric-note,
+                .landing-market-value span {
+                    font-family: 'DM Mono', monospace;
                     text-transform: uppercase;
+                    letter-spacing: 1.3px;
                 }
 
-                .landing-network { color: #9b8da8; white-space: nowrap; }
+                .landing-network { color: #9b8da8; font-size: 9px; white-space: nowrap; }
 
                 .landing-hero {
                     position: relative;
-                    isolation: isolate;
-                    width: min(1240px, 100%);
-                    margin: 0 auto;
-                    min-height: 620px;
-                    display: grid;
-                    grid-template-columns: minmax(0, 1.25fr) minmax(330px, .75fr);
-                    align-items: center;
-                    gap: 72px;
-                    padding: 88px 0 82px;
-                    overflow: hidden;
-                }
-
-                .landing-aero-shards {
-                    position: absolute;
-                    inset: 0;
-                    z-index: 0;
-                    opacity: .24;
-                    pointer-events: none;
-                }
-
-                .landing-aero-shards > * {
-                    width: 100%;
-                    height: 100%;
-                }
-
-                .landing-hero-copy,
-                .landing-hero-panel {
-                    position: relative;
                     z-index: 1;
+                    min-height: min(700px, calc(100vh - 76px));
+                    display: grid;
+                    grid-template-columns: minmax(0, 1.08fr) minmax(280px, .72fr);
+                    align-items: center;
+                    gap: clamp(42px, 7vw, 100px);
+                    padding: 88px 0 90px;
                 }
 
                 .landing-status {
@@ -371,6 +333,7 @@ export default function WelcomePage() {
                     align-items: center;
                     gap: 8px;
                     color: #b09bc7;
+                    font-size: 9px;
                 }
 
                 .landing-status i {
@@ -385,14 +348,14 @@ export default function WelcomePage() {
                     max-width: 760px;
                     margin: 20px 0 18px;
                     font-family: var(--display-font, Georgia, serif);
-                    font-size: clamp(56px, 7.3vw, 96px);
+                    font-size: clamp(52px, 7vw, 94px);
                     line-height: .94;
                     letter-spacing: -4px;
                     font-weight: 400;
                 }
 
                 .landing-hero-copy > p {
-                    max-width: 690px;
+                    max-width: 650px;
                     margin: 0;
                     color: #aaa0b1;
                     font-size: 14px;
@@ -402,113 +365,131 @@ export default function WelcomePage() {
                 .landing-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 30px; }
                 .landing-trust-row { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 20px; color: #62596c; font: 9px 'DM Mono', monospace; text-transform: uppercase; letter-spacing: .7px; }
 
-                .landing-hero-panel {
-                    padding: 28px;
-                    border: 1px solid #2b2138;
-                    border-radius: 18px;
-                    background: linear-gradient(155deg, rgba(18,13,31,.9), rgba(10,7,16,.94));
-                    box-shadow: 0 30px 90px rgba(0,0,0,.25);
-                    backdrop-filter: blur(2px);
-                }
+                .landing-hero-metrics { align-self: center; justify-self: end; width: min(440px, 100%); }
+                .landing-metric { display: flex; flex-direction: column; gap: 10px; padding: 24px 0; border-top: 1px solid rgba(139, 113, 171, .18); }
+                .landing-metric:last-of-type { border-bottom: 1px solid rgba(139, 113, 171, .18); }
+                .landing-metric span { color: #736980; font-size: 9px; }
+                .landing-metric strong { font-family: var(--display-font, Georgia, serif); font-size: clamp(30px, 4vw, 44px); line-height: 1; font-weight: 400; letter-spacing: -1.1px; font-variant-numeric: tabular-nums; }
+                .landing-metric-note { margin-top: 14px; color: #5d5568; font-size: 7px; line-height: 1.5; }
 
-                .landing-hero-panel-top { display: flex; justify-content: space-between; align-items: baseline; gap: 18px; padding-bottom: 22px; border-bottom: 1px solid #231a2f; }
-                .landing-hero-panel-top span { color: #756d83; font: 9px 'DM Mono', monospace; letter-spacing: 1.5px; }
-                .landing-hero-panel-top strong { font-family: var(--display-font, Georgia, serif); font-size: 28px; font-weight: 400; white-space: nowrap; }
-                .landing-supplied-list { min-height: 155px; }
-                .landing-supplied-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 17px 0; border-bottom: 1px solid #1b1425; font-size: 11px; }
-                .landing-supplied-row span { color: #9b91a4; }
-                .landing-supplied-row b { color: #e4dcf0; font-weight: 500; font-variant-numeric: tabular-nums; }
-                .landing-supplied-empty { display: flex; min-height: 155px; align-items: center; color: #645b6d; font-size: 11px; }
-                .landing-panel-link { display: flex; justify-content: space-between; margin-top: 20px; color: #c6adff; font-size: 11px; }
-
-                .protocol-stats { width: min(1240px, 100%); margin: 0 auto; }
-
-                .landing-section { width: min(1240px, 100%); margin: 0 auto; padding: 92px 0; }
-                .landing-section-heading { max-width: 720px; margin-bottom: 34px; }
-                .landing-kicker { color: #987db9; }
+                .landing-how-section { position: relative; z-index: 1; padding: 80px 0 125px; }
+                .landing-how-copy { width: min(650px, 100%); }
+                .landing-kicker { color: #987db9; font-size: 9px; }
+                .landing-how-copy h2,
                 .landing-section-heading h2,
-                .landing-market-copy h2,
-                .landing-governance-section h2,
+                .landing-governance-copy h2,
                 .landing-cta h2 {
-                    margin: 10px 0 10px;
+                    margin: 10px 0 12px;
                     font-family: var(--display-font, Georgia, serif);
-                    font-size: clamp(35px, 4vw, 58px);
+                    font-size: clamp(35px, 4vw, 57px);
                     line-height: 1;
-                    letter-spacing: -2.3px;
+                    letter-spacing: -2.2px;
                     font-weight: 400;
                 }
-                .landing-section-heading p,
-                .landing-market-copy p,
-                .landing-governance-section p,
+
+                .landing-how-copy > p,
+                .landing-section-heading > p,
+                .landing-governance-copy > p,
                 .landing-cta p { margin: 0; color: #8f8598; font-size: 12px; line-height: 1.7; }
 
-                .landing-flow-grid,
-                .landing-principles-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 14px; }
-                .landing-flow-card,
-                .landing-principle-card { min-height: 240px; padding: 25px; border: 1px solid #282033; border-radius: 15px; background: linear-gradient(145deg, #100b1b, #0b0813); }
-                .landing-flow-number { color: #6e5a82; font: 10px 'DM Mono', monospace; }
-                .landing-flow-card h3,
-                .landing-principle-card h3 { margin: 56px 0 10px; font-family: var(--display-font, Georgia, serif); font-size: 25px; font-weight: 400; }
-                .landing-principle-card h3 { margin-top: 30px; }
-                .landing-flow-card p,
-                .landing-principle-card p { margin: 0; color: #877d90; font-size: 11px; line-height: 1.7; }
+                .landing-how-list { margin-top: 46px; }
+                .landing-how-item { display: grid; grid-template-columns: 46px minmax(0,1fr); gap: 18px; padding: 24px 0; border-top: 1px solid rgba(139, 113, 171, .17); }
+                .landing-how-item:last-child { border-bottom: 1px solid rgba(139, 113, 171, .17); }
+                .landing-how-number { color: #6f5b82; font: 10px 'DM Mono', monospace; }
+                .landing-how-item h3 { margin: -3px 0 7px; font-family: var(--display-font, Georgia, serif); font-size: 25px; font-weight: 400; letter-spacing: -.4px; }
+                .landing-how-item p { margin: 0; color: #81778b; font-size: 11px; line-height: 1.7; }
 
-                .landing-principles-section { padding-top: 25px; }
+                .landing-market-section { position: relative; z-index: 1; padding: 86px 0 112px; }
+                .landing-section-heading { width: min(720px, 100%); margin-bottom: 40px; }
+                .landing-market-list { border-top: 1px solid rgba(139, 113, 171, .18); margin-bottom: 26px; }
+                .landing-market-row { display: grid; grid-template-columns: 1.2fr .8fr .8fr; gap: 28px; align-items: end; padding: 21px 0; border-bottom: 1px solid rgba(139, 113, 171, .12); }
+                .landing-market-row > div { display: flex; flex-direction: column; gap: 5px; }
+                .landing-market-name { align-items: flex-start; }
+                .landing-market-name strong { color: #ddd4e5; font-size: 13px; font-weight: 500; }
+                .landing-market-name span { color: #675e71; font-size: 9px; }
+                .landing-market-value { align-items: flex-end; }
+                .landing-market-value span { color: #5f566a; font-size: 8px; }
+                .landing-market-value strong { color: #d8cfdf; font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
 
-                .landing-market-section,
-                .landing-governance-section,
-                .landing-cta { display: grid; grid-template-columns: minmax(0,1fr) minmax(320px,.9fr); gap: 55px; align-items: center; }
-                .landing-market-copy .secondary-btn { margin-top: 25px; }
+                .landing-governance-section { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, .75fr) minmax(180px, .7fr); gap: 90px; align-items: center; padding: 90px 0 120px; }
+                .landing-governance-copy { width: min(600px, 100%); }
+                .landing-governance-copy .secondary-btn { margin-top: 24px; }
+                .landing-governance-rule { height: 1px; background: linear-gradient(90deg, rgba(168, 85, 247, .42), transparent); }
 
-                .landing-live-card,
-                .landing-governance-card { padding: 25px; border: 1px solid #282033; border-radius: 16px; background: #0c0814; }
-                .landing-live-card-head { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding-bottom: 20px; border-bottom: 1px solid #21182d; }
-                .landing-live-card-head > div { display: flex; align-items: center; gap: 11px; }
-                .landing-usdc-badge { display: grid; width: 39px; height: 39px; place-items: center; border-radius: 50%; background: #2775ca; color: #fff; font-weight: 700; }
-                .landing-live-card-head strong { display: block; font-size: 13px; }
-                .landing-live-card-head small { display: block; margin-top: 3px; color: #62596c; font-size: 9px; }
-                .live-badge { display: inline-flex; align-items: center; gap: 7px; padding: 6px 10px; border: 1px solid #303044; border-radius: 999px; color: #aaa2b9; background: #0d0b15; font: 9px 'DM Mono', monospace; white-space: nowrap; }
-                .live-badge i { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); }
-                .landing-live-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; margin-top: 18px; }
-                .landing-live-grid > div { padding: 13px; border: 1px solid #21182d; border-radius: 11px; }
-                .landing-live-grid span { display: block; color: #5f566a; font: 9px 'DM Mono', monospace; }
-                .landing-live-grid strong { display: block; margin-top: 7px; font-size: 11px; }
+                .landing-cta {
+                    position: relative;
+                    z-index: 1;
+                    margin-top: 20px;
+                    margin-bottom: 30px;
+                    padding: 36px 40px;
+                    display: grid;
+                    grid-template-columns: minmax(0,1fr) auto;
+                    gap: 32px;
+                    align-items: center;
+                    border: 1px solid #2c2239;
+                    border-radius: 18px;
+                    background: linear-gradient(135deg, rgba(23,16,33,.96), rgba(13,9,21,.96));
+                    box-shadow: 0 30px 90px rgba(0,0,0,.24);
+                }
 
-                .landing-governance-card { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; align-items: stretch; }
-                .landing-governance-card > div { padding: 16px; border: 1px solid #21182d; border-radius: 11px; background: #0f0a17; }
-                .landing-governance-card span { display: block; color: #5f566a; font: 9px 'DM Mono', monospace; }
-                .landing-governance-card strong { display: block; margin-top: 9px; font-size: 12px; }
-                .landing-governance-card .primary-btn { grid-column: 1 / -1; margin-top: 3px; }
+                .landing-cta .primary-btn { justify-self: end; white-space: nowrap; }
 
-                .landing-cta { margin: 30px auto 30px; width: min(1240px, 100%); padding: 36px 40px; border: 1px solid #2c2239; border-radius: 18px; background: linear-gradient(135deg, #171021, #0d0915); }
-                .landing-cta .primary-btn { justify-self: end; }
-
-                .landing-footer { width: min(1240px, 100%); margin: 0 auto; padding-top: 28px; border-top: 1px solid #211a2e; display: flex; justify-content: space-between; gap: 15px; color: #645b6d; font-size: 10px; }
+                .landing-footer { position: relative; z-index: 1; padding-top: 26px; border-top: 1px solid rgba(139, 113, 171, .14); display: flex; justify-content: space-between; gap: 15px; color: #645b6d; font-size: 10px; }
                 .landing-footer strong { color: #c7bed0; font-family: var(--display-font, Georgia, serif); font-size: 16px; font-weight: 400; }
 
                 @media (max-width: 900px) {
-                    .landing-page { padding: 0 22px 28px; }
-                    .landing-nav-links { display: none; }
-                    .landing-hero { grid-template-columns: 1fr; gap: 30px; padding: 62px 0 55px; }
-                    .landing-hero-panel { max-width: 680px; }
-                    .landing-aero-shards { opacity: .18; }
-                    .landing-market-section,
-                    .landing-governance-section,
-                    .landing-cta { grid-template-columns: 1fr; gap: 28px; }
+                    .landing-page { --landing-content: min(720px, calc(100vw - 36px)); padding: 0 18px 28px; }
+                    .landing-nav { grid-template-columns: auto auto; gap: 16px; min-height: 68px; }
+                    .landing-nav-links { grid-column: 1 / -1; grid-row: 2; width: 100%; justify-content: flex-start; gap: 18px; padding: 0 0 13px; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+                    .landing-nav-links::-webkit-scrollbar { display: none; }
+                    .landing-network { justify-self: end; }
+                    .landing-hero { grid-template-columns: 1fr; min-height: auto; gap: 48px; padding: 68px 0 84px; }
+                    .landing-hero-metrics { justify-self: start; width: 100%; max-width: 620px; }
+                    .landing-governance-section { grid-template-columns: 1fr; gap: 26px; }
+                    .landing-governance-rule { width: 72%; }
+                    .landing-cta { grid-template-columns: 1fr; padding: 30px; }
                     .landing-cta .primary-btn { justify-self: start; }
                 }
 
-                @media (max-width: 640px) {
-                    .landing-page { padding: 0 16px 22px; }
-                    .landing-network { display: none; }
-                    .landing-hero h1 { font-size: 52px; letter-spacing: -2.5px; }
-                    .landing-section { padding: 66px 0; }
-                    .landing-flow-grid,
-                    .landing-principles-grid { grid-template-columns: 1fr; }
-                    .landing-live-grid { grid-template-columns: 1fr; }
-                    .landing-governance-card { grid-template-columns: 1fr; }
-                    .landing-governance-card .primary-btn { grid-column: auto; }
+                @media (max-width: 620px) {
+                    .landing-page { --landing-content: calc(100vw - 28px); padding: 0 14px 22px; }
+                    .landing-brand { font-size: 22px; }
+                    .landing-network { font-size: 8px; }
+                    .landing-nav { min-height: 64px; }
+                    .landing-nav-links { gap: 15px; font-size: 10px; }
+                    .landing-hero { padding: 52px 0 66px; }
+                    .landing-hero h1 { font-size: clamp(43px, 13.5vw, 61px); letter-spacing: -2.6px; }
+                    .landing-hero-copy > p { font-size: 13px; }
+                    .landing-actions .primary-btn,
+                    .landing-actions .secondary-btn,
+                    .landing-market-section .secondary-btn,
+                    .landing-governance-copy .secondary-btn { width: 100%; text-align: center; }
+                    .landing-trust-row { gap: 10px 14px; line-height: 1.5; }
+                    .landing-metric { padding: 20px 0; }
+                    .landing-metric strong { font-size: 29px; }
+                    .landing-how-section { padding: 66px 0 90px; }
+                    .landing-how-copy h2,
+                    .landing-section-heading h2,
+                    .landing-governance-copy h2,
+                    .landing-cta h2 { font-size: clamp(31px, 10vw, 43px); letter-spacing: -1.5px; }
+                    .landing-how-item { grid-template-columns: 32px minmax(0,1fr); gap: 10px; }
+                    .landing-how-item h3 { font-size: 22px; }
+                    .landing-market-section { padding: 66px 0 88px; }
+                    .landing-market-row { grid-template-columns: 1fr 1fr; gap: 15px; }
+                    .landing-market-name { grid-column: 1 / -1; }
+                    .landing-market-value { align-items: flex-start; }
+                    .landing-governance-section { padding: 66px 0 88px; }
+                    .landing-cta { margin-top: 10px; padding: 26px 22px; }
+                    .landing-cta .primary-btn { width: 100%; text-align: center; }
                     .landing-footer { flex-direction: column; }
+                }
+
+                @media (max-width: 360px) {
+                    .landing-page { --landing-content: calc(100vw - 22px); padding-inline: 11px; }
+                    .landing-nav-links { gap: 12px; font-size: 9px; }
+                    .landing-hero h1 { font-size: 41px; }
+                    .landing-market-name strong { font-size: 12px; }
+                    .landing-market-value strong { font-size: 11px; }
                 }
 
                 @media (prefers-reduced-motion: reduce) {
