@@ -75,8 +75,11 @@ jobs:
             ];
             packageJson.dependencies ??= {};
             for (const dependency of dependencies) {
-              const [name, version] = String(dependency).split(/(?=@)/);
-              packageJson.dependencies[name] = version || packageJson.dependencies[name] || 'latest';
+              const raw = String(dependency);
+              const splitAt = raw.lastIndexOf('@');
+              const name = splitAt > 0 ? raw.slice(0, splitAt) : raw;
+              const version = splitAt > 0 ? raw.slice(splitAt + 1) : 'latest';
+              packageJson.dependencies[name] = version;
             }
             fs.writeFileSync(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8');
           })().catch(error => {
