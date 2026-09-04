@@ -44,7 +44,6 @@ function PortfolioContent() {
     <div className="page-stack">
       <div className="section-header">
         <div>
-          <span className="section-kicker">PORTFOLIO</span>
           <h1>Your position</h1>
           <p>Account-wide collateral, debt, borrowing capacity, and health.</p>
         </div>
@@ -82,7 +81,6 @@ function PortfolioContent() {
       <div className="panel">
         <div className="panel-head">
           <div>
-            <span className="section-kicker">RISK</span>
             <h2>Position health</h2>
           </div>
         </div>

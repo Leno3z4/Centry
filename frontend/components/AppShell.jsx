@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { useAccount, useChainId } from 'wagmi';
+import { useAccount } from 'wagmi';
 import { WalletConnect } from './WalletConnect';
 
 const NAV_ITEMS = [
@@ -19,7 +19,6 @@ const NAV_ITEMS = [
 export function AppShell({ children }) {
   const pathname = usePathname();
   const { address } = useAccount();
-  const chainId = useChainId();
   const active = pathname === '/app'
     ? '/app'
     : NAV_ITEMS.find((item) => item.href !== '/app' && pathname.startsWith(item.href))?.href || '/app';
@@ -36,11 +35,6 @@ export function AppShell({ children }) {
             </a>
           ))}
         </nav>
-        <div className="network-card">
-          <span className="network-dot" />
-          <div><small>Network</small><strong>Arc Testnet</strong></div>
-          <span className="chain-id">{chainId || 5042002}</span>
-        </div>
         <div className="sidebar-footer"><strong>Centry Protocol</strong><span>Arc-native liquidity</span></div>
       </aside>
 
@@ -54,7 +48,6 @@ export function AppShell({ children }) {
         <div className="page-view">{children}</div>
         <footer className="page-footer">
           <span>Centry Protocol</span>
-          <span>Arc Testnet</span>
           <span>{address ? `${address.slice(0, 6)}…${address.slice(-4)}` : 'Wallet not connected'}</span>
         </footer>
       </main>

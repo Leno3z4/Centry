@@ -105,8 +105,6 @@ select option { background: #0d0a18; color: #f7f4ff; }
 .section-kicker { color: #967ab8; font: 9px 'DM Mono', monospace; letter-spacing: 1.5px; }
 .hero { position: relative; min-height: 390px; overflow: hidden; padding: 72px 36px 48px; border-bottom: 1px solid #211a2e; }
 .hero-copy { position: relative; z-index: 2; max-width: 660px; }
-.eyebrow { display: flex; align-items: center; gap: 9px; color: #aa92d2; font: 11px 'DM Mono', monospace; letter-spacing: 0.8px; text-transform: uppercase; }
-.eyebrow span { width: 6px; height: 6px; border-radius: 50%; background: var(--purple); box-shadow: 0 0 14px var(--purple); }
 .hero h1 { margin: 19px 0 22px; font-size: clamp(54px, 6vw, 84px); font-weight: 600; line-height: 0.95; letter-spacing: -5px; }
 .hero h1 em { color: transparent; font-style: normal; background: linear-gradient(90deg, #fff, #9b62ff); background-clip: text; -webkit-background-clip: text; }
 .hero-copy p { max-width: 560px; color: #a49caf; font-size: 14px; line-height: 1.65; }
@@ -129,9 +127,6 @@ select option { background: #0d0a18; color: #f7f4ff; }
 .panel { padding: 24px; border: 1px solid var(--line); border-radius: 15px; background: linear-gradient(145deg, #100b1a, #0b0813); box-shadow: 0 20px 60px #00000025; }
 .panel h2 { margin: 6px 0 0; font-size: 20px; letter-spacing: -0.4px; }
 .panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; margin-bottom: 20px; }
-.live-badge, .test-badge { display: inline-flex; min-height: 30px; align-items: center; gap: 7px; padding: 6px 10px; border: 1px solid #303044; border-radius: 999px; color: #aaa2b9; background: #0d0b15; font: 9px 'DM Mono', monospace; white-space: nowrap; }
-.live-badge i { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); }
-.test-badge { border-color: #5b432c; color: #d8b68d; }
 .market-list { display: grid; gap: 8px; }
 .market-list-item { display: grid; width: 100%; grid-template-columns: minmax(180px, 1.5fr) minmax(80px, 0.7fr) minmax(150px, 1fr) auto; align-items: center; gap: 15px; padding: 15px; border: 1px solid var(--line-soft); border-radius: 12px; background: #0c0814; color: inherit; text-align: left; transition: border-color 160ms ease, background 160ms ease, transform 160ms ease; }
 .market-list-item:hover { border-color: #51327d; background: #100b19; transform: translateY(-1px); }

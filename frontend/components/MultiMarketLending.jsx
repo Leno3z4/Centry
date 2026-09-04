@@ -171,11 +171,9 @@ export default function MultiMarketLending() {
     <div className={styles.page}>
       <div className={styles.header}>
         <div>
-          <span className="section-kicker">CENTRY · LENDING</span>
           <h1>Borrow & lend</h1>
           <p>Supply, borrow and manage your position across Centry markets.</p>
         </div>
-        <div className="test-badge">ARC TESTNET</div>
       </div>
 
       <div className={styles.marketTabs} role="tablist" aria-label="Lending markets">
@@ -221,12 +219,8 @@ export default function MultiMarketLending() {
         <div className="panel">
           <div className="panel-head">
             <div>
-              <span className="section-kicker">{market.symbol}</span>
               <h2>{action[0].toUpperCase() + action.slice(1)} {market.symbol}</h2>
             </div>
-            <span className={lending.reserveActive ? 'live-badge' : 'test-badge'}>
-              {reserveStatus}
-            </span>
           </div>
 
           <div className={styles.actions}>
@@ -305,7 +299,6 @@ export default function MultiMarketLending() {
         <div className="panel">
           <div className="panel-head">
             <div>
-              <span className="section-kicker">RISK</span>
               <h2>Position health</h2>
             </div>
           </div>

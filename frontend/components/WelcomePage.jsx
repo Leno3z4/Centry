@@ -128,24 +128,17 @@ export default function WelcomePage() {
                 <div className="landing-nav-links">
                     <a href="#how-it-works">How it works</a>
                     <a href="#governance">Governance</a>
-                    <Link href="/app">Open app</Link>
+                    <Link href="/app" className="landing-nav-app">Open app</Link>
                 </div>
-                <span className="landing-network">ARC TESTNET</span>
             </nav>
 
             <section className="landing-hero">
                 <div className="landing-hero-copy">
-                    <span className="landing-status"><i /> ARC TESTNET · ONCHAIN</span>
                     <h1>Lending, without the noise.</h1>
                     <p>Supply liquidity, borrow against supported collateral, and coordinate the protocol through veCENT governance.</p>
                     <div className="landing-actions">
                         <Link className="primary-btn" href="/app">Enter Centry</Link>
                         <a className="secondary-btn" href="#how-it-works">Explore the protocol</a>
-                    </div>
-                    <div className="landing-trust-row">
-                        <span>Native USDC</span>
-                        <span>Live contracts</span>
-                        <span>veCENT governance</span>
                     </div>
                 </div>
 
@@ -164,7 +157,6 @@ export default function WelcomePage() {
 
             <section id="how-it-works" className="landing-how-section">
                 <div className="landing-how-copy">
-                    <span className="landing-kicker">HOW CENTRY WORKS</span>
                     <h2>A lending system you can understand at a glance.</h2>
                     <p>Three core actions connect liquidity, borrowing, risk, rewards, and governance.</p>
 
@@ -184,7 +176,6 @@ export default function WelcomePage() {
 
             <section id="governance" className="landing-governance-section">
                 <div className="landing-governance-copy">
-                    <span className="landing-kicker">GOVERNANCE</span>
                     <h2>CENT becomes influence through time.</h2>
                     <p>Lock CENT into veCENT, build voting power over time, and manage your position directly from the app.</p>
                     <Link className="secondary-btn" href="/app">Open governance</Link>
@@ -194,7 +185,6 @@ export default function WelcomePage() {
 
             <section className="landing-cta">
                 <div>
-                    <span className="landing-kicker">READY WHEN YOU ARE</span>
                     <h2>Enter the live protocol.</h2>
                     <p>Supply, borrow, manage your position, and follow rewards from one interface.</p>
                 </div>
@@ -203,7 +193,7 @@ export default function WelcomePage() {
 
             <footer className="landing-footer">
                 <strong>Centry</strong>
-                <span>Arc Testnet · Experimental software</span>
+                <span>Experimental software</span>
             </footer>
 
             <style jsx global>{`
@@ -249,7 +239,7 @@ export default function WelcomePage() {
                     z-index: 2;
                     min-height: 76px;
                     display: grid;
-                    grid-template-columns: auto 1fr auto;
+                    grid-template-columns: auto 1fr;
                     align-items: center;
                     gap: 28px;
                     border-bottom: 1px solid rgba(139, 113, 171, .16);
@@ -262,7 +252,7 @@ export default function WelcomePage() {
                 }
 
                 .landing-nav-links {
-                    justify-self: center;
+                    justify-self: end;
                     display: flex;
                     align-items: center;
                     gap: 24px;
@@ -272,18 +262,15 @@ export default function WelcomePage() {
 
                 .landing-nav-links a:hover { color: #fff; }
 
-                .landing-network,
-                .landing-status,
-                .landing-kicker,
-                .landing-data-heading span,
+                .landing-nav-app { padding: 8px 13px; border: 1px solid rgba(161, 128, 193, .32); border-radius: 999px; color: #eee7f3 !important; background: rgba(109, 71, 145, .16); }
+                .landing-nav-app:hover { border-color: rgba(190, 157, 222, .5); background: rgba(109, 71, 145, .26); }
+
                 .landing-metric span,
                 .landing-metric-note {
                     font-family: 'DM Mono', monospace;
                     text-transform: uppercase;
                     letter-spacing: 1.3px;
                 }
-
-                .landing-network { color: #9b8da8; font-size: 9px; white-space: nowrap; }
 
                 .landing-hero {
                     position: relative;
@@ -296,25 +283,9 @@ export default function WelcomePage() {
                     padding: 88px 0 90px;
                 }
 
-                .landing-status {
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 8px;
-                    color: #b09bc7;
-                    font-size: 9px;
-                }
-
-                .landing-status i {
-                    width: 6px;
-                    height: 6px;
-                    border-radius: 50%;
-                    background: var(--green);
-                    box-shadow: 0 0 12px var(--green);
-                }
-
                 .landing-hero h1 {
                     max-width: 760px;
-                    margin: 20px 0 18px;
+                    margin: 0 0 18px;
                     font-family: var(--display-font, Georgia, serif);
                     font-size: clamp(52px, 7vw, 94px);
                     line-height: .94;
@@ -331,7 +302,6 @@ export default function WelcomePage() {
                 }
 
                 .landing-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 30px; }
-                .landing-trust-row { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 20px; color: #62596c; font: 9px 'DM Mono', monospace; text-transform: uppercase; letter-spacing: .7px; }
 
                 .landing-hero-metrics { align-self: center; justify-self: end; width: min(440px, 100%); }
                 .landing-metric { display: flex; flex-direction: column; gap: 10px; padding: 24px 0; border-top: 1px solid rgba(139, 113, 171, .18); }
@@ -342,7 +312,6 @@ export default function WelcomePage() {
 
                 .landing-how-section { position: relative; z-index: 1; padding: 80px 0 125px; }
                 .landing-how-copy { width: min(650px, 100%); }
-                .landing-kicker { color: #987db9; font-size: 9px; }
                 .landing-how-copy h2,
                 .landing-section-heading h2,
                 .landing-governance-copy h2,
@@ -419,7 +388,6 @@ export default function WelcomePage() {
                     .landing-actions .primary-btn,
                     .landing-actions .secondary-btn,
                     .landing-governance-copy .secondary-btn { width: 100%; text-align: center; }
-                    .landing-trust-row { gap: 10px 14px; line-height: 1.5; }
                     .landing-metric { padding: 20px 0; }
                     .landing-metric strong { font-size: 29px; }
                     .landing-how-section { padding: 66px 0 90px; }

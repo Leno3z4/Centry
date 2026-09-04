@@ -46,8 +46,6 @@ export default function ProtocolStats() {
   return (
     <section className="protocol-stats" aria-label="Live Centry protocol statistics">
       <div className="protocol-stats-heading">
-        <span className="section-kicker">LIVE PROTOCOL DATA</span>
-        <span className="protocol-stats-live"><i /> Onchain</span>
       </div>
       <div className="protocol-stats-grid">
         <article className="protocol-stat">

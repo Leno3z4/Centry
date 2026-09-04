@@ -208,7 +208,6 @@ function GovernanceContent() {
     <div className="page-stack">
       <div className="section-header governance-header">
         <div>
-          <span className="section-kicker">GOVERNANCE</span>
           <h1>veCENT</h1>
           <p>Lock CENT to create and manage your governance positions.</p>
         </div>
@@ -216,7 +215,6 @@ function GovernanceContent() {
 
       <section className="governance-hero-grid">
         <div className="panel governance-hero-card">
-          <span className="section-kicker">YOUR POSITION</span>
           <div className="big-number">{isConnected ? formatCENT(governance.votingPower) : '—'}</div>
           <span className="muted-label">Voting power</span>
           <div className="governance-stat-line"><span>CENT balance</span><strong>{isConnected ? formatCENT(governance.centBalance) : '—'}</strong></div>
@@ -226,7 +224,6 @@ function GovernanceContent() {
         </div>
 
         <div className="panel">
-          <span className="section-kicker">CREATE POSITION</span>
           <h2>Lock CENT</h2>
           <p className="panel-copy">Longer locks create more voting power. Each lock is represented by its own veCENT position.</p>
           <label className="field-label" htmlFor="cent-amount">CENT amount</label>
@@ -242,7 +239,6 @@ function GovernanceContent() {
         <section className="panel governance-positions-panel">
           <div className="panel-head">
             <div>
-              <span className="section-kicker">POSITIONS</span>
               <h2>Your veCENT locks</h2>
             </div>
             <span className="position-count">{positions.length} position{positions.length === 1 ? '' : 's'}</span>

@@ -221,7 +221,6 @@ function RewardsContent() {
     <div className="page-stack">
       <div className="section-header reward-section-header">
         <div>
-          <span className="section-kicker">REWARDS</span>
           <h1>Protocol rewards</h1>
           <p>Revenue-funded CENT rewards are published by epoch and verified onchain.</p>
         </div>
@@ -262,7 +261,6 @@ function RewardsContent() {
         <div className="panel panel-large">
           <div className="panel-head">
             <div>
-              <span className="section-kicker">YOUR REWARDS</span>
               <h2>veCENT positions</h2>
             </div>
           </div>
@@ -310,7 +308,6 @@ function RewardsContent() {
         <div className="panel rewards-epoch-panel">
           <div className="panel-head">
             <div>
-              <span className="section-kicker">DISTRIBUTION</span>
               <h2>Epoch status</h2>
             </div>
           </div>

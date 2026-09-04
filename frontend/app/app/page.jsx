@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useState } from 'react';
 import { useAccount, useReadContract } from 'wagmi';
 import { formatUnits } from 'viem';
@@ -10,6 +11,8 @@ import { CONTRACT_ADDRESSES } from '../../constants/contracts';
 import { LENDING_POOL_ABI, VE_CENTRY_ABI } from '../../constants/abis';
 import { useMultiMarketLending } from '../../hooks/useMultiMarketLending';
 import { useVeGovernance } from '../../hooks/useVeGovernance';
+
+const AeroShards = dynamic(() => import('../../components/AeroShards'), { ssr: false, loading: () => null });
 
 const ARC_CHAIN_ID = 5042002;
 const ZERO_ROOT = `0x${'0'.repeat(64)}`;
@@ -96,9 +99,40 @@ function OverviewContent() {
 
   return (
     <div className="page-stack">
+      <div className="overview-aero-background" aria-hidden="true">
+        <AeroShards
+          backgroundColor="#120F17"
+          shardColor="#896ABD"
+          accentColor="#A855F7"
+          placement="full"
+          flow="stream"
+          material="pearl"
+          detail="balanced"
+          effect="none"
+          scale={1}
+          spread={1}
+          depth={1}
+          speed={1}
+          spin={1}
+          interaction="repel"
+          density={1.5}
+          shardSize={1.1}
+          stretch={1}
+          turbulence={1}
+          glow={1}
+          edgeSoftness={2}
+          bloom={0.5}
+          grain={0.05}
+          chromaticAberration={0.0075}
+          transitionDuration={1}
+          interactionRadius={1.5}
+          interactionStrength={0.5}
+          rippleIntensity={1}
+          holdToGather={true}
+        />
+      </div>
       <section className="hero">
         <div className="hero-copy">
-          <div className="eyebrow"><span />Arc-native lending market</div>
           <h1>Liquidity,<br /><em>built for Arc.</em></h1>
           <p>Centry is an Arc-native money market for lending, borrowing, swaps, and onchain risk management.</p>
           <div className="hero-actions">
@@ -121,7 +155,7 @@ function OverviewContent() {
 
       <section className="content-grid">
         <div className="panel panel-large">
-          <div className="panel-head"><div><span className="section-kicker">MARKETS</span><h2>Available markets</h2></div><a className="text-link" href="/app/lending">View lending →</a></div>
+          <div className="panel-head"><div><h2>Available markets</h2></div><a className="text-link" href="/app/lending">View lending →</a></div>
           <div className="market-list">
             {ACTIVE_MARKETS.map((market) => (
               <a key={market.id} href="/app/lending" className="market-list-item">
@@ -135,7 +169,7 @@ function OverviewContent() {
         </div>
 
         <div className="panel overview-account-panel">
-          <div className="panel-head"><div><span className="section-kicker">YOUR ACCOUNT</span><h2>Position</h2></div></div>
+          <div className="panel-head"><div><h2>Position</h2></div></div>
           {isConnected ? <HealthMeter percent={lending.healthFactorPercent} factor={lending.healthFactor} /> : <div className="connect-prompt">Connect your wallet to see account health and position details.</div>}
           <a className="secondary-btn full-btn" href="/app/portfolio">View portfolio</a>
         </div>
@@ -143,7 +177,7 @@ function OverviewContent() {
 
       <section className="content-grid overview-bottom-grid">
         <div className="panel">
-          <div className="panel-head"><div><span className="section-kicker">GOVERNANCE</span><h2>veCENT</h2></div><a className="text-link" href="/app/governance">Manage →</a></div>
+          <div className="panel-head"><div><h2>veCENT</h2></div><a className="text-link" href="/app/governance">Manage →</a></div>
           <div className="overview-feature-number">{isConnected ? `${formatNumber(walletVotingPower, 1)}` : '—'}</div>
           <div className="overview-feature-label">Voting power</div>
           <div className="overview-inline-stats">
@@ -153,7 +187,7 @@ function OverviewContent() {
         </div>
 
         <div className="panel">
-          <div className="panel-head"><div><span className="section-kicker">REWARDS</span><h2>Latest distribution</h2></div><a className="text-link" href="/app/rewards">Open →</a></div>
+          <div className="panel-head"><div><h2>Latest distribution</h2></div><a className="text-link" href="/app/rewards">Open →</a></div>
           <div className="overview-reward-row"><div><span className="overview-feature-label">Epoch</span><strong className="overview-reward-value">{rewardPending ? nextEpoch.toString() : latestEpoch.toString()}</strong></div><div className="overview-reward-right"><span className={`reward-mini-status ${rewardPending ? 'pending' : 'live'}`}>{rewardPending ? 'IN PROGRESS' : 'ACTIVE'}</span><small>{rewardPending ? formatCountdown(pendingCountdown) : 'Claims available'}</small></div></div>
           <div className="overview-reward-line"><span>Voting power</span><strong>{isConnected ? formatNumber(walletVotingPower, 1) : '—'}</strong></div>
           <div className="overview-reward-line"><span>Manage rewards</span><strong className="text-link">Open rewards →</strong></div>
@@ -161,6 +195,10 @@ function OverviewContent() {
       </section>
 
       <style jsx global>{`
+        .page-stack{position:relative;isolation:isolate}
+        .overview-aero-background{position:fixed;inset:0;z-index:0;opacity:.10;pointer-events:none;overflow:hidden}
+        .overview-aero-background > *{width:100%;height:100%}
+        .page-stack > :not(.overview-aero-background){position:relative;z-index:1}
         .overview-stats-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
         .overview-bottom-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
         .panel-head .text-link,.text-link{color:#bda9e9;text-decoration:none;font-size:11px}

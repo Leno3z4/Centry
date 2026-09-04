@@ -178,7 +178,6 @@ function AnalyticsContent() {
     <div className="page-stack">
       <div className="section-header">
         <div>
-          <span className="section-kicker">ANALYTICS</span>
           <h1>Protocol analytics</h1>
           <p>Live market, liquidity, utilization, and risk data from the deployed Centry contracts.</p>
         </div>
@@ -193,7 +192,7 @@ function AnalyticsContent() {
 
       <section className="content-grid analytics-grid">
         <div className="panel panel-large">
-          <div className="panel-head"><div><span className="section-kicker">MARKETS</span><h2>Live market snapshot</h2></div></div>
+          <div className="panel-head"><div><h2>Live market snapshot</h2></div></div>
           <div className="analytics-market-list">
             {markets.map((market) => (
               <div className="analytics-market" key={market.id}>
@@ -218,7 +217,7 @@ function AnalyticsContent() {
         </div>
 
         <div className="panel">
-          <div className="panel-head"><div><span className="section-kicker">RISK</span><h2>Reserve parameters</h2></div></div>
+          <div className="panel-head"><div><h2>Reserve parameters</h2></div></div>
           <div className="risk-list">
             {markets.map((market) => (
               <div className="risk-card" key={market.id}>
@@ -234,7 +233,6 @@ function AnalyticsContent() {
       </section>
 
       <div className="panel analytics-note">
-        <span className="section-kicker">ABOUT THESE NUMBERS</span>
         <p>Market totals and rates are calculated from the deployed reserves and immutable interest-rate strategy. Historical time-series charts are intentionally omitted until an event indexer is available.</p>
       </div>
 

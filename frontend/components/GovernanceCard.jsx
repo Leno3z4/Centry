@@ -37,7 +37,6 @@ export function GovernanceCard() {
   if (!configured) {
     return (
       <div className="panel">
-        <span className="section-kicker">GOVERNANCE</span>
         <h2>veCENT</h2>
         <p>
           Deploy the CENT token and vote-escrow contract, then configure their
@@ -49,7 +48,6 @@ export function GovernanceCard() {
 
   return (
     <div className="panel feature-panel purple" id="governance">
-      <span className="section-kicker">GOVERNANCE</span>
       <h2>veCENT</h2>
       <p>
         Lock CENT into transferable veCENT NFTs. Every lock is an independent
