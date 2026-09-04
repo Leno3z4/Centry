@@ -1,21 +1,21 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-04T13:01:09.523Z",
+  "generatedAt": "2026-09-04T22:19:18.554Z",
   "epoch": 1,
-  "rewardBudget": "200034243965223974",
-  "totalVotingPower": "1711201414326414326",
+  "rewardBudget": "250000000000000000",
+  "totalVotingPower": "6964206222018722",
   "rewardToken": "0x76e6d50D3151f0B4645ac0E53584F4204Fc6f0e3",
-  "revenueRewards": "0x06e627ce43F2ddd37e8f196824f7049416c3025b",
-  "veCENT": "0xF8B71bAed42c28e7e376C4DbD4A137047B92a503",
+  "revenueRewards": "0xFE791C5141ef417100Ce56624bc975DA1fBE9815",
+  "veCENT": "0xdcb00Ea10FBeaaB66b88C208Ad09b58E38D6f04e",
   "source": "Centry deterministic voting-power reward allocation",
   "positions": [
     {
-      "tokenId": "1",
+      "tokenId": "2",
       "owner": "0xd422fc040ad9294d553150Cf5646Ab0B1729E443",
-      "votingPower": "1711201414326414326",
+      "votingPower": "6964206222018722",
       "lockedAmount": "0",
       "lockEnd": "0",
-      "amount": "200034243965223974",
+      "amount": "250000000000000000",
       "instructions": []
     }
   ]
