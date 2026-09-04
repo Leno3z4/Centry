@@ -7,24 +7,19 @@ const RPC_URL =
   process.env.ARC_RPC_URL_SECRET;
 
 const REWARDS_ADDRESS =
-  "0x06e627ce43F2ddd37e8f196824f7049416c3025b";
+  process.env.CENTRY_REVENUE_REWARDS ||
+  "0xFE791C5141ef417100Ce56624bc975DA1fBE9815";
 
 const EXPECTED_CHAIN_ID =
   5042002n;
 
 const REWARDS_ABI = [
   "function latestEpoch() view returns (uint256)",
-
   "function rewardToken() view returns (address)",
-
   "function veCENT() view returns (address)",
-
   "function epochRoots(uint256 epoch) view returns (bytes32)",
-
   "function epochRewardBudget(uint256 epoch) view returns (uint256)",
-
   "function epochClaimed(uint256 epoch) view returns (uint256)",
-
   "function pendingEpochs(uint256 epoch) view returns (bytes32 root,uint256 rewardBudget,uint40 readyAt)"
 ];
 
