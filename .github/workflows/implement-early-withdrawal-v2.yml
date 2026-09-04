@@ -1,0 +1,180 @@
+name: Implement early withdrawal v2
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply v2 early-withdrawal changes
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new, count=1):
+              p = Path(path)
+              s = p.read_text()
+              if old not in s:
+                  raise SystemExit(f"Pattern not found in {path}: {old[:120]!r}")
+              if s.count(old) < count:
+                  raise SystemExit(f"Pattern count too low in {path}: expected {count}, found {s.count(old)}")
+              s = s.replace(old, new, count)
+              p.write_text(s)
+
+          # ------------------------------------------------------------------
+          # Voting escrow: 25% early-exit fee, split 60/40, reward rights live.
+          # ------------------------------------------------------------------
+          replace(
+              'contracts/governance/CentryVotingEscrow.sol',
+              '    uint256 public constant MAX_LOCK = 104 weeks;\n',
+              '    uint256 public constant MAX_LOCK = 104 weeks;\n    uint256 public constant BPS = 10_000;\n    uint256 public constant EARLY_WITHDRAW_FEE_BPS = 2_500;\n    uint256 public constant EARLY_WITHDRAW_REWARD_SHARE_BPS = 6_000;\n'
+          )
+          replace(
+              'contracts/governance/CentryVotingEscrow.sol',
+              '    IERC20 public immutable token;\n    address public immutable admin;\n',
+              '    IERC20 public immutable token;\n    address public immutable admin;\n    address public immutable treasury;\n'
+          )
+          replace(
+              'contracts/governance/CentryVotingEscrow.sol',
+              '    error ZeroAmount();\n    error ZeroToken();\n',
+              '    error ZeroAmount();\n    error ZeroToken();\n    error ZeroTreasury();\n    error RewardsControllerNotSet();\n'
+          )
+          replace(
+              'contracts/governance/CentryVotingEscrow.sol',
+              '    event Withdrawn(\n        address indexed user,\n        uint256 indexed tokenId,\n        uint256 amount\n    );\n',
+              '    event Withdrawn(\n        address indexed user,\n        uint256 indexed tokenId,\n        uint256 amount\n    );\n\n    event EarlyWithdrawn(\n        address indexed user,\n        uint256 indexed tokenId,\n        uint256 principal,\n        uint256 fee,\n        uint256 rewardShare,\n        uint256 treasuryShare,\n        uint256 returnedAmount\n    );\n'
+          )
+          replace(
+              'contracts/governance/CentryVotingEscrow.sol',
+              '    constructor(address token_)\n        ERC721("Centry Vote Escrow", "veCENT")\n    {\n        if (token_ == address(0)) {\n            revert ZeroToken();\n        }\n\n        token = IERC20(token_);\n        admin = msg.sender;\n    }\n',
+              '    constructor(address token_, address treasury_)\n        ERC721("Centry Vote Escrow", "veCENT")\n    {\n        if (token_ == address(0)) {\n            revert ZeroToken();\n        }\n\n        if (treasury_ == address(0)) {\n            revert ZeroTreasury();\n        }\n\n        token = IERC20(token_);\n        admin = msg.sender;\n        treasury = treasury_;\n    }\n'
+          )
+          old_withdraw = '''    function withdraw(\n        uint256 tokenId\n    ) external nonReentrant {\n        if (ownerOf(tokenId) != msg.sender) {\n            revert NoLock();\n        }\n\n        Lock memory lock = locks[tokenId];\n\n        if (block.timestamp < lock.end) {\n            revert LockNotExpired();\n        }\n\n        _checkpointVotingPower(\n            tokenId\n        );\n\n        delete locks[tokenId];\n        delete lastVotingPowerCheckpoint[tokenId];\n\n        _burn(\n            tokenId\n        );\n\n        token.safeTransfer(\n            msg.sender,\n            lock.amount\n        );\n\n        emit Withdrawn(\n            msg.sender,\n            tokenId,\n            lock.amount\n        );\n    }\n'''
+          new_withdraw = '''    function withdraw(\n        uint256 tokenId\n    ) external nonReentrant {\n        if (ownerOf(tokenId) != msg.sender) {\n            revert NoLock();\n        }\n\n        Lock memory lock = locks[tokenId];\n        bool early = block.timestamp < lock.end;\n\n        _checkpointVotingPower(\n            tokenId\n        );\n\n        delete locks[tokenId];\n        delete lastVotingPowerCheckpoint[tokenId];\n\n        if (early) {\n            if (rewardsController == address(0)) {\n                revert RewardsControllerNotSet();\n            }\n\n            uint256 fee = (\n                uint256(lock.amount) *\n                EARLY_WITHDRAW_FEE_BPS\n            ) / BPS;\n\n            uint256 rewardShare = (\n                fee *\n                EARLY_WITHDRAW_REWARD_SHARE_BPS\n            ) / BPS;\n\n            uint256 treasuryShare =\n                fee - rewardShare;\n\n            uint256 returnedAmount =\n                uint256(lock.amount) - fee;\n\n            _burn(\n                tokenId\n            );\n\n            token.safeTransfer(\n                address(rewardsController),\n                rewardShare\n            );\n\n            token.safeTransfer(\n                treasury,\n                treasuryShare\n            );\n\n            token.safeTransfer(\n                msg.sender,\n                returnedAmount\n            );\n\n            emit EarlyWithdrawn(\n                msg.sender,\n                tokenId,\n                lock.amount,\n                fee,\n                rewardShare,\n                treasuryShare,\n                returnedAmount\n            );\n\n            return;\n        }\n\n        _burn(\n            tokenId\n        );\n\n        token.safeTransfer(\n            msg.sender,\n            lock.amount\n        );\n\n        emit Withdrawn(\n            msg.sender,\n            tokenId,\n            lock.amount\n        );\n    }\n'''
+          replace('contracts/governance/CentryVotingEscrow.sol', old_withdraw, new_withdraw)
+
+          # ------------------------------------------------------------------
+          # Revenue rewards: burned positions retain claim rights.
+          # ------------------------------------------------------------------
+          replace(
+              'contracts/governance/CentryVeCENTRevenueRewards.sol',
+              '    mapping(uint256 => address) public selfRepayRecipient;\n    mapping(uint256 => address) public selfRepayOwner;\n',
+              '    mapping(uint256 => address) public selfRepayRecipient;\n    mapping(uint256 => address) public selfRepayOwner;\n\n    // Early-withdrawn positions retain ownership of already-published rewards.\n    mapping(uint256 => address) public withdrawnPositionOwner;\n'
+          )
+          replace(
+              'contracts/governance/CentryVeCENTRevenueRewards.sol',
+              '    event SelfRepayDisabled(\n        uint256 indexed tokenId,\n        address indexed owner\n    );\n',
+              '    event SelfRepayDisabled(\n        uint256 indexed tokenId,\n        address indexed owner\n    );\n\n    event PositionClosed(\n        uint256 indexed tokenId,\n        address indexed owner\n    );\n'
+          )
+          replace(
+              'contracts/governance/CentryVeCENTRevenueRewards.sol',
+              '    function claim(\n        uint256 epoch,\n        uint256 tokenId,\n        uint256 amount,\n        bytes32[] calldata proof\n    ) external nonReentrant returns (uint256) {\n        address owner = veCENT.ownerOf(tokenId);\n\n        if (owner != msg.sender) {\n            revert NotOwner();\n        }\n',
+              '    function claim(\n        uint256 epoch,\n        uint256 tokenId,\n        uint256 amount,\n        bytes32[] calldata proof\n    ) external nonReentrant returns (uint256) {\n        address owner = positionOwner(tokenId);\n\n        if (owner != msg.sender) {\n            revert NotOwner();\n        }\n'
+          )
+          replace(
+              'contracts/governance/CentryVeCENTRevenueRewards.sol',
+              '    function claimTo(\n        uint256 epoch,\n        uint256 tokenId,\n        address recipient,\n        uint256 amount,\n        bytes32[] calldata proof\n    ) external nonReentrant returns (uint256) {\n        address owner = veCENT.ownerOf(tokenId);\n\n        if (owner != msg.sender) {\n            revert NotOwner();\n        }\n',
+              '    function claimTo(\n        uint256 epoch,\n        uint256 tokenId,\n        address recipient,\n        uint256 amount,\n        bytes32[] calldata proof\n    ) external nonReentrant returns (uint256) {\n        address owner = positionOwner(tokenId);\n\n        if (owner != msg.sender) {\n            revert NotOwner();\n        }\n'
+          )
+          replace(
+              'contracts/governance/CentryVeCENTRevenueRewards.sol',
+              '    function claimForSelfRepay(\n        uint256 epoch,\n        uint256 tokenId,\n        uint256 amount,\n        bytes32[] calldata proof\n    ) external nonReentrant returns (uint256) {\n        address owner = veCENT.ownerOf(tokenId);\n        address recipient = selfRepayRecipient[tokenId];\n',
+              '    function claimForSelfRepay(\n        uint256 epoch,\n        uint256 tokenId,\n        uint256 amount,\n        bytes32[] calldata proof\n    ) external nonReentrant returns (uint256) {\n        address owner = positionOwner(tokenId);\n        address recipient = selfRepayRecipient[tokenId];\n'
+          )
+          old_hook = '''    function onVeCENTTransfer(\n        uint256 tokenId,\n        address from,\n        address to\n    ) external override {\n        if (msg.sender != address(veCENT)) {\n            revert TransferHookUnauthorized();\n        }\n\n        if (\n            from != address(0) &&\n            from != to &&\n            selfRepayRecipient[tokenId] != address(0)\n        ) {\n            _clearSelfRepay(tokenId, from);\n        }\n    }\n'''
+          new_hook = '''    function onVeCENTTransfer(\n        uint256 tokenId,\n        address from,\n        address to\n    ) external override {\n        if (msg.sender != address(veCENT)) {\n            revert TransferHookUnauthorized();\n        }\n\n        if (from == address(0) || from == to) {\n            return;\n        }\n\n        if (to == address(0)) {\n            // Burn caused by an early or normal withdrawal. Preserve the\n            // claimant so already-earned allocations can still be claimed.\n            withdrawnPositionOwner[tokenId] = from;\n            emit PositionClosed(tokenId, from);\n            return;\n        }\n\n        if (selfRepayRecipient[tokenId] != address(0)) {\n            _clearSelfRepay(tokenId, from);\n        }\n\n        delete withdrawnPositionOwner[tokenId];\n    }\n\n    function positionOwner(\n        uint256 tokenId\n    ) public view returns (address owner) {\n        try veCENT.ownerOf(tokenId) returns (address activeOwner) {\n            return activeOwner;\n        } catch {\n            return withdrawnPositionOwner[tokenId];\n        }\n    }\n'''
+          replace('contracts/governance/CentryVeCENTRevenueRewards.sol', old_hook, new_hook)
+
+          # ------------------------------------------------------------------
+          # Executor: allow self-repay to resolve a closed position's owner.
+          # ------------------------------------------------------------------
+          replace(
+              'contracts/core/CentrySelfRepayExecutorV2.sol',
+              'interface ICentryVeCENTRevenueRewards {\n    function rewardToken() external view returns (address);\n\n    function veCENT() external view returns (address);\n\n    function claimForSelfRepay(',
+              'interface ICentryVeCENTRevenueRewards {\n    function rewardToken() external view returns (address);\n\n    function veCENT() external view returns (address);\n\n    function positionOwner(uint256 tokenId) external view returns (address);\n\n    function claimForSelfRepay('
+          )
+          replace(
+              'contracts/core/CentrySelfRepayExecutorV2.sol',
+              '        address borrower = veCENT.ownerOf(tokenId);\n\n        if (borrower == address(0)) {\n            revert InvalidAddress();\n        }\n',
+              '        address borrower = rewardsController.positionOwner(tokenId);\n\n        if (borrower == address(0)) {\n            revert InvalidAddress();\n        }\n'
+          )
+
+          # ------------------------------------------------------------------
+          # Frontend ABI + governance hook + controls.
+          # ------------------------------------------------------------------
+          replace(
+              'frontend/constants/abis.js',
+              "  {\n    type: 'function',\n    name: 'withdraw',\n    stateMutability: 'nonpayable',\n    inputs: [{ name: 'tokenId', type: 'uint256' }],\n    outputs: [],\n  },\n",
+              "  {\n    type: 'function',\n    name: 'withdraw',\n    stateMutability: 'nonpayable',\n    inputs: [{ name: 'tokenId', type: 'uint256' }],\n    outputs: [],\n  },\n  {\n    type: 'function',\n    name: 'EARLY_WITHDRAW_FEE_BPS',\n    stateMutability: 'view',\n    inputs: [],\n    outputs: [{ type: 'uint256' }],\n  },\n"
+          )
+          replace(
+              'frontend/hooks/useVeGovernance.js',
+              '  const extendLock = (tokenId, weeks) => sendAndWait({\n    address: CONTRACT_ADDRESSES.veCentry,\n    abi: VE_CENTRY_ABI,\n    functionName: \'extendLock\',\n    args: [tokenId, BigInt(weeks) * 7n * 24n * 60n * 60n],\n  });\n',
+              '  const extendLock = (tokenId, weeks) => sendAndWait({\n    address: CONTRACT_ADDRESSES.veCentry,\n    abi: VE_CENTRY_ABI,\n    functionName: \'extendLock\',\n    args: [tokenId, BigInt(weeks) * 7n * 24n * 60n * 60n],\n  });\n\n  const withdrawLock = (tokenId) => sendAndWait({\n    address: CONTRACT_ADDRESSES.veCentry,\n    abi: VE_CENTRY_ABI,\n    functionName: \'withdraw\',\n    args: [tokenId],\n  });\n'
+          )
+          replace(
+              'frontend/hooks/useVeGovernance.js',
+              '    extendLock,\n    refetchAll,\n',
+              '    extendLock,\n    withdrawLock,\n    refetchAll,\n'
+          )
+
+          # Add the withdrawal handler to the current governance page.
+          replace(
+              'frontend/app/app/governance/page.jsx',
+              '  const extendPosition = async (tokenId, currentWeeks) => {\n',
+              '  const withdrawPosition = async (tokenId) => {\n    if (busyPosition) return;\n    const confirmed = window.confirm(\n      `Early withdrawal returns 75% of the locked CENT. The remaining 25% is split 60/40 between RevenueRewards and treasury. Already-earned rewards remain claimable.`\n    );\n    if (!confirmed) return;\n    try {\n      setNotice(\'\');\n      setBusyPosition(`withdraw-${tokenId}`);\n      await governance.withdrawLock(BigInt(tokenId));\n      await governance.refetchAll();\n      setNotice(`veCENT #${tokenId} withdrawn. Your earned rewards remain claimable.`);\n    } catch (error) {\n      setNotice(error?.shortMessage || error?.message || \'Transaction failed.\');\n    } finally {\n      setBusyPosition(null);\n    }\n  };\n\n  const extendPosition = async (tokenId, currentWeeks) => {\n'
+          )
+          replace(
+              'frontend/app/app/governance/page.jsx',
+              '                    <div className="position-detail-grid">',
+              '                    <div className="position-detail-grid">'
+          )
+          old_actions = '''                  <div className="position-actions-grid">\n                    <div className="position-action-block">\n'''
+          new_actions = '''                  <div className="position-early-exit">\n                    <div>\n                      <span>Early exit</span>\n                      <strong>25% fee · 75% returned</strong>\n                    </div>\n                    <button\n                      type="button"\n                      className="secondary-btn early-exit-btn"\n                      disabled={busyPosition !== null || position.weeksLeft <= 0}\n                      onClick={() => withdrawPosition(position.tokenId)}\n                    >\n                      {busyPosition === `withdraw-${position.tokenId}` ? 'Working…' : 'Exit early'}\n                    </button>\n                  </div>\n\n                  <div className="position-actions-grid">\n                    <div className="position-action-block">\n'''
+          replace('frontend/app/app/governance/page.jsx', old_actions, new_actions)
+          replace(
+              'frontend/app/app/governance/page.jsx',
+              '        .position-actions-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:16px}\n',
+              '        .position-early-exit{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:16px;padding:13px 14px;border:1px solid #3a2a48;border-radius:11px;background:rgba(48,24,35,.34)}\n        .position-early-exit span{display:block;color:#8f849d;font-size:11px}.position-early-exit strong{display:block;margin-top:4px;font-size:13px}\n        .early-exit-btn{white-space:nowrap}\n        .position-actions-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:14px}\n'
+          )
+
+          # Deployment docs: make the new constructor/flow explicit.
+          replace(
+              'contracts/REMIX_DEPLOYMENT.md',
+              'CentryVotingEscrow\n',
+              'CentryVotingEscrow\n\nEarly withdrawal v2 economics:\n- 25% of locked CENT is taken as an early-exit fee.\n- 60% of that fee is sent to RevenueRewards.\n- 40% of that fee is sent to treasury.\n- 75% of principal is returned to the user.\n- Published/earned rewards remain claimable after the veCENT NFT is closed.\n',
+              1
+          )
+
+          print('Early withdrawal v2 source changes applied.')
+          PY
+
+      - name: Verify changes
+        run: |
+          git diff --check
+          grep -R "EARLY_WITHDRAW_FEE_BPS" -n contracts/governance/CentryVotingEscrow.sol frontend/constants/abis.js
+          grep -R "withdrawnPositionOwner\|function positionOwner" -n contracts/governance/CentryVeCENTRevenueRewards.sol
+          grep -R "rewardsController.positionOwner" -n contracts/core/CentrySelfRepayExecutorV2.sol
+          grep -R "withdrawLock\|Exit early" -n frontend/hooks/useVeGovernance.js frontend/app/app/governance/page.jsx
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add contracts/governance/CentryVotingEscrow.sol contracts/governance/CentryVeCENTRevenueRewards.sol contracts/core/CentrySelfRepayExecutorV2.sol frontend/constants/abis.js frontend/hooks/useVeGovernance.js frontend/app/app/governance/page.jsx contracts/REMIX_DEPLOYMENT.md
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git commit -m "feat: add penalized early veCENT withdrawal"
+          git push
