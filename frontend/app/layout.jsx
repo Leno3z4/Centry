@@ -2,7 +2,6 @@ import './globals.css';
 import './typography.css';
 import './mobile.css';
 import './mobile-nav.css';
-import './welcome/landing.css';
 import './wallet-picker.css';
 import './health-meter.css';
 import './overview.css';
