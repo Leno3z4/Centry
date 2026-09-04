@@ -277,7 +277,7 @@ export default function WelcomePage() {
                 .landing-kicker,
                 .landing-data-heading span,
                 .landing-metric span,
-                .landing-metric-note,
+                .landing-metric-note {
                     font-family: 'DM Mono', monospace;
                     text-transform: uppercase;
                     letter-spacing: 1.3px;
