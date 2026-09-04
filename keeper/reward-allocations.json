@@ -1,0 +1,18 @@
+{
+  "epoch": 1,
+  "source": "Centry authoritative reward allocation",
+  "positions": [
+    {
+      "tokenId": "1",
+      "amount": "0",
+      "instructions": [
+        {
+          "debtAsset": "0x3600000000000000000000000000000000000000",
+          "rewardAmountIn": "0",
+          "minDebtAssetOut": "0",
+          "swapData": "0x"
+        }
+      ]
+    }
+  ]
+}
