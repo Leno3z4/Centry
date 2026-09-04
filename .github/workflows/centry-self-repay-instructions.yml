@@ -1,0 +1,80 @@
+name: Centry Self-Repay Instruction Generation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: centry-self-repay-instructions
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Generate fresh USDC self-repay instructions
+        env:
+          ARC_RPC_URL_SECRET: ${{ secrets.ARC_RPC_URL }}
+          ARC_RPC_URL_VARIABLE: ${{ vars.ARC_RPC_URL }}
+          CENTRY_REPAY_SLIPPAGE_BPS: ${{ vars.CENTRY_REPAY_SLIPPAGE_BPS || '100' }}
+        run: npm run generate:self-repay-instructions
+
+      - name: Validate manifest structure
+        env:
+          ARC_RPC_URL_SECRET: ""
+          ARC_RPC_URL_VARIABLE: ""
+        run: npm run validate:manifest
+
+      - name: Show instruction summary
+        run: |
+          node - <<'NODE'
+          const fs = require("fs");
+          const manifest = JSON.parse(
+            fs.readFileSync("keeper/reward-manifest.json", "utf8")
+          );
+
+          console.log(`Epoch: ${manifest.epoch}`);
+          console.log(`Merkle root: ${manifest.root}`);
+          console.log(`Positions: ${manifest.positions.length}`);
+
+          for (const position of manifest.positions) {
+            for (const instruction of position.instructions) {
+              console.log(
+                `tokenId ${position.tokenId}: debtAsset=${instruction.debtAsset} rewardIn=${instruction.rewardAmountIn} minDebtOut=${instruction.minDebtAssetOut}`
+              );
+            }
+          }
+          NODE
+
+      - name: Commit updated manifest
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add keeper/reward-manifest.json
+
+          if git diff --cached --quiet; then
+            echo "No manifest changes to commit."
+            exit 0
+          fi
+
+          git commit -m "chore: refresh self-repay instructions"
+          git pull --rebase origin main
+          git push origin HEAD:main
