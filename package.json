@@ -5,15 +5,10 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "generate:manifest": "node scripts/generate-reward-manifest.js",
-    "validate:manifest": "node scripts/validate-reward-manifest.js"
-    "generate:allocations": "node scripts/generate-reward-allocations.js"
-    "read:epoch": "node scripts/read-reward-epoch.js"
+    "start": "next start"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.85.0",
-    "ethers": "^6.15.0",
     "next": "^15.4.6",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
