@@ -60,8 +60,8 @@ jobs:
           (async () => {
             const registry = await fetchJson(url);
             for (const file of registry.files ?? []) {
-              const target = file.target
-                .replace(/^@components\//, 'components/');
+              const rawTarget = file.target || `@components/${file.path}`;
+              const target = rawTarget.replace(/^@components\//, 'components/');
               const destination = path.resolve(process.cwd(), target);
               fs.mkdirSync(path.dirname(destination), { recursive: true });
               fs.writeFileSync(destination, file.content, 'utf8');
@@ -72,13 +72,11 @@ jobs:
             const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
             const dependencies = [
               ...(registry.dependencies ?? []),
-              ...(registry.devDependencies ?? []),
             ];
             packageJson.dependencies ??= {};
             for (const dependency of dependencies) {
-              if (!packageJson.dependencies[dependency]) {
-                packageJson.dependencies[dependency] = 'latest';
-              }
+              const [name, version] = String(dependency).split(/(?=@)/);
+              packageJson.dependencies[name] = version || packageJson.dependencies[name] || 'latest';
             }
             fs.writeFileSync(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8');
           })().catch(error => {
