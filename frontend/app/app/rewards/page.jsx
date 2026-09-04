@@ -34,7 +34,6 @@ const REWARDS_ABI = [
     inputs: [{ name: '', type: 'uint256' }, { name: '', type: 'uint256' }],
     outputs: [{ type: 'bool' }],
   },
-  { type: 'function', name: 'selfRepayRecipient', stateMutability: 'view', inputs: [{ name: 'tokenId', type: 'uint256' }], outputs: [{ type: 'address' }] },
   {
     type: 'function', name: 'claim', stateMutability: 'nonpayable',
     inputs: [
@@ -47,7 +46,6 @@ const REWARDS_ABI = [
   },
 ];
 
-const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 const ZERO_ROOT = `0x${'0'.repeat(64)}`;
 
 function errorText(error) {
@@ -57,11 +55,11 @@ function errorText(error) {
 function formatCENT(amount) {
   try {
     return Number(formatUnits(BigInt(String(amount ?? 0)), 18)).toLocaleString(undefined, {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 6,
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
     });
   } catch {
-    return '0';
+    return '0.0';
   }
 }
 
@@ -163,20 +161,12 @@ function RewardsContent() {
   const ownedSet = useMemo(() => new Set((ownedTokenIds || []).map((tokenId) => String(tokenId))), [ownedTokenIds]);
   const userPositions = positions.filter((position) => ownedSet.has(String(position.tokenId)));
 
-  const positionContracts = userPositions.flatMap((position) => [
-    {
-      address: CONTRACT_ADDRESSES.veCentryRewards,
-      abi: REWARDS_ABI,
-      functionName: 'claimed',
-      args: [manifestEpoch, BigInt(position.tokenId)],
-    },
-    {
-      address: CONTRACT_ADDRESSES.veCentryRewards,
-      abi: REWARDS_ABI,
-      functionName: 'selfRepayRecipient',
-      args: [BigInt(position.tokenId)],
-    },
-  ]);
+  const positionContracts = userPositions.map((position) => ({
+    address: CONTRACT_ADDRESSES.veCentryRewards,
+    abi: REWARDS_ABI,
+    functionName: 'claimed',
+    args: [manifestEpoch, BigInt(position.tokenId)],
+  }));
   const { data: positionState, refetch: refetchPositionState } = useReadContracts({
     contracts: positionContracts,
     query: { enabled: Boolean(isConnected && manifest && userPositions.length > 0 && chainId === ARC_CHAIN_ID) },
@@ -195,7 +185,7 @@ function RewardsContent() {
 
   const claimPosition = async (position, index) => {
     if (!isConnected || chainId !== ARC_CHAIN_ID || !active || !rootMatches) return;
-    if (Boolean(positionState?.[index * 2]?.result)) return;
+    if (Boolean(positionState?.[index]?.result)) return;
     setClaimingTokenId(String(position.tokenId));
     setNotice('');
     setError('');
@@ -218,18 +208,20 @@ function RewardsContent() {
   };
 
   const manifestFallbackBudget = manifest?.positions?.reduce((sum, position) => sum + BigInt(position.amount), 0n) ?? 0n;
+  const epochStatus = active ? 'ACTIVE' : pendingForManifest ? 'IN PROGRESS' : 'AWAITING';
+  const epochStatusHint = active ? 'Claims are live' : pendingForManifest ? 'Timelock is running' : 'Waiting for distribution';
 
   return (
     <div className="page-stack">
-      <div className="section-header">
+      <div className="section-header reward-section-header">
         <div>
           <span className="section-kicker">REWARDS</span>
           <h1>Protocol rewards</h1>
-          <p>Revenue-funded CENT rewards are published by epoch and verified against the onchain Merkle root.</p>
+          <p>Revenue-funded CENT rewards are published by epoch and verified onchain.</p>
         </div>
-        <div className="reward-header-status">
-          <span className={`reward-status-dot ${active ? 'active' : ''}`} />
-          <span>{active ? 'Epoch active' : pendingForManifest ? 'Epoch queued' : 'Awaiting distribution'}</span>
+        <div className={`reward-header-status ${active ? 'is-active' : pendingForManifest ? 'is-progress' : ''}`}>
+          <span className="reward-status-dot" />
+          <span>{active ? 'Epoch active' : pendingForManifest ? 'Epoch in progress' : 'Awaiting distribution'}</span>
         </div>
       </div>
 
@@ -237,16 +229,37 @@ function RewardsContent() {
       {error ? <div className="notice reward-error">{error}</div> : null}
       {notice ? <div className="notice reward-notice">{notice}</div> : null}
 
-      <section className="stats-grid">
-        <div className="metric"><span>Current epoch</span><strong>{manifest?.epoch ?? '—'}</strong><small>{active ? 'Active onchain' : pendingForManifest ? 'Queued onchain' : 'Not active'}</small></div>
-        <div className="metric"><span>Reward budget</span><strong>{formatCENT(epochBudget ?? manifestFallbackBudget)} CENT</strong><small>{epochBudget !== undefined ? 'Onchain budget' : 'Manifest total'}</small></div>
-        <div className="metric"><span>Distributed</span><strong>{formatCENT(epochClaimed ?? 0n)} CENT</strong><small>Claimed from this epoch</small></div>
-        <div className="metric"><span>Root status</span><strong>{rootMatches ? 'MATCH' : 'WAIT'}</strong><small>{rootMatches ? 'Manifest matches chain' : 'Manifest not active yet'}</small></div>
+      <section className="stats-grid rewards-stats-grid">
+        <div className="metric reward-metric">
+          <span>Current epoch</span>
+          <strong>{manifest?.epoch ?? '—'}</strong>
+          <small>{active ? 'Active onchain' : pendingForManifest ? 'Queued onchain' : 'Not active'}</small>
+        </div>
+        <div className="metric reward-metric">
+          <span>Reward budget</span>
+          <strong>{formatCENT(epochBudget ?? manifestFallbackBudget)} CENT</strong>
+          <small>{epochBudget !== undefined ? 'Onchain budget' : 'Manifest total'}</small>
+        </div>
+        <div className="metric reward-metric">
+          <span>Distributed</span>
+          <strong>{formatCENT(epochClaimed ?? 0n)} CENT</strong>
+          <small>Claimed from this epoch</small>
+        </div>
+        <div className="metric reward-metric reward-status-metric">
+          <span>Root status</span>
+          <strong>{epochStatus}</strong>
+          <small>{epochStatusHint}</small>
+        </div>
       </section>
 
-      <section className="content-grid">
+      <section className="content-grid rewards-content-grid">
         <div className="panel panel-large">
-          <div className="panel-head"><div><span className="section-kicker">YOUR REWARDS</span><h2>veCENT positions</h2></div></div>
+          <div className="panel-head">
+            <div>
+              <span className="section-kicker">YOUR REWARDS</span>
+              <h2>veCENT positions</h2>
+            </div>
+          </div>
           {!isConnected ? (
             <div className="connect-prompt">Connect your wallet to see rewards attached to your veCENT positions.</div>
           ) : userPositions.length === 0 ? (
@@ -254,22 +267,30 @@ function RewardsContent() {
           ) : (
             <div className="reward-position-list">
               {userPositions.map((position, index) => {
-                const claimed = Boolean(positionState?.[index * 2]?.result);
-                const selfRepayRecipient = positionState?.[index * 2 + 1]?.result;
-                const selfRepayEnabled = Boolean(selfRepayRecipient && selfRepayRecipient !== ZERO_ADDRESS);
+                const claimed = Boolean(positionState?.[index]?.result);
                 const claiming = claimingTokenId === String(position.tokenId) || isPending;
                 return (
                   <article className="reward-position" key={position.tokenId}>
                     <div className="reward-position-main">
                       <div className="reward-position-title">
                         <span className="token usdc">C</span>
-                        <div><strong>veCENT #{position.tokenId}</strong><small>{selfRepayEnabled ? 'Self-repay configured' : 'Standard claim'}</small></div>
+                        <div>
+                          <strong>veCENT #{position.tokenId}</strong>
+                          <small>{claimed ? 'Reward claimed' : active ? 'Reward available' : 'Reward pending'}</small>
+                        </div>
                       </div>
-                      <div className="reward-position-amount"><strong>{formatCENT(position.amount)} CENT</strong><span>{claimed ? 'Already claimed' : active ? 'Available' : 'Pending epoch activation'}</span></div>
+                      <div className="reward-position-amount">
+                        <strong>{formatCENT(position.amount)} CENT</strong>
+                        <span>{claimed ? 'Already claimed' : active ? 'Available now' : 'Pending epoch activation'}</span>
+                      </div>
                     </div>
                     <div className="reward-position-actions">
-                      <div className="reward-mini-stats"><span>Proof items <strong>{position.proof?.length || 0}</strong></span><span>Self-repay <strong>{selfRepayEnabled ? 'ON' : 'OFF'}</strong></span></div>
-                      <button type="button" className="primary-btn" disabled={claimed || !active || !rootMatches || claiming} onClick={() => claimPosition(position, index)}>
+                      <button
+                        type="button"
+                        className="primary-btn"
+                        disabled={claimed || !active || !rootMatches || claiming}
+                        onClick={() => claimPosition(position, index)}
+                      >
                         {claimed ? 'Claimed' : claiming ? 'Claiming…' : active ? 'Claim reward' : 'Not claimable yet'}
                       </button>
                     </div>
@@ -280,31 +301,44 @@ function RewardsContent() {
           )}
         </div>
 
-        <div className="panel">
-          <div className="panel-head"><div><span className="section-kicker">DISTRIBUTION</span><h2>Epoch status</h2></div></div>
+        <div className="panel rewards-epoch-panel">
+          <div className="panel-head">
+            <div>
+              <span className="section-kicker">DISTRIBUTION</span>
+              <h2>Epoch status</h2>
+            </div>
+          </div>
           <div className="reward-status-card">
             <div><span>Manifest epoch</span><strong>{manifest?.epoch ?? '—'}</strong></div>
             <div><span>Latest active epoch</span><strong>{latestEpoch?.toString() ?? '—'}</strong></div>
-            <div><span>Pending root</span><strong>{pendingForManifest ? 'Matches manifest' : '—'}</strong></div>
+            <div><span>Status</span><strong>{epochStatus}</strong></div>
             <div><span>Timelock</span><strong>{pendingForManifest ? formatCountdown(pendingCountdown) : active ? 'Complete' : '—'}</strong></div>
           </div>
-          <div className="reward-root-block"><span>Merkle root</span><code>{manifestRoot}</code></div>
-          <div className="reward-explainer"><strong>Self-repay</strong><p>When configured, the keeper can route the position's CENT reward through the repayment path instead of requiring a manual claim.</p></div>
+          <div className="reward-progress">
+            <div className="reward-progress-head"><span>Distribution progress</span><strong>{active ? 'Live' : pendingForManifest ? 'In progress' : 'Waiting'}</strong></div>
+            <div className="reward-progress-track"><div className={`reward-progress-fill ${active ? 'complete' : pendingForManifest ? 'running' : ''}`} /></div>
+            <p>{pendingForManifest ? 'The epoch has been queued and is moving through its safety delay before activation.' : active ? 'The epoch is active and rewards can be claimed.' : 'The protocol is waiting for the next distribution to be queued.'}</p>
+          </div>
         </div>
       </section>
 
       <style jsx global>{`
-        .reward-header-status{display:inline-flex;align-items:center;gap:8px;align-self:flex-start;padding:10px 12px;border:1px solid #30263d;border-radius:10px;background:#0e0a16;color:#bcb2c8;font-size:10px;font-weight:700}
-        .reward-status-dot{width:7px;height:7px;border-radius:50%;background:#9a8fa7}.reward-status-dot.active{background:#55dca1;box-shadow:0 0 9px rgba(85,220,161,.65)}
+        .reward-section-header{align-items:flex-start}
+        .reward-header-status{display:inline-flex;align-items:center;gap:9px;align-self:flex-start;padding:10px 12px;border:1px solid #30263d;border-radius:10px;background:#0e0a16;color:#bcb2c8;font-size:10px;font-weight:700;letter-spacing:.02em}
+        .reward-header-status.is-progress{border-color:#4a3d5c;color:#d8cff0}
+        .reward-header-status.is-active{border-color:#315744;color:#b5e8ce}
+        .reward-status-dot{width:7px;height:7px;border-radius:50%;background:#8f849c}
+        .reward-header-status.is-progress .reward-status-dot{background:#b99be8;box-shadow:0 0 10px rgba(185,155,232,.45)}
+        .reward-header-status.is-active .reward-status-dot{background:#55dca1;box-shadow:0 0 9px rgba(85,220,161,.65)}
         .reward-notice,.reward-error{margin:0}.reward-error{border-color:#633243;background:rgba(94,30,52,.26);color:#f2a5b7}
-        .reward-position-list{display:grid;gap:12px}.reward-position{padding:15px;border:1px solid #2d233b;border-radius:14px;background:rgba(13,9,21,.76)}
-        .reward-position-main,.reward-position-actions{display:flex;align-items:center;justify-content:space-between;gap:16px}.reward-position-actions{margin-top:14px;padding-top:12px;border-top:1px solid #251d31}
-        .reward-position-title{display:flex;align-items:center;gap:11px;min-width:0}.reward-position-title>div{display:grid;gap:4px}.reward-position-title strong{color:#f7f3ff;font-size:13px}.reward-position-title small,.reward-position-amount span,.reward-mini-stats{color:#81778f;font-size:10px}
-        .reward-position-amount{display:grid;gap:5px;text-align:right}.reward-position-amount strong{color:#d9c8ff;font-size:16px}.reward-mini-stats{display:flex;flex-wrap:wrap;gap:14px}.reward-mini-stats span{display:inline-flex;gap:5px}.reward-mini-stats strong{color:#bda6df}
-        .reward-status-card{display:grid;gap:12px}.reward-status-card>div{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:11px;border-bottom:1px solid #241d2f}.reward-status-card span,.reward-root-block>span{color:#7f758b;font-size:10px}.reward-status-card strong{color:#eee8f6;font-size:11px;text-align:right}
-        .reward-root-block{display:grid;gap:8px;margin-top:18px}.reward-root-block code{overflow-wrap:anywhere;padding:10px;border:1px solid #2d2439;border-radius:9px;background:#0a0710;color:#a998bc;font:9px 'DM Mono',monospace;line-height:1.5}
-        .reward-explainer{margin-top:18px;padding:13px;border:1px solid #352946;border-radius:11px;background:rgba(44,25,67,.28)}.reward-explainer strong{color:#d7c4f4;font-size:11px}.reward-explainer p{margin:7px 0 0;color:#887e94;font-size:10px;line-height:1.55}
-        @media (max-width:740px){.reward-position-main,.reward-position-actions{align-items:flex-start;flex-direction:column}.reward-position-amount{text-align:left}.reward-position-actions .primary-btn{width:100%}}
+        .rewards-stats-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+        .reward-metric strong{font-variant-numeric:tabular-nums}
+        .reward-status-metric strong{letter-spacing:.02em}
+        .reward-position-list{display:grid;gap:12px}.reward-position{padding:17px;border:1px solid #2d233b;border-radius:14px;background:rgba(13,9,21,.76)}
+        .reward-position-main{display:flex;justify-content:space-between;gap:20px;align-items:center}.reward-position-title{display:flex;align-items:center;gap:12px}.reward-position-title .token{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:#241938;color:#d9c8ff;font-weight:800}.reward-position-title strong,.reward-position-amount strong{display:block}.reward-position-title small,.reward-position-amount span{display:block;margin-top:4px;color:#8f849d;font-size:11px}.reward-position-amount{text-align:right}.reward-position-actions{display:flex;justify-content:flex-end;margin-top:15px}.reward-position-actions .primary-btn{min-width:150px}.reward-position-actions .primary-btn:disabled{opacity:.48;cursor:not-allowed}
+        .reward-status-card{display:grid;gap:0;border:1px solid #2d233b;border-radius:14px;overflow:hidden;background:rgba(13,9,21,.52)}.reward-status-card>div{display:flex;justify-content:space-between;align-items:center;padding:15px 16px;border-bottom:1px solid #2a2235}.reward-status-card>div:last-child{border-bottom:0}.reward-status-card span{color:#91869f;font-size:12px}.reward-status-card strong{font-size:13px}.reward-progress{margin-top:16px;padding:16px;border:1px solid #2d233b;border-radius:14px;background:rgba(15,10,24,.56)}.reward-progress-head{display:flex;justify-content:space-between;gap:16px;font-size:12px}.reward-progress-head span{color:#8f849d}.reward-progress-head strong{font-size:11px;text-transform:uppercase;letter-spacing:.08em}.reward-progress-track{height:5px;margin-top:12px;border-radius:999px;background:#251c30;overflow:hidden}.reward-progress-fill{height:100%;width:8%;border-radius:999px;background:#51405f}.reward-progress-fill.running{width:58%;background:#a992c7;box-shadow:0 0 14px rgba(169,146,199,.2)}.reward-progress-fill.complete{width:100%;background:#55dca1;box-shadow:0 0 14px rgba(85,220,161,.18)}.reward-progress p{margin:12px 0 0;color:#8f849d;font-size:11px;line-height:1.6}
+        @media (max-width:900px){.rewards-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+        @media (max-width:640px){.rewards-stats-grid{grid-template-columns:1fr}.reward-position-main{align-items:flex-start;flex-direction:column}.reward-position-amount{text-align:left}.reward-header-status{display:none}}
       `}</style>
     </div>
   );
