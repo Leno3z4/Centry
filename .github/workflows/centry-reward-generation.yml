@@ -1,0 +1,83 @@
+name: Centry Reward Generation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: centry-reward-generation
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Generate reward allocations and Merkle manifest
+        env:
+          ARC_RPC_URL_SECRET: ${{ secrets.ARC_RPC_URL }}
+          ARC_RPC_URL_VARIABLE: ${{ vars.ARC_RPC_URL }}
+        run: npm run generate:rewards
+
+      - name: Validate generated manifest structure
+        env:
+          ARC_RPC_URL_SECRET: ""
+          ARC_RPC_URL_VARIABLE: ""
+        run: npm run validate:manifest
+
+      - name: Show generated reward summary
+        run: |
+          node - <<'NODE'
+          const fs = require("fs");
+
+          const allocations = JSON.parse(
+            fs.readFileSync("keeper/reward-allocations.json", "utf8")
+          );
+
+          const manifest = JSON.parse(
+            fs.readFileSync("keeper/reward-manifest.json", "utf8")
+          );
+
+          console.log(`Epoch: ${allocations.epoch}`);
+          console.log(`Reward budget: ${allocations.rewardBudget}`);
+          console.log(`Total voting power: ${allocations.totalVotingPower}`);
+          console.log(`Positions: ${allocations.positions.length}`);
+          console.log(`Merkle root: ${manifest.root}`);
+
+          for (const position of manifest.positions) {
+            console.log(
+              `tokenId ${position.tokenId}: reward=${position.amount} proofItems=${position.proof.length}`
+            );
+          }
+          NODE
+
+      - name: Commit generated reward files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add keeper/reward-allocations.json keeper/reward-manifest.json
+
+          if git diff --cached --quiet; then
+            echo "No reward-file changes to commit."
+            exit 0
+          fi
+
+          git commit -m "chore: generate reward epoch manifest"
+          git push
