@@ -1,6 +1,5 @@
 // Arc Testnet deployment configuration.
-// Keep deployed addresses centralized so the frontend and keeper tooling
-// target the same live protocol contracts.
+// Keep deployed addresses centralized so the frontend targets the same live protocol contracts.
 export const CONTRACT_ADDRESSES = Object.freeze({
   USDC: '0x3600000000000000000000000000000000000000',
   EURC: '0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a',
@@ -10,11 +9,11 @@ export const CONTRACT_ADDRESSES = Object.freeze({
   interestRateModel: '0x0e33c05cc844914155B7300aA93085DBB32d4FBE',
   oracle: '0xC82424D224dbfBF9D41a9cBe5cA2AdF762572fC6',
   centryToken: '0x76e6d50D3151f0B4645ac0E53584F4204Fc6f0e3',
-  veCentry: '0xb39411595eD14991377411bcE52677C05AcE978D',
-  veCentryRewards: '0x2fA236D227cb139FbA6E43396614cf8E23CF3050',
-  selfRepayExecutor: '0xfCDBA35d9255927E9226f371761c1A9Ad82cF831',
-  unitFlowSwapAdapter: '0xDc99c84B8B58d0E0f2dA5E29567Be5325b4b3545',
-  revenueDistributor: '0xc54A67aBF5a5697F2dDCd75d6165a17E73048271',
+  veCentry: '0xF8B71bAed42c28e7e376C4DbD4A137047B92a503',
+  veCentryRewards: '0x06e627ce43F2ddd37e8f196824f7049416c3025b',
+  selfRepayExecutor: '0x02356D1E4557b8D656cE1493D751C914EA84efe7',
+  unitFlowSwapAdapter: '0x8430a1cF22C1cd09F7B7eD2C3dB0D66020f6F020',
+  revenueDistributor: '0x06e627ce43F2ddd37e8f196824f7049416c3025b',
 
   collateralAssets: Object.freeze({
     ETH: '0x54a4dd95bf4ABb6cF02014ca62C3FbbDeE040B6a',
