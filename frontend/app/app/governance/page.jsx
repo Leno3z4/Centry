@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAccount, useReadContracts } from 'wagmi';
 import { formatUnits } from 'viem';
 import { Providers } from '../../../components/Providers';
@@ -10,6 +10,8 @@ import { CONTRACT_ADDRESSES } from '../../../constants/contracts';
 import { VE_CENTRY_ABI } from '../../../constants/abis';
 
 const WEEK = 7 * 24 * 60 * 60;
+const CREATE_DURATIONS = [4, 13, 26, 52];
+const EXTEND_DURATIONS = [13, 26, 52, 78, 104];
 
 function formatCENT(value) {
   const number = Number(value || 0);
@@ -28,6 +30,57 @@ function formatDate(value) {
 function remainingWeeks(lockEnd) {
   if (!lockEnd) return 0;
   return Math.max(0, Math.ceil((Number(lockEnd) * 1000 - Date.now()) / (WEEK * 1000)));
+}
+
+function DurationPicker({ value, options, onChange, label }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const selected = Number(value);
+
+  useEffect(() => {
+    const close = (event) => {
+      if (!rootRef.current?.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
+  }, []);
+
+  return (
+    <div className={`duration-picker${open ? ' duration-picker-open' : ''}`} ref={rootRef}>
+      <button
+        type="button"
+        className="duration-trigger"
+        onClick={() => setOpen((current) => !current)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={label}
+      >
+        <span>{selected} weeks</span>
+        <span className="duration-chevron">{open ? '⌃' : '⌄'}</span>
+      </button>
+
+      {open && (
+        <div className="duration-menu" role="listbox" aria-label={label}>
+          {options.map((weeks) => (
+            <button
+              key={weeks}
+              type="button"
+              role="option"
+              aria-selected={weeks === selected}
+              className={`duration-option${weeks === selected ? ' duration-option-active' : ''}`}
+              onClick={() => {
+                onChange(String(weeks));
+                setOpen(false);
+              }}
+            >
+              <span>{weeks} weeks</span>
+              {weeks === selected ? <span className="duration-check">✓</span> : null}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function Page() {
@@ -179,7 +232,7 @@ function GovernanceContent() {
           <label className="field-label" htmlFor="cent-amount">CENT amount</label>
           <div className="amount-input-wrap"><input id="cent-amount" type="number" min="0" step="0.01" placeholder="0.00" value={amount} onChange={(event) => setAmount(event.target.value)} /><span>CENT</span></div>
           <label className="field-label" htmlFor="lock-weeks">Lock duration</label>
-          <select id="lock-weeks" value={weeks} onChange={(event) => setWeeks(event.target.value)}><option value="4">4 weeks</option><option value="13">13 weeks</option><option value="26">26 weeks</option><option value="52">52 weeks</option></select>
+          <DurationPicker value={weeks} options={CREATE_DURATIONS} onChange={setWeeks} label="Lock duration" />
           {!isConnected ? <div className="connect-prompt">Connect your wallet to manage veCENT.</div> : <button type="button" className="primary-btn full-btn large-btn" disabled={busy || !amount} onClick={submit}>{busy ? 'Waiting for confirmation…' : needsApproval ? 'Approve CENT' : `Lock CENT for ${weeks} weeks`}</button>}
           {notice && <div className="notice">{notice}</div>}
         </div>
@@ -223,14 +276,8 @@ function GovernanceContent() {
                     </div>
 
                     <div className="position-action-block">
-                      <label className="field-label" htmlFor={`extend-${position.tokenId}`}>Extend lock</label>
-                      <select id={`extend-${position.tokenId}`} value={selectedWeeks} onChange={(event) => setPositionWeeks((current) => ({ ...current, [position.tokenId]: event.target.value }))}>
-                        <option value="13">13 weeks</option>
-                        <option value="26">26 weeks</option>
-                        <option value="52">52 weeks</option>
-                        <option value="78">78 weeks</option>
-                        <option value="104">104 weeks</option>
-                      </select>
+                      <label className="field-label">Extend lock</label>
+                      <DurationPicker value={String(selectedWeeks)} options={EXTEND_DURATIONS} onChange={(value) => setPositionWeeks((current) => ({ ...current, [position.tokenId]: value }))} label={`Extend veCENT #${position.tokenId}`} />
                       <button type="button" className="secondary-btn full-btn" disabled={extending} onClick={() => extendPosition(position.tokenId, position.weeksLeft)}>{extending ? 'Working…' : `Extend to ${selectedWeeks} weeks`}</button>
                     </div>
                   </div>
@@ -257,6 +304,15 @@ function GovernanceContent() {
         .position-actions-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:16px}
         .position-action-block{display:grid;gap:8px}.position-action-block .field-label{margin-top:0}
         .secondary-btn{border:1px solid #3a3047;background:#14101d;color:#e7ddf2;border-radius:10px;padding:11px 14px;font-weight:700;cursor:pointer}.secondary-btn:hover{border-color:#66567d;background:#1a1424}.secondary-btn:disabled{opacity:.48;cursor:not-allowed}
+        .duration-picker{position:relative;z-index:1;min-width:0}
+        .duration-picker-open{z-index:30}
+        .duration-trigger{display:flex;width:100%;min-height:44px;align-items:center;justify-content:space-between;gap:10px;padding:0 13px;border:1px solid var(--line);border-radius:11px;background:#0b0712;color:var(--text);text-align:left;cursor:pointer}
+        .duration-trigger:hover,.duration-picker-open .duration-trigger{border-color:var(--purple-3);box-shadow:0 0 0 3px #9b62ff18}
+        .duration-chevron{color:#9c8bac;font-size:12px}
+        .duration-menu{position:absolute;z-index:100;top:calc(100% + 8px);left:0;right:0;display:grid;gap:4px;padding:7px;border:1px solid #3a2a4f;border-radius:14px;background:rgba(11,8,19,.99);box-shadow:0 24px 60px rgba(0,0,0,.58),0 0 0 1px rgba(155,98,255,.04);backdrop-filter:blur(14px)}
+        .duration-option{display:flex;width:100%;min-height:42px;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px;border:1px solid transparent;border-radius:10px;background:transparent;color:#e9e2f2;text-align:left;cursor:pointer}
+        .duration-option:hover,.duration-option-active{border-color:#382a4a;background:linear-gradient(120deg,#171022,#120c1b)}
+        .duration-check{color:#b38aff;font-weight:800}
         @media (max-width:700px){.position-actions-grid,.position-detail-grid{grid-template-columns:1fr}.position-topline{align-items:flex-start;flex-direction:column}.position-power{text-align:left}}
       `}</style>
     </div>
