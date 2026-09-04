@@ -11,7 +11,8 @@
     "generate:rewards": "npm run generate:allocations && npm run generate:manifest",
     "read:reward-epoch": "node scripts/read-reward-epoch.js",
     "validate:manifest": "node scripts/validate-reward-manifest.js",
-    "queue:reward-epoch": "node scripts/queue-reward-epoch.js"
+    "queue:reward-epoch": "node scripts/queue-reward-epoch.js",
+    "activate:reward-epoch": "node scripts/activate-reward-epoch.js"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.85.0",
