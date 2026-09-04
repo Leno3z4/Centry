@@ -59,7 +59,7 @@ jobs:
           CENTRY_MIN_NATIVE_BALANCE: ${{ vars.CENTRY_MIN_NATIVE_BALANCE || '0.001' }}
 
         run: |
-          node <<'NODE'
+          node --input-type=commonjs <<'NODE'
           const fs = require("fs");
           const { ethers } = require("ethers");
 
