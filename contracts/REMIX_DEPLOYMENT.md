@@ -2,6 +2,14 @@
 
 > Test on Arc Testnet first. A successful testnet deployment is not a security audit.
 
+## Early withdrawal v2
+
+The v2 veCENT escrow supports penalized early withdrawal: 25% of locked CENT is charged as a fee; 60% of that fee goes to RevenueRewards, 40% to treasury, and 75% of principal returns to the user. Voting power becomes zero immediately and already-published rewards remain claimable by the withdrawn position owner.
+
+Constructor: `CentryVotingEscrow(token_, treasury_)`.
+
+The v2 dependency chain is VotingEscrow -> RevenueRewards -> RevenueEngine -> RevenueToCENT adapter, with SelfRepayExecutorV2 also pointed at the new RevenueRewards.
+
 ## 1. Compiler
 
 Use Solidity `0.8.24`.

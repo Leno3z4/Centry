@@ -137,6 +137,13 @@ export function useVeGovernance() {
     args: [tokenId, BigInt(weeks) * 7n * 24n * 60n * 60n],
   });
 
+  const withdrawLock = (tokenId) => sendAndWait({
+    address: CONTRACT_ADDRESSES.veCentry,
+    abi: VE_CENTRY_ABI,
+    functionName: 'withdraw',
+    args: [tokenId],
+  });
+
   const refetchAll = () => Promise.all([
     refetchVeBalance(),
     refetchTokenIds(),
@@ -161,6 +168,7 @@ export function useVeGovernance() {
     createLock,
     increaseLock,
     extendLock,
+    withdrawLock,
     refetchAll,
     isPending: isPending || transactionPending,
     isConfirming: transactionPending && !isPending,

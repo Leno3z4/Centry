@@ -48,6 +48,7 @@ contract CentryVeCENTRevenueRewards is Ownable2Step, ReentrancyGuard, ICentryVeC
 
     mapping(uint256 => address) public selfRepayRecipient;
     mapping(uint256 => address) public selfRepayOwner;
+    mapping(uint256 => address) public withdrawnPositionOwner;
 
     uint256 public latestEpoch;
 
@@ -212,7 +213,7 @@ contract CentryVeCENTRevenueRewards is Ownable2Step, ReentrancyGuard, ICentryVeC
         uint256 amount,
         bytes32[] calldata proof
     ) external nonReentrant returns (uint256) {
-        address owner = veCENT.ownerOf(tokenId);
+        address owner = positionOwner(tokenId);
 
         if (owner != msg.sender) {
             revert NotOwner();
@@ -235,7 +236,7 @@ contract CentryVeCENTRevenueRewards is Ownable2Step, ReentrancyGuard, ICentryVeC
         uint256 amount,
         bytes32[] calldata proof
     ) external nonReentrant returns (uint256) {
-        address owner = veCENT.ownerOf(tokenId);
+        address owner = positionOwner(tokenId);
 
         if (owner != msg.sender) {
             revert NotOwner();
@@ -295,7 +296,7 @@ contract CentryVeCENTRevenueRewards is Ownable2Step, ReentrancyGuard, ICentryVeC
         uint256 amount,
         bytes32[] calldata proof
     ) external nonReentrant returns (uint256) {
-        address owner = veCENT.ownerOf(tokenId);
+        address owner = positionOwner(tokenId);
         address recipient = selfRepayRecipient[tokenId];
 
         if (
@@ -324,12 +325,27 @@ contract CentryVeCENTRevenueRewards is Ownable2Step, ReentrancyGuard, ICentryVeC
             revert TransferHookUnauthorized();
         }
 
-        if (
-            from != address(0) &&
-            from != to &&
-            selfRepayRecipient[tokenId] != address(0)
-        ) {
+        if (from == address(0) || from == to) {
+            return;
+        }
+
+        if (to == address(0)) {
+            withdrawnPositionOwner[tokenId] = from;
+            return;
+        }
+
+        if (selfRepayRecipient[tokenId] != address(0)) {
             _clearSelfRepay(tokenId, from);
+        }
+
+        delete withdrawnPositionOwner[tokenId];
+    }
+
+    function positionOwner(uint256 tokenId) public view returns (address owner) {
+        try veCENT.ownerOf(tokenId) returns (address activeOwner) {
+            return activeOwner;
+        } catch {
+            return withdrawnPositionOwner[tokenId];
         }
     }
 

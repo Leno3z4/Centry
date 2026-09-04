@@ -14,6 +14,8 @@ interface ICentryVeCENTRevenueRewards {
 
     function veCENT() external view returns (address);
 
+    function positionOwner(uint256 tokenId) external view returns (address);
+
     function claimForSelfRepay(
         uint256 epoch,
         uint256 tokenId,
@@ -191,7 +193,7 @@ contract CentrySelfRepayExecutorV2 is Ownable2Step, ReentrancyGuard {
             revert NotKeeper();
         }
 
-        address borrower = veCENT.ownerOf(tokenId);
+        address borrower = rewardsController.positionOwner(tokenId);
 
         if (borrower == address(0)) {
             revert InvalidAddress();

@@ -185,6 +185,22 @@ function GovernanceContent() {
     }
   };
 
+  const withdrawPosition = async (tokenId) => {
+    if (busyPosition) return;
+    if (!window.confirm('Early withdrawal returns 75% of locked CENT. The 25% fee is split 60% to RevenueRewards and 40% to treasury. Already-earned rewards remain claimable.')) return;
+    try {
+      setNotice('');
+      setBusyPosition(`withdraw-${tokenId}`);
+      await governance.withdrawLock(BigInt(tokenId));
+      await governance.refetchAll();
+      setNotice(`veCENT #${tokenId} withdrawn. Earned rewards remain claimable.`);
+    } catch (error) {
+      setNotice(error?.shortMessage || error?.message || 'Transaction failed.');
+    } finally {
+      setBusyPosition(null);
+    }
+  };
+
   const extendPosition = async (tokenId, currentWeeks) => {
     const targetWeeks = Number(positionWeeks[tokenId] || 52);
     if (!targetWeeks || targetWeeks <= currentWeeks || busyPosition) {
@@ -264,6 +280,12 @@ function GovernanceContent() {
                     <div><span>Unlocks</span><strong>{formatDate(position.end)}</strong></div>
                   </div>
 
+                  <div className="position-early-exit">
+                    <div><span>Early exit</span><strong>25% fee · 75% returned</strong></div>
+                    <button type="button" className="secondary-btn early-exit-btn" disabled={busyPosition !== null || position.weeksLeft <= 0} onClick={() => withdrawPosition(position.tokenId)}>
+                      {busyPosition === `withdraw-${position.tokenId}` ? 'Working…' : 'Exit early'}
+                    </button>
+                  </div>
                   <div className="position-actions-grid">
                     <div className="position-action-block">
                       <label className="field-label" htmlFor={`add-${position.tokenId}`}>Add CENT</label>
@@ -297,7 +319,10 @@ function GovernanceContent() {
         .position-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:16px}
         .position-detail-grid>div{padding:12px;border:1px solid #2a2235;border-radius:10px;background:rgba(11,8,18,.48)}
         .position-detail-grid span{display:block;color:#8f849d;font-size:11px}.position-detail-grid strong{display:block;margin-top:5px;font-size:13px}
-        .position-actions-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:16px}
+        .position-early-exit{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:16px;padding:13px 14px;border:1px solid #3a2a48;border-radius:11px;background:rgba(48,24,35,.34)}
+        .position-early-exit span{display:block;color:#8f849d;font-size:11px}.position-early-exit strong{display:block;margin-top:4px;font-size:13px}
+        .early-exit-btn{white-space:nowrap}
+        .position-actions-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:14px}
         .position-action-block{display:grid;gap:8px}.position-action-block .field-label{margin-top:0}
         .secondary-btn{border:1px solid #3a3047;background:#14101d;color:#e7ddf2;border-radius:10px;padding:11px 14px;font-weight:700;cursor:pointer}.secondary-btn:hover{border-color:#66567d;background:#1a1424}.secondary-btn:disabled{opacity:.48;cursor:not-allowed}
         .duration-picker{position:relative;z-index:1;min-width:0}

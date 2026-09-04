@@ -195,6 +195,13 @@ export const VE_CENTRY_ABI = [
   },
   {
     type: 'function',
+    name: 'EARLY_WITHDRAW_FEE_BPS',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
     name: 'balanceOf',
     stateMutability: 'view',
     inputs: [{ name: 'owner', type: 'address' }],

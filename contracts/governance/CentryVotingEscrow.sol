@@ -20,6 +20,9 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
     uint256 public constant WEEK = 7 days;
     uint256 public constant MIN_LOCK = 1 weeks;
     uint256 public constant MAX_LOCK = 104 weeks;
+    uint256 public constant BPS = 10_000;
+    uint256 public constant EARLY_WITHDRAW_FEE_BPS = 2_500;
+    uint256 public constant EARLY_WITHDRAW_REWARD_SHARE_BPS = 6_000;
 
     struct Lock {
         uint128 amount;
@@ -28,6 +31,7 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
 
     IERC20 public immutable token;
     address public immutable admin;
+    address public immutable treasury;
     address public rewardsController;
     address public transferHook;
 
@@ -51,6 +55,8 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
     error TransferHookAlreadySet();
     error ZeroAmount();
     error ZeroToken();
+    error ZeroTreasury();
+    error RewardsControllerNotSet();
 
     event RewardsControllerSet(
         address indexed controller
@@ -86,15 +92,20 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
         uint256 amount
     );
 
-    constructor(address token_)
+    constructor(address token_, address treasury_)
         ERC721("Centry Vote Escrow", "veCENT")
     {
         if (token_ == address(0)) {
             revert ZeroToken();
         }
 
+        if (treasury_ == address(0)) {
+            revert ZeroTreasury();
+        }
+
         token = IERC20(token_);
         admin = msg.sender;
+        treasury = treasury_;
     }
 
     function setRewardsController(
@@ -298,32 +309,34 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard {
         }
 
         Lock memory lock = locks[tokenId];
+        bool early = block.timestamp < lock.end;
 
-        if (block.timestamp < lock.end) {
-            revert LockNotExpired();
-        }
-
-        _checkpointVotingPower(
-            tokenId
-        );
+        _checkpointVotingPower(tokenId);
 
         delete locks[tokenId];
         delete lastVotingPowerCheckpoint[tokenId];
 
-        _burn(
-            tokenId
-        );
+        if (early) {
+            if (rewardsController == address(0)) {
+                revert RewardsControllerNotSet();
+            }
 
-        token.safeTransfer(
-            msg.sender,
-            lock.amount
-        );
+            uint256 fee = (uint256(lock.amount) * EARLY_WITHDRAW_FEE_BPS) / BPS;
+            uint256 rewardShare = (fee * EARLY_WITHDRAW_REWARD_SHARE_BPS) / BPS;
+            uint256 treasuryShare = fee - rewardShare;
+            uint256 returnedAmount = uint256(lock.amount) - fee;
 
-        emit Withdrawn(
-            msg.sender,
-            tokenId,
-            lock.amount
-        );
+            _burn(tokenId);
+            token.safeTransfer(address(rewardsController), rewardShare);
+            token.safeTransfer(treasury, treasuryShare);
+            token.safeTransfer(msg.sender, returnedAmount);
+            return;
+        }
+
+        _burn(tokenId);
+        token.safeTransfer(msg.sender, lock.amount);
+
+        emit Withdrawn(msg.sender, tokenId, lock.amount);
     }
 
     function votingPower(
