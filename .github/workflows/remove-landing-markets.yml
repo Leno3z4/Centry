@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Remove markets section from landing page
+      - name: Clean landing markets markup and styles
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -21,23 +21,34 @@ jobs:
 
           path = Path('frontend/components/WelcomePage.jsx')
           text = path.read_text()
+
           text = re.sub(r'\s*<a href="#markets">Markets</a>', '', text, count=1)
           text = re.sub(
               r'\n\s*<section id="markets" className="landing-market-section">.*?\n\s*</section>\n',
               '\n', text, count=1, flags=re.S
           )
-          text = re.sub(r'\n\s*\.landing-market-section,', '', text)
+
+          # Remove only leftover market-specific CSS rules/selectors.
+          text = re.sub(r'\n\s*\.landing-market-section,?', '', text)
+          text = re.sub(r'\n\s*\.landing-market-section \{[^}]*\}', '', text)
+          text = re.sub(r'\n\s*\.landing-market-row \{[^}]*\}', '', text)
+          text = re.sub(r'\n\s*\.landing-market-name \{[^}]*\}', '', text)
+          text = re.sub(r'\n\s*\.landing-market-value \{[^}]*\}', '', text)
+          text = re.sub(r'\n\s*\.landing-market-name strong \{[^}]*\}', '', text)
+          text = re.sub(r'\n\s*\.landing-market-value strong \{[^}]*\}', '', text)
+
+          # Repair the shared typography selector after removing market-specific entries.
           text = re.sub(
-              r'\n\s*\.landing-market-section \{.*?\n\s*\.landing-governance-section',
-              '\n\n                .landing-governance-section', text, count=1, flags=re.S
+              r'\.landing-status,\n\s*\.landing-kicker,\n\s*\.landing-data-heading span,\n\s*\.landing-metric span,\n\s*\.landing-metric-note,?\s*\n\s*font-family:',
+              '.landing-status,\n                .landing-kicker,\n                .landing-data-heading span,\n                .landing-metric span,\n                .landing-metric-note {\n                    font-family:',
+              text,
           )
-          text = re.sub(r'\n\s*\.landing-market-section[^\n]*\n', '\n', text)
-          text = re.sub(r'\n\s*\.landing-market-row[^\n]*\n', '\n', text)
-          text = re.sub(r'\n\s*\.landing-market-name[^\n]*\n', '\n', text)
-          text = re.sub(r'\n\s*\.landing-market-value[^\n]*\n', '\n', text)
 
           if 'id="markets"' in text or 'landing-market-section' in text:
-              raise SystemExit('Markets cleanup verification failed')
+              raise SystemExit('Markets section cleanup verification failed')
+          if 'landing-metric-note,\n                    font-family:' in text:
+              raise SystemExit('Typography selector repair failed')
+
           path.write_text(text)
           PY
       - name: Verify and commit
@@ -53,5 +64,5 @@ jobs:
             echo "Nothing to commit"
             exit 0
           fi
-          git commit -m "refactor: remove landing markets section [skip landing markets]"
+          git commit -m "refactor: finish landing markets removal [skip landing markets]"
           git push
