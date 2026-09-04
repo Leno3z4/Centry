@@ -18,6 +18,9 @@ function GovernanceContent() {
   const [notice, setNotice] = useState('');
   const busy = governance.isPending || governance.isConfirming;
   const needsApproval = isConnected && Number(amount || 0) > Number(governance.centAllowance || 0);
+  const lockEndLabel = isConnected && governance.lockEnd > 0
+    ? new Date(governance.lockEnd).toLocaleDateString()
+    : '—';
 
   const submit = async () => {
     if (!isConnected || !amount || Number(amount) <= 0 || busy) return;
@@ -48,7 +51,7 @@ function GovernanceContent() {
           <div className="governance-stat-line"><span>CENT balance</span><strong>{isConnected ? Number(governance.centBalance).toLocaleString(undefined,{maximumFractionDigits:2}) : '—'}</strong></div>
           <div className="governance-stat-line"><span>Locked CENT</span><strong>{isConnected ? Number(governance.lockedAmount).toLocaleString(undefined,{maximumFractionDigits:2}) : '—'}</strong></div>
           <div className="governance-stat-line"><span>veNFTs</span><strong>{isConnected ? governance.veBalance : '—'}</strong></div>
-          <div className="governance-stat-line"><span>Lock end</span><strong>{isConnected && governance.lockEnd ? governance.lockEnd.toLocaleDateString() : '—'}</strong></div>
+          <div className="governance-stat-line"><span>Lock end</span><strong>{lockEndLabel}</strong></div>
         </div>
         <div className="panel">
           <span className="section-kicker">CREATE LOCK</span><h2>Lock CENT</h2>
