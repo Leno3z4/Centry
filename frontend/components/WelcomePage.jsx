@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useReadContracts } from 'wagmi';
 import { formatUnits } from 'viem';
@@ -8,6 +9,11 @@ import ProtocolStats from './ProtocolStats';
 import { ACTIVE_MARKETS } from '../constants/markets';
 import { CONTRACT_ADDRESSES } from '../constants/contracts';
 import { LENDING_POOL_ABI, ORACLE_ABI } from '../constants/abis';
+
+const AeroShards = dynamic(() => import('./AeroShards'), {
+    ssr: false,
+    loading: () => null,
+});
 
 const FLOW = [
     {
@@ -112,6 +118,39 @@ export default function WelcomePage() {
             </nav>
 
             <section className="landing-hero">
+                <div className="landing-aero-shards" aria-hidden="true">
+                    <AeroShards
+                        backgroundColor="#120F17"
+                        shardColor="#896ABD"
+                        accentColor="#A855F7"
+                        placement="full"
+                        flow="stream"
+                        material="pearl"
+                        detail="balanced"
+                        effect="none"
+                        scale={1}
+                        spread={1}
+                        depth={1}
+                        speed={1}
+                        spin={1}
+                        interaction="repel"
+                        density={1.5}
+                        shardSize={1.1}
+                        stretch={1}
+                        turbulence={1}
+                        glow={1}
+                        edgeSoftness={2}
+                        bloom={0.5}
+                        grain={0.05}
+                        chromaticAberration={0.0075}
+                        transitionDuration={1}
+                        interactionRadius={1.5}
+                        interactionStrength={0.5}
+                        rippleIntensity={1}
+                        holdToGather={true}
+                    />
+                </div>
+
                 <div className="landing-hero-copy">
                     <span className="landing-status"><i /> ARC TESTNET · ONCHAIN</span>
                     <h1>Lending, without the noise.</h1>
@@ -295,6 +334,8 @@ export default function WelcomePage() {
                 .landing-network { color: #9b8da8; white-space: nowrap; }
 
                 .landing-hero {
+                    position: relative;
+                    isolation: isolate;
                     width: min(1240px, 100%);
                     margin: 0 auto;
                     min-height: 620px;
@@ -303,6 +344,26 @@ export default function WelcomePage() {
                     align-items: center;
                     gap: 72px;
                     padding: 88px 0 82px;
+                    overflow: hidden;
+                }
+
+                .landing-aero-shards {
+                    position: absolute;
+                    inset: 0;
+                    z-index: 0;
+                    opacity: .24;
+                    pointer-events: none;
+                }
+
+                .landing-aero-shards > * {
+                    width: 100%;
+                    height: 100%;
+                }
+
+                .landing-hero-copy,
+                .landing-hero-panel {
+                    position: relative;
+                    z-index: 1;
                 }
 
                 .landing-status {
@@ -345,8 +406,9 @@ export default function WelcomePage() {
                     padding: 28px;
                     border: 1px solid #2b2138;
                     border-radius: 18px;
-                    background: linear-gradient(155deg, #120d1f, #0a0710);
+                    background: linear-gradient(155deg, rgba(18,13,31,.9), rgba(10,7,16,.94));
                     box-shadow: 0 30px 90px rgba(0,0,0,.25);
+                    backdrop-filter: blur(2px);
                 }
 
                 .landing-hero-panel-top { display: flex; justify-content: space-between; align-items: baseline; gap: 18px; padding-bottom: 22px; border-bottom: 1px solid #231a2f; }
@@ -429,6 +491,7 @@ export default function WelcomePage() {
                     .landing-nav-links { display: none; }
                     .landing-hero { grid-template-columns: 1fr; gap: 30px; padding: 62px 0 55px; }
                     .landing-hero-panel { max-width: 680px; }
+                    .landing-aero-shards { opacity: .18; }
                     .landing-market-section,
                     .landing-governance-section,
                     .landing-cta { grid-template-columns: 1fr; gap: 28px; }
