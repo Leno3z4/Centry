@@ -14,7 +14,10 @@ const STRATEGY_ABI = [
   { type: 'function', name: 'slope1PerYear', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'slope2PerYear', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'kink', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
-  { type: 'function', name: 'maxRatePerYear', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+];
+
+const ERC20_BALANCE_ABI = [
+  { type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ type: 'uint256' }] },
 ];
 
 function formatNumber(value, digits = 2) {
@@ -35,9 +38,14 @@ function formatUnitsSafe(value, decimals) {
   }
 }
 
-function formatUsdFromPrice(amount, priceE18, decimals) {
-  if (amount === 0 || priceE18 === 0n) return 0;
-  return (amount * Number(priceE18)) / (10 ** decimals) / 1e18;
+function formatUsdFromPrice(amountRaw, priceE18Raw, decimals) {
+  try {
+    const amount = Number(formatUnits(amountRaw ?? 0n, decimals));
+    const price = Number(formatUnits(priceE18Raw ?? 0n, 18));
+    return Number.isFinite(amount) && Number.isFinite(price) ? amount * price : 0;
+  } catch {
+    return 0;
+  }
 }
 
 function projectedBorrowRate(utilization, strategy) {
@@ -56,22 +64,20 @@ function projectedBorrowRate(utilization, strategy) {
 }
 
 function AnalyticsContent() {
-  const strategyQueries = [
-    ['base', 'baseRatePerYear'],
-    ['slope1', 'slope1PerYear'],
-    ['slope2', 'slope2PerYear'],
-    ['kink', 'kink'],
-  ];
-
   const strategyResults = useReadContracts({
-    contracts: strategyQueries.map(([, functionName]) => ({
+    contracts: [
+      ['baseRatePerYear', 'base'],
+      ['slope1PerYear', 'slope1'],
+      ['slope2PerYear', 'slope2'],
+      ['kink', 'kink'],
+    ].map(([functionName]) => ({
       address: CONTRACT_ADDRESSES.interestRateModel,
       abi: STRATEGY_ABI,
       functionName,
     })),
   }).data;
 
-  const strategy = strategyResults && strategyResults.length === 4
+  const strategy = strategyResults?.length === 4
     ? {
         base: strategyResults[0]?.result ?? 0n,
         slope1: strategyResults[1]?.result ?? 0n,
@@ -107,7 +113,7 @@ function AnalyticsContent() {
     },
     {
       address: market.address,
-      abi: [{ type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ type: 'uint256' }] }],
+      abi: ERC20_BALANCE_ABI,
       functionName: 'balanceOf',
       args: [CONTRACT_ADDRESSES.lendingPool],
     },
