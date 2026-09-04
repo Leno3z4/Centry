@@ -127,7 +127,6 @@ export default function WelcomePage() {
                 <Link href="/" className="landing-brand">Centry</Link>
                 <div className="landing-nav-links">
                     <a href="#how-it-works">How it works</a>
-                    <a href="#markets">Markets</a>
                     <a href="#governance">Governance</a>
                     <Link href="/app">Open app</Link>
                 </div>
@@ -267,7 +266,6 @@ export default function WelcomePage() {
                 .landing-nav,
                 .landing-hero,
                 .landing-how-section,
-                .landing-market-section,
                 .landing-governance-section,
                 .landing-cta,
                 .landing-footer {
@@ -399,18 +397,6 @@ export default function WelcomePage() {
                 .landing-how-item h3 { margin: -3px 0 7px; font-family: var(--display-font, Georgia, serif); font-size: 25px; font-weight: 400; letter-spacing: -.4px; }
                 .landing-how-item p { margin: 0; color: #81778b; font-size: 11px; line-height: 1.7; }
 
-                .landing-market-section { position: relative; z-index: 1; padding: 86px 0 112px; }
-                .landing-section-heading { width: min(720px, 100%); margin-bottom: 40px; }
-                .landing-market-list { border-top: 1px solid rgba(139, 113, 171, .18); margin-bottom: 26px; }
-                .landing-market-row { display: grid; grid-template-columns: 1.2fr .8fr .8fr; gap: 28px; align-items: end; padding: 21px 0; border-bottom: 1px solid rgba(139, 113, 171, .12); }
-                .landing-market-row > div { display: flex; flex-direction: column; gap: 5px; }
-                .landing-market-name { align-items: flex-start; }
-                .landing-market-name strong { color: #ddd4e5; font-size: 13px; font-weight: 500; }
-                .landing-market-name span { color: #675e71; font-size: 9px; }
-                .landing-market-value { align-items: flex-end; }
-                .landing-market-value span { color: #5f566a; font-size: 8px; }
-                .landing-market-value strong { color: #d8cfdf; font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
-
                 .landing-governance-section { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, .75fr) minmax(180px, .7fr); gap: 90px; align-items: center; padding: 90px 0 120px; }
                 .landing-governance-copy { width: min(600px, 100%); }
                 .landing-governance-copy .secondary-btn { margin-top: 24px; }
@@ -462,7 +448,6 @@ export default function WelcomePage() {
                     .landing-hero-copy > p { font-size: 13px; }
                     .landing-actions .primary-btn,
                     .landing-actions .secondary-btn,
-                    .landing-market-section .secondary-btn,
                     .landing-governance-copy .secondary-btn { width: 100%; text-align: center; }
                     .landing-trust-row { gap: 10px 14px; line-height: 1.5; }
                     .landing-metric { padding: 20px 0; }
@@ -474,10 +459,6 @@ export default function WelcomePage() {
                     .landing-cta h2 { font-size: clamp(31px, 10vw, 43px); letter-spacing: -1.5px; }
                     .landing-how-item { grid-template-columns: 32px minmax(0,1fr); gap: 10px; }
                     .landing-how-item h3 { font-size: 22px; }
-                    .landing-market-section { padding: 66px 0 88px; }
-                    .landing-market-row { grid-template-columns: 1fr 1fr; gap: 15px; }
-                    .landing-market-name { grid-column: 1 / -1; }
-                    .landing-market-value { align-items: flex-start; }
                     .landing-governance-section { padding: 66px 0 88px; }
                     .landing-cta { margin-top: 10px; padding: 26px 22px; }
                     .landing-cta .primary-btn { width: 100%; text-align: center; }
@@ -488,8 +469,6 @@ export default function WelcomePage() {
                     .landing-page { --landing-content: calc(100vw - 22px); padding-inline: 11px; }
                     .landing-nav-links { gap: 12px; font-size: 9px; }
                     .landing-hero h1 { font-size: 41px; }
-                    .landing-market-name strong { font-size: 12px; }
-                    .landing-market-value strong { font-size: 11px; }
                 }
 
                 @media (prefers-reduced-motion: reduce) {
