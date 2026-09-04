@@ -31,10 +31,10 @@ jobs:
         run: |
           npm install --no-save ethers@6
 
-      - name: Validate reward manifest
+      - name: Validate reward manifest structure
         env:
-          ARC_RPC_URL_SECRET: ${{ secrets.ARC_RPC_URL }}
-          ARC_RPC_URL_VARIABLE: ${{ vars.ARC_RPC_URL }}
+          ARC_RPC_URL_SECRET: ""
+          ARC_RPC_URL_VARIABLE: ""
         run: |
           node scripts/validate-reward-manifest.js
 
@@ -130,10 +130,7 @@ jobs:
             ]
           ];
 
-          for (const [
-            name,
-            address
-          ] of addresses) {
+          for (const [name, address] of addresses) {
             if (!ethers.isAddress(address)) {
               throw new Error(
                 `${name} is not a valid address`
@@ -141,28 +138,21 @@ jobs:
             }
           }
 
-          if (
-            !fs.existsSync(
-              MANIFEST_PATH
-            )
-          ) {
+          if (!fs.existsSync(MANIFEST_PATH)) {
             throw new Error(
               `${MANIFEST_PATH} does not exist`
             );
           }
 
-          const manifest =
-            JSON.parse(
-              fs.readFileSync(
-                MANIFEST_PATH,
-                "utf8"
-              )
-            );
+          const manifest = JSON.parse(
+            fs.readFileSync(
+              MANIFEST_PATH,
+              "utf8"
+            )
+          );
 
           const provider =
-            new ethers.JsonRpcProvider(
-              RPC_URL
-            );
+            new ethers.JsonRpcProvider(RPC_URL);
 
           const wallet =
             new ethers.Wallet(
@@ -175,7 +165,6 @@ jobs:
               VECENT,
               [
                 "function nextTokenId() view returns (uint256)",
-
                 "function ownerOf(uint256 tokenId) view returns (address)"
               ],
               provider
@@ -186,17 +175,11 @@ jobs:
               REWARDS,
               [
                 "function rewardToken() view returns (address)",
-
                 "function veCENT() view returns (address)",
-
                 "function epochRoots(uint256 epoch) view returns (bytes32)",
-
                 "function latestEpoch() view returns (uint256)",
-
                 "function selfRepayRecipient(uint256 tokenId) view returns (address)",
-
                 "function selfRepayOwner(uint256 tokenId) view returns (address)",
-
                 "function claimed(uint256 epoch, uint256 tokenId) view returns (bool)"
               ],
               provider
@@ -216,58 +199,44 @@ jobs:
               EXECUTOR,
               [
                 "function isKeeper(address keeper) view returns (bool)",
-
                 "function swapAdapter() view returns (address)",
-
                 "function supportedDebtAsset(address asset) view returns (bool)",
-
                 "function executeSelfRepay(uint256 epoch,uint256 tokenId,uint256 rewardAmount,bytes32[] rewardProof,tuple(address debtAsset,uint256 rewardAmountIn,uint256 minDebtAssetOut,bytes swapData)[] instructions)"
               ],
               wallet
             );
 
-          const network =
-            await provider.getNetwork();
+          const network = await provider.getNetwork();
 
           console.log(
             `Connected chain ID: ${network.chainId.toString()}`
           );
 
-          if (
-            network.chainId !==
-            EXPECTED_CHAIN_ID
-          ) {
+          if (network.chainId !== EXPECTED_CHAIN_ID) {
             throw new Error(
               `Wrong network. Expected Arc Testnet ${EXPECTED_CHAIN_ID}, got ${network.chainId}`
             );
           }
 
-          console.log(
-            `Keeper wallet: ${wallet.address}`
-          );
+          console.log(`Keeper wallet: ${wallet.address}`);
 
-          const nativeBalance =
-            await provider.getBalance(
-              wallet.address
-            );
+          const nativeBalance = await provider.getBalance(
+            wallet.address
+          );
 
           console.log(
             `Keeper gas balance: ${ethers.formatEther(nativeBalance)}`
           );
 
-          if (
-            nativeBalance <
-            MIN_NATIVE_BALANCE
-          ) {
+          if (nativeBalance < MIN_NATIVE_BALANCE) {
             throw new Error(
               "Keeper native balance is below configured minimum"
             );
           }
 
-          const keeperAuthorized =
-            await executor.isKeeper(
-              wallet.address
-            );
+          const keeperAuthorized = await executor.isKeeper(
+            wallet.address
+          );
 
           if (!keeperAuthorized) {
             throw new Error(
@@ -275,44 +244,29 @@ jobs:
             );
           }
 
-          const adapter =
-            await executor.swapAdapter();
+          const adapter = await executor.swapAdapter();
 
-          if (
-            adapter === ethers.ZeroAddress
-          ) {
+          if (adapter === ethers.ZeroAddress) {
             throw new Error(
               "SelfRepayExecutorV2 has no swap adapter configured"
             );
           }
 
-          console.log(
-            `Swap adapter: ${adapter}`
-          );
+          console.log(`Swap adapter: ${adapter}`);
 
-          const rewardsVeCENT =
-            await rewards.veCENT();
+          const rewardsVeCENT = await rewards.veCENT();
 
           if (
-            ethers.getAddress(
-              rewardsVeCENT
-            ) !==
-            ethers.getAddress(
-              VECENT
-            )
+            ethers.getAddress(rewardsVeCENT) !==
+            ethers.getAddress(VECENT)
           ) {
             throw new Error(
               "RevenueRewards.veCENT() does not match configured veCENT"
             );
           }
 
-          const manifestEpoch =
-            BigInt(
-              manifest.epoch
-            );
-
-          const latestEpoch =
-            await rewards.latestEpoch();
+          const manifestEpoch = BigInt(manifest.epoch);
+          const latestEpoch = await rewards.latestEpoch();
 
           console.log(
             `Manifest epoch: ${manifestEpoch.toString()}`
@@ -322,44 +276,38 @@ jobs:
             `Latest active epoch: ${latestEpoch.toString()}`
           );
 
-          if (
-            manifestEpoch >
-            latestEpoch
-          ) {
-            throw new Error(
-              "Manifest epoch is not active yet"
+          if (manifestEpoch > latestEpoch) {
+            console.log(
+              `Manifest epoch ${manifestEpoch.toString()} is not active yet; keeper is idle.`
             );
+            process.exit(0);
           }
 
-          const onChainRoot =
-            await rewards.epochRoots(
-              manifestEpoch
-            );
+          const onChainRoot = await rewards.epochRoots(
+            manifestEpoch
+          );
 
-          if (
-            onChainRoot === ethers.ZeroHash
-          ) {
-            throw new Error(
-              "Manifest epoch has no active Merkle root"
+          if (onChainRoot === ethers.ZeroHash) {
+            console.log(
+              `Manifest epoch ${manifestEpoch.toString()} has no active Merkle root; keeper is idle.`
             );
+            process.exit(0);
           }
 
           if (
             manifest.root &&
             manifest.root.toLowerCase() !==
-            onChainRoot.toLowerCase()
+              onChainRoot.toLowerCase()
           ) {
             throw new Error(
               "Manifest root does not match on-chain root"
             );
           }
 
-          const nextTokenId =
-            await veCENT.nextTokenId();
+          const nextTokenId = await veCENT.nextTokenId();
 
           const upperBound =
-            nextTokenId <
-            MAX_TOKEN_SCAN + 1n
+            nextTokenId < MAX_TOKEN_SCAN + 1n
               ? nextTokenId
               : MAX_TOKEN_SCAN + 1n;
 
@@ -372,61 +320,41 @@ jobs:
           );
 
           let executed = 0;
-
           let skipped = 0;
 
-          for (
-            const position of
-            manifest.positions
-          ) {
-            const tokenId =
-              BigInt(
-                position.tokenId
-              );
+          for (const position of manifest.positions) {
+            const tokenId = BigInt(position.tokenId);
 
             if (
               tokenId <= 0n ||
               tokenId >= upperBound
             ) {
               skipped++;
-
               continue;
             }
 
             let owner;
 
             try {
-              owner =
-                await veCENT.ownerOf(
-                  tokenId
-                );
+              owner = await veCENT.ownerOf(tokenId);
             } catch {
               console.log(
                 `tokenId ${tokenId}: NFT does not exist`
               );
-
               skipped++;
-
               continue;
             }
 
-            if (
-              owner === ethers.ZeroAddress
-            ) {
+            if (owner === ethers.ZeroAddress) {
               skipped++;
-
               continue;
             }
 
             const configuredRecipient =
-              await rewards.selfRepayRecipient(
-                tokenId
-              );
+              await rewards.selfRepayRecipient(tokenId);
 
             const configuredOwner =
-              await rewards.selfRepayOwner(
-                tokenId
-              );
+              await rewards.selfRepayOwner(tokenId);
 
             if (
               configuredRecipient ===
@@ -435,102 +363,69 @@ jobs:
               console.log(
                 `tokenId ${tokenId}: self-repay disabled`
               );
-
               skipped++;
-
               continue;
             }
 
             if (
-              ethers.getAddress(
-                configuredOwner
-              ) !==
-              ethers.getAddress(
-                owner
-              )
+              ethers.getAddress(configuredOwner) !==
+              ethers.getAddress(owner)
             ) {
               console.log(
                 `tokenId ${tokenId}: owner changed, self-repay configuration is stale`
               );
-
               skipped++;
-
               continue;
             }
 
             if (
-              ethers.getAddress(
-                configuredRecipient
-              ) !==
-              ethers.getAddress(
-                EXECUTOR
-              )
+              ethers.getAddress(configuredRecipient) !==
+              ethers.getAddress(EXECUTOR)
             ) {
               console.log(
                 `tokenId ${tokenId}: self-repay recipient is not executor`
               );
-
               skipped++;
-
               continue;
             }
 
-            const alreadyClaimed =
-              await rewards.claimed(
-                manifestEpoch,
-                tokenId
-              );
+            const alreadyClaimed = await rewards.claimed(
+              manifestEpoch,
+              tokenId
+            );
 
-            if (
-              alreadyClaimed
-            ) {
+            if (alreadyClaimed) {
               console.log(
                 `tokenId ${tokenId}: reward already claimed`
               );
-
               skipped++;
-
               continue;
             }
 
-            const rewardAmount =
-              BigInt(
-                position.amount
-              );
+            const rewardAmount = BigInt(position.amount);
 
-            if (
-              rewardAmount <= 0n
-            ) {
+            if (rewardAmount <= 0n) {
               console.log(
                 `tokenId ${tokenId}: reward amount is zero`
               );
-
               skipped++;
-
               continue;
             }
 
             const instructions = [];
 
-            for (
-              const rawInstruction of
-              position.instructions
-            ) {
-              const debtAsset =
-                ethers.getAddress(
-                  rawInstruction.debtAsset
-                );
+            for (const rawInstruction of position.instructions) {
+              const debtAsset = ethers.getAddress(
+                rawInstruction.debtAsset
+              );
 
               const supported =
-                await executor.supportedDebtAsset(
-                  debtAsset
-                );
+                await executor.supportedDebtAsset(debtAsset);
 
               if (!supported) {
                 console.log(
                   `tokenId ${tokenId}: ${debtAsset} is not a supported debt asset`
                 );
-
                 continue;
               }
 
@@ -540,80 +435,54 @@ jobs:
                   debtAsset
                 );
 
-              if (
-                currentDebt === 0n
-              ) {
+              if (currentDebt === 0n) {
                 continue;
               }
 
-              const rewardAmountIn =
-                BigInt(
-                  rawInstruction.rewardAmountIn
-                );
+              const rewardAmountIn = BigInt(
+                rawInstruction.rewardAmountIn
+              );
 
-              const minDebtAssetOut =
-                BigInt(
-                  rawInstruction.minDebtAssetOut
-                );
+              const minDebtAssetOut = BigInt(
+                rawInstruction.minDebtAssetOut
+              );
 
-              if (
-                rewardAmountIn <= 0n
-              ) {
+              if (rewardAmountIn <= 0n) {
                 continue;
               }
 
-              if (
-                minDebtAssetOut <= 0n
-              ) {
+              if (minDebtAssetOut <= 0n) {
                 continue;
               }
 
               instructions.push({
                 debtAsset,
-
                 rewardAmountIn,
-
                 minDebtAssetOut,
-
                 swapData:
-                  rawInstruction.swapData ||
-                  "0x"
+                  rawInstruction.swapData || "0x"
               });
             }
 
-            if (
-              instructions.length === 0
-            ) {
+            if (instructions.length === 0) {
               console.log(
                 `tokenId ${tokenId}: no executable debt remains`
               );
-
               skipped++;
-
               continue;
             }
 
-            const totalRewardInput =
-              instructions.reduce(
-                (
-                  total,
-                  instruction
-                ) =>
-                  total +
-                  instruction.rewardAmountIn,
-                0n
-              );
+            const totalRewardInput = instructions.reduce(
+              (total, instruction) =>
+                total + instruction.rewardAmountIn,
+              0n
+            );
 
-            if (
-              totalRewardInput >
-              rewardAmount
-            ) {
+            if (totalRewardInput > rewardAmount) {
               console.log(
                 `tokenId ${tokenId}: instructions use more reward than allocation`
               );
-
               skipped++;
-
               continue;
             }
 
@@ -630,8 +499,7 @@ jobs:
                 instructions
               );
 
-            const feeData =
-              await provider.getFeeData();
+            const feeData = await provider.getFeeData();
 
             const overrides = {
               gasLimit:
@@ -640,38 +508,32 @@ jobs:
                 100n
             };
 
-            if (
-              feeData.maxFeePerGas
-            ) {
+            if (feeData.maxFeePerGas) {
               overrides.maxFeePerGas =
                 feeData.maxFeePerGas;
 
               overrides.maxPriorityFeePerGas =
                 feeData.maxPriorityFeePerGas ??
                 0n;
-            } else if (
-              feeData.gasPrice
-            ) {
+            } else if (feeData.gasPrice) {
               overrides.gasPrice =
                 feeData.gasPrice;
             }
 
-            const tx =
-              await executor.executeSelfRepay(
-                manifestEpoch,
-                tokenId,
-                rewardAmount,
-                position.proof,
-                instructions,
-                overrides
-              );
+            const tx = await executor.executeSelfRepay(
+              manifestEpoch,
+              tokenId,
+              rewardAmount,
+              position.proof,
+              instructions,
+              overrides
+            );
 
             console.log(
               `tokenId ${tokenId}: submitted ${tx.hash}`
             );
 
-            const receipt =
-              await tx.wait();
+            const receipt = await tx.wait();
 
             console.log(
               `tokenId ${tokenId}: confirmed in block ${receipt.blockNumber}`
