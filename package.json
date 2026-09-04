@@ -16,3 +16,14 @@
     "wagmi": "^2.16.0"
   }
 }
+{
+  "name": "centry-v2-keeper",
+  "private": true,
+  "scripts": {
+    "generate:manifest": "node scripts/generate-reward-manifest.js",
+    "validate:manifest": "node scripts/validate-reward-manifest.js"
+  },
+  "dependencies": {
+    "ethers": "^6.0.0"
+  }
+}
