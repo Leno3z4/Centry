@@ -46,10 +46,9 @@ jobs:
                   "functionName: 'withdraw',",
               ],
               'frontend/app/app/governance/page.jsx': [
-                  'const withdrawPosition = async () =>',
+                  'const withdrawPosition = async ()',
                   'Exit early',
                   '75% of locked CENT',
-                  '25%',
                   'Fee to rewards',
                   'Fee to treasury',
               ],
