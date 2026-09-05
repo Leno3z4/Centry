@@ -79,6 +79,23 @@ function executionPriceImpact(inputUnits, outputUnits, inputPriceUsd, outputPric
   return Math.max(0, Math.min(100, (1 - outputUnits / fairOutput) * 100));
 }
 
+function chooseOutputUnits(raw, outputMarket, inputUnits, inputPriceUsd, outputPriceUsd) {
+  const decimalsCandidates = [...new Set([Number(outputMarket.decimals ?? 6), 18])];
+  const fairOutput = (inputUnits * inputPriceUsd) / outputPriceUsd;
+  if (!Number.isFinite(fairOutput) || fairOutput <= 0) return null;
+
+  const candidates = decimalsCandidates
+    .map((decimals) => ({ decimals, units: toUnits(raw, decimals) }))
+    .filter((candidate) => Number.isFinite(candidate.units) && candidate.units > 0)
+    .map((candidate) => ({
+      ...candidate,
+      score: Math.abs(Math.log(candidate.units / fairOutput)),
+    }))
+    .sort((a, b) => a.score - b.score);
+
+  return candidates[0]?.units ?? null;
+}
+
 async function calculateQuotePriceImpact(quote, inputToken, outputToken) {
   const providerImpact = Number(quote?.priceImpact);
   const providerIsSane = Number.isFinite(providerImpact) && providerImpact >= 0 && providerImpact <= 100;
@@ -107,14 +124,15 @@ async function calculateQuotePriceImpact(quote, inputToken, outputToken) {
     const outputRaw = BigInt(String(quote.outputAmount || '0'));
     if (inputRaw <= 0n || outputRaw <= 0n) return providerIsSane ? providerImpact : null;
 
-    // Tower documents quote output as base atomic units of the purchased asset.
-    // Use the actual market decimals here. cirBTC is 8 decimals; assuming 18
-    // decimals was the source of the bogus 100% impact on small BTC trades.
     const inputUnits = toUnits(inputRaw, Number(inputMarket.decimals ?? 6));
-    const outputUnits = toUnits(outputRaw, Number(outputMarket.decimals ?? 6));
+    const outputUnits = chooseOutputUnits(outputRaw, outputMarket, inputUnits, inputPriceUsd, outputPriceUsd);
     const calculated = executionPriceImpact(inputUnits, outputUnits, inputPriceUsd, outputPriceUsd);
     if (calculated == null) return providerIsSane ? providerImpact : null;
 
+    // Tower examples use 18-decimal quote outputs for EURC, while Arc cirBTC is
+    // an 8-decimal token. Choose the quote interpretation closest to fair USD value
+    // instead of hard-coding either precision, which prevents 100% artifacts from
+    // decimal mismatches while preserving a genuinely large pool impact.
     return Number(calculated.toFixed(4));
   } catch {
     return providerIsSane ? providerImpact : null;
