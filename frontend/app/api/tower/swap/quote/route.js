@@ -50,6 +50,65 @@ function isStructurallyValidQuote(quote) {
   }
 }
 
+function findUsdPrice(prices, tokenAddress) {
+  if (!prices || !tokenAddress) return null;
+  const normalized = tokenAddress.toLowerCase();
+  const market = ACTIVE_MARKETS.find((item) => item.address?.toLowerCase() === normalized);
+  if (!market) return null;
+
+  const keys = [market.id, market.symbol?.toLowerCase(), market.name?.toLowerCase()];
+  for (const key of keys) {
+    const value = prices?.[key]?.usd;
+    if (Number.isFinite(Number(value)) && Number(value) > 0) return Number(value);
+  }
+
+  return null;
+}
+
+async function calculateStablecoinPriceImpact(quote, inputToken, outputToken) {
+  const providerImpact = Number(quote?.priceImpact);
+  const apiKey = process.env.TOWER_API_KEY;
+  if (!apiKey) return Number.isFinite(providerImpact) && providerImpact >= 0 && providerImpact <= 100 ? providerImpact : null;
+
+  try {
+    const response = await fetch(`${TOWER_BASE_URL}/prices`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${apiKey}` },
+      cache: 'no-store',
+    });
+    if (!response.ok) return Number.isFinite(providerImpact) && providerImpact >= 0 && providerImpact <= 100 ? providerImpact : null;
+
+    const prices = await response.json();
+    const inputPriceUsd = findUsdPrice(prices, inputToken);
+    const outputPriceUsd = findUsdPrice(prices, outputToken);
+    if (!inputPriceUsd || !outputPriceUsd) {
+      return Number.isFinite(providerImpact) && providerImpact >= 0 && providerImpact <= 100 ? providerImpact : null;
+    }
+
+    const inputAmount = BigInt(String(quote.inputAmount || '0'));
+    const outputAmount = BigInt(String(quote.outputAmount || '0'));
+    if (inputAmount <= 0n || outputAmount <= 0n) return null;
+
+    const inputMarket = ACTIVE_MARKETS.find((item) => item.address?.toLowerCase() === inputToken.toLowerCase());
+    const outputMarket = ACTIVE_MARKETS.find((item) => item.address?.toLowerCase() === outputToken.toLowerCase());
+    if (!inputMarket || !outputMarket) return null;
+
+    const inputDecimals = Number(inputMarket.decimals ?? 6);
+    const outputDecimals = Number(outputMarket.decimals ?? 6);
+    const inputUnits = Number(inputAmount) / (10 ** inputDecimals);
+    const outputUnits = Number(outputAmount) / (10 ** outputDecimals);
+    if (!Number.isFinite(inputUnits) || !Number.isFinite(outputUnits) || inputUnits <= 0 || outputUnits <= 0) return null;
+
+    // Use live USD spot prices to sanity-check the provider's percentage.
+    // 0% means the quoted output matches the current spot-value ratio.
+    const fairOutput = (inputUnits * inputPriceUsd) / outputPriceUsd;
+    const calculated = Math.max(0, (1 - (outputUnits / fairOutput)) * 100);
+    return Math.min(100, calculated);
+  } catch {
+    return Number.isFinite(providerImpact) && providerImpact >= 0 && providerImpact <= 100 ? providerImpact : null;
+  }
+}
+
 async function getUnitFlowQuote(inputToken, outputToken, inputAmount, slippageTolerance) {
   const rpcUrl = process.env.ARC_RPC_URL || process.env.ARC_RPC_URL_VARIABLE || 'https://rpc.testnet.arc.network';
   const client = createPublicClient({
@@ -146,8 +205,19 @@ export async function POST(request) {
     });
 
     const data = await response.json();
-    if (response.ok && data?.success === true && !isStructurallyValidQuote(data.data)) {
-      return NextResponse.json({ success: false, error: 'Tower returned an incomplete quote. Try refreshing the quote or using a smaller amount.' }, { status: 422 });
+    if (response.ok && data?.success === true) {
+      if (!isStructurallyValidQuote(data.data)) {
+        return NextResponse.json({ success: false, error: 'Tower returned an incomplete quote. Try refreshing the quote or using a smaller amount.' }, { status: 422 });
+      }
+
+      const providerImpact = Number(data.data.priceImpact);
+      const sanityCheckedImpact = await calculateStablecoinPriceImpact(data.data, inputToken, outputToken);
+      const shouldReplaceProviderValue = !Number.isFinite(providerImpact) || providerImpact < 0 || providerImpact > 100;
+
+      if (sanityCheckedImpact != null && shouldReplaceProviderValue) {
+        data.data.priceImpact = Number(sanityCheckedImpact.toFixed(4));
+        data.data.priceImpactSource = 'spot-price-sanity-check';
+      }
     }
 
     return NextResponse.json(data, { status: response.status });
