@@ -23,8 +23,35 @@ export const arcTestnet = defineChain({
   },
 });
 
-const walletConnectProjectId =
-  process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
+const walletConnectProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
+const ARC_CHAIN_HEX = `0x${arcTestnet.id.toString(16)}`;
+const ARC_ADD_CHAIN_PARAMS = {
+  chainId: ARC_CHAIN_HEX,
+  chainName: 'Arc Testnet',
+  nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 6 },
+  rpcUrls: ['https://rpc.testnet.arc.network'],
+  blockExplorerUrls: ['https://testnet.arcscan.app'],
+};
+
+async function switchOrAddArc(provider) {
+  try {
+    await provider.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: ARC_CHAIN_HEX }],
+    });
+  } catch (error) {
+    const code = Number(error?.code);
+    if (code !== 4902 && code !== -32603 && code !== -32602) throw error;
+    await provider.request({
+      method: 'wallet_addEthereumChain',
+      params: [ARC_ADD_CHAIN_PARAMS],
+    });
+    await provider.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: ARC_CHAIN_HEX }],
+    });
+  }
+}
 
 function centryWalletConnect() {
   let provider;
@@ -71,9 +98,7 @@ function centryWalletConnect() {
         }
       }
 
-      await wcProvider.connect({
-        chains: [targetChainId],
-      });
+      await wcProvider.connect({ chains: [targetChainId] });
 
       const accounts = wcProvider.accounts || [];
       const connectedChainId = Number(wcProvider.chainId || targetChainId);
@@ -87,15 +112,11 @@ function centryWalletConnect() {
         chainId: connectedChainId,
       });
 
-      return {
-        accounts,
-        chainId: connectedChainId,
-      };
+      return { accounts, chainId: connectedChainId };
     },
 
     async disconnect() {
       if (!provider) return;
-
       try {
         await provider.disconnect();
       } finally {
@@ -123,16 +144,10 @@ function centryWalletConnect() {
 
     async switchChain({ chainId }) {
       const wcProvider = await createProvider();
-
       if (chainId !== arcTestnet.id) {
         throw new Error('Centry only supports Arc Testnet.');
       }
-
-      await wcProvider.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: `0x${chainId.toString(16)}` }],
-      });
-
+      await switchOrAddArc(wcProvider);
       return config.chains.find((chain) => chain.id === chainId) || arcTestnet;
     },
 
@@ -151,10 +166,7 @@ function centryWalletConnect() {
 }
 
 const connectors = [];
-
-if (walletConnectProjectId) {
-  connectors.push(centryWalletConnect());
-}
+if (walletConnectProjectId) connectors.push(centryWalletConnect());
 
 const arcRpcUrls = [
   process.env.NEXT_PUBLIC_ARC_RPC_URL,
