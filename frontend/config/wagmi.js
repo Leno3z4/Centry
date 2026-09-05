@@ -1,4 +1,4 @@
-import { createConfig, http } from 'wagmi';
+import { createConfig, fallback, http } from 'wagmi';
 import { defineChain } from 'viem';
 import { injected } from 'wagmi/connectors';
 import { walletConnect } from '@wagmi/connectors/walletConnect';
@@ -47,11 +47,22 @@ if (walletConnectProjectId) {
   );
 }
 
+const arcRpcUrls = [
+  process.env.NEXT_PUBLIC_ARC_RPC_URL,
+  'https://rpc.testnet.arc.network',
+  'https://rpc.drpc.testnet.arc.network',
+  'https://rpc.quicknode.testnet.arc.network',
+  'https://rpc.blockdaemon.testnet.arc.network',
+].filter(Boolean);
+
 export const config = createConfig({
   chains: [arcTestnet],
   connectors,
   transports: {
-    [arcTestnet.id]: http(),
+    [arcTestnet.id]: fallback(
+      arcRpcUrls.map((url) => http(url)),
+      { rank: true },
+    ),
   },
   ssr: true,
 });
