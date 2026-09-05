@@ -1,4 +1,4 @@
-import { createConfig, createConnector, http } from 'wagmi';
+import { createConfig, createConnector, fallback, http } from 'wagmi';
 import { defineChain } from 'viem';
 import EthereumProvider from '@walletconnect/ethereum-provider';
 
@@ -156,11 +156,22 @@ if (walletConnectProjectId) {
   connectors.push(centryWalletConnect());
 }
 
+const arcRpcUrls = [
+  process.env.NEXT_PUBLIC_ARC_RPC_URL,
+  'https://rpc.testnet.arc.network',
+  'https://rpc.drpc.testnet.arc.network',
+  'https://rpc.quicknode.testnet.arc.network',
+  'https://rpc.blockdaemon.testnet.arc.network',
+].filter(Boolean);
+
 export const config = createConfig({
   chains: [arcTestnet],
   connectors,
   transports: {
-    [arcTestnet.id]: http(),
+    [arcTestnet.id]: fallback(
+      arcRpcUrls.map((url) => http(url)),
+      { rank: true },
+    ),
   },
   multiInjectedProviderDiscovery: true,
   ssr: true,
