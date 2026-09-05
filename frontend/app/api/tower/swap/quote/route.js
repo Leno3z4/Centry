@@ -113,7 +113,23 @@ function executionPriceImpact(inputUnits, outputUnits, inputPriceUsd, outputPric
   return Math.max(0, Math.min(100, (1 - outputUnits / fairOutput) * 100));
 }
 
+function getRoutePriceImpact(quote) {
+  const hops = Array.isArray(quote?.route?.hops) ? quote.route.hops : [];
+  const impacts = hops
+    .map((hop) => Number(hop?.priceImpact))
+    .filter((value) => Number.isFinite(value) && value >= 0 && value <= 100);
+
+  if (!impacts.length) return null;
+  // Tower documents each hop's priceImpact as a percentage. For a multi-hop route,
+  // use the sum as the conservative route-level impact rather than recomputing it
+  // from token USD prices and risking decimal mismatches.
+  return Math.min(100, impacts.reduce((sum, value) => sum + value, 0));
+}
+
 async function calculateQuotePriceImpact(quote, inputToken, outputToken) {
+  const routeImpact = getRoutePriceImpact(quote);
+  if (routeImpact != null) return Number(routeImpact.toFixed(4));
+
   const providerImpact = Number(quote?.priceImpact);
   const providerIsSane = Number.isFinite(providerImpact) && providerImpact >= 0 && providerImpact <= 100;
 
@@ -138,6 +154,7 @@ async function calculateQuotePriceImpact(quote, inputToken, outputToken) {
 
     const inputPriceUsd = findUsdPrice(prices, inputToken);
     let outputPriceUsd = findUsdPrice(prices, outputToken);
+    if (inputMarket.id === 'cirbtc') inputPriceUsd = inputPriceUsd || await getExternalBtcUsd();
     if (outputMarket.id === 'cirbtc') outputPriceUsd = outputPriceUsd || await getExternalBtcUsd();
     if (!inputPriceUsd || !outputPriceUsd) return providerIsSane ? providerImpact : null;
 
@@ -147,15 +164,11 @@ async function calculateQuotePriceImpact(quote, inputToken, outputToken) {
 
     // Tower normalizes quote output amounts to its quote precision (18 decimals).
     // Input amounts remain in the sold token's native atomic units.
-    // This was the source of the bogus 99% cirBTC impact: cirBTC itself has 8 decimals,
-    // but Tower's quote output is represented at 18-decimal quote precision.
     const inputUnits = toUnits(inputRaw, Number(inputMarket.decimals ?? 6));
     const outputUnits = toUnits(outputRaw, TOWER_QUOTE_DECIMALS);
     const calculated = executionPriceImpact(inputUnits, outputUnits, inputPriceUsd, outputPriceUsd);
     if (calculated == null) return providerIsSane ? providerImpact : null;
 
-    // Prefer the independently calculated figure whenever Tower's value materially
-    // disagrees. This keeps stablecoin and cirBTC routes on the same unit-safe path.
     if (!providerIsSane || Math.abs(providerImpact - calculated) > 5) {
       return Number(calculated.toFixed(4));
     }
@@ -270,7 +283,7 @@ export async function POST(request) {
       const calculatedImpact = await calculateQuotePriceImpact(data.data, inputToken, outputToken);
       if (calculatedImpact != null) {
         data.data.priceImpact = calculatedImpact;
-        data.data.priceImpactSource = 'sanity-checked';
+        data.data.priceImpactSource = getRoutePriceImpact(data.data) != null ? 'route' : 'sanity-checked';
       } else if (!Number.isFinite(Number(data.data.priceImpact)) || Number(data.data.priceImpact) < 0 || Number(data.data.priceImpact) > 100) {
         data.data.priceImpact = null;
         data.data.priceImpactSource = 'unavailable';
