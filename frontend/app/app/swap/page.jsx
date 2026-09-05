@@ -64,7 +64,6 @@ function formatPriceImpact(value) {
   const parsed = safeNumber(value);
   if (parsed == null) return '—';
 
-  // Tower currently returns this field in basis-point style on the Arc testnet route.
   return `${(parsed / 100).toLocaleString(undefined, {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
@@ -156,7 +155,9 @@ function SwapContent() {
   const [amount, setAmount] = useState('');
   const [slippage, setSlippage] = useState('0.50');
   const [quote, setQuote] = useState(null);
+  const [preparedTransactions, setPreparedTransactions] = useState(null);
   const [swapTx, setSwapTx] = useState(null);
+  const [approvalTx, setApprovalTx] = useState(null);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [stage, setStage] = useState('idle');
@@ -202,12 +203,16 @@ function SwapContent() {
 
     if (!amountRaw || !fromMarket?.address || !toMarket?.address) {
       setQuote(null);
+      setPreparedTransactions(null);
+      setApprovalTx(null);
       setError('');
       setStage('idle');
       return undefined;
     }
 
     setQuote(null);
+    setPreparedTransactions(null);
+    setApprovalTx(null);
     setError('');
     setNotice('');
     setStage('quoting');
@@ -236,6 +241,7 @@ function SwapContent() {
       } catch (caughtError) {
         if (requestId !== requestIdRef.current) return;
         setQuote(null);
+        setPreparedTransactions(null);
         setError(errorText(caughtError));
         setStage('idle');
       }
@@ -244,9 +250,52 @@ function SwapContent() {
     return () => window.clearTimeout(timer);
   }, [amountRaw, fromMarket?.address, toMarket?.address, slippageBps]);
 
+  useEffect(() => {
+    if (!quote || !address || !isConnected) {
+      setPreparedTransactions(null);
+      return undefined;
+    }
+
+    const requestId = ++requestIdRef.current;
+    setPreparedTransactions(null);
+    setApprovalTx(null);
+    setNotice('');
+    setError('');
+    setStage('preparing');
+
+    const prepare = async () => {
+      try {
+        const response = await fetch('/api/tower/swap/build', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ quote, userAddress: address }),
+        });
+        const result = await response.json();
+        if (requestId !== requestIdRef.current) return;
+        if (!response.ok || !result.success) {
+          throw new Error(result.error || 'Unable to prepare the swap transaction.');
+        }
+        setPreparedTransactions(result.data || {});
+        setStage('quoted');
+      } catch (caughtError) {
+        if (requestId !== requestIdRef.current) return;
+        setPreparedTransactions(null);
+        setError(errorText(caughtError));
+        setStage('quoted');
+      }
+    };
+
+    prepare();
+    return () => {
+      requestIdRef.current += 1;
+    };
+  }, [quote, address, isConnected]);
+
   const invalidateQuote = () => {
     requestIdRef.current += 1;
     setQuote(null);
+    setPreparedTransactions(null);
+    setApprovalTx(null);
     setSwapTx(null);
     setNotice('');
     setError('');
@@ -279,35 +328,41 @@ function SwapContent() {
 
     setNotice('');
     setError('');
-    setStage('building');
 
     try {
-      const response = await fetch('/api/tower/swap/build', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quote, userAddress: address }),
-      });
-
-      const result = await response.json();
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || 'Tower could not build the swap transaction.');
+      let transactions = preparedTransactions;
+      if (!transactions?.swap?.to || !transactions?.swap?.data) {
+        setStage('building');
+        const response = await fetch('/api/tower/swap/build', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ quote, userAddress: address }),
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+          throw new Error(result.error || 'Tower could not build the swap transaction.');
+        }
+        transactions = result.data || {};
+        setPreparedTransactions(transactions);
       }
 
-      const transactions = result.data || {};
       if (!transactions.swap?.to || !transactions.swap?.data) {
         throw new Error('Tower returned an incomplete swap transaction.');
       }
 
-      if (transactions.approval) {
-        setNotice(`Approve ${fromMarket.symbol} in your wallet first.`);
+      const approval = transactions.approval;
+      if (approval && !approvalTx) {
+        setNotice(`Approve ${fromMarket.symbol} first. After approval, press Swap to continue.`);
         setStage('approval');
-        await sendTransactionAsync({
-          to: transactions.approval.to,
-          data: transactions.approval.data,
-          value: BigInt(transactions.approval.value || '0'),
-          gas: transactions.approval.gasLimit ? BigInt(transactions.approval.gasLimit) : undefined,
+        const hash = await sendTransactionAsync({
+          to: approval.to,
+          data: approval.data,
+          value: BigInt(approval.value || '0'),
+          gas: approval.gasLimit ? BigInt(approval.gasLimit) : undefined,
           chainId: ARC_CHAIN_ID,
         });
+        setApprovalTx(hash);
+        return;
       }
 
       setNotice('Approve the swap transaction in your wallet.');
@@ -330,13 +385,21 @@ function SwapContent() {
     }
   };
 
+  const approvalReceipt = useWaitForTransactionReceipt({
+    hash: approvalTx || undefined,
+    chainId: ARC_CHAIN_ID,
+    query: { enabled: Boolean(approvalTx) },
+  });
+
   const swapReceipt = useWaitForTransactionReceipt({
     hash: swapTx || undefined,
     chainId: ARC_CHAIN_ID,
     query: { enabled: Boolean(swapTx) },
   });
 
-  const isBusy = walletPending || ['quoting', 'building', 'approval', 'swapping'].includes(stage);
+  const approvalRequired = Boolean(preparedTransactions?.approval);
+  const approvalComplete = !approvalRequired || approvalReceipt.isSuccess;
+  const isBusy = walletPending || ['quoting', 'preparing', 'building', 'approval', 'swapping'].includes(stage);
   const outputAmount = quote ? formatQuoteAmount(quote.outputAmount, toTokenDecimals, toMarket.symbol) : '—';
   const minOutput = quote ? formatQuoteAmount(quote.minOut, toTokenDecimals, toMarket.symbol) : '—';
   const quoteReady = Boolean(
@@ -345,6 +408,13 @@ function SwapContent() {
     BigInt(String(quote.minOut)) > 0n &&
     BigInt(String(quote.outputAmount)) >= BigInt(String(quote.minOut)),
   );
+
+  useEffect(() => {
+    if (approvalReceipt.isSuccess) {
+      setNotice('Approval confirmed. Press Swap to complete the trade.');
+      setStage('quoted');
+    }
+  }, [approvalReceipt.isSuccess]);
 
   return (
     <div className={styles.page}>
@@ -435,17 +505,37 @@ function SwapContent() {
           {error && <div className={`${styles.notice} ${styles.noticeError}`}>{error}</div>}
 
           {quoteReady ? (
-            <button type="button" className={styles.primaryButton} disabled={!isConnected || isBusy || swapReceipt.isLoading} onClick={buildAndSwap}>
-              {!isConnected ? 'Connect wallet to swap' : stage === 'approval' ? 'Approve in wallet…' : stage === 'swapping' ? 'Confirm swap…' : stage === 'building' ? 'Preparing swap…' : stage === 'submitted' && !swapReceipt.isSuccess ? 'Swap submitted' : 'Swap'}
+            <button
+              type="button"
+              className={styles.primaryButton}
+              disabled={!isConnected || isBusy || swapReceipt.isLoading || (approvalReceipt.isLoading && !approvalReceipt.isSuccess)}
+              onClick={buildAndSwap}
+            >
+              {!isConnected
+                ? 'Connect wallet to swap'
+                : stage === 'preparing'
+                  ? 'Preparing swap…'
+                  : stage === 'building'
+                    ? 'Preparing swap…'
+                    : stage === 'approval' && !approvalComplete
+                      ? 'Approve in wallet…'
+                      : stage === 'swapping'
+                        ? 'Confirm swap…'
+                        : stage === 'submitted' && !swapReceipt.isSuccess
+                          ? 'Swap submitted'
+                          : approvalRequired && !approvalComplete
+                            ? `Approve ${fromMarket.symbol}`
+                            : 'Swap'}
             </button>
           ) : (
             <div className={styles.quoteStatus}>
-              {stage === 'quoting' ? 'Finding the best route…' : amountRaw ? 'Waiting for a quote…' : 'Enter an amount to get a quote.'}
+              {stage === 'quoting' ? 'Finding the best route…' : stage === 'preparing' ? 'Preparing swap…' : amountRaw ? 'Waiting for a quote…' : 'Enter an amount to get a quote.'}
             </div>
           )}
 
           {!isConnected && <div className={styles.notice}>Connect your wallet to execute the swap. Quotes can still be requested.</div>}
           {notice && <div className={`${styles.notice} ${styles.noticeSuccess}`}>{notice}</div>}
+          {approvalReceipt.isSuccess && !swapReceipt.isSuccess && <div className={`${styles.notice} ${styles.noticeSuccess}`}>Approval confirmed. The next step is Swap.</div>}
           {swapReceipt.isSuccess && <div className={`${styles.notice} ${styles.noticeSuccess}`}>Swap confirmed on Arc.</div>}
         </section>
 
