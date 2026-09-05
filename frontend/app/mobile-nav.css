@@ -45,6 +45,15 @@
     display: flex;
   }
 
+  /* The nav labels are intentionally restored on mobile. An older global
+     mobile rule hides the final span inside nav items, which is the text label
+     in AppShell (Lending, Swap, Bridge, etc.). */
+  .app-shell .sidebar .nav-item > span:last-child {
+    display: inline;
+    visibility: visible;
+    opacity: 1;
+  }
+
   .app-shell .sidebar .nav-item {
     width: 100%;
     min-width: 0;
@@ -53,11 +62,23 @@
     padding: 11px 14px;
     border-radius: 10px;
     font-size: 12px;
+    color: #aaa2b9;
     touch-action: manipulation;
+  }
+
+  .app-shell .sidebar .nav-item > .nav-icon {
+    flex: 0 0 21px;
   }
 
   .app-shell .sidebar .nav-item.active {
     background: rgba(155, 98, 255, .14);
+    color: #fff;
+  }
+
+  .app-shell .sidebar .nav-item:hover {
+    background: #151022;
+    color: #fff;
+    transform: none;
   }
 
   .app-shell .sidebar .network-card,
