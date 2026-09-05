@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { encodeAbiParameters, encodeFunctionData } from 'viem';
+import { createPublicClient, encodeAbiParameters, encodeFunctionData, http } from 'viem';
+import { arc } from 'viem/chains';
 
 const TOWER_BASE_URL = 'https://www.tower.exchange/api/public';
 const ARC_CHAIN_ID = 5042002;
@@ -9,6 +10,7 @@ const WUSDC = '0x911b4000D3422F482F4062a913885f7b035382Df';
 const UNITFLOW_UNIVERSAL_ROUTER = '0xEaF3195bE51861632cd32850973C9515DA48e76F';
 const WUSDC_SCALE = 10n ** 12n;
 const ROUTER_MSG_SENDER = '0x0000000000000000000000000000000000000002';
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 const UNITFLOW_UNIVERSAL_ROUTER_ABI = [
   {
@@ -35,6 +37,16 @@ const ERC20_ABI = [
     ],
     outputs: [{ type: 'bool' }],
   },
+  {
+    type: 'function',
+    name: 'allowance',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' },
+    ],
+    outputs: [{ type: 'uint256' }],
+  },
 ];
 
 function validAddress(value) {
@@ -56,7 +68,22 @@ function parseQuoteBigInt(quote, key) {
   }
 }
 
-function buildCentSwap(quote, userAddress) {
+async function getCentAllowance(userAddress, amountIn) {
+  const rpcUrl = process.env.ARC_RPC_URL || process.env.ARC_RPC_URL_VARIABLE || 'https://rpc.testnet.arc.network';
+  const client = createPublicClient({
+    chain: { ...arc, id: ARC_CHAIN_ID },
+    transport: http(rpcUrl),
+  });
+
+  return client.readContract({
+    address: CENT,
+    abi: ERC20_ABI,
+    functionName: 'allowance',
+    args: [userAddress, UNITFLOW_UNIVERSAL_ROUTER],
+  }) >= amountIn;
+}
+
+async function buildCentSwap(quote, userAddress) {
   const inputToken = String(quote.inputToken || '').toLowerCase();
   const outputToken = String(quote.outputToken || '').toLowerCase();
   const amountIn = parseQuoteBigInt(quote, 'inputAmount');
@@ -95,16 +122,20 @@ function buildCentSwap(quote, userAddress) {
       ),
     ];
 
+    const approved = await getCentAllowance(userAddress, amountIn);
+
     return {
-      approval: {
-        to: CENT,
-        data: encodeFunctionData({
-          abi: ERC20_ABI,
-          functionName: 'approve',
-          args: [UNITFLOW_UNIVERSAL_ROUTER, amountIn],
-        }),
-        value: '0',
-      },
+      approval: approved
+        ? null
+        : {
+            to: CENT,
+            data: encodeFunctionData({
+              abi: ERC20_ABI,
+              functionName: 'approve',
+              args: [UNITFLOW_UNIVERSAL_ROUTER, amountIn],
+            }),
+            value: '0',
+          },
       swap: {
         to: UNITFLOW_UNIVERSAL_ROUTER,
         data: encodeFunctionData({
@@ -177,7 +208,7 @@ export async function POST(request) {
     }
 
     if (isCentPair(quote.inputToken, quote.outputToken)) {
-      return NextResponse.json({ success: true, data: buildCentSwap(quote, userAddress) });
+      return NextResponse.json({ success: true, data: await buildCentSwap(quote, userAddress) });
     }
 
     const apiKey = process.env.TOWER_API_KEY;
