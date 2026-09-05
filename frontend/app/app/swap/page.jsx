@@ -1,12 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  useAccount,
-  useReadContract,
-  useSendTransaction,
-  useWaitForTransactionReceipt,
-} from 'wagmi';
+import { useAccount, useChainId, useReadContract, useSendTransaction, useSwitchChain, useWaitForTransactionReceipt } from 'wagmi';
 import { formatUnits, parseUnits } from 'viem';
 import { Providers } from '../../../components/Providers';
 import { AppShell } from '../../../components/AppShell';
@@ -14,9 +9,7 @@ import { MARKETS } from '../../../constants/markets';
 import { ERC20_ABI } from '../../../constants/abis';
 import styles from './swap.module.css';
 
-const LIVE_MARKETS = MARKETS.filter(
-  (market) => market.status === 'live' && market.address,
-);
+const LIVE_MARKETS = MARKETS.filter((market) => market.status === 'live' && market.address);
 const ARC_CHAIN_ID = 5042002;
 const TOWER_QUOTE_DECIMALS = 18;
 
@@ -28,33 +21,20 @@ function safeNumber(value) {
 function formatQuoteAmount(raw, outputDecimals) {
   if (raw == null || outputDecimals == null) return '—';
   try {
-    const rawAmount = BigInt(String(raw));
-    if (outputDecimals === TOWER_QUOTE_DECIMALS) {
-      return Number(formatUnits(rawAmount, outputDecimals)).toLocaleString(undefined, {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 8,
-      });
-    }
-
+    let displayRaw = BigInt(String(raw));
     if (outputDecimals < TOWER_QUOTE_DECIMALS) {
-      const scale = 10n ** BigInt(TOWER_QUOTE_DECIMALS - outputDecimals);
-      const normalized = rawAmount / scale;
-      const remainder = rawAmount % scale;
-      const whole = formatUnits(normalized, outputDecimals);
-      const fraction = remainder.toString().padStart(Number(TOWER_QUOTE_DECIMALS - outputDecimals), '0');
-      const combined = `${whole}.${fraction}`.replace(/\.0+$/, '');
-      const number = Number(combined);
-      if (Number.isFinite(number)) {
-        return number.toLocaleString(undefined, {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: Math.min(outputDecimals, 8),
-        });
-      }
-      return combined;
+      displayRaw /= 10n ** BigInt(TOWER_QUOTE_DECIMALS - outputDecimals);
+    } else if (outputDecimals > TOWER_QUOTE_DECIMALS) {
+      displayRaw *= 10n ** BigInt(outputDecimals - TOWER_QUOTE_DECIMALS);
     }
-
-    const upscaled = rawAmount * (10n ** BigInt(outputDecimals - TOWER_QUOTE_DECIMALS));
-    return formatUnits(upscaled, outputDecimals);
+    const formatted = formatUnits(displayRaw, outputDecimals);
+    const [whole, fraction = ''] = formatted.split('.');
+    const trimmed = fraction.slice(0, 8).replace(/0+$/, '');
+    const normalized = trimmed ? `${whole}.${trimmed}` : whole;
+    const number = Number(normalized);
+    return Number.isFinite(number)
+      ? number.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: Math.min(8, trimmed.length) })
+      : normalized;
   } catch {
     return '—';
   }
@@ -63,11 +43,7 @@ function formatQuoteAmount(raw, outputDecimals) {
 function formatPriceImpact(value) {
   const parsed = safeNumber(value);
   if (parsed == null) return '—';
-
-  return `${(parsed / 100).toLocaleString(undefined, {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  })}%`;
+  return `${(parsed / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}%`;
 }
 
 function errorText(error) {
@@ -89,66 +65,30 @@ function TokenDropdown({ value, markets, onChange, label }) {
 
   return (
     <div className={styles.tokenPicker} ref={rootRef}>
-      <button
-        type="button"
-        className={`${styles.tokenTrigger} ${open ? styles.tokenTriggerOpen : ''}`}
-        onClick={() => setOpen((current) => !current)}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label={label}
-      >
-        <span className={`${styles.tokenIcon} ${styles[`tokenIcon_${selected?.id || 'usdc'}`]}`}>
-          {selected?.symbol === 'cirBTC' ? '₿' : selected?.symbol === 'EURC' ? '€' : selected?.symbol === 'CENT' ? 'C' : '$'}
-        </span>
-        <span className={styles.tokenTriggerText}>
-          <strong>{selected?.symbol || '—'}</strong>
-          <small>{selected?.name || ''}</small>
-        </span>
+      <button type="button" className={`${styles.tokenTrigger} ${open ? styles.tokenTriggerOpen : ''}`} onClick={() => setOpen((current) => !current)} aria-haspopup="listbox" aria-expanded={open} aria-label={label}>
+        <span className={`${styles.tokenIcon} ${styles[`tokenIcon_${selected?.id || 'usdc'}`]}`}>{selected?.symbol === 'cirBTC' ? '₿' : selected?.symbol === 'EURC' ? '€' : selected?.symbol === 'CENT' ? 'C' : '$'}</span>
+        <span className={styles.tokenTriggerText}><strong>{selected?.symbol || '—'}</strong><small>{selected?.name || ''}</small></span>
         <span className={`${styles.tokenChevron} ${open ? styles.tokenChevronOpen : ''}`}>⌄</span>
       </button>
-
-      {open && (
-        <div className={styles.tokenMenu} role="listbox" aria-label={label}>
-          {markets.map((market) => (
-            <button
-              key={market.id}
-              type="button"
-              role="option"
-              aria-selected={market.id === value}
-              className={`${styles.tokenOption} ${market.id === value ? styles.tokenOptionActive : ''}`}
-              onClick={() => {
-                onChange(market.id);
-                setOpen(false);
-              }}
-            >
-              <span className={`${styles.tokenIcon} ${styles[`tokenIcon_${market.id}`]}`}>
-                {market.symbol === 'cirBTC' ? '₿' : market.symbol === 'EURC' ? '€' : market.symbol === 'CENT' ? 'C' : '$'}
-              </span>
-              <span className={styles.tokenOptionText}>
-                <strong>{market.symbol}</strong>
-                <small>{market.name}</small>
-              </span>
-              {market.id === value ? <span className={styles.tokenCheck}>✓</span> : null}
-            </button>
-          ))}
-        </div>
-      )}
+      {open && <div className={styles.tokenMenu} role="listbox" aria-label={label}>
+        {markets.map((market) => <button key={market.id} type="button" role="option" aria-selected={market.id === value} className={`${styles.tokenOption} ${market.id === value ? styles.tokenOptionActive : ''}`} onClick={() => { onChange(market.id); setOpen(false); }}>
+          <span className={`${styles.tokenIcon} ${styles[`tokenIcon_${market.id}`]}`}>{market.symbol === 'cirBTC' ? '₿' : market.symbol === 'EURC' ? '€' : market.symbol === 'CENT' ? 'C' : '$'}</span>
+          <span className={styles.tokenOptionText}><strong>{market.symbol}</strong><small>{market.name}</small></span>
+          {market.id === value ? <span className={styles.tokenCheck}>✓</span> : null}
+        </button>)}
+      </div>}
     </div>
   );
 }
 
 export default function Page() {
-  return (
-    <Providers>
-      <AppShell>
-        <SwapContent />
-      </AppShell>
-    </Providers>
-  );
+  return <Providers><AppShell><SwapContent /></AppShell></Providers>;
 }
 
 function SwapContent() {
   const { address, isConnected } = useAccount();
+  const chainId = useChainId();
+  const { switchChain, isPending: switchingNetwork } = useSwitchChain();
   const { sendTransactionAsync, isPending: walletPending } = useSendTransaction();
   const [fromId, setFromId] = useState('usdc');
   const [toId, setToId] = useState('eurc');
@@ -165,21 +105,10 @@ function SwapContent() {
 
   const fromMarket = LIVE_MARKETS.find((market) => market.id === fromId) || LIVE_MARKETS[0];
   const toMarket = LIVE_MARKETS.find((market) => market.id === toId) || LIVE_MARKETS[1] || LIVE_MARKETS[0];
+  const wrongNetwork = isConnected && chainId !== ARC_CHAIN_ID;
 
-  const { data: inputDecimals } = useReadContract({
-    address: fromMarket?.address,
-    abi: ERC20_ABI,
-    functionName: 'decimals',
-    query: { enabled: Boolean(fromMarket?.address) },
-  });
-
-  const { data: outputDecimals } = useReadContract({
-    address: toMarket?.address,
-    abi: ERC20_ABI,
-    functionName: 'decimals',
-    query: { enabled: Boolean(toMarket?.address) },
-  });
-
+  const { data: inputDecimals } = useReadContract({ address: fromMarket?.address, abi: ERC20_ABI, functionName: 'decimals', query: { enabled: Boolean(fromMarket?.address) } });
+  const { data: outputDecimals } = useReadContract({ address: toMarket?.address, abi: ERC20_ABI, functionName: 'decimals', query: { enabled: Boolean(toMarket?.address) } });
   const fromTokenDecimals = Number(inputDecimals ?? fromMarket?.decimals ?? 6);
   const toTokenDecimals = Number(outputDecimals ?? toMarket?.decimals ?? 6);
 
@@ -191,363 +120,118 @@ function SwapContent() {
 
   const amountRaw = useMemo(() => {
     if (!amount) return '';
-    try {
-      return parseUnits(amount, fromTokenDecimals).toString();
-    } catch {
-      return '';
-    }
+    try { return parseUnits(amount, fromTokenDecimals).toString(); } catch { return ''; }
   }, [amount, fromTokenDecimals]);
 
   useEffect(() => {
     const requestId = ++requestIdRef.current;
-
-    if (!amountRaw || !fromMarket?.address || !toMarket?.address) {
-      setQuote(null);
-      setPreparedTransactions(null);
-      setApprovalTx(null);
-      setError('');
-      setStage('idle');
+    if (!amountRaw || !fromMarket?.address || !toMarket?.address || wrongNetwork) {
+      setQuote(null); setPreparedTransactions(null); setApprovalTx(null); setError(''); setStage(wrongNetwork ? 'network' : 'idle');
       return undefined;
     }
-
-    setQuote(null);
-    setPreparedTransactions(null);
-    setApprovalTx(null);
-    setError('');
-    setNotice('');
-    setStage('quoting');
-
+    setQuote(null); setPreparedTransactions(null); setApprovalTx(null); setError(''); setNotice(''); setStage('quoting');
     const timer = window.setTimeout(async () => {
       try {
-        const response = await fetch('/api/tower/swap/quote', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            inputToken: fromMarket.address,
-            outputToken: toMarket.address,
-            inputAmount: amountRaw,
-            slippageTolerance: slippageBps,
-          }),
-        });
-
+        const response = await fetch('/api/tower/swap/quote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ inputToken: fromMarket.address, outputToken: toMarket.address, inputAmount: amountRaw, slippageTolerance: slippageBps }) });
         const result = await response.json();
         if (requestId !== requestIdRef.current) return;
-        if (!response.ok || !result.success) {
-          throw new Error(result.error || 'Tower could not find a route.');
-        }
-
-        setQuote(result.data);
-        setStage('quoted');
+        if (!response.ok || !result.success) throw new Error(result.error || 'Tower could not find a route.');
+        setQuote(result.data); setStage('quoted');
       } catch (caughtError) {
         if (requestId !== requestIdRef.current) return;
-        setQuote(null);
-        setPreparedTransactions(null);
-        setError(errorText(caughtError));
-        setStage('idle');
+        setQuote(null); setPreparedTransactions(null); setError(errorText(caughtError)); setStage('idle');
       }
     }, 450);
-
     return () => window.clearTimeout(timer);
-  }, [amountRaw, fromMarket?.address, toMarket?.address, slippageBps]);
+  }, [amountRaw, fromMarket?.address, toMarket?.address, slippageBps, wrongNetwork]);
 
   useEffect(() => {
-    if (!quote || !address || !isConnected) {
-      setPreparedTransactions(null);
-      return undefined;
-    }
-
+    if (!quote || !address || !isConnected || wrongNetwork) { setPreparedTransactions(null); return undefined; }
     const requestId = ++requestIdRef.current;
-    setPreparedTransactions(null);
-    setApprovalTx(null);
-    setNotice('');
-    setError('');
-    setStage('preparing');
-
+    setPreparedTransactions(null); setApprovalTx(null); setNotice(''); setError(''); setStage('preparing');
     const prepare = async () => {
       try {
-        const response = await fetch('/api/tower/swap/build', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ quote, userAddress: address }),
-        });
+        const response = await fetch('/api/tower/swap/build', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quote, userAddress: address }) });
         const result = await response.json();
         if (requestId !== requestIdRef.current) return;
-        if (!response.ok || !result.success) {
-          throw new Error(result.error || 'Unable to prepare the swap transaction.');
-        }
-        setPreparedTransactions(result.data || {});
-        setStage('quoted');
+        if (!response.ok || !result.success) throw new Error(result.error || 'Unable to prepare the swap transaction.');
+        setPreparedTransactions(result.data || {}); setStage('quoted');
       } catch (caughtError) {
         if (requestId !== requestIdRef.current) return;
-        setPreparedTransactions(null);
-        setError(errorText(caughtError));
-        setStage('quoted');
+        setPreparedTransactions(null); setError(errorText(caughtError)); setStage('quoted');
       }
     };
-
     prepare();
-    return () => {
-      requestIdRef.current += 1;
-    };
-  }, [quote, address, isConnected]);
+    return () => { requestIdRef.current += 1; };
+  }, [quote, address, isConnected, wrongNetwork]);
 
-  const invalidateQuote = () => {
-    requestIdRef.current += 1;
-    setQuote(null);
-    setPreparedTransactions(null);
-    setApprovalTx(null);
-    setSwapTx(null);
-    setNotice('');
-    setError('');
-    setStage('idle');
-  };
-
-  const swapTokens = () => {
-    const currentFrom = fromId;
-    setFromId(toId);
-    setToId(currentFrom);
-    invalidateQuote();
-  };
-
-  const changeFrom = (next) => {
-    setFromId(next);
-    if (next === toId) {
-      const replacement = LIVE_MARKETS.find((market) => market.id !== next);
-      if (replacement) setToId(replacement.id);
-    }
-    invalidateQuote();
-  };
-
-  const changeTo = (next) => {
-    setToId(next);
-    invalidateQuote();
-  };
+  const invalidateQuote = () => { requestIdRef.current += 1; setQuote(null); setPreparedTransactions(null); setApprovalTx(null); setSwapTx(null); setNotice(''); setError(''); setStage(wrongNetwork ? 'network' : 'idle'); };
+  const swapTokens = () => { const currentFrom = fromId; setFromId(toId); setToId(currentFrom); invalidateQuote(); };
+  const changeFrom = (next) => { setFromId(next); if (next === toId) { const replacement = LIVE_MARKETS.find((market) => market.id !== next); if (replacement) setToId(replacement.id); } invalidateQuote(); };
+  const changeTo = (next) => { setToId(next); invalidateQuote(); };
 
   const buildAndSwap = async () => {
-    if (!quote || !address || !isConnected) return;
-
-    setNotice('');
-    setError('');
-
+    if (!quote || !address || !isConnected || wrongNetwork || walletPending) return;
+    setNotice(''); setError('');
     try {
       let transactions = preparedTransactions;
       if (!transactions?.swap?.to || !transactions?.swap?.data) {
         setStage('building');
-        const response = await fetch('/api/tower/swap/build', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ quote, userAddress: address }),
-        });
+        const response = await fetch('/api/tower/swap/build', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quote, userAddress: address }) });
         const result = await response.json();
-        if (!response.ok || !result.success) {
-          throw new Error(result.error || 'Tower could not build the swap transaction.');
-        }
-        transactions = result.data || {};
-        setPreparedTransactions(transactions);
+        if (!response.ok || !result.success) throw new Error(result.error || 'Tower could not build the swap transaction.');
+        transactions = result.data || {}; setPreparedTransactions(transactions);
       }
-
-      if (!transactions.swap?.to || !transactions.swap?.data) {
-        throw new Error('Tower returned an incomplete swap transaction.');
-      }
-
+      if (!transactions.swap?.to || !transactions.swap?.data) throw new Error('Tower returned an incomplete swap transaction.');
       const approval = transactions.approval;
       if (approval && !approvalTx) {
-        setNotice(`Approve ${fromMarket.symbol} first. After approval, press Swap to continue.`);
-        setStage('approval');
-        const hash = await sendTransactionAsync({
-          to: approval.to,
-          data: approval.data,
-          value: BigInt(approval.value || '0'),
-          gas: approval.gasLimit ? BigInt(approval.gasLimit) : undefined,
-          chainId: ARC_CHAIN_ID,
-        });
-        setApprovalTx(hash);
-        return;
+        setNotice(`Approve ${fromMarket.symbol} first. After approval, press Swap to continue.`); setStage('approval');
+        const hash = await sendTransactionAsync({ to: approval.to, data: approval.data, value: BigInt(approval.value || '0'), gas: approval.gasLimit ? BigInt(approval.gasLimit) : undefined, chainId: ARC_CHAIN_ID });
+        setApprovalTx(hash); return;
       }
-
-      setNotice('Approve the swap transaction in your wallet.');
-      setStage('swapping');
-
-      const hash = await sendTransactionAsync({
-        to: transactions.swap.to,
-        data: transactions.swap.data,
-        value: BigInt(transactions.swap.value || '0'),
-        gas: transactions.swap.gasLimit ? BigInt(transactions.swap.gasLimit) : undefined,
-        chainId: ARC_CHAIN_ID,
-      });
-
-      setSwapTx(hash);
-      setStage('submitted');
-      setNotice('Swap transaction submitted.');
-    } catch (caughtError) {
-      setError(errorText(caughtError));
-      setStage('quoted');
-    }
+      setNotice('Approve the swap transaction in your wallet.'); setStage('swapping');
+      const hash = await sendTransactionAsync({ to: transactions.swap.to, data: transactions.swap.data, value: BigInt(transactions.swap.value || '0'), gas: transactions.swap.gasLimit ? BigInt(transactions.swap.gasLimit) : undefined, chainId: ARC_CHAIN_ID });
+      setSwapTx(hash); setStage('submitted'); setNotice('Swap transaction submitted.');
+    } catch (caughtError) { setError(errorText(caughtError)); setStage('quoted'); }
   };
 
-  const approvalReceipt = useWaitForTransactionReceipt({
-    hash: approvalTx || undefined,
-    chainId: ARC_CHAIN_ID,
-    query: { enabled: Boolean(approvalTx) },
-  });
-
-  const swapReceipt = useWaitForTransactionReceipt({
-    hash: swapTx || undefined,
-    chainId: ARC_CHAIN_ID,
-    query: { enabled: Boolean(swapTx) },
-  });
-
+  const approvalReceipt = useWaitForTransactionReceipt({ hash: approvalTx || undefined, chainId: ARC_CHAIN_ID, query: { enabled: Boolean(approvalTx) } });
+  const swapReceipt = useWaitForTransactionReceipt({ hash: swapTx || undefined, chainId: ARC_CHAIN_ID, query: { enabled: Boolean(swapTx) } });
   const approvalRequired = Boolean(preparedTransactions?.approval);
   const approvalComplete = !approvalRequired || approvalReceipt.isSuccess;
-  const isBusy = walletPending || ['quoting', 'preparing', 'building', 'approval', 'swapping'].includes(stage);
+  const approvalPending = Boolean(approvalTx) && !approvalComplete;
+  const isPreparing = walletPending || ['quoting', 'preparing', 'building'].includes(stage);
   const outputAmount = quote ? formatQuoteAmount(quote.outputAmount, toTokenDecimals) : '—';
   const minOutput = quote ? formatQuoteAmount(quote.minOut, toTokenDecimals) : '—';
-  const quoteReady = Boolean(
-    quote?.outputAmount &&
-    quote?.minOut &&
-    BigInt(String(quote.minOut)) > 0n &&
-    BigInt(String(quote.outputAmount)) >= BigInt(String(quote.minOut)),
-  );
+  const priceImpactPercent = quote?.priceImpact != null ? safeNumber(quote.priceImpact) / 100 : null;
+  const quoteReady = Boolean(quote?.outputAmount && quote?.minOut && BigInt(String(quote.minOut)) > 0n && BigInt(String(quote.outputAmount)) >= BigInt(String(quote.minOut)));
 
   useEffect(() => {
-    if (approvalReceipt.isSuccess) {
-      setNotice('Approval confirmed. Press Swap to complete the trade.');
-      setStage('quoted');
-    }
+    if (approvalReceipt.isSuccess) { setNotice('Approval confirmed. Press Swap to complete the trade.'); setStage('quoted'); }
   }, [approvalReceipt.isSuccess]);
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <div>
-          <span className={styles.kicker}>CENTRY · SWAP</span>
-          <h1>Swap assets</h1>
-          <p>Find a routed Arc swap without leaving Centry.</p>
-        </div>
-        <span className={styles.routePill}><i className={styles.routeDot} /> Tower routing</span>
-      </header>
-
+      <header className={styles.header}><div><span className={styles.kicker}>CENTRY · SWAP</span><h1>Swap assets</h1><p>Find a routed Arc swap without leaving Centry.</p></div><span className={styles.routePill}><i className={styles.routeDot} /> Tower routing</span></header>
       <div className={styles.panelGrid}>
         <section className={styles.panel}>
-          <div className={styles.panelHead}>
-            <div><span className={styles.kicker}>ARC SWAP</span><h2>Exchange</h2></div>
-          </div>
-
+          <div className={styles.panelHead}><div><span className={styles.kicker}>ARC SWAP</span><h2>Exchange</h2></div></div>
+          {wrongNetwork ? <div className={`${styles.notice} ${styles.noticeError}`}><strong>Arc Testnet required.</strong> Switch your wallet network before requesting a quote or sending a swap.</div> : null}
           <div className={styles.swapStack}>
-            <div className={styles.assetField}>
-              <label htmlFor="swap-amount">You pay</label>
-              <div className={styles.assetRow}>
-                <input
-                  id="swap-amount"
-                  className={styles.amountInput}
-                  type="text"
-                  inputMode="decimal"
-                  autoComplete="off"
-                  placeholder="0.00"
-                  value={amount}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    if (value === '' || /^\d*(\.\d*)?$/.test(value)) setAmount(value);
-                  }}
-                />
-                <TokenDropdown value={fromId} markets={LIVE_MARKETS} onChange={changeFrom} label="Input token" />
-              </div>
-            </div>
-
-            <button type="button" className={styles.switchButton} onClick={swapTokens} disabled={isBusy} aria-label="Switch tokens">↓</button>
-
-            <div className={styles.assetField}>
-              <label htmlFor="swap-output">You receive</label>
-              <div className={styles.assetRow}>
-                <input
-                  id="swap-output"
-                  className={styles.amountInput}
-                  type="text"
-                  readOnly
-                  placeholder={stage === 'quoting' ? 'Finding route…' : 'Quote appears here'}
-                  value={quote ? outputAmount : ''}
-                />
-                <TokenDropdown
-                  value={toId}
-                  markets={LIVE_MARKETS.filter((market) => market.id !== fromId)}
-                  onChange={changeTo}
-                  label="Output token"
-                />
-              </div>
-            </div>
+            <div className={styles.assetField}><label htmlFor="swap-amount">You pay</label><div className={styles.assetRow}><input id="swap-amount" className={styles.amountInput} type="text" inputMode="decimal" placeholder="0.00" value={amount} onChange={(event) => { const value = event.target.value; if (value === '' || /^\d*(\.\d*)?$/.test(value)) setAmount(value); }} /><TokenDropdown value={fromId} markets={LIVE_MARKETS} onChange={changeFrom} label="Input token" /></div></div>
+            <button type="button" className={styles.switchButton} onClick={swapTokens} disabled={wrongNetwork || isPreparing || approvalPending} aria-label="Reverse swap">↕</button>
+            <div className={styles.assetField}><label>Receive</label><div className={styles.assetRow}><div className={styles.amountInput}>{outputAmount}</div><TokenDropdown value={toId} markets={LIVE_MARKETS} onChange={changeTo} label="Output token" /></div></div>
           </div>
-
-          <div className={styles.metaRow}>
-            <span>Slippage</span>
-            <input
-              className={styles.slippageInput}
-              value={slippage}
-              onChange={(event) => {
-                const value = event.target.value;
-                if (value === '' || /^\d*(\.\d*)?$/.test(value)) setSlippage(value);
-              }}
-              aria-label="Slippage percentage"
-              inputMode="decimal"
-            />
-            <span>%</span>
-          </div>
-
-          {quote && (
-            <div className={styles.quoteCard}>
-              <div className={styles.quoteRow}><span>Expected output</span><strong className={styles.quoteOutput}>{outputAmount}</strong></div>
-              <div className={styles.quoteRow}><span>Minimum received</span><strong>{minOutput}</strong></div>
-              <div className={styles.quoteRow}><span>Price impact</span><strong>{formatPriceImpact(quote.priceImpact)}</strong></div>
-              <div className={styles.quoteRow}><span>Fee</span><strong>{quote.feeBps != null ? `${quote.feeBps} bps` : '—'}</strong></div>
-              <div className={styles.quoteRow}><span>Route</span><strong>{quote.dexName || quote.dexId || 'Tower'}</strong></div>
-            </div>
-          )}
-
-          {error && <div className={`${styles.notice} ${styles.noticeError}`}>{error}</div>}
-
-          {quoteReady ? (
-            <button
-              type="button"
-              className={styles.primaryButton}
-              disabled={!isConnected || isBusy || swapReceipt.isLoading || (approvalRequired && !approvalComplete)}
-              onClick={buildAndSwap}
-            >
-              {!isConnected
-                ? 'Connect wallet to swap'
-                : approvalRequired && !approvalTx
-                  ? `Approve ${fromMarket.symbol}`
-                  : approvalRequired && !approvalComplete
-                    ? 'Confirming approval…'
-                    : stage === 'swapping'
-                      ? 'Confirm swap…'
-                      : stage === 'building' || stage === 'preparing'
-                        ? 'Preparing swap…'
-                        : stage === 'submitted' && !swapReceipt.isSuccess
-                          ? 'Swap submitted'
-                          : 'Swap'}
-            </button>
-          ) : (
-            <div className={styles.quoteStatus}>
-              {stage === 'quoting' ? 'Finding the best route…' : amountRaw ? 'Waiting for a quote…' : 'Enter an amount to get a quote.'}
-            </div>
-          )}
-
-          {!isConnected && <div className={styles.notice}>Connect your wallet to execute the swap. Quotes can still be requested.</div>}
-          {notice && <div className={`${styles.notice} ${styles.noticeSuccess}`}>{notice}</div>}
-          {swapReceipt.isSuccess && <div className={`${styles.notice} ${styles.noticeSuccess}`}>Swap confirmed on Arc.</div>}
+          <div className={styles.metaRow}><span>Slippage</span><input className={styles.slippageInput} value={slippage} onChange={(event) => setSlippage(event.target.value)} inputMode="decimal" aria-label="Slippage percentage" /><span>%</span></div>
+          {quote ? <div className={styles.quoteCard}><div className={styles.quoteRow}><span>Expected output</span><strong className={styles.quoteOutput}>{outputAmount} {toMarket.symbol}</strong></div><div className={styles.quoteRow}><span>Minimum received</span><strong>{minOutput} {toMarket.symbol}</strong></div><div className={styles.quoteRow}><span>Price impact</span><strong>{formatPriceImpact(quote.priceImpact)}</strong></div>{priceImpactPercent != null && priceImpactPercent >= 5 ? <div className={`${styles.notice} ${styles.noticeError}`}>High price impact: {priceImpactPercent.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}%. Review this route before swapping.</div> : null}</div> : <div className={styles.quoteStatus}>{wrongNetwork ? 'Switch to Arc Testnet to quote this swap.' : stage === 'quoting' ? 'Finding the best route…' : 'Enter an amount to get a quote.'}</div>}
+          {error ? <div className={`${styles.notice} ${styles.noticeError}`} role="alert">{error}</div> : null}
+          {notice ? <div className={`${styles.notice} ${styles.noticeSuccess}`} role="status">{notice}</div> : null}
+          {wrongNetwork ? <button type="button" className={styles.primaryButton} onClick={() => switchChain({ chainId: ARC_CHAIN_ID }).catch(() => {})} disabled={switchingNetwork}>{switchingNetwork ? 'Switching network…' : 'Switch to Arc Testnet'}</button> : <button type="button" className={styles.primaryButton} disabled={!isConnected || !quoteReady || isPreparing || approvalPending || swapReceipt.isLoading || !preparedTransactions?.swap?.to} onClick={buildAndSwap}>{!isConnected ? 'Connect wallet to swap' : approvalPending ? 'Confirming approval…' : isPreparing ? 'Preparing swap…' : approvalRequired && !approvalComplete ? `Approve ${fromMarket.symbol}` : swapReceipt.isLoading ? 'Confirming swap…' : 'Swap'}</button>}
+          {approvalTx && !approvalReceipt.isSuccess ? <div className={styles.quoteStatus}>Approval transaction pending. Waiting for Arc confirmation…</div> : null}
+          {swapTx && !swapReceipt.isSuccess && !swapReceipt.isLoading ? <div className={styles.quoteStatus}>Swap submitted. Waiting for confirmation…</div> : null}
+          {swapReceipt.isSuccess ? <div className={`${styles.notice} ${styles.noticeSuccess}`}>Swap confirmed on Arc Testnet.</div> : null}
         </section>
-
-        <section className={`${styles.panel} ${styles.bridgeCard}`}>
-          <div className={styles.panelHead}>
-            <div><span className={styles.kicker}>BRING FUNDS TO ARC</span><h2>Cross-chain USDC</h2></div>
-          </div>
-          <p className={styles.bridgeDescription}>USDC bridging will use Tower's cross-chain endpoint and Circle's transfer flow. It stays separate from normal swaps.</p>
-          <div className={styles.quoteCard}>
-            <div className={styles.bridgeRow}><span>Asset</span><strong>USDC</strong></div>
-            <div className={styles.bridgeRow}><span>Destination</span><strong>Arc Testnet</strong></div>
-            <div className={styles.bridgeRow}><span>Status</span><strong>Bridge integration next</strong></div>
-          </div>
-          <button type="button" className={styles.secondaryButton} disabled>Detect supported USDC balances</button>
-        </section>
+        <section className={`${styles.panel} ${styles.bridgeCard}`}><div className={styles.panelHead}><div><span className={styles.kicker}>BRING FUNDS TO ARC</span><h2>Cross-chain USDC</h2></div></div><p className={styles.bridgeDescription}>Bridge testnet USDC into Arc when you need funds for a swap. Centry uses Circle CCTP via Tower for supported routes.</p><div className={styles.quoteCard}><div className={styles.quoteRow}><span>Network</span><strong>{wrongNetwork ? 'Switch required' : 'Arc Testnet'}</strong></div><div className={styles.quoteRow}><span>Route</span><strong>Circle CCTP · Tower</strong></div><div className={styles.quoteRow}><span>Quote safety</span><strong>{priceImpactPercent != null && priceImpactPercent >= 5 ? 'Review high impact' : 'Minimum received enforced'}</strong></div></div></section>
       </div>
     </div>
   );
