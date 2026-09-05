@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { ACTIVE_MARKETS } from '../constants/markets';
 import { useMultiMarketLending } from '../hooks/useMultiMarketLending';
@@ -30,6 +30,8 @@ export default function MultiMarketLending() {
   const [action, setAction] = useState('supply');
   const [amount, setAmount] = useState('');
   const [notice, setNotice] = useState('');
+  const [refreshingPosition, setRefreshingPosition] = useState(false);
+  const refreshTimerRef = useRef(null);
   const market = supportedMarkets.find((item) => item.id === marketId) || supportedMarkets[0];
   const lending = useMultiMarketLending(market?.address, market?.decimals);
   const busy = lending.isPending || lending.isConfirming;
@@ -40,6 +42,25 @@ export default function MultiMarketLending() {
   const maxBorrowNumber = Number(maxBorrow);
   const liquidity = Number(lending.reserveData?.totalLiquidity || 0);
   const needsApproval = isConnected && ['supply', 'repay'].includes(action) && numericAmount > allowance;
+
+  useEffect(() => () => {
+    if (refreshTimerRef.current) window.clearTimeout(refreshTimerRef.current);
+  }, []);
+
+  const refreshPosition = async (attempt = 0) => {
+    try {
+      await lending.refetchAll();
+    } catch {
+      // Keep polling; the underlying RPC may be temporarily busy while the position updates.
+    }
+
+    if (attempt >= 15) {
+      setRefreshingPosition(false);
+      return;
+    }
+
+    refreshTimerRef.current = window.setTimeout(() => refreshPosition(attempt + 1), 3000);
+  };
 
   const setMax = () => {
     if (action === 'withdraw') setAmount(lending.supplyBalance || '0');
@@ -69,10 +90,11 @@ export default function MultiMarketLending() {
     setAction('supply');
     setAmount('');
     setNotice('');
+    setRefreshingPosition(false);
   };
 
   const run = async () => {
-    if (!isConnected || !market?.address || lending.reserveActive !== true || !amount || numericAmount <= 0 || busy) return;
+    if (!isConnected || !market?.address || lending.reserveActive !== true || !amount || numericAmount <= 0 || busy || refreshingPosition) return;
     try {
       setNotice('');
       if (needsApproval) {
@@ -80,7 +102,17 @@ export default function MultiMarketLending() {
         setNotice(`Approved ${amount} ${market.symbol}.`);
         return;
       }
-      if (action === 'supply') await lending.supply(amount);
+
+      if (action === 'supply') {
+        await lending.supply(amount);
+        setAmount('');
+        setRefreshingPosition(true);
+        setNotice('Supply confirmed. Updating your borrowing capacity…');
+        refreshTimerRef.current && window.clearTimeout(refreshTimerRef.current);
+        void refreshPosition();
+        return;
+      }
+
       if (action === 'withdraw') await lending.withdraw(amount);
       if (action === 'borrow') await lending.borrow(amount);
       if (action === 'repay') await lending.repay(amount);
@@ -88,6 +120,7 @@ export default function MultiMarketLending() {
       setAmount('');
       setNotice(`${action[0].toUpperCase()}${action.slice(1)} confirmed onchain.`);
     } catch (error) {
+      setRefreshingPosition(false);
       setNotice(error?.shortMessage || error?.message || 'Transaction failed. Check your wallet, network, allowance, and reserve state.');
     }
   };
@@ -145,20 +178,21 @@ export default function MultiMarketLending() {
               : action === 'borrow'
                 ? `Max: ${isConnected ? `${num(maxBorrow, Math.min(market.decimals, 8))} ${market.symbol}` : 'Connect wallet'}`
                 : `Wallet: ${isConnected ? `${num(lending.walletBalance)} ${market.symbol}` : 'Connect wallet'}`}</span>
-            {isConnected && <button type="button" onClick={setMax}>Max</button>}
+            {isConnected && <button type="button" onClick={setMax} disabled={refreshingPosition}>Max</button>}
           </div>
 
           {!isConnected ? <div className="connect-prompt">Connect your wallet to interact with this market.</div>
             : lending.reserveLoading ? <div className="connect-prompt">Checking {market.symbol} reserve…</div>
+            : refreshingPosition ? <div className="connect-prompt" aria-live="polite" aria-busy="true">Updating your borrowing capacity… We’re refreshing the lending position.</div>
             : lending.reserveActive !== true ? <div className="connect-prompt">{market.symbol} is not enabled in the connected Centry LendingPool.</div>
             : noLiquidity ? <div className="connect-prompt">There is no {market.symbol} liquidity available to borrow right now.</div>
             : noRoom ? <div className="connect-prompt">You have no remaining borrowing room.</div>
             : <button type="button" className="primary-btn full-btn large-btn"
-                disabled={busy || !amount || numericAmount <= 0 || (action === 'repay' && debt <= 0) || (action === 'borrow' && numericAmount > maxBorrowNumber)}
+                disabled={busy || refreshingPosition || !amount || numericAmount <= 0 || (action === 'repay' && debt <= 0) || (action === 'borrow' && numericAmount > maxBorrowNumber)}
                 onClick={run}>
-                {busy ? 'Waiting for confirmation…' : needsApproval ? `Approve ${market.symbol}` : `${action[0].toUpperCase()}${action.slice(1)} ${market.symbol}`}
+                {busy ? 'Waiting for confirmation…' : refreshingPosition ? 'Updating borrow capacity…' : needsApproval ? `Approve ${market.symbol}` : `${action[0].toUpperCase()}${action.slice(1)} ${market.symbol}`}
               </button>}
-          {notice && <div className="notice">{notice}</div>}
+          {notice && <div className="notice" aria-live="polite">{notice}</div>}
         </div>
 
         <div className="panel">
