@@ -25,6 +25,7 @@ const ERC20_ABI = [
 ];
 
 const WUSDC_META = { symbol: 'USDC', name: 'USD Coin', decimals: 18 };
+const ZERO = '0x0000000000000000000000000000000000000000';
 
 function validAddress(value) {
   return typeof value === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value);
@@ -72,14 +73,15 @@ export async function GET(request) {
       functionName: 'allPairsLength',
     }));
 
-    const take = Math.min(12, length);
+    // Search is client-side for the currently loaded registry. Load a larger
+    // window so the Pools page is useful beyond the first handful of pairs.
+    const take = Math.min(50, length);
     const indices = Array.from({ length: take }, (_, offset) => BigInt(length - 1 - offset));
 
     if (!indices.length) {
       return NextResponse.json({ success: true, data: { count: 0, pools: [] } });
     }
 
-    // Arc Testnet does not expose Multicall3. Read each factory entry directly.
     const pairResults = await Promise.all(
       indices.map((index) => readSafe(client, {
         address: FACTORY,
@@ -92,6 +94,7 @@ export async function GET(request) {
     const pairAddresses = pairResults
       .map((item) => item.status === 'success' ? item.result : null)
       .filter(Boolean)
+      .filter((pair) => pair !== ZERO)
       .map((pair) => getAddress(pair));
 
     const pairData = await Promise.all(
@@ -105,7 +108,6 @@ export async function GET(request) {
             ? readSafe(client, { address: pair, abi: PAIR_ABI, functionName: 'balanceOf', args: [wallet] })
             : Promise.resolve({ status: 'failure', result: 0n }),
         ]);
-
         return { pair, token0, token1, reserves, totalSupply, lpBalance };
       }),
     );
@@ -119,19 +121,14 @@ export async function GET(request) {
     const uniqueTokens = [...new Set(tokenAddresses.map((token) => token.toLowerCase()))]
       .map((token) => getAddress(token));
 
-    // Token metadata is also read directly so no server-side multicall is required.
     const tokenMetaEntries = await Promise.all(
       uniqueTokens.map(async (token) => {
-        if (token.toLowerCase() === WUSDC.toLowerCase()) {
-          return [token.toLowerCase(), WUSDC_META];
-        }
-
+        if (token.toLowerCase() === WUSDC.toLowerCase()) return [token.toLowerCase(), WUSDC_META];
         const [symbol, name, decimals] = await Promise.all([
           readSafe(client, { address: token, abi: ERC20_ABI, functionName: 'symbol' }),
           readSafe(client, { address: token, abi: ERC20_ABI, functionName: 'name' }),
           readSafe(client, { address: token, abi: ERC20_ABI, functionName: 'decimals' }),
         ]);
-
         return [token.toLowerCase(), {
           symbol: symbol.status === 'success' ? String(symbol.result) : `${token.slice(0, 6)}…`,
           name: name.status === 'success' ? String(name.result) : 'Token',
@@ -141,41 +138,33 @@ export async function GET(request) {
     );
 
     const tokenMeta = new Map(tokenMetaEntries);
-
-    const pools = pairData
-      .map((item, index) => {
-        const token0 = item.token0.status === 'success' && item.token0.result ? getAddress(item.token0.result) : null;
-        const token1 = item.token1.status === 'success' && item.token1.result ? getAddress(item.token1.result) : null;
-        if (!token0 || !token1) return null;
-
-        const reserves = item.reserves.status === 'success' ? item.reserves.result : [0n, 0n, 0];
-        const totalSupply = item.totalSupply.status === 'success' ? item.totalSupply.result : 0n;
-        const lpBalance = wallet && item.lpBalance.status === 'success' ? item.lpBalance.result : 0n;
-
-        return {
-          pair: item.pair,
-          token0,
-          token1,
-          token0Meta: tokenMeta.get(token0.toLowerCase()) || null,
-          token1Meta: tokenMeta.get(token1.toLowerCase()) || null,
-          reserve0: String(reserves[0] ?? 0),
-          reserve1: String(reserves[1] ?? 0),
-          totalSupply: String(totalSupply),
-          lpBalance: String(lpBalance),
-          createdIndex: length - 1 - index,
-          hasPosition: Boolean(wallet && lpBalance > 0n),
-        };
-      })
-      .filter(Boolean);
+    const pools = pairData.map((item, index) => {
+      const token0 = item.token0.status === 'success' && item.token0.result ? getAddress(item.token0.result) : null;
+      const token1 = item.token1.status === 'success' && item.token1.result ? getAddress(item.token1.result) : null;
+      if (!token0 || !token1) return null;
+      const reserves = item.reserves.status === 'success' ? item.reserves.result : [0n, 0n, 0];
+      const totalSupply = item.totalSupply.status === 'success' ? item.totalSupply.result : 0n;
+      const lpBalance = wallet && item.lpBalance.status === 'success' ? item.lpBalance.result : 0n;
+      return {
+        pair: item.pair,
+        token0,
+        token1,
+        token0Meta: tokenMeta.get(token0.toLowerCase()) || null,
+        token1Meta: tokenMeta.get(token1.toLowerCase()) || null,
+        reserve0: String(reserves[0] ?? 0),
+        reserve1: String(reserves[1] ?? 0),
+        totalSupply: String(totalSupply),
+        lpBalance: String(lpBalance),
+        createdIndex: length - 1 - index,
+        hasPosition: Boolean(wallet && lpBalance > 0n),
+      };
+    }).filter(Boolean);
 
     return NextResponse.json(
       { success: true, data: { count: length, pools, wallet } },
       { headers: { 'Cache-Control': 's-maxage=15, stale-while-revalidate=60' } },
     );
   } catch (error) {
-    return NextResponse.json(
-      { success: false, error: error?.message || 'Unable to load UnitFlow pools.' },
-      { status: 502 },
-    );
+    return NextResponse.json({ success: false, error: error?.message || 'Unable to load UnitFlow pools.' }, { status: 502 });
   }
 }
