@@ -9,6 +9,7 @@ const USDC = '0x3600000000000000000000000000000000000000';
 const WUSDC = '0x911b4000D3422F482F4062a913885f7b035382Df';
 const UNITFLOW_V25_SWAP_ROUTER = '0x4AA8c7Ac458479d9A4FA5c1481e03061ac76824A';
 const WUSDC_SCALE = 10n ** 12n;
+const TOWER_QUOTE_DECIMALS = 18;
 
 const UNITFLOW_V25_ROUTER_ABI = [
   {
@@ -60,6 +61,7 @@ function findUsdPrice(prices, tokenAddress) {
     usdc: ['usd-coin', 'usdc'],
     eurc: ['eurc', 'euro-coin'],
     usdt: ['tether', 'usdt'],
+    cirbtc: ['wrapped-bitcoin', 'bitcoin', 'btc', 'cirbtc'],
   };
   const keys = [
     ...(aliases[market.id] || []),
@@ -92,9 +94,29 @@ async function getExternalBtcUsd() {
   }
 }
 
+function toUnits(raw, decimals) {
+  try {
+    return Number(BigInt(String(raw))) / 10 ** decimals;
+  } catch {
+    return null;
+  }
+}
+
+function executionPriceImpact(inputUnits, outputUnits, inputPriceUsd, outputPriceUsd) {
+  if (![inputUnits, outputUnits, inputPriceUsd, outputPriceUsd].every((value) => Number.isFinite(value) && value > 0)) {
+    return null;
+  }
+
+  const fairOutput = (inputUnits * inputPriceUsd) / outputPriceUsd;
+  if (!Number.isFinite(fairOutput) || fairOutput <= 0) return null;
+
+  return Math.max(0, Math.min(100, (1 - outputUnits / fairOutput) * 100));
+}
+
 async function calculateQuotePriceImpact(quote, inputToken, outputToken) {
   const providerImpact = Number(quote?.priceImpact);
   const providerIsSane = Number.isFinite(providerImpact) && providerImpact >= 0 && providerImpact <= 100;
+
   const inputMarket = ACTIVE_MARKETS.find((item) => item.address?.toLowerCase() === inputToken.toLowerCase());
   const outputMarket = ACTIVE_MARKETS.find((item) => item.address?.toLowerCase() === outputToken.toLowerCase());
   if (!inputMarket || !outputMarket) return providerIsSane ? providerImpact : null;
@@ -117,35 +139,28 @@ async function calculateQuotePriceImpact(quote, inputToken, outputToken) {
     const inputPriceUsd = findUsdPrice(prices, inputToken);
     let outputPriceUsd = findUsdPrice(prices, outputToken);
     if (outputMarket.id === 'cirbtc') outputPriceUsd = outputPriceUsd || await getExternalBtcUsd();
-
     if (!inputPriceUsd || !outputPriceUsd) return providerIsSane ? providerImpact : null;
 
-    const inputAmount = BigInt(String(quote.inputAmount || '0'));
-    const outputAmount = BigInt(String(quote.outputAmount || '0'));
-    if (inputAmount <= 0n || outputAmount <= 0n) return providerIsSane ? providerImpact : null;
+    const inputRaw = BigInt(String(quote.inputAmount || '0'));
+    const outputRaw = BigInt(String(quote.outputAmount || '0'));
+    if (inputRaw <= 0n || outputRaw <= 0n) return providerIsSane ? providerImpact : null;
 
-    const inputDecimals = Number(inputMarket.decimals ?? 6);
-    const outputDecimals = Number(outputMarket.decimals ?? 6);
-    const inputUnits = Number(inputAmount) / 10 ** inputDecimals;
-    const outputUnits = Number(outputAmount) / 10 ** outputDecimals;
-    if (!Number.isFinite(inputUnits) || !Number.isFinite(outputUnits) || inputUnits <= 0 || outputUnits <= 0) {
-      return providerIsSane ? providerImpact : null;
+    // Tower normalizes quote output amounts to its quote precision (18 decimals).
+    // Input amounts remain in the sold token's native atomic units.
+    // This was the source of the bogus 99% cirBTC impact: cirBTC itself has 8 decimals,
+    // but Tower's quote output is represented at 18-decimal quote precision.
+    const inputUnits = toUnits(inputRaw, Number(inputMarket.decimals ?? 6));
+    const outputUnits = toUnits(outputRaw, TOWER_QUOTE_DECIMALS);
+    const calculated = executionPriceImpact(inputUnits, outputUnits, inputPriceUsd, outputPriceUsd);
+    if (calculated == null) return providerIsSane ? providerImpact : null;
+
+    // Prefer the independently calculated figure whenever Tower's value materially
+    // disagrees. This keeps stablecoin and cirBTC routes on the same unit-safe path.
+    if (!providerIsSane || Math.abs(providerImpact - calculated) > 5) {
+      return Number(calculated.toFixed(4));
     }
 
-    const fairOutput = (inputUnits * inputPriceUsd) / outputPriceUsd;
-    if (!Number.isFinite(fairOutput) || fairOutput <= 0) return providerIsSane ? providerImpact : null;
-
-    const calculated = Math.max(0, (1 - (outputUnits / fairOutput)) * 100);
-
-    // Tower documents priceImpact as a percentage. Replace it when the
-    // provider value is missing, impossible, or materially disagrees with
-    // the independently calculated execution-vs-spot figure. This covers
-    // cirBTC as well as stablecoin routes.
-    if (!providerIsSane || providerImpact > calculated + 5 || providerImpact < calculated - 5) {
-      return Math.min(100, calculated);
-    }
-
-    return Math.min(100, providerImpact);
+    return Number(providerImpact.toFixed(4));
   } catch {
     return providerIsSane ? providerImpact : null;
   }
@@ -254,7 +269,7 @@ export async function POST(request) {
 
       const calculatedImpact = await calculateQuotePriceImpact(data.data, inputToken, outputToken);
       if (calculatedImpact != null) {
-        data.data.priceImpact = Number(calculatedImpact.toFixed(4));
+        data.data.priceImpact = calculatedImpact;
         data.data.priceImpactSource = 'sanity-checked';
       } else if (!Number.isFinite(Number(data.data.priceImpact)) || Number(data.data.priceImpact) < 0 || Number(data.data.priceImpact) > 100) {
         data.data.priceImpact = null;
