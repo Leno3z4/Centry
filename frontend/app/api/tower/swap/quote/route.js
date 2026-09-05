@@ -76,10 +76,31 @@ function findUsdPrice(prices, tokenAddress) {
   return null;
 }
 
-async function calculateStablecoinPriceImpact(quote, inputToken, outputToken) {
+async function getExternalBtcUsd() {
+  try {
+    const response = await fetch('https://api.coinbase.com/v2/prices/BTC-USD/spot', {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    });
+    if (!response.ok) return null;
+    const payload = await response.json();
+    const value = Number(payload?.data?.amount);
+    return Number.isFinite(value) && value > 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+async function calculateQuotePriceImpact(quote, inputToken, outputToken) {
   const providerImpact = Number(quote?.priceImpact);
+  const providerIsSane = Number.isFinite(providerImpact) && providerImpact >= 0 && providerImpact <= 100;
+  const inputMarket = ACTIVE_MARKETS.find((item) => item.address?.toLowerCase() === inputToken.toLowerCase());
+  const outputMarket = ACTIVE_MARKETS.find((item) => item.address?.toLowerCase() === outputToken.toLowerCase());
+  if (!inputMarket || !outputMarket) return providerIsSane ? providerImpact : null;
+
   const apiKey = process.env.TOWER_API_KEY;
-  if (!apiKey) return Number.isFinite(providerImpact) && providerImpact >= 0 && providerImpact <= 100 ? providerImpact : null;
+  if (!apiKey) return providerIsSane ? providerImpact : null;
 
   try {
     const response = await fetch(`${TOWER_BASE_URL}/prices`, {
@@ -87,37 +108,46 @@ async function calculateStablecoinPriceImpact(quote, inputToken, outputToken) {
       headers: { Authorization: `Bearer ${apiKey}` },
       cache: 'no-store',
     });
-    if (!response.ok) return Number.isFinite(providerImpact) && providerImpact >= 0 && providerImpact <= 100 ? providerImpact : null;
-
-    const payload = await response.json();
-    const prices = payload?.data && typeof payload.data === 'object' ? payload.data : payload;
-    const inputPriceUsd = findUsdPrice(prices, inputToken);
-    const outputPriceUsd = findUsdPrice(prices, outputToken);
-    if (!inputPriceUsd || !outputPriceUsd) {
-      return Number.isFinite(providerImpact) && providerImpact >= 0 && providerImpact <= 100 ? providerImpact : null;
+    let prices = null;
+    if (response.ok) {
+      const payload = await response.json();
+      prices = payload?.data && typeof payload.data === 'object' ? payload.data : payload;
     }
+
+    const inputPriceUsd = findUsdPrice(prices, inputToken);
+    let outputPriceUsd = findUsdPrice(prices, outputToken);
+    if (outputMarket.id === 'cirbtc') outputPriceUsd = outputPriceUsd || await getExternalBtcUsd();
+
+    if (!inputPriceUsd || !outputPriceUsd) return providerIsSane ? providerImpact : null;
 
     const inputAmount = BigInt(String(quote.inputAmount || '0'));
     const outputAmount = BigInt(String(quote.outputAmount || '0'));
-    if (inputAmount <= 0n || outputAmount <= 0n) return null;
-
-    const inputMarket = ACTIVE_MARKETS.find((item) => item.address?.toLowerCase() === inputToken.toLowerCase());
-    const outputMarket = ACTIVE_MARKETS.find((item) => item.address?.toLowerCase() === outputToken.toLowerCase());
-    if (!inputMarket || !outputMarket) return null;
+    if (inputAmount <= 0n || outputAmount <= 0n) return providerIsSane ? providerImpact : null;
 
     const inputDecimals = Number(inputMarket.decimals ?? 6);
     const outputDecimals = Number(outputMarket.decimals ?? 6);
-    const inputUnits = Number(inputAmount) / (10 ** inputDecimals);
-    const outputUnits = Number(outputAmount) / (10 ** outputDecimals);
-    if (!Number.isFinite(inputUnits) || !Number.isFinite(outputUnits) || inputUnits <= 0 || outputUnits <= 0) return null;
+    const inputUnits = Number(inputAmount) / 10 ** inputDecimals;
+    const outputUnits = Number(outputAmount) / 10 ** outputDecimals;
+    if (!Number.isFinite(inputUnits) || !Number.isFinite(outputUnits) || inputUnits <= 0 || outputUnits <= 0) {
+      return providerIsSane ? providerImpact : null;
+    }
 
     const fairOutput = (inputUnits * inputPriceUsd) / outputPriceUsd;
-    if (!Number.isFinite(fairOutput) || fairOutput <= 0) return null;
+    if (!Number.isFinite(fairOutput) || fairOutput <= 0) return providerIsSane ? providerImpact : null;
 
     const calculated = Math.max(0, (1 - (outputUnits / fairOutput)) * 100);
-    return Math.min(100, calculated);
+
+    // Tower documents priceImpact as a percentage. Replace it when the
+    // provider value is missing, impossible, or materially disagrees with
+    // the independently calculated execution-vs-spot figure. This covers
+    // cirBTC as well as stablecoin routes.
+    if (!providerIsSane || providerImpact > calculated + 5 || providerImpact < calculated - 5) {
+      return Math.min(100, calculated);
+    }
+
+    return Math.min(100, providerImpact);
   } catch {
-    return Number.isFinite(providerImpact) && providerImpact >= 0 && providerImpact <= 100 ? providerImpact : null;
+    return providerIsSane ? providerImpact : null;
   }
 }
 
@@ -222,14 +252,11 @@ export async function POST(request) {
         return NextResponse.json({ success: false, error: 'Tower returned an incomplete quote. Try refreshing the quote or using a smaller amount.' }, { status: 422 });
       }
 
-      const providerImpact = Number(data.data.priceImpact);
-      const sanityCheckedImpact = await calculateStablecoinPriceImpact(data.data, inputToken, outputToken);
-      const shouldReplaceProviderValue = !Number.isFinite(providerImpact) || providerImpact < 0 || providerImpact > 100;
-
-      if (sanityCheckedImpact != null && shouldReplaceProviderValue) {
-        data.data.priceImpact = Number(sanityCheckedImpact.toFixed(4));
-        data.data.priceImpactSource = 'spot-price-sanity-check';
-      } else if (shouldReplaceProviderValue) {
+      const calculatedImpact = await calculateQuotePriceImpact(data.data, inputToken, outputToken);
+      if (calculatedImpact != null) {
+        data.data.priceImpact = Number(calculatedImpact.toFixed(4));
+        data.data.priceImpactSource = 'sanity-checked';
+      } else if (!Number.isFinite(Number(data.data.priceImpact)) || Number(data.data.priceImpact) < 0 || Number(data.data.priceImpact) > 100) {
         data.data.priceImpact = null;
         data.data.priceImpactSource = 'unavailable';
       }
