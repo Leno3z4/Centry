@@ -56,7 +56,18 @@ function findUsdPrice(prices, tokenAddress) {
   const market = ACTIVE_MARKETS.find((item) => item.address?.toLowerCase() === normalized);
   if (!market) return null;
 
-  const keys = [market.id, market.symbol?.toLowerCase(), market.name?.toLowerCase()];
+  const aliases = {
+    usdc: ['usd-coin', 'usdc'],
+    eurc: ['eurc', 'euro-coin'],
+    usdt: ['tether', 'usdt'],
+  };
+  const keys = [
+    ...(aliases[market.id] || []),
+    market.id,
+    market.symbol?.toLowerCase(),
+    market.name?.toLowerCase(),
+  ].filter(Boolean);
+
   for (const key of keys) {
     const value = prices?.[key]?.usd;
     if (Number.isFinite(Number(value)) && Number(value) > 0) return Number(value);
@@ -78,7 +89,8 @@ async function calculateStablecoinPriceImpact(quote, inputToken, outputToken) {
     });
     if (!response.ok) return Number.isFinite(providerImpact) && providerImpact >= 0 && providerImpact <= 100 ? providerImpact : null;
 
-    const prices = await response.json();
+    const payload = await response.json();
+    const prices = payload?.data && typeof payload.data === 'object' ? payload.data : payload;
     const inputPriceUsd = findUsdPrice(prices, inputToken);
     const outputPriceUsd = findUsdPrice(prices, outputToken);
     if (!inputPriceUsd || !outputPriceUsd) {
@@ -99,9 +111,9 @@ async function calculateStablecoinPriceImpact(quote, inputToken, outputToken) {
     const outputUnits = Number(outputAmount) / (10 ** outputDecimals);
     if (!Number.isFinite(inputUnits) || !Number.isFinite(outputUnits) || inputUnits <= 0 || outputUnits <= 0) return null;
 
-    // Use live USD spot prices to sanity-check the provider's percentage.
-    // 0% means the quoted output matches the current spot-value ratio.
     const fairOutput = (inputUnits * inputPriceUsd) / outputPriceUsd;
+    if (!Number.isFinite(fairOutput) || fairOutput <= 0) return null;
+
     const calculated = Math.max(0, (1 - (outputUnits / fairOutput)) * 100);
     return Math.min(100, calculated);
   } catch {
@@ -217,6 +229,9 @@ export async function POST(request) {
       if (sanityCheckedImpact != null && shouldReplaceProviderValue) {
         data.data.priceImpact = Number(sanityCheckedImpact.toFixed(4));
         data.data.priceImpactSource = 'spot-price-sanity-check';
+      } else if (shouldReplaceProviderValue) {
+        data.data.priceImpact = null;
+        data.data.priceImpactSource = 'unavailable';
       }
     }
 
