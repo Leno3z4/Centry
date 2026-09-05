@@ -25,15 +25,15 @@ function safeNumber(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function formatQuoteAmount(raw, outputDecimals, symbol) {
+function formatQuoteAmount(raw, outputDecimals) {
   if (raw == null || outputDecimals == null) return '—';
   try {
     const rawAmount = BigInt(String(raw));
     if (outputDecimals === TOWER_QUOTE_DECIMALS) {
-      return `${Number(formatUnits(rawAmount, outputDecimals)).toLocaleString(undefined, {
+      return Number(formatUnits(rawAmount, outputDecimals)).toLocaleString(undefined, {
         minimumFractionDigits: 0,
         maximumFractionDigits: 8,
-      })} ${symbol}`;
+      });
     }
 
     if (outputDecimals < TOWER_QUOTE_DECIMALS) {
@@ -45,16 +45,16 @@ function formatQuoteAmount(raw, outputDecimals, symbol) {
       const combined = `${whole}.${fraction}`.replace(/\.0+$/, '');
       const number = Number(combined);
       if (Number.isFinite(number)) {
-        return `${number.toLocaleString(undefined, {
+        return number.toLocaleString(undefined, {
           minimumFractionDigits: 0,
           maximumFractionDigits: Math.min(outputDecimals, 8),
-        })} ${symbol}`;
+        });
       }
-      return `${combined} ${symbol}`;
+      return combined;
     }
 
     const upscaled = rawAmount * (10n ** BigInt(outputDecimals - TOWER_QUOTE_DECIMALS));
-    return `${formatUnits(upscaled, outputDecimals)} ${symbol}`;
+    return formatUnits(upscaled, outputDecimals);
   } catch {
     return '—';
   }
@@ -98,7 +98,7 @@ function TokenDropdown({ value, markets, onChange, label }) {
         aria-label={label}
       >
         <span className={`${styles.tokenIcon} ${styles[`tokenIcon_${selected?.id || 'usdc'}`]}`}>
-          {selected?.symbol === 'cirBTC' ? '₿' : selected?.symbol === 'EURC' ? '€' : '$'}
+          {selected?.symbol === 'cirBTC' ? '₿' : selected?.symbol === 'EURC' ? '€' : selected?.symbol === 'CENT' ? 'C' : '$'}
         </span>
         <span className={styles.tokenTriggerText}>
           <strong>{selected?.symbol || '—'}</strong>
@@ -122,7 +122,7 @@ function TokenDropdown({ value, markets, onChange, label }) {
               }}
             >
               <span className={`${styles.tokenIcon} ${styles[`tokenIcon_${market.id}`]}`}>
-                {market.symbol === 'cirBTC' ? '₿' : market.symbol === 'EURC' ? '€' : '$'}
+                {market.symbol === 'cirBTC' ? '₿' : market.symbol === 'EURC' ? '€' : market.symbol === 'CENT' ? 'C' : '$'}
               </span>
               <span className={styles.tokenOptionText}>
                 <strong>{market.symbol}</strong>
@@ -400,8 +400,8 @@ function SwapContent() {
   const approvalRequired = Boolean(preparedTransactions?.approval);
   const approvalComplete = !approvalRequired || approvalReceipt.isSuccess;
   const isBusy = walletPending || ['quoting', 'preparing', 'building', 'approval', 'swapping'].includes(stage);
-  const outputAmount = quote ? formatQuoteAmount(quote.outputAmount, toTokenDecimals, toMarket.symbol) : '—';
-  const minOutput = quote ? formatQuoteAmount(quote.minOut, toTokenDecimals, toMarket.symbol) : '—';
+  const outputAmount = quote ? formatQuoteAmount(quote.outputAmount, toTokenDecimals) : '—';
+  const minOutput = quote ? formatQuoteAmount(quote.minOut, toTokenDecimals) : '—';
   const quoteReady = Boolean(
     quote?.outputAmount &&
     quote?.minOut &&
@@ -508,34 +508,31 @@ function SwapContent() {
             <button
               type="button"
               className={styles.primaryButton}
-              disabled={!isConnected || isBusy || swapReceipt.isLoading || (approvalReceipt.isLoading && !approvalReceipt.isSuccess)}
+              disabled={!isConnected || isBusy || swapReceipt.isLoading || (approvalRequired && !approvalComplete)}
               onClick={buildAndSwap}
             >
               {!isConnected
                 ? 'Connect wallet to swap'
-                : stage === 'preparing'
-                  ? 'Preparing swap…'
-                  : stage === 'building'
-                    ? 'Preparing swap…'
-                    : stage === 'approval' && !approvalComplete
-                      ? 'Approve in wallet…'
-                      : stage === 'swapping'
-                        ? 'Confirm swap…'
+                : approvalRequired && !approvalTx
+                  ? `Approve ${fromMarket.symbol}`
+                  : approvalRequired && !approvalComplete
+                    ? 'Confirming approval…'
+                    : stage === 'swapping'
+                      ? 'Confirm swap…'
+                      : stage === 'building' || stage === 'preparing'
+                        ? 'Preparing swap…'
                         : stage === 'submitted' && !swapReceipt.isSuccess
                           ? 'Swap submitted'
-                          : approvalRequired && !approvalComplete
-                            ? `Approve ${fromMarket.symbol}`
-                            : 'Swap'}
+                          : 'Swap'}
             </button>
           ) : (
             <div className={styles.quoteStatus}>
-              {stage === 'quoting' ? 'Finding the best route…' : stage === 'preparing' ? 'Preparing swap…' : amountRaw ? 'Waiting for a quote…' : 'Enter an amount to get a quote.'}
+              {stage === 'quoting' ? 'Finding the best route…' : amountRaw ? 'Waiting for a quote…' : 'Enter an amount to get a quote.'}
             </div>
           )}
 
           {!isConnected && <div className={styles.notice}>Connect your wallet to execute the swap. Quotes can still be requested.</div>}
           {notice && <div className={`${styles.notice} ${styles.noticeSuccess}`}>{notice}</div>}
-          {approvalReceipt.isSuccess && !swapReceipt.isSuccess && <div className={`${styles.notice} ${styles.noticeSuccess}`}>Approval confirmed. The next step is Swap.</div>}
           {swapReceipt.isSuccess && <div className={`${styles.notice} ${styles.noticeSuccess}`}>Swap confirmed on Arc.</div>}
         </section>
 
