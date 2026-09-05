@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useAccount, useReadContract, useSendTransaction } from 'wagmi';
+import { useAccount, useReadContract, useSendTransaction, useWaitForTransactionReceipt } from 'wagmi';
 import { encodeFunctionData, getAddress, parseUnits } from 'viem';
 import { Providers } from '../../../components/Providers';
 import { AppShell } from '../../../components/AppShell';
@@ -11,183 +11,73 @@ import styles from './pools.module.css';
 const ARC_CHAIN_ID = 5042002;
 const FACTORY = '0xd67F63A4F26a497b364d1C82e6747Aec8B5743a5';
 const LIQUIDITY_ROUTER = '0x0ef57CC428c851e9a9b7cD97190EF3D3EFe4B631';
+const SWAP_ROUTER = '0x4AA8c7Ac458479d9A4FA5c1481e03061ac76824A';
 const WUSDC = '0x911b4000D3422F482F4062a913885f7b035382Df';
+const NATIVE_USDC = '0x3600000000000000000000000000000000000000';
+const BPS = 10000n;
+const SLIPPAGE_BPS = 50n;
 
-const ERC20_WRITE_ABI = [
-  { type: 'function', name: 'approve', stateMutability: 'nonpayable', inputs: [{ type: 'address' }, { type: 'uint256' }], outputs: [{ type: 'bool' }] },
+const ERC20_ABI = [
+ { type:'function', name:'approve', stateMutability:'nonpayable', inputs:[{type:'address'},{type:'uint256'}], outputs:[{type:'bool'}] },
+ { type:'function', name:'allowance', stateMutability:'view', inputs:[{type:'address'},{type:'address'}], outputs:[{type:'uint256'}] },
 ];
-
-const FACTORY_ABI = [
-  { type: 'function', name: 'getPair', stateMutability: 'view', inputs: [{ type: 'address' }, { type: 'address' }], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'createPair', stateMutability: 'nonpayable', inputs: [{ type: 'address' }, { type: 'address' }], outputs: [{ type: 'address' }] },
+const FACTORY_ABI = [{type:'function',name:'createPair',stateMutability:'nonpayable',inputs:[{type:'address'},{type:'address'}],outputs:[{type:'address'}]}];
+const LIQ_ABI = [
+ {type:'function',name:'addLiquidity',stateMutability:'nonpayable',inputs:[{type:'address'},{type:'address'},{type:'uint256'},{type:'uint256'},{type:'uint256'},{type:'uint256'},{type:'address'},{type:'uint256'}],outputs:[{type:'uint256'},{type:'uint256'},{type:'uint256'}]},
+ {type:'function',name:'addLiquidityUSDC',stateMutability:'payable',inputs:[{type:'address'},{type:'uint256'},{type:'uint256'},{type:'uint256'},{type:'address'},{type:'uint256'}],outputs:[{type:'uint256'},{type:'uint256'},{type:'uint256'}]},
+ {type:'function',name:'removeLiquidity',stateMutability:'nonpayable',inputs:[{type:'address'},{type:'address'},{type:'uint256'},{type:'uint256'},{type:'uint256'},{type:'address'},{type:'uint256'}],outputs:[{type:'uint256'},{type:'uint256'}]},
+ {type:'function',name:'removeLiquidityUSDC',stateMutability:'nonpayable',inputs:[{type:'address'},{type:'uint256'},{type:'uint256'},{type:'uint256'},{type:'address'},{type:'uint256'}],outputs:[{type:'uint256'},{type:'uint256'}]},
 ];
-
-const ROUTER_ABI = [
-  { type: 'function', name: 'addLiquidity', stateMutability: 'nonpayable', inputs: [
-    { type: 'address' }, { type: 'address' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'address' }, { type: 'uint256' },
-  ], outputs: [{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }] },
-  { type: 'function', name: 'addLiquidityUSDC', stateMutability: 'payable', inputs: [
-    { type: 'address' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'address' }, { type: 'uint256' },
-  ], outputs: [{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }] },
-  { type: 'function', name: 'removeLiquidity', stateMutability: 'nonpayable', inputs: [
-    { type: 'address' }, { type: 'address' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'address' }, { type: 'uint256' },
-  ], outputs: [{ type: 'uint256' }, { type: 'uint256' }] },
-  { type: 'function', name: 'removeLiquidityUSDC', stateMutability: 'nonpayable', inputs: [
-    { type: 'address' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'address' }, { type: 'uint256' },
-  ], outputs: [{ type: 'uint256' }, { type: 'uint256' }] },
+const SWAP_ABI = [
+ {type:'function',name:'getAmountsOut',stateMutability:'view',inputs:[{type:'uint256'},{type:'address[]'}],outputs:[{type:'uint256[]'}]},
+ {type:'function',name:'swapExactTokensForTokens',stateMutability:'nonpayable',inputs:[{type:'uint256'},{type:'uint256'},{type:'address[]'},{type:'address'},{type:'uint256'}],outputs:[{type:'uint256[]'}]},
+ {type:'function',name:'swapExactUSDCForTokens',stateMutability:'payable',inputs:[{type:'uint256'},{type:'address[]'},{type:'address'},{type:'uint256'}],outputs:[{type:'uint256[]'}]},
+ {type:'function',name:'swapExactTokensForUSDC',stateMutability:'nonpayable',inputs:[{type:'uint256'},{type:'uint256'},{type:'address[]'},{type:'address'},{type:'uint256'}],outputs:[{type:'uint256[]'}]},
 ];
+const PAIR_ABI = [{type:'function',name:'balanceOf',stateMutability:'view',inputs:[{type:'address'}],outputs:[{type:'uint256'}]}];
+const FEATURED_TOKENS = MARKETS.filter(m=>m.status==='live'&&m.address).map(m=>({...m,address:getAddress(m.address)}));
+const short = a => a ? `${a.slice(0,6)}…${a.slice(-4)}` : '—';
+const fmt = (v,d=18,max=6) => { try { const n=Number(v??0)/10**d; return Number.isFinite(n)?n.toLocaleString(undefined,{maximumFractionDigits:max}):'0'; } catch { return '0'; } };
+const icon = s => s==='CENT'?'C':s==='EURC'?'€':s==='cirBTC'?'₿':'$';
+const isUSDC = a => a?.toLowerCase()===WUSDC.toLowerCase() || a?.toLowerCase()===NATIVE_USDC.toLowerCase();
+function meta(pool,side){const address=side?pool.token1:pool.token0; const m=side?pool.token1Meta:pool.token0Meta; return isUSDC(address)?{symbol:'USDC',name:'USD Coin',decimals:6,address:WUSDC}:(m||{symbol:'TOKEN',name:'Token',decimals:18,address});}
+function poolName(p){return `${meta(p,0).symbol} / ${meta(p,1).symbol}`;}
 
-const PAIR_ABI = [
-  { type: 'function', name: 'token0', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'token1', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'getReserves', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint112' }, { type: 'uint112' }, { type: 'uint32' }] },
-  { type: 'function', name: 'totalSupply', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
-  { type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ type: 'address' }], outputs: [{ type: 'uint256' }] },
-];
-
-const FEATURED_TOKENS = MARKETS.filter((market) => market.status === 'live' && market.address).map((market) => ({ ...market, address: getAddress(market.address) }));
-
-function shortAddress(address) { return address ? `${address.slice(0, 6)}…${address.slice(-4)}` : '—'; }
-function formatUnitsSafe(value, decimals = 18, max = 4) {
-  try { const number = Number(value == null ? 0 : value) / 10 ** decimals; return Number.isFinite(number) ? number.toLocaleString(undefined, { maximumFractionDigits: max }) : '0'; } catch { return '0'; }
-}
-function tokenIcon(symbol) { return symbol === 'CENT' ? 'C' : symbol === 'EURC' ? '€' : symbol === 'cirBTC' ? '₿' : '$'; }
-function poolLabel(pool) { return `${pool.token0Meta?.symbol || 'TOKEN'} / ${pool.token1Meta?.symbol || 'TOKEN'}`; }
-function isUsdcPool(pool) { return pool.token0?.toLowerCase() === WUSDC.toLowerCase() || pool.token1?.toLowerCase() === WUSDC.toLowerCase(); }
-function marketForAddress(address) { return FEATURED_TOKENS.find((market) => market.address.toLowerCase() === address?.toLowerCase()) || null; }
-
-export default function Page() {
-  return <Providers><AppShell><PoolsContent /></AppShell></Providers>;
-}
-
-function PoolsContent() {
-  const { address, isConnected } = useAccount();
-  const { sendTransactionAsync, isPending } = useSendTransaction();
-  const [tab, setTab] = useState('explore');
-  const [pools, setPools] = useState([]);
-  const [poolCount, setPoolCount] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [selectedPool, setSelectedPool] = useState(null);
-  const [action, setAction] = useState(null);
-  const [tokenA, setTokenA] = useState('');
-  const [tokenB, setTokenB] = useState('');
-  const [amountA, setAmountA] = useState('');
-  const [amountB, setAmountB] = useState('');
-  const [createA, setCreateA] = useState('');
-  const [createB, setCreateB] = useState('');
-  const [notice, setNotice] = useState('');
-  const [writeHash, setWriteHash] = useState(null);
-
-  const loadPools = useCallback(async () => {
-    setLoading(true); setError('');
-    try {
-      const query = address ? `?address=${encodeURIComponent(address)}` : '';
-      const response = await fetch(`/api/unitflow/pools${query}`, { cache: 'no-store' });
-      const data = await response.json();
-      if (!response.ok || !data.success) throw new Error(data.error || 'Unable to load UnitFlow pools.');
-      setPools(data.data?.pools || []); setPoolCount(Number(data.data?.count || 0));
-    } catch (caughtError) { setError(caughtError?.message || 'Unable to load UnitFlow pools.'); }
-    finally { setLoading(false); }
-  }, [address]);
-
-  useEffect(() => { loadPools(); }, [loadPools]);
-  const myPools = useMemo(() => pools.filter((pool) => pool.hasPosition), [pools]);
-
-  // Arc Testnet does not expose Multicall3, so read the pair directly with
-  // individual eth_call requests instead of wagmi's useReadContracts.
-  const { data: pairBalance } = useReadContract({
-    address: selectedPool?.pair,
-    abi: PAIR_ABI,
-    functionName: 'balanceOf',
-    args: address ? [address] : undefined,
-    query: { enabled: Boolean(selectedPool?.pair && address) },
-  });
-
-  const openAdd = (pool = null) => { setSelectedPool(pool); setAction('add'); setTokenA(pool?.token0 || FEATURED_TOKENS[0]?.address || ''); setTokenB(pool?.token1 || FEATURED_TOKENS[1]?.address || ''); setAmountA(''); setAmountB(''); setNotice(''); setError(''); };
-  const openRemove = (pool) => { setSelectedPool(pool); setAction('remove'); setNotice(''); setError(''); };
-  const openCreate = () => { setAction('create'); setSelectedPool(null); setCreateA(''); setCreateB(''); setNotice(''); setError(''); };
-  const closePanel = () => { setAction(null); setSelectedPool(null); setNotice(''); setError(''); };
-
-  const submitCreate = async () => {
-    if (!isConnected || !createA || !createB || createA.toLowerCase() === createB.toLowerCase()) return;
-    try {
-      const hash = await sendTransactionAsync({ to: FACTORY, data: encodeFunctionData({ abi: FACTORY_ABI, functionName: 'createPair', args: [getAddress(createA), getAddress(createB)] }), value: 0n, chainId: ARC_CHAIN_ID });
-      setWriteHash(hash); setNotice('Pool created. Add the initial liquidity next.'); await loadPools();
-    } catch (caughtError) { setError(caughtError?.shortMessage || caughtError?.message || 'Pool creation failed.'); }
-  };
-
-  const submitAdd = async () => {
-    if (!isConnected || !tokenA || !tokenB || !amountA || !amountB) return;
-    try {
-      const tokenAAddress = getAddress(tokenA); const tokenBAddress = getAddress(tokenB);
-      const amountARaw = parseUnits(amountA, marketForAddress(tokenAAddress)?.decimals ?? 18);
-      const amountBRaw = parseUnits(amountB, marketForAddress(tokenBAddress)?.decimals ?? 18);
-      const deadline = BigInt(Math.floor(Date.now() / 1000) + 900);
-      const usdcSide = tokenAAddress.toLowerCase() === WUSDC.toLowerCase() || tokenBAddress.toLowerCase() === WUSDC.toLowerCase();
-      if (usdcSide) {
-        const token = tokenAAddress.toLowerCase() === WUSDC.toLowerCase() ? tokenBAddress : tokenAAddress;
-        const tokenAmount = tokenAAddress.toLowerCase() === WUSDC.toLowerCase() ? amountBRaw : amountARaw;
-        const usdcAmount = tokenAAddress.toLowerCase() === WUSDC.toLowerCase() ? amountARaw : amountBRaw;
-        await sendTransactionAsync({ to: token, data: encodeFunctionData({ abi: ERC20_WRITE_ABI, functionName: 'approve', args: [LIQUIDITY_ROUTER, tokenAmount] }), value: 0n, chainId: ARC_CHAIN_ID });
-        const hash = await sendTransactionAsync({ to: LIQUIDITY_ROUTER, data: encodeFunctionData({ abi: ROUTER_ABI, functionName: 'addLiquidityUSDC', args: [token, tokenAmount, 0n, 0n, address, deadline] }), value: usdcAmount * 10n ** 12n, chainId: ARC_CHAIN_ID });
-        setWriteHash(hash);
-      } else {
-        await sendTransactionAsync({ to: tokenAAddress, data: encodeFunctionData({ abi: ERC20_WRITE_ABI, functionName: 'approve', args: [LIQUIDITY_ROUTER, amountARaw] }), value: 0n, chainId: ARC_CHAIN_ID });
-        await sendTransactionAsync({ to: tokenBAddress, data: encodeFunctionData({ abi: ERC20_WRITE_ABI, functionName: 'approve', args: [LIQUIDITY_ROUTER, amountBRaw] }), value: 0n, chainId: ARC_CHAIN_ID });
-        const hash = await sendTransactionAsync({ to: LIQUIDITY_ROUTER, data: encodeFunctionData({ abi: ROUTER_ABI, functionName: 'addLiquidity', args: [tokenAAddress, tokenBAddress, amountARaw, amountBRaw, 0n, 0n, address, deadline] }), value: 0n, chainId: ARC_CHAIN_ID });
-        setWriteHash(hash);
-      }
-      setNotice('Liquidity transaction submitted.'); await loadPools();
-    } catch (caughtError) { setError(caughtError?.shortMessage || caughtError?.message || 'Adding liquidity failed.'); }
-  };
-
-  const submitRemove = async () => {
-    if (!selectedPool?.pair || !address || !pairBalance || pairBalance === 0n) return;
-    try {
-      const liquidity = pairBalance; const deadline = BigInt(Math.floor(Date.now() / 1000) + 900);
-      await sendTransactionAsync({ to: selectedPool.pair, data: encodeFunctionData({ abi: ERC20_WRITE_ABI, functionName: 'approve', args: [LIQUIDITY_ROUTER, liquidity] }), value: 0n, chainId: ARC_CHAIN_ID });
-      const args = isUsdcPool(selectedPool)
-        ? [selectedPool.token0?.toLowerCase() === WUSDC.toLowerCase() ? selectedPool.token1 : selectedPool.token0, liquidity, 0n, 0n, address, deadline]
-        : [selectedPool.token0, selectedPool.token1, liquidity, 0n, 0n, address, deadline];
-      const abi = isUsdcPool(selectedPool) ? [ROUTER_ABI[3]] : [ROUTER_ABI[2]];
-      const fn = isUsdcPool(selectedPool) ? 'removeLiquidityUSDC' : 'removeLiquidity';
-      const hash = await sendTransactionAsync({ to: LIQUIDITY_ROUTER, data: encodeFunctionData({ abi, functionName: fn, args }), value: 0n, chainId: ARC_CHAIN_ID });
-      setWriteHash(hash); setNotice('Liquidity removal submitted.'); await loadPools();
-    } catch (caughtError) { setError(caughtError?.shortMessage || caughtError?.message || 'Removing liquidity failed.'); }
-  };
-
-  return (
-    <div className={styles.page}>
-      <div className={styles.hero}>
-        <div><div className={styles.eyebrow}>CENTRY × UNITFLOW</div><h1>Liquidity, <em>without the detour.</em></h1><p>Explore UnitFlow v2.5 pools, manage your positions, and create new markets without leaving Centry.</p></div>
-        <div className={styles.heroOrbit}><span>UNITFLOW</span><b>v2.5</b></div>
-      </div>
-      <div className={styles.controlBar}>
-        <div className={styles.tabs}>
-          <button className={tab === 'explore' ? styles.tabActive : ''} onClick={() => setTab('explore')}>Explore <b>{poolCount}</b></button>
-          <button className={tab === 'mine' ? styles.tabActive : ''} onClick={() => setTab('mine')}>My pools <b>{myPools.length}</b></button>
-        </div>
-        <div className={styles.actions}><button className={styles.refresh} onClick={loadPools} disabled={loading}>↻ Refresh</button><button className={styles.create} onClick={openCreate}>＋ Create pool</button></div>
-      </div>
-      {error && <div className={styles.error}>{error}</div>}
-      {loading ? <div className={styles.empty}>Loading UnitFlow liquidity…</div> : (tab === 'mine' ? myPools : pools).length === 0 ? <div className={styles.empty}><strong>No pools here yet.</strong><span>Create a UnitFlow pool or switch back to Explore.</span></div> :
-        <div className={styles.grid}>{(tab === 'mine' ? myPools : pools).map((pool, index) => (
-          <article key={pool.pair} className={`${styles.poolCard} ${index === 0 ? styles.poolFeatured : ''}`}>
-            <div className={styles.poolTop}><div className={styles.tokenPair}><span className={`${styles.poolToken} ${styles.poolTokenA}`}>{tokenIcon(pool.token0Meta?.symbol)}</span><span className={`${styles.poolToken} ${styles.poolTokenB}`}>{tokenIcon(pool.token1Meta?.symbol)}</span></div><span className={styles.unitflowTag}>UNITFLOW / V2.5</span></div>
-            <h3>{poolLabel(pool)}</h3><p className={styles.poolAddress}>{shortAddress(pool.pair)}</p>
-            <div className={styles.metrics}><div><span>Reserve A</span><strong>{formatUnitsSafe(pool.reserve0, pool.token0Meta?.decimals ?? 18)}</strong></div><div><span>Reserve B</span><strong>{formatUnitsSafe(pool.reserve1, pool.token1Meta?.decimals ?? 18)}</strong></div><div><span>My LP</span><strong>{pool.hasPosition ? formatUnitsSafe(pool.userLiquidity) : '—'}</strong></div></div>
-            <div className={styles.cardActions}><button onClick={() => openAdd(pool)}>Add liquidity</button>{pool.hasPosition && <button className={styles.ghostButton} onClick={() => openRemove(pool)}>Remove</button>}</div>
-          </article>
-        ))}</div>}
-
-      {action && <div className={styles.overlay} onClick={closePanel}><div className={styles.drawer} onClick={(event) => event.stopPropagation()}>
-        <div className={styles.drawerHead}><div><span className={styles.eyebrow}>UNITFLOW / ACTION</span><h2>{action === 'create' ? 'Create a pool' : action === 'add' ? 'Add liquidity' : 'Remove liquidity'}</h2></div><button onClick={closePanel}>×</button></div>
-        {action === 'create' && <div className={styles.form}><p>Create a permissionless UnitFlow v2.5 pair directly through the Factory.</p><input placeholder="Token A address" value={createA} onChange={(event) => setCreateA(event.target.value)} /><input placeholder="Token B address" value={createB} onChange={(event) => setCreateB(event.target.value)} /><button className={styles.create} disabled={!isConnected || !createA || !createB || isPending} onClick={submitCreate}>{isConnected ? 'Create pool' : 'Connect wallet'}</button></div>}
-        {action === 'add' && <div className={styles.form}><p>Approve the token(s), then UnitFlow's liquidity router will deposit them into the pool.</p><input placeholder="Token A address" value={tokenA} onChange={(event) => setTokenA(event.target.value)} /><input placeholder="Amount A" value={amountA} onChange={(event) => setAmountA(event.target.value)} /><input placeholder="Token B address" value={tokenB} onChange={(event) => setTokenB(event.target.value)} /><input placeholder="Amount B" value={amountB} onChange={(event) => setAmountB(event.target.value)} /><button className={styles.create} disabled={!isConnected || !tokenA || !tokenB || !amountA || !amountB || isPending} onClick={submitAdd}>{isConnected ? 'Approve & add liquidity' : 'Connect wallet'}</button></div>}
-        {action === 'remove' && <div className={styles.form}><p>Your current LP balance is <strong>{formatUnitsSafe(pairBalance, 18)}</strong>. You will approve the LP token and then remove the position.</p><button className={styles.create} disabled={!isConnected || !pairBalance || isPending} onClick={submitRemove}>{isConnected ? 'Approve & remove liquidity' : 'Connect wallet'}</button></div>}
-        {notice && <div className={styles.notice}>{notice}</div>}{writeHash && <a className={styles.txLink} href={`https://testnet.arcscan.app/tx/${writeHash}`} target="_blank" rel="noreferrer">View transaction ↗</a>}
-      </div></div>}
-    </div>
-  );
+export default function Page(){return <Providers><AppShell><Pools/></AppShell></Providers>}
+function Pools(){
+ const {address,isConnected}=useAccount(); const {sendTransactionAsync,isPending}=useSendTransaction();
+ const [tab,setTab]=useState('explore'),[q,setQ]=useState(''),[pools,setPools]=useState([]),[count,setCount]=useState(0),[loading,setLoading]=useState(true),[error,setError]=useState('');
+ const [action,setAction]=useState(null),[selected,setSelected]=useState(null),[amountA,setAmountA]=useState(''),[amountB,setAmountB]=useState(''),[createA,setCreateA]=useState(''),[createB,setCreateB]=useState(''),[swapIn,setSwapIn]=useState(''),[swapOut,setSwapOut]=useState(''),[swapQuote,setSwapQuote]=useState(null),[approvalHash,setApprovalHash]=useState(null),[txHash,setTxHash]=useState(null),[notice,setNotice]=useState(''),[actionError,setActionError]=useState(''),[swapLoading,setSwapLoading]=useState(false);
+ const load=useCallback(async()=>{setLoading(true);setError('');try{const qs=address?`?address=${encodeURIComponent(address)}`:'';const r=await fetch(`/api/unitflow/pools${qs}`,{cache:'no-store'});const d=await r.json();if(!r.ok||!d.success)throw new Error(d.error||'Unable to load UnitFlow pools.');setPools(d.data?.pools||[]);setCount(Number(d.data?.count||0));}catch(e){setError(e?.message||'Unable to load UnitFlow pools.')}finally{setLoading(false)}},[address]);
+ useEffect(()=>{load()},[load]);
+ const mine=useMemo(()=>pools.filter(p=>p.hasPosition),[pools]);
+ const visible=useMemo(()=>{const src=tab==='mine'?mine:pools;const n=q.trim().toLowerCase();if(!n)return src;return src.filter(p=>[poolName(p),p.token0,p.token1,p.pair,p.token0Meta?.name,p.token1Meta?.name,p.token0Meta?.symbol,p.token1Meta?.symbol].filter(Boolean).join(' ').toLowerCase().includes(n));},[mine,pools,q,tab]);
+ const {data:lpBalance}=useReadContract({address:selected?.pair,abi:PAIR_ABI,functionName:'balanceOf',args:address?[address]:undefined,query:{enabled:Boolean(selected?.pair&&address&&action==='remove')}});
+ const inUSDC=selected?isUSDC(selected.token0):false, outUSDC=selected?isUSDC(selected.token1):false;
+ const inputToken=selected?(inUSDC?WUSDC:selected.token0):undefined, outputToken=selected?(outUSDC?WUSDC:selected.token1):undefined;
+ const {data:allowance}=useReadContract({address:inputToken,abi:ERC20_ABI,functionName:'allowance',args:address&&inputToken?[address,SWAP_ROUTER]:undefined,query:{enabled:Boolean(address&&inputToken&&!inUSDC)}});
+ const approvalReceipt=useWaitForTransactionReceipt({hash:approvalHash||undefined,chainId:ARC_CHAIN_ID,query:{enabled:Boolean(approvalHash)}});
+ useEffect(()=>{if(approvalReceipt.isSuccess){setNotice('Approval confirmed. Press Swap to execute the trade.');setApprovalHash(null)}},[approvalReceipt.isSuccess]);
+ const reset=()=>{setActionError('');setNotice('');setTxHash(null);setApprovalHash(null);setSwapQuote(null);setSwapIn('');setSwapOut('');setAmountA('');setAmountB('')};
+ const open=(a,p=null)=>{reset();setAction(a);setSelected(p)}; const close=()=>{setAction(null);setSelected(null);reset()};
+ const updateA=v=>{setAmountA(v);if(!selected||!v){setAmountB('');return}try{const a=meta(selected,0),b=meta(selected,1),ra=BigInt(selected.reserve0||0),rb=BigInt(selected.reserve1||0);if(ra>0n&&rb>0n){const x=parseUnits(v,a.decimals),y=x*rb/ra;let s=y.toString().padStart(b.decimals+1,'0');const w=s.slice(0,-b.decimals)||'0',f=s.slice(-b.decimals).replace(/0+$/,'');setAmountB(f?`${w}.${f}`:w)}}catch{setAmountB('')}};
+ const create=async()=>{if(!isConnected||!createA||!createB)return;try{const a=getAddress(createA.trim()),b=getAddress(createB.trim());if(a.toLowerCase()===b.toLowerCase())throw new Error('Choose two different token addresses.');const h=await sendTransactionAsync({to:FACTORY,data:encodeFunctionData({abi:FACTORY_ABI,functionName:'createPair',args:[a,b]}),value:0n,chainId:ARC_CHAIN_ID});setTxHash(h);setNotice('Pool created. Add initial liquidity next.');await load()}catch(e){setActionError(e?.shortMessage||e?.message||'Pool creation failed.')}};
+ const add=async()=>{if(!isConnected||!selected||!amountA||!amountB)return;try{const a=selected.token0,b=selected.token1,A=meta(selected,0),B=meta(selected,1),ra=parseUnits(amountA,A.decimals),rb=parseUnits(amountB,B.decimals),deadline=BigInt(Math.floor(Date.now()/1000)+900);let h;if(isUSDC(a)||isUSDC(b)){const token=isUSDC(a)?b:a,ta=isUSDC(a)?rb:ra,ua=(isUSDC(a)?ra:rb)*10n**12n;await sendTransactionAsync({to:token,data:encodeFunctionData({abi:ERC20_ABI,functionName:'approve',args:[LIQUIDITY_ROUTER,ta]}),value:0n,chainId:ARC_CHAIN_ID});h=await sendTransactionAsync({to:LIQUIDITY_ROUTER,data:encodeFunctionData({abi:LIQ_ABI,functionName:'addLiquidityUSDC',args:[token,ta,0n,0n,address,deadline]}),value:ua,chainId:ARC_CHAIN_ID});}else{await sendTransactionAsync({to:a,data:encodeFunctionData({abi:ERC20_ABI,functionName:'approve',args:[LIQUIDITY_ROUTER,ra]}),value:0n,chainId:ARC_CHAIN_ID});await sendTransactionAsync({to:b,data:encodeFunctionData({abi:ERC20_ABI,functionName:'approve',args:[LIQUIDITY_ROUTER,rb]}),value:0n,chainId:ARC_CHAIN_ID});h=await sendTransactionAsync({to:LIQUIDITY_ROUTER,data:encodeFunctionData({abi:LIQ_ABI,functionName:'addLiquidity',args:[a,b,ra,rb,0n,0n,address,deadline]}),value:0n,chainId:ARC_CHAIN_ID});}setTxHash(h);setNotice('Liquidity transaction submitted.');await load()}catch(e){setActionError(e?.shortMessage||e?.message||'Adding liquidity failed.')}};
+ const remove=async()=>{if(!isConnected||!selected?.pair||!lpBalance||lpBalance===0n)return;try{const d=BigInt(Math.floor(Date.now()/1000)+900);await sendTransactionAsync({to:selected.pair,data:encodeFunctionData({abi:ERC20_ABI,functionName:'approve',args:[LIQUIDITY_ROUTER,lpBalance]}),value:0n,chainId:ARC_CHAIN_ID});const h=isUSDC(selected.token0)||isUSDC(selected.token1)?await sendTransactionAsync({to:LIQUIDITY_ROUTER,data:encodeFunctionData({abi:LIQ_ABI,functionName:'removeLiquidityUSDC',args:[isUSDC(selected.token0)?selected.token1:selected.token0,lpBalance,0n,0n,address,d]}),value:0n,chainId:ARC_CHAIN_ID}):await sendTransactionAsync({to:LIQUIDITY_ROUTER,data:encodeFunctionData({abi:LIQ_ABI,functionName:'removeLiquidity',args:[selected.token0,selected.token1,lpBalance,0n,0n,address,d]}),value:0n,chainId:ARC_CHAIN_ID});setTxHash(h);setNotice('Liquidity removal submitted.');await load()}catch(e){setActionError(e?.shortMessage||e?.message||'Removing liquidity failed.')}};
+ useEffect(()=>{if(action!=='swap'||!selected||!swapIn){setSwapQuote(null);setSwapOut('');return}const t=setTimeout(async()=>{setSwapLoading(true);setActionError('');try{const A=meta(selected,0),B=meta(selected,1),raw=parseUnits(swapIn,A.decimals),path=[inputToken,outputToken];const r=await fetch('/api/unitflow/pools/swap-quote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amountIn:raw.toString(),path})});const d=await r.json();if(!r.ok||!d.success)throw new Error(d.error||'No swap route available.');const out=BigInt(String(d.data.outputAmount));setSwapQuote({raw:raw.toString(),out:out.toString()});const n=Number(out)/10**B.decimals;setSwapOut(Number.isFinite(n)?n.toLocaleString(undefined,{maximumFractionDigits:8}):'')}catch(e){setSwapQuote(null);setSwapOut('');setActionError(e?.message||'No swap route available.')}finally{setSwapLoading(false)}},350);return()=>clearTimeout(t)},[action,selected,swapIn,inputToken,outputToken]);
+ const swap=async()=>{if(!isConnected||!selected||!swapQuote)return;try{const amountIn=BigInt(swapQuote.raw),out=BigInt(swapQuote.out),min=(out*(BPS-SLIPPAGE_BPS))/BPS,path=[inputToken,outputToken],d=BigInt(Math.floor(Date.now()/1000)+300);if(!inUSDC&&BigInt(String(allowance||0))<amountIn&&!approvalReceipt.isSuccess&&!approvalHash){const h=await sendTransactionAsync({to:inputToken,data:encodeFunctionData({abi:ERC20_ABI,functionName:'approve',args:[SWAP_ROUTER,amountIn]}),value:0n,chainId:ARC_CHAIN_ID});setApprovalHash(h);setNotice(`Approve ${meta(selected,0).symbol} first. After confirmation, press Swap.`);return}let h;if(inUSDC)h=await sendTransactionAsync({to:SWAP_ROUTER,data:encodeFunctionData({abi:SWAP_ABI,functionName:'swapExactUSDCForTokens',args:[min,path,address,d]}),value:amountIn*10n**12n,chainId:ARC_CHAIN_ID});else if(outUSDC)h=await sendTransactionAsync({to:SWAP_ROUTER,data:encodeFunctionData({abi:SWAP_ABI,functionName:'swapExactTokensForUSDC',args:[amountIn,min,path,address,d]}),value:0n,chainId:ARC_CHAIN_ID});else h=await sendTransactionAsync({to:SWAP_ROUTER,data:encodeFunctionData({abi:SWAP_ABI,functionName:'swapExactTokensForTokens',args:[amountIn,min,path,address,d]}),value:0n,chainId:ARC_CHAIN_ID});setTxHash(h);setNotice('Swap submitted to UnitFlow.')}catch(e){setActionError(e?.shortMessage||e?.message||'Swap failed.')}};
+ const needApprove=Boolean(swapQuote&&!inUSDC&&BigInt(String(allowance||0))<BigInt(String(swapQuote.raw))&&!approvalReceipt.isSuccess);
+ return <div className={styles.page}>
+  <div className={styles.hero}><div><div className={styles.eyebrow}>CENTRY × UNITFLOW</div><h1>Liquidity, <em>without the detour.</em></h1><p>Search UnitFlow v2.5 markets, add or remove liquidity, create pairs, and trade directly against the pool.</p></div><div className={styles.heroOrbit}><span>UNITFLOW</span><b>V2.5</b></div></div>
+  <div className={styles.commandBar}><div className={styles.tabs}><button className={tab==='explore'?styles.tabActive:''} onClick={()=>setTab('explore')}>Explore <span>{count}</span></button><button className={tab==='mine'?styles.tabActive:''} onClick={()=>setTab('mine')}>My pools <span>{mine.length}</span></button></div><div className={styles.searchWrap}><span className={styles.searchIcon}>⌕</span><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search token, symbol, pool address…" /></div><div className={styles.commandActions}><button className={styles.refresh} onClick={load} disabled={loading}>↻ Refresh</button><button className={styles.createButton} onClick={()=>open('create')}>＋ Create pool</button></div></div>
+  {error&&<div className={styles.globalError}>{error}</div>}
+  {loading?<div className={styles.emptyState}><div className={styles.emptyGlyph}>◎</div><h2>Scanning UnitFlow</h2><p>Reading the on-chain v2.5 registry. No Centry database is required.</p></div>:visible.length===0?<div className={styles.emptyState}><div className={styles.emptyGlyph}>⌕</div><h2>{q?'No pools match that search.':tab==='mine'?'No positions yet.':'No pools found.'}</h2><p>{q?'Search by token name, symbol, or address.':'Create a pair or add liquidity to an existing UnitFlow market.'}</p><button onClick={()=>open('create')}>Create a pool</button></div>:<><div className={styles.grid}>{visible.map((p,i)=>{const a=meta(p,0),b=meta(p,1);return <article className={styles.poolCard} key={p.pair}><div className={styles.cardTop}><div className={styles.tokenPair}><span className={`${styles.coin} ${styles[`coin_${a.symbol.toLowerCase()}`]}`}>{icon(a.symbol)}</span><span className={`${styles.coin} ${styles[`coin_${b.symbol.toLowerCase()}`]}`}>{icon(b.symbol)}</span><div><strong>{poolName(p)}</strong><small>{i===0?'Featured · ':''}UnitFlow v2.5</small></div></div><span className={styles.liveDot}>LIVE</span></div><p className={styles.poolAddress}>{short(p.pair)}</p><div className={styles.metrics}><div><span>{a.symbol}</span><strong>{fmt(p.reserve0,a.decimals)}</strong><small>{a.name}</small></div><div><span>{b.symbol}</span><strong>{fmt(p.reserve1,b.decimals)}</strong><small>{b.name}</small></div><div><span>My LP</span><strong>{p.hasPosition?fmt(p.lpBalance):'—'}</strong><small>{p.hasPosition?'Active position':'No position'}</small></div></div><div className={styles.cardFooter}><a href={`https://testnet.arcscan.app/address/${p.pair}`} target="_blank" rel="noreferrer">Pool on ArcScan ↗</a><div><button onClick={()=>open('swap',p)}>Swap</button><button onClick={()=>open('add',p)}>Add liquidity</button>{p.hasPosition&&<button className={styles.secondaryAction} onClick={()=>open('remove',p)}>Remove</button>}</div></div></article>})}</div><div className={styles.bottomNote}><span>UnitFlow v2.5 · on-chain registry</span><span>{visible.length} shown · {count} total</span></div></>}
+  {action&&<div className={styles.overlay} onClick={close}><div className={styles.drawer} onClick={e=>e.stopPropagation()}><div className={styles.drawerHead}><div><div className={styles.eyebrow}>UNITFLOW / ACTION</div><h2>{action==='create'?'Create a pool':action==='add'?'Add liquidity':action==='remove'?'Remove liquidity':'Swap in pool'}</h2></div><button onClick={close}>×</button></div>
+   {action==='create'&&<><p className={styles.drawerCopy}>Create a permissionless v2.5 pair directly through UnitFlow's Factory.</p><label>Token A<input placeholder="0x… token address" value={createA} onChange={e=>setCreateA(e.target.value)}/></label><label>Token B<input placeholder="0x… token address" value={createB} onChange={e=>setCreateB(e.target.value)}/></label><div className={styles.helper}>The pair becomes tradable once liquidity is supplied.</div><button className={styles.bigAction} disabled={!isConnected||isPending} onClick={create}>{isConnected?'Create pool':'Connect wallet'}</button></>}
+   {action==='add'&&selected&&<><div className={styles.routeStrip}><span>POOL</span><strong>{poolName(selected)}</strong></div><p className={styles.drawerCopy}>Large inputs, with the second side calculated from the current pool ratio.</p><div className={styles.amountGrid}><div className={styles.amountBox}><div className={styles.tokenLabel}><label>{meta(selected,0).symbol}</label><code>{short(selected.token0)}</code></div><input className={styles.amountInput} inputMode="decimal" placeholder="0.00" value={amountA} onChange={e=>updateA(e.target.value)}/></div><div className={styles.amountBox}><div className={styles.tokenLabel}><label>{meta(selected,1).symbol}</label><code>{short(selected.token1)}</code></div><input className={styles.amountInput} inputMode="decimal" placeholder="Calculated" value={amountB} onChange={e=>setAmountB(e.target.value)}/></div></div><button className={styles.bigAction} disabled={!isConnected||!amountA||!amountB||isPending} onClick={add}>{isConnected?'Approve & add liquidity':'Connect wallet'}</button></>}
+   {action==='remove'&&selected&&<><div className={styles.positionBox}><span>Your LP balance</span><strong>{fmt(lpBalance)}</strong><small>{poolName(selected)}</small></div><button className={styles.bigAction} disabled={!isConnected||!lpBalance||lpBalance===0n||isPending} onClick={remove}>{isConnected?'Approve & remove liquidity':'Connect wallet'}</button></>}
+   {action==='swap'&&selected&&<><div className={styles.routeStrip}><span>POOL</span><strong>{poolName(selected)}</strong></div><p className={styles.drawerCopy}>Direct v2.5 swap through the UnitFlow Swap Router. Native USDC is wrapped or unwrapped automatically.</p><div className={styles.amountBox}><div className={styles.tokenLabel}><label>Pay {meta(selected,0).symbol}</label><code>{short(selected.token0)}</code></div><input className={styles.amountInput} inputMode="decimal" placeholder="0.00" value={swapIn} onChange={e=>setSwapIn(e.target.value)}/></div><div className={styles.swapMark}>↓</div><div className={styles.amountBox}><div className={styles.tokenLabel}><label>Receive {meta(selected,1).symbol}</label><code>{short(selected.token1)}</code></div><input className={styles.amountInput} readOnly placeholder={swapLoading?'Quoting…':'Output'} value={swapOut}/></div><button className={styles.bigAction} disabled={!isConnected||!swapQuote||swapLoading||isPending} onClick={swap}>{!isConnected?'Connect wallet':!swapQuote?'Enter an amount':needApprove?`Approve ${meta(selected,0).symbol}`:'Swap'}</button><div className={styles.walletHint}>ERC-20 inputs need approval once. The button becomes Swap after approval confirms.</div></>}
+   {actionError&&<div className={styles.drawerError}>{actionError}</div>}{notice&&<div className={styles.drawerNotice}>{notice}</div>}{txHash&&<a className={styles.txLink} href={`https://testnet.arcscan.app/tx/${txHash}`} target="_blank" rel="noreferrer">View transaction ↗</a>}
+  </div></div>}
+ </div>;
 }
