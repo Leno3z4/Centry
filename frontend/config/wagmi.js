@@ -1,5 +1,5 @@
-import { createConfig, fallback, http } from 'wagmi';
-import { defineChain } from 'viem';
+import { createConfig, http } from 'wagmi';
+import { defineChain, fallback } from 'viem';
 import { injected } from 'wagmi/connectors';
 import { walletConnect } from '@wagmi/connectors/walletConnect';
 
