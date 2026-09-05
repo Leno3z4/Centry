@@ -40,10 +40,12 @@ function formatQuoteAmount(raw, outputDecimals) {
   }
 }
 
+// Tower returns priceImpact as a percentage, not basis points.
+// Example from Tower docs: 0.02 means 0.02% impact.
 function formatPriceImpact(value) {
   const parsed = safeNumber(value);
   if (parsed == null) return '—';
-  return `${(parsed / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}%`;
+  return `${parsed.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}%`;
 }
 
 function errorText(error) {
@@ -203,7 +205,7 @@ function SwapContent() {
   const isPreparing = walletPending || ['quoting', 'preparing', 'building'].includes(stage);
   const outputAmount = quote ? formatQuoteAmount(quote.outputAmount, toTokenDecimals) : '—';
   const minOutput = quote ? formatQuoteAmount(quote.minOut, toTokenDecimals) : '—';
-  const priceImpactPercent = quote?.priceImpact != null ? safeNumber(quote.priceImpact) / 100 : null;
+  const priceImpactPercent = quote?.priceImpact != null ? safeNumber(quote.priceImpact) : null;
   const quoteReady = Boolean(quote?.outputAmount && quote?.minOut && BigInt(String(quote.minOut)) > 0n && BigInt(String(quote.outputAmount)) >= BigInt(String(quote.minOut)));
 
   useEffect(() => {
@@ -223,15 +225,26 @@ function SwapContent() {
             <div className={styles.assetField}><label>Receive</label><div className={styles.assetRow}><div className={styles.amountInput}>{outputAmount}</div><TokenDropdown value={toId} markets={LIVE_MARKETS} onChange={changeTo} label="Output token" /></div></div>
           </div>
           <div className={styles.metaRow}><span>Slippage</span><input className={styles.slippageInput} value={slippage} onChange={(event) => setSlippage(event.target.value)} inputMode="decimal" aria-label="Slippage percentage" /><span>%</span></div>
-          {quote ? <div className={styles.quoteCard}><div className={styles.quoteRow}><span>Expected output</span><strong className={styles.quoteOutput}>{outputAmount} {toMarket.symbol}</strong></div><div className={styles.quoteRow}><span>Minimum received</span><strong>{minOutput} {toMarket.symbol}</strong></div><div className={styles.quoteRow}><span>Price impact</span><strong>{formatPriceImpact(quote.priceImpact)}</strong></div>{priceImpactPercent != null && priceImpactPercent >= 5 ? <div className={`${styles.notice} ${styles.noticeError}`}>High price impact: {priceImpactPercent.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}%. Review this route before swapping.</div> : null}</div> : <div className={styles.quoteStatus}>{wrongNetwork ? 'Switch to Arc Testnet to quote this swap.' : stage === 'quoting' ? 'Finding the best route…' : 'Enter an amount to get a quote.'}</div>}
-          {error ? <div className={`${styles.notice} ${styles.noticeError}`} role="alert">{error}</div> : null}
-          {notice ? <div className={`${styles.notice} ${styles.noticeSuccess}`} role="status">{notice}</div> : null}
-          {wrongNetwork ? <button type="button" className={styles.primaryButton} onClick={() => switchChain({ chainId: ARC_CHAIN_ID }).catch(() => {})} disabled={switchingNetwork}>{switchingNetwork ? 'Switching network…' : 'Switch to Arc Testnet'}</button> : <button type="button" className={styles.primaryButton} disabled={!isConnected || !quoteReady || isPreparing || approvalPending || swapReceipt.isLoading || !preparedTransactions?.swap?.to} onClick={buildAndSwap}>{!isConnected ? 'Connect wallet to swap' : approvalPending ? 'Confirming approval…' : isPreparing ? 'Preparing swap…' : approvalRequired && !approvalComplete ? `Approve ${fromMarket.symbol}` : swapReceipt.isLoading ? 'Confirming swap…' : 'Swap'}</button>}
-          {approvalTx && !approvalReceipt.isSuccess ? <div className={styles.quoteStatus}>Approval transaction pending. Waiting for Arc confirmation…</div> : null}
-          {swapTx && !swapReceipt.isSuccess && !swapReceipt.isLoading ? <div className={styles.quoteStatus}>Swap submitted. Waiting for confirmation…</div> : null}
-          {swapReceipt.isSuccess ? <div className={`${styles.notice} ${styles.noticeSuccess}`}>Swap confirmed on Arc Testnet.</div> : null}
+          {quote ? <div className={styles.quoteCard}><div className={styles.quoteRow}><span>Expected output</span><strong className={styles.quoteOutput}>{outputAmount} {toMarket.symbol}</strong></div><div className={styles.quoteRow}><span>Minimum received</span><strong>{minOutput} {toMarket.symbol}</strong></div><div className={styles.quoteRow}><span>Price impact</span><strong>{formatPriceImpact(quote.priceImpact)}</strong></div>{priceImpactPercent != null && priceImpactPercent >= 5 ? <div className={`${styles.notice} ${styles.noticeError}`}>High price impact: {formatPriceImpact(priceImpactPercent)}. Consider a smaller trade or a different route.</div> : null}<div className={styles.quoteRow}><span>Route</span><strong>{typeof quote.route === 'string' ? quote.route : quote.dexName || quote.dexId || 'Tower routing'}</strong></div></div> : <div className={styles.quoteStatus}>{wrongNetwork ? 'Switch to Arc Testnet to quote this swap.' : stage === 'quoting' ? 'Fetching the best Arc route…' : stage === 'preparing' ? 'Preparing the transaction…' : 'Enter an amount to get a quote.'}</div>}
+          {notice && <div className={styles.notice}>{notice}</div>}
+          {error && <div className={`${styles.notice} ${styles.noticeError}`}>{error}</div>}
+          {approvalReceipt.isLoading ? <div className={styles.notice}>Waiting for approval confirmation…</div> : null}
+          {swapReceipt.isLoading ? <div className={styles.notice}>Waiting for swap confirmation…</div> : null}
+          {swapReceipt.isSuccess ? <div className={`${styles.notice} ${styles.noticeSuccess}`}>Swap confirmed on Arc.</div> : null}
+          {isConnected && !wrongNetwork && quoteReady ? <button type="button" className={styles.primaryButton} disabled={isPreparing || approvalPending || (!approvalComplete && !approvalRequired) || switchingNetwork || !preparedTransactions} onClick={buildAndSwap}>{walletPending ? 'Confirm in wallet…' : approvalPending ? 'Waiting for approval…' : approvalRequired && !approvalComplete ? `Approve ${fromMarket.symbol}` : approvalRequired && approvalComplete ? `Swap ${fromMarket.symbol} → ${toMarket.symbol}` : `Swap ${fromMarket.symbol} → ${toMarket.symbol}`}</button> : <button type="button" className={styles.secondaryButton} disabled>{wrongNetwork ? 'Switch to Arc Testnet' : !isConnected ? 'Connect wallet' : stage === 'quoting' ? 'Finding route…' : stage === 'preparing' ? 'Preparing swap…' : 'Enter an amount'}</button>}
         </section>
-        <section className={`${styles.panel} ${styles.bridgeCard}`}><div className={styles.panelHead}><div><span className={styles.kicker}>BRING FUNDS TO ARC</span><h2>Cross-chain USDC</h2></div></div><p className={styles.bridgeDescription}>Bridge testnet USDC into Arc when you need funds for a swap. Centry uses Circle CCTP via Tower for supported routes.</p><div className={styles.quoteCard}><div className={styles.quoteRow}><span>Network</span><strong>{wrongNetwork ? 'Switch required' : 'Arc Testnet'}</strong></div><div className={styles.quoteRow}><span>Route</span><strong>Circle CCTP · Tower</strong></div><div className={styles.quoteRow}><span>Quote safety</span><strong>{priceImpactPercent != null && priceImpactPercent >= 5 ? 'Review high impact' : 'Minimum received enforced'}</strong></div></div></section>
+
+        <section className={`${styles.panel} ${styles.bridgeCard}`}>
+          <div><span className={styles.kicker}>EXECUTION</span><h2>Trade details</h2></div>
+          <p className={styles.bridgeDescription}>Tower selects the best available Arc route. CENT routes are handled by UnitFlow v2.5.</p>
+          <div className={styles.quoteCard}>
+            <div className={styles.bridgeRow}><span>Network</span><strong>Arc Testnet</strong></div>
+            <div className={styles.bridgeRow}><span>Slippage tolerance</span><strong>{slippage}%</strong></div>
+            <div className={styles.bridgeRow}><span>Price impact</span><strong>{quote ? formatPriceImpact(quote.priceImpact) : '—'}</strong></div>
+            <div className={styles.bridgeRow}><span>Gas</span><strong>{quote?.gasEstimate ? `${quote.gasEstimate} units` : 'Calculated by wallet'}</strong></div>
+          </div>
+          {quote?.feeBps != null ? <div className={styles.quoteCard}><div className={styles.bridgeRow}><span>Liquidity fee</span><strong>{(Number(quote.feeBps) / 100).toFixed(2)}%</strong></div></div> : null}
+        </section>
       </div>
     </div>
   );
