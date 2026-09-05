@@ -44,7 +44,7 @@ function formatQuoteAmount(raw, outputDecimals) {
 // Example from Tower docs: 0.02 means 0.02% impact.
 function formatPriceImpact(value) {
   const parsed = safeNumber(value);
-  if (parsed == null) return '—';
+  if (parsed == null || parsed < 0 || parsed > 100) return '—';
   return `${parsed.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}%`;
 }
 
@@ -128,7 +128,7 @@ function SwapContent() {
   useEffect(() => {
     const requestId = ++requestIdRef.current;
     if (!amountRaw || !fromMarket?.address || !toMarket?.address || wrongNetwork) {
-      setQuote(null); setPreparedTransactions(null); setApprovalTx(null); setError(''); setStage(wrongNetwork ? 'network' : 'idle');
+      setQuote(null); setPreparedTransactions(null); setApprovalTx(null); setError(''); setNotice(''); setStage(wrongNetwork ? 'network' : 'idle');
       return undefined;
     }
     setQuote(null); setPreparedTransactions(null); setApprovalTx(null); setError(''); setNotice(''); setStage('quoting');
@@ -157,6 +157,7 @@ function SwapContent() {
         const result = await response.json();
         if (requestId !== requestIdRef.current) return;
         if (!response.ok || !result.success) throw new Error(result.error || 'Unable to prepare the swap transaction.');
+        if (result.data?.swap?.chainId != null && Number(result.data.swap.chainId) !== ARC_CHAIN_ID) throw new Error('Swap transaction is not targeting Arc Testnet.');
         setPreparedTransactions(result.data || {}); setStage('quoted');
       } catch (caughtError) {
         if (requestId !== requestIdRef.current) return;
@@ -172,8 +173,23 @@ function SwapContent() {
   const changeFrom = (next) => { setFromId(next); if (next === toId) { const replacement = LIVE_MARKETS.find((market) => market.id !== next); if (replacement) setToId(replacement.id); } invalidateQuote(); };
   const changeTo = (next) => { setToId(next); invalidateQuote(); };
 
+  const requestArcNetwork = async () => {
+    if (!isConnected || switchingNetwork || chainId === ARC_CHAIN_ID) return;
+    setNotice('Switching wallet to Arc Testnet…'); setError('');
+    try {
+      await switchChain({ chainId: ARC_CHAIN_ID });
+      setQuote(null); setPreparedTransactions(null); setApprovalTx(null); setNotice('Arc Testnet selected. Fetching a fresh quote…'); setStage('idle');
+    } catch (caughtError) {
+      setError(errorText(caughtError)); setStage('network');
+    }
+  };
+
   const buildAndSwap = async () => {
-    if (!quote || !address || !isConnected || wrongNetwork || walletPending) return;
+    if (!quote || !address || !isConnected || walletPending) return;
+    if (chainId !== ARC_CHAIN_ID) {
+      await requestArcNetwork();
+      return;
+    }
     setNotice(''); setError('');
     try {
       let transactions = preparedTransactions;
@@ -182,15 +198,18 @@ function SwapContent() {
         const response = await fetch('/api/tower/swap/build', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quote, userAddress: address }) });
         const result = await response.json();
         if (!response.ok || !result.success) throw new Error(result.error || 'Tower could not build the swap transaction.');
+        if (result.data?.swap?.chainId != null && Number(result.data.swap.chainId) !== ARC_CHAIN_ID) throw new Error('Swap transaction is not targeting Arc Testnet.');
         transactions = result.data || {}; setPreparedTransactions(transactions);
       }
       if (!transactions.swap?.to || !transactions.swap?.data) throw new Error('Tower returned an incomplete swap transaction.');
+      if (transactions.swap.chainId != null && Number(transactions.swap.chainId) !== ARC_CHAIN_ID) throw new Error('Swap transaction is not targeting Arc Testnet.');
       const approval = transactions.approval;
       if (approval && !approvalTx) {
         setNotice(`Approve ${fromMarket.symbol} first. After approval, press Swap to continue.`); setStage('approval');
         const hash = await sendTransactionAsync({ to: approval.to, data: approval.data, value: BigInt(approval.value || '0'), gas: approval.gasLimit ? BigInt(approval.gasLimit) : undefined, chainId: ARC_CHAIN_ID });
         setApprovalTx(hash); return;
       }
+      if (approvalTx && !approvalComplete) return;
       setNotice('Approve the swap transaction in your wallet.'); setStage('swapping');
       const hash = await sendTransactionAsync({ to: transactions.swap.to, data: transactions.swap.data, value: BigInt(transactions.swap.value || '0'), gas: transactions.swap.gasLimit ? BigInt(transactions.swap.gasLimit) : undefined, chainId: ARC_CHAIN_ID });
       setSwapTx(hash); setStage('submitted'); setNotice('Swap transaction submitted.');
@@ -206,6 +225,7 @@ function SwapContent() {
   const outputAmount = quote ? formatQuoteAmount(quote.outputAmount, toTokenDecimals) : '—';
   const minOutput = quote ? formatQuoteAmount(quote.minOut, toTokenDecimals) : '—';
   const priceImpactPercent = quote?.priceImpact != null ? safeNumber(quote.priceImpact) : null;
+  const safePriceImpactPercent = priceImpactPercent != null && priceImpactPercent >= 0 && priceImpactPercent <= 100 ? priceImpactPercent : null;
   const quoteReady = Boolean(quote?.outputAmount && quote?.minOut && BigInt(String(quote.minOut)) > 0n && BigInt(String(quote.outputAmount)) >= BigInt(String(quote.minOut)));
 
   useEffect(() => {
@@ -218,20 +238,20 @@ function SwapContent() {
       <div className={styles.panelGrid}>
         <section className={styles.panel}>
           <div className={styles.panelHead}><div><span className={styles.kicker}>ARC SWAP</span><h2>Exchange</h2></div></div>
-          {wrongNetwork ? <div className={`${styles.notice} ${styles.noticeError}`}><strong>Arc Testnet required.</strong> Switch your wallet network before requesting a quote or sending a swap.</div> : null}
+          {wrongNetwork ? <div className={`${styles.notice} ${styles.noticeError}`}><strong>Wallet is on chain {chainId}.</strong> Arc Testnet is required for swaps.<button type="button" className={styles.inlineButton} onClick={requestArcNetwork} disabled={switchingNetwork}>{switchingNetwork ? 'Switching…' : 'Switch to Arc Testnet'}</button></div> : null}
           <div className={styles.swapStack}>
             <div className={styles.assetField}><label htmlFor="swap-amount">You pay</label><div className={styles.assetRow}><input id="swap-amount" className={styles.amountInput} type="text" inputMode="decimal" placeholder="0.00" value={amount} onChange={(event) => { const value = event.target.value; if (value === '' || /^\d*(\.\d*)?$/.test(value)) setAmount(value); }} /><TokenDropdown value={fromId} markets={LIVE_MARKETS} onChange={changeFrom} label="Input token" /></div></div>
             <button type="button" className={styles.switchButton} onClick={swapTokens} disabled={wrongNetwork || isPreparing || approvalPending} aria-label="Reverse swap">↕</button>
             <div className={styles.assetField}><label>Receive</label><div className={styles.assetRow}><div className={styles.amountInput}>{outputAmount}</div><TokenDropdown value={toId} markets={LIVE_MARKETS} onChange={changeTo} label="Output token" /></div></div>
           </div>
           <div className={styles.metaRow}><span>Slippage</span><input className={styles.slippageInput} value={slippage} onChange={(event) => setSlippage(event.target.value)} inputMode="decimal" aria-label="Slippage percentage" /><span>%</span></div>
-          {quote ? <div className={styles.quoteCard}><div className={styles.quoteRow}><span>Expected output</span><strong className={styles.quoteOutput}>{outputAmount} {toMarket.symbol}</strong></div><div className={styles.quoteRow}><span>Minimum received</span><strong>{minOutput} {toMarket.symbol}</strong></div><div className={styles.quoteRow}><span>Price impact</span><strong>{formatPriceImpact(quote.priceImpact)}</strong></div>{priceImpactPercent != null && priceImpactPercent >= 5 ? <div className={`${styles.notice} ${styles.noticeError}`}>High price impact: {formatPriceImpact(priceImpactPercent)}. Consider a smaller trade or a different route.</div> : null}<div className={styles.quoteRow}><span>Route</span><strong>{typeof quote.route === 'string' ? quote.route : quote.dexName || quote.dexId || 'Tower routing'}</strong></div></div> : <div className={styles.quoteStatus}>{wrongNetwork ? 'Switch to Arc Testnet to quote this swap.' : stage === 'quoting' ? 'Fetching the best Arc route…' : stage === 'preparing' ? 'Preparing the transaction…' : 'Enter an amount to get a quote.'}</div>}
+          {quote ? <div className={styles.quoteCard}><div className={styles.quoteRow}><span>Expected output</span><strong className={styles.quoteOutput}>{outputAmount} {toMarket.symbol}</strong></div><div className={styles.quoteRow}><span>Minimum received</span><strong>{minOutput} {toMarket.symbol}</strong></div><div className={styles.quoteRow}><span>Price impact</span><strong>{formatPriceImpact(safePriceImpactPercent)}</strong></div>{safePriceImpactPercent != null && safePriceImpactPercent >= 5 ? <div className={`${styles.notice} ${styles.noticeError}`}>High price impact: {formatPriceImpact(safePriceImpactPercent)}. Consider a smaller trade or a different route.</div> : null}<div className={styles.quoteRow}><span>Route</span><strong>{typeof quote.route === 'string' ? quote.route : quote.dexName || quote.dexId || 'Tower routing'}</strong></div></div> : <div className={styles.quoteStatus}>{wrongNetwork ? 'Switch to Arc Testnet to quote this swap.' : stage === 'quoting' ? 'Fetching the best Arc route…' : stage === 'preparing' ? 'Preparing the transaction…' : 'Enter an amount to get a quote.'}</div>}
           {notice && <div className={styles.notice}>{notice}</div>}
           {error && <div className={`${styles.notice} ${styles.noticeError}`}>{error}</div>}
           {approvalReceipt.isLoading ? <div className={styles.notice}>Waiting for approval confirmation…</div> : null}
           {swapReceipt.isLoading ? <div className={styles.notice}>Waiting for swap confirmation…</div> : null}
           {swapReceipt.isSuccess ? <div className={`${styles.notice} ${styles.noticeSuccess}`}>Swap confirmed on Arc.</div> : null}
-          {isConnected && !wrongNetwork && quoteReady ? <button type="button" className={styles.primaryButton} disabled={isPreparing || approvalPending || (!approvalComplete && !approvalRequired) || switchingNetwork || !preparedTransactions} onClick={buildAndSwap}>{walletPending ? 'Confirm in wallet…' : approvalPending ? 'Waiting for approval…' : approvalRequired && !approvalComplete ? `Approve ${fromMarket.symbol}` : approvalRequired && approvalComplete ? `Swap ${fromMarket.symbol} → ${toMarket.symbol}` : `Swap ${fromMarket.symbol} → ${toMarket.symbol}`}</button> : <button type="button" className={styles.secondaryButton} disabled>{wrongNetwork ? 'Switch to Arc Testnet' : !isConnected ? 'Connect wallet' : stage === 'quoting' ? 'Finding route…' : stage === 'preparing' ? 'Preparing swap…' : 'Enter an amount'}</button>}
+          {wrongNetwork ? <button type="button" className={styles.primaryButton} disabled={switchingNetwork} onClick={requestArcNetwork}>{switchingNetwork ? 'Switching network…' : 'Switch to Arc Testnet'}</button> : isConnected && quoteReady ? <button type="button" className={styles.primaryButton} disabled={isPreparing || approvalPending || (!approvalComplete && !approvalRequired) || switchingNetwork || !preparedTransactions} onClick={buildAndSwap}>{walletPending ? 'Confirm in wallet…' : approvalPending ? 'Waiting for approval…' : approvalRequired && !approvalComplete ? `Approve ${fromMarket.symbol}` : `Swap ${fromMarket.symbol} → ${toMarket.symbol}`}</button> : <button type="button" className={styles.secondaryButton} disabled>{!isConnected ? 'Connect wallet' : stage === 'quoting' ? 'Finding route…' : stage === 'preparing' ? 'Preparing swap…' : 'Enter an amount'}</button>}
         </section>
 
         <section className={`${styles.panel} ${styles.bridgeCard}`}>
@@ -240,7 +260,7 @@ function SwapContent() {
           <div className={styles.quoteCard}>
             <div className={styles.bridgeRow}><span>Network</span><strong>Arc Testnet</strong></div>
             <div className={styles.bridgeRow}><span>Slippage tolerance</span><strong>{slippage}%</strong></div>
-            <div className={styles.bridgeRow}><span>Price impact</span><strong>{quote ? formatPriceImpact(quote.priceImpact) : '—'}</strong></div>
+            <div className={styles.bridgeRow}><span>Price impact</span><strong>{quote ? formatPriceImpact(safePriceImpactPercent) : '—'}</strong></div>
             <div className={styles.bridgeRow}><span>Gas</span><strong>{quote?.gasEstimate ? `${quote.gasEstimate} units` : 'Calculated by wallet'}</strong></div>
           </div>
           {quote?.feeBps != null ? <div className={styles.quoteCard}><div className={styles.bridgeRow}><span>Liquidity fee</span><strong>{(Number(quote.feeBps) / 100).toFixed(2)}%</strong></div></div> : null}
