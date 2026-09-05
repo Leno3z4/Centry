@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createPublicClient, http } from 'viem';
-import { arc } from 'viem/chains';
+import { createPublicClient, defineChain, http } from 'viem';
 import { ACTIVE_MARKETS } from '../../../../../constants/markets';
 
 const TOWER_BASE_URL = 'https://www.tower.exchange/api/public';
@@ -54,7 +53,12 @@ function isStructurallyValidQuote(quote) {
 async function getUnitFlowQuote(inputToken, outputToken, inputAmount, slippageTolerance) {
   const rpcUrl = process.env.ARC_RPC_URL || process.env.ARC_RPC_URL_VARIABLE || 'https://rpc.testnet.arc.network';
   const client = createPublicClient({
-    chain: { ...arc, id: ARC_CHAIN_ID },
+    chain: defineChain({
+      id: ARC_CHAIN_ID,
+      name: 'Arc Testnet',
+      nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 18 },
+      rpcUrls: { default: { http: [rpcUrl] } },
+    }),
     transport: http(rpcUrl),
   });
 
@@ -115,7 +119,10 @@ export async function POST(request) {
       return NextResponse.json({ success: false, error: 'inputAmount must be an integer base-unit amount.' }, { status: 400 });
     }
 
-    const slippage = Math.max(0, Math.min(5000, Number(slippageTolerance)));
+    const requestedSlippage = Number(slippageTolerance);
+    const slippage = Number.isFinite(requestedSlippage)
+      ? Math.max(0, Math.min(5000, requestedSlippage))
+      : 50;
 
     if (isCentPair(inputToken, outputToken)) {
       const data = await getUnitFlowQuote(inputToken, outputToken, inputAmount, slippage);
