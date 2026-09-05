@@ -216,6 +216,12 @@
   background: #3b2a16;
 }
 
+.tokenIcon_cent {
+  border-color: #9b62ff;
+  background: #2f174f;
+  color: #e2ccff;
+}
+
 .tokenMenu {
   position: absolute;
   z-index: 100;

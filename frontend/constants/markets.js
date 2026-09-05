@@ -41,12 +41,28 @@ export const MARKETS = [
     status: 'coming-soon',
     description: 'Requires a dedicated collateral/risk model before lending support.',
   },
+  {
+    id: 'cent',
+    symbol: 'CENT',
+    name: 'Centry',
+    decimals: 18,
+    address: CONTRACT_ADDRESSES.centryToken,
+    kind: 'centry',
+    status: 'live',
+    swapOnly: true,
+    description: 'Centry governance token available on the Swap page through the dedicated UnitFlow route.',
+  },
 ];
 
 export const ACTIVE_MARKETS = MARKETS.filter(
-  (market) => market.status === 'live' && market.address
+  (market) => market.status === 'live' && market.address && !market.swapOnly
 );
 
 export const UPCOMING_MARKETS = MARKETS.filter(
   (market) => market.status !== 'live'
 );
+
+export const SWAP_MARKETS = [
+  ...ACTIVE_MARKETS,
+  MARKETS.find((market) => market.id === 'cent'),
+].filter(Boolean);
