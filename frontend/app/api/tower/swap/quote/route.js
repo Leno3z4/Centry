@@ -7,9 +7,8 @@ const ARC_CHAIN_ID = 5042002;
 const CENT = '0x76e6d50D3151f0B4645ac0E53584F4204Fc6f0e3';
 const USDC = '0x3600000000000000000000000000000000000000';
 const WUSDC = '0x911b4000D3422F482F4062a913885f7b035382Df';
-const UNITFLOW_V25_SWAP_ROUTER = '0x4AA8c7Ac458479dA4FA5c1481e03061ac76824A';
+const UNITFLOW_V25_SWAP_ROUTER = '0x4AA8c7Ac458479d9A4FA5c1481e03061ac76824A';
 const WUSDC_SCALE = 10n ** 12n;
-const TOWER_QUOTE_DECIMALS = 18;
 
 const UNITFLOW_V25_ROUTER_ABI = [
   {
@@ -80,23 +79,15 @@ function executionPriceImpact(inputUnits, outputUnits, inputPriceUsd, outputPric
   return Math.max(0, Math.min(100, (1 - outputUnits / fairOutput) * 100));
 }
 
-function getRoutePriceImpact(quote) {
-  const hops = Array.isArray(quote?.route?.hops) ? quote.route.hops : [];
-  const impacts = hops.map((hop) => Number(hop?.priceImpact)).filter((value) => Number.isFinite(value) && value >= 0 && value <= 100);
-  if (!impacts.length) return null;
-  return Math.min(100, impacts.reduce((sum, value) => sum + value, 0));
-}
-
 async function calculateQuotePriceImpact(quote, inputToken, outputToken) {
-  const routeImpact = getRoutePriceImpact(quote);
   const providerImpact = Number(quote?.priceImpact);
   const providerIsSane = Number.isFinite(providerImpact) && providerImpact >= 0 && providerImpact <= 100;
   const inputMarket = ACTIVE_MARKETS.find((item) => item.address?.toLowerCase() === inputToken.toLowerCase());
   const outputMarket = ACTIVE_MARKETS.find((item) => item.address?.toLowerCase() === outputToken.toLowerCase());
-  if (!inputMarket || !outputMarket) return routeImpact ?? (providerIsSane ? providerImpact : null);
+  if (!inputMarket || !outputMarket) return providerIsSane ? providerImpact : null;
 
   const apiKey = process.env.TOWER_API_KEY;
-  if (!apiKey) return routeImpact ?? (providerIsSane ? providerImpact : null);
+  if (!apiKey) return providerIsSane ? providerImpact : null;
 
   try {
     const response = await fetch(`${TOWER_BASE_URL}/prices`, { method: 'GET', headers: { Authorization: `Bearer ${apiKey}` }, cache: 'no-store' });
@@ -110,26 +101,23 @@ async function calculateQuotePriceImpact(quote, inputToken, outputToken) {
     let outputPriceUsd = findUsdPrice(prices, outputToken);
     if (inputMarket.id === 'cirbtc') inputPriceUsd = inputPriceUsd || await getExternalBtcUsd();
     if (outputMarket.id === 'cirbtc') outputPriceUsd = outputPriceUsd || await getExternalBtcUsd();
-    if (!inputPriceUsd || !outputPriceUsd) return routeImpact ?? (providerIsSane ? providerImpact : null);
+    if (!inputPriceUsd || !outputPriceUsd) return providerIsSane ? providerImpact : null;
 
     const inputRaw = BigInt(String(quote.inputAmount || '0'));
     const outputRaw = BigInt(String(quote.outputAmount || '0'));
-    if (inputRaw <= 0n || outputRaw <= 0n) return routeImpact ?? (providerIsSane ? providerImpact : null);
+    if (inputRaw <= 0n || outputRaw <= 0n) return providerIsSane ? providerImpact : null;
 
-    // Tower keeps input in the sold token's native atomic units and normalizes
-    // quote output to 18-decimal quote precision. Do not apply the output token's
-    // local decimals again here, especially for cirBTC (8 decimals).
+    // Tower documents quote output as base atomic units of the purchased asset.
+    // Use the actual market decimals here. cirBTC is 8 decimals; assuming 18
+    // decimals was the source of the bogus 100% impact on small BTC trades.
     const inputUnits = toUnits(inputRaw, Number(inputMarket.decimals ?? 6));
-    const outputUnits = toUnits(outputRaw, TOWER_QUOTE_DECIMALS);
+    const outputUnits = toUnits(outputRaw, Number(outputMarket.decimals ?? 6));
     const calculated = executionPriceImpact(inputUnits, outputUnits, inputPriceUsd, outputPriceUsd);
-    if (calculated == null) return routeImpact ?? (providerIsSane ? providerImpact : null);
+    if (calculated == null) return providerIsSane ? providerImpact : null;
 
-    // Prefer the unit-safe execution-vs-spot result. Tower's route-level impact
-    // has produced implausibly large values for tiny cirBTC trades; the quoted
-    // output is the stronger signal for this UI sanity check.
     return Number(calculated.toFixed(4));
   } catch {
-    return routeImpact ?? (providerIsSane ? providerImpact : null);
+    return providerIsSane ? providerImpact : null;
   }
 }
 
@@ -178,11 +166,10 @@ export async function POST(request) {
     const data = await response.json();
     if (response.ok && data?.success === true) {
       if (!isStructurallyValidQuote(data.data)) return NextResponse.json({ success: false, error: 'Tower returned an incomplete quote. Try refreshing the quote or using a smaller amount.' }, { status: 422 });
-      const routeImpact = getRoutePriceImpact(data.data);
       const calculatedImpact = await calculateQuotePriceImpact(data.data, inputToken, outputToken);
       if (calculatedImpact != null) {
         data.data.priceImpact = calculatedImpact;
-        data.data.priceImpactSource = routeImpact != null && Math.abs(routeImpact - calculatedImpact) <= 5 ? 'route' : 'execution-vs-spot';
+        data.data.priceImpactSource = 'execution-vs-spot';
       } else if (!Number.isFinite(Number(data.data.priceImpact)) || Number(data.data.priceImpact) < 0 || Number(data.data.priceImpact) > 100) {
         data.data.priceImpact = null;
         data.data.priceImpactSource = 'unavailable';
