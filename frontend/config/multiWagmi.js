@@ -1,5 +1,5 @@
-import { createConfig, createConnector, fallback, http } from 'wagmi';
-import { defineChain } from 'viem';
+import { createConfig, createConnector, http } from 'wagmi';
+import { defineChain, fallback } from 'viem';
 import EthereumProvider from '@walletconnect/ethereum-provider';
 
 export const arcTestnet = defineChain({
