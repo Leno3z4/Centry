@@ -228,8 +228,6 @@ async function findSearchCandidates(client, length, query) {
   const target = query.trim().toLowerCase();
   const candidates = [];
 
-  // Walk the factory registry in bounded chunks. This avoids building the entire
-  // token metadata universe before returning a single search result.
   for (let start = 0; start < length && candidates.length < SEARCH_RESULT_LIMIT; start += SEARCH_BATCH_SIZE) {
     const count = Math.min(SEARCH_BATCH_SIZE, length - start);
     const indices = Array.from({ length: count }, (_, offset) => BigInt(start + offset));
@@ -246,7 +244,6 @@ async function findSearchCandidates(client, length, query) {
 
     if (!pairAddresses.length) continue;
 
-    // A pair-address search is exact and does not require token metadata.
     if (validAddress(query)) {
       const addressMatches = pairAddresses.filter((pair) => pair.toLowerCase() === target);
       candidates.push(...addressMatches);
