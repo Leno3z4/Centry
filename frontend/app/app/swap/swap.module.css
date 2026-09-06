@@ -306,26 +306,24 @@
 
 .metaRow {
   display: grid;
-  grid-template-columns: auto auto auto;
+  grid-template-columns: 1fr auto auto;
   align-items: center;
-  justify-content: end;
-  gap: 5px;
-  margin-top: 7px;
-  color: #655b70;
-  font-size: 10px;
+  gap: 6px;
+  margin-top: 10px;
+  color: #756d83;
+  font-size: 11px;
 }
 
 .slippageInput {
-  width: 52px;
-  min-height: 28px;
-  padding: 4px 7px;
-  border: 1px solid #292033;
+  width: 68px;
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 1px solid #2f243e;
   border-radius: 8px;
-  background: #0c0812;
-  color: #aaa0b3;
+  background: #0e0917;
+  color: #d9cce7;
   text-align: right;
   outline: 0;
-  font-size: 10px;
 }
 
 .slippageInput:focus {
