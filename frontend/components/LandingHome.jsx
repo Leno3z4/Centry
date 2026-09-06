@@ -45,7 +45,7 @@ export default function LandingHome() {
             <nav className="landing-home-nav">
                 <Link href="/" className="landing-home-brand">Centry</Link>
                 <div className="landing-home-nav-links">
-                    <a href="#products">Products</a>
+                    <a href="#main">Main</a>
                     <a href="#explore">Explore</a>
                     <Link href="/app" className="landing-home-open">Open app</Link>
                 </div>
