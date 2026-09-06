@@ -41,6 +41,104 @@ function isStructurallyValidQuote(quote) {
   } catch { return false; }
 }
 
+function findUsdPrice(prices, tokenAddress) {
+  if (!prices || !tokenAddress) return null;
+  const normalized = tokenAddress.toLowerCase();
+  const market = ACTIVE_MARKETS.find((item) => item.address?.toLowerCase() === normalized);
+  if (!market) return null;
+  const aliases = {
+    usdc: ['usd-coin', 'usdc'], eurc: ['eurc', 'euro-coin'], usdt: ['tether', 'usdt'],
+    cirbtc: ['wrapped-bitcoin', 'bitcoin', 'btc', 'cirbtc'],
+  };
+  const keys = [...(aliases[market.id] || []), market.id, market.symbol?.toLowerCase(), market.name?.toLowerCase()].filter(Boolean);
+  for (const key of keys) {
+    const value = prices?.[key]?.usd;
+    if (Number.isFinite(Number(value)) && Number(value) > 0) return Number(value);
+  }
+  return null;
+}
+
+async function getExternalBtcUsd() {
+  try {
+    const response = await fetch('https://api.coinbase.com/v2/prices/BTC-USD/spot', { method: 'GET', headers: { Accept: 'application/json' }, cache: 'no-store' });
+    if (!response.ok) return null;
+    const payload = await response.json();
+    const value = Number(payload?.data?.amount);
+    return Number.isFinite(value) && value > 0 ? value : null;
+  } catch { return null; }
+}
+
+function toUnits(raw, decimals) {
+  try { return Number(BigInt(String(raw))) / 10 ** decimals; } catch { return null; }
+}
+
+function executionPriceImpact(inputUnits, outputUnits, inputPriceUsd, outputPriceUsd) {
+  if (![inputUnits, outputUnits, inputPriceUsd, outputPriceUsd].every((value) => Number.isFinite(value) && value > 0)) return null;
+  const fairOutput = (inputUnits * inputPriceUsd) / outputPriceUsd;
+  if (!Number.isFinite(fairOutput) || fairOutput <= 0) return null;
+  return Math.max(0, Math.min(100, (1 - outputUnits / fairOutput) * 100));
+}
+
+function chooseOutputUnits(raw, outputMarket, inputUnits, inputPriceUsd, outputPriceUsd) {
+  const decimalsCandidates = [...new Set([Number(outputMarket.decimals ?? 6), 18])];
+  const fairOutput = (inputUnits * inputPriceUsd) / outputPriceUsd;
+  if (!Number.isFinite(fairOutput) || fairOutput <= 0) return null;
+
+  const candidates = decimalsCandidates
+    .map((decimals) => ({ decimals, units: toUnits(raw, decimals) }))
+    .filter((candidate) => Number.isFinite(candidate.units) && candidate.units > 0)
+    .map((candidate) => ({
+      ...candidate,
+      score: Math.abs(Math.log(candidate.units / fairOutput)),
+    }))
+    .sort((a, b) => a.score - b.score);
+
+  return candidates[0]?.units ?? null;
+}
+
+async function calculateQuotePriceImpact(quote, inputToken, outputToken) {
+  const providerImpact = Number(quote?.priceImpact);
+  const providerIsSane = Number.isFinite(providerImpact) && providerImpact >= 0 && providerImpact <= 100;
+  const inputMarket = ACTIVE_MARKETS.find((item) => item.address?.toLowerCase() === inputToken.toLowerCase());
+  const outputMarket = ACTIVE_MARKETS.find((item) => item.address?.toLowerCase() === outputToken.toLowerCase());
+  if (!inputMarket || !outputMarket) return providerIsSane ? providerImpact : null;
+
+  const apiKey = process.env.TOWER_API_KEY;
+  if (!apiKey) return providerIsSane ? providerImpact : null;
+
+  try {
+    const response = await fetch(`${TOWER_BASE_URL}/prices`, { method: 'GET', headers: { Authorization: `Bearer ${apiKey}` }, cache: 'no-store' });
+    let prices = null;
+    if (response.ok) {
+      const payload = await response.json();
+      prices = payload?.data && typeof payload.data === 'object' ? payload.data : payload;
+    }
+
+    let inputPriceUsd = findUsdPrice(prices, inputToken);
+    let outputPriceUsd = findUsdPrice(prices, outputToken);
+    if (inputMarket.id === 'cirbtc') inputPriceUsd = inputPriceUsd || await getExternalBtcUsd();
+    if (outputMarket.id === 'cirbtc') outputPriceUsd = outputPriceUsd || await getExternalBtcUsd();
+    if (!inputPriceUsd || !outputPriceUsd) return providerIsSane ? providerImpact : null;
+
+    const inputRaw = BigInt(String(quote.inputAmount || '0'));
+    const outputRaw = BigInt(String(quote.outputAmount || '0'));
+    if (inputRaw <= 0n || outputRaw <= 0n) return providerIsSane ? providerImpact : null;
+
+    const inputUnits = toUnits(inputRaw, Number(inputMarket.decimals ?? 6));
+    const outputUnits = chooseOutputUnits(outputRaw, outputMarket, inputUnits, inputPriceUsd, outputPriceUsd);
+    const calculated = executionPriceImpact(inputUnits, outputUnits, inputPriceUsd, outputPriceUsd);
+    if (calculated == null) return providerIsSane ? providerImpact : null;
+
+    // Tower examples use 18-decimal quote outputs for EURC, while Arc cirBTC is
+    // an 8-decimal token. Choose the quote interpretation closest to fair USD value
+    // instead of hard-coding either precision, which prevents 100% artifacts from
+    // decimal mismatches while preserving a genuinely large pool impact.
+    return Number(calculated.toFixed(4));
+  } catch {
+    return providerIsSane ? providerImpact : null;
+  }
+}
+
 async function getUnitFlowQuote(inputToken, outputToken, inputAmount, slippageTolerance) {
   const rpcUrl = process.env.ARC_RPC_URL || process.env.ARC_RPC_URL_VARIABLE || 'https://rpc.testnet.arc.network';
   const client = createPublicClient({
@@ -84,29 +182,17 @@ export async function POST(request) {
       cache: 'no-store',
     });
     const data = await response.json();
-
     if (response.ok && data?.success === true) {
-      if (!isStructurallyValidQuote(data.data)) {
-        return NextResponse.json(
-          { success: false, error: 'Tower returned an incomplete quote. Try refreshing the quote or using a smaller amount.' },
-          { status: 422 },
-        );
-      }
-
-      // Tower already calculates price impact from the selected route. Do not
-      // replace it with a USD spot-price calculation: output token decimals
-      // differ (BTC/cirBTC is 8 decimals, for example), and guessing precision
-      // can manufacture a false near-100% impact.
-      const providerImpact = Number(data.data.priceImpact);
-      if (Number.isFinite(providerImpact) && providerImpact >= 0 && providerImpact <= 100) {
-        data.data.priceImpact = providerImpact;
-        data.data.priceImpactSource = 'tower';
-      } else {
+      if (!isStructurallyValidQuote(data.data)) return NextResponse.json({ success: false, error: 'Tower returned an incomplete quote. Try refreshing the quote or using a smaller amount.' }, { status: 422 });
+      const calculatedImpact = await calculateQuotePriceImpact(data.data, inputToken, outputToken);
+      if (calculatedImpact != null) {
+        data.data.priceImpact = calculatedImpact;
+        data.data.priceImpactSource = 'execution-vs-spot';
+      } else if (!Number.isFinite(Number(data.data.priceImpact)) || Number(data.data.priceImpact) < 0 || Number(data.data.priceImpact) > 100) {
         data.data.priceImpact = null;
         data.data.priceImpactSource = 'unavailable';
       }
     }
-
     return NextResponse.json(data, { status: response.status });
   } catch (error) {
     return NextResponse.json({ success: false, error: error?.message || 'Unable to reach a swap routing provider.' }, { status: 502 });
