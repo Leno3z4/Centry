@@ -184,8 +184,21 @@ function SwapContent() {
     }
   };
 
+  const approveToken = async () => {
+    const approval = preparedTransactions?.approval;
+    if (!approval || !address || !isConnected || walletPending || switchingNetwork) return;
+    setNotice(`Approve ${fromMarket.symbol} in your wallet. This is a one-time token permission for the swap.`);
+    setError(''); setStage('approval');
+    try {
+      const hash = await sendTransactionAsync({ to: approval.to, data: approval.data, value: BigInt(approval.value || '0'), gas: approval.gasLimit ? BigInt(approval.gasLimit) : undefined, chainId: ARC_CHAIN_ID });
+      setApprovalTx(hash);
+    } catch (caughtError) {
+      setError(errorText(caughtError)); setStage('quoted');
+    }
+  };
+
   const buildAndSwap = async () => {
-    if (!quote || !address || !isConnected || walletPending) return;
+    if (!quote || !address || !isConnected || walletPending || approvalPending) return;
     if (chainId !== ARC_CHAIN_ID) {
       await requestArcNetwork();
       return;
@@ -203,13 +216,10 @@ function SwapContent() {
       }
       if (!transactions.swap?.to || !transactions.swap?.data) throw new Error('Tower returned an incomplete swap transaction.');
       if (transactions.swap.chainId != null && Number(transactions.swap.chainId) !== ARC_CHAIN_ID) throw new Error('Swap transaction is not targeting Arc Testnet.');
-      const approval = transactions.approval;
-      if (approval && !approvalTx) {
-        setNotice(`Approve ${fromMarket.symbol} first. After approval, press Swap to continue.`); setStage('approval');
-        const hash = await sendTransactionAsync({ to: approval.to, data: approval.data, value: BigInt(approval.value || '0'), gas: approval.gasLimit ? BigInt(approval.gasLimit) : undefined, chainId: ARC_CHAIN_ID });
-        setApprovalTx(hash); return;
+      if (transactions.approval && !approvalComplete) {
+        setError('Approve the token first.'); setStage('quoted');
+        return;
       }
-      if (approvalTx && !approvalComplete) return;
       setNotice('Approve the swap transaction in your wallet.'); setStage('swapping');
       const hash = await sendTransactionAsync({ to: transactions.swap.to, data: transactions.swap.data, value: BigInt(transactions.swap.value || '0'), gas: transactions.swap.gasLimit ? BigInt(transactions.swap.gasLimit) : undefined, chainId: ARC_CHAIN_ID });
       setSwapTx(hash); setStage('submitted'); setNotice('Swap transaction submitted.');
@@ -229,7 +239,7 @@ function SwapContent() {
   const quoteReady = Boolean(quote?.outputAmount && quote?.minOut && BigInt(String(quote.minOut)) > 0n && BigInt(String(quote.outputAmount)) >= BigInt(String(quote.minOut)));
 
   useEffect(() => {
-    if (approvalReceipt.isSuccess) { setNotice('Approval confirmed. Press Swap to complete the trade.'); setStage('quoted'); }
+    if (approvalReceipt.isSuccess) { setNotice('Approval confirmed. The swap is ready.'); setStage('quoted'); }
   }, [approvalReceipt.isSuccess]);
 
   return (
@@ -251,7 +261,7 @@ function SwapContent() {
           {approvalReceipt.isLoading ? <div className={styles.notice}>Waiting for approval confirmation…</div> : null}
           {swapReceipt.isLoading ? <div className={styles.notice}>Waiting for swap confirmation…</div> : null}
           {swapReceipt.isSuccess ? <div className={`${styles.notice} ${styles.noticeSuccess}`}>Swap confirmed on Arc.</div> : null}
-          {wrongNetwork ? <button type="button" className={styles.primaryButton} disabled={switchingNetwork} onClick={requestArcNetwork}>{switchingNetwork ? 'Switching network…' : 'Switch to Arc Testnet'}</button> : isConnected && quoteReady ? <button type="button" className={styles.primaryButton} disabled={isPreparing || approvalPending || (!approvalComplete && !approvalRequired) || switchingNetwork || !preparedTransactions} onClick={buildAndSwap}>{walletPending ? 'Confirm in wallet…' : approvalPending ? 'Waiting for approval…' : approvalRequired && !approvalComplete ? `Approve ${fromMarket.symbol}` : `Swap ${fromMarket.symbol} → ${toMarket.symbol}`}</button> : <button type="button" className={styles.secondaryButton} disabled>{!isConnected ? 'Connect wallet' : stage === 'quoting' ? 'Finding route…' : stage === 'preparing' ? 'Preparing swap…' : 'Enter an amount'}</button>}
+          {wrongNetwork ? <button type="button" className={styles.primaryButton} disabled={switchingNetwork} onClick={requestArcNetwork}>{switchingNetwork ? 'Switching network…' : 'Switch to Arc Testnet'}</button> : isConnected && quoteReady ? <>{approvalRequired && !approvalComplete ? <><button type="button" className={styles.secondaryButton} disabled={isPreparing || approvalPending || switchingNetwork || !preparedTransactions} onClick={approveToken}>{walletPending ? 'Confirm in wallet…' : approvalPending ? `Waiting for ${fromMarket.symbol} approval…` : `Approve ${fromMarket.symbol}`}</button><button type="button" className={styles.primaryButton} disabled>{`Approve ${fromMarket.symbol} first`}</button></> : <button type="button" className={styles.primaryButton} disabled={isPreparing || switchingNetwork || !preparedTransactions || !approvalComplete} onClick={buildAndSwap}>{walletPending ? 'Confirm in wallet…' : `Swap ${fromMarket.symbol} → ${toMarket.symbol}`}</button>}</> : <button type="button" className={styles.secondaryButton} disabled>{!isConnected ? 'Connect wallet' : stage === 'quoting' ? 'Finding route…' : stage === 'preparing' ? 'Preparing swap…' : 'Enter an amount'}</button>}
         </section>
 
         <details className={`${styles.panel} ${styles.bridgeCard}`}>
