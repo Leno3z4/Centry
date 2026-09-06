@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createPublicClient, defineChain, fallback, http, getAddress } from 'viem';
+import { createPublicClient, defineChain, fallback, http, getAddress, encodeFunctionData, decodeFunctionResult } from 'viem';
+import { MARKETS } from '../../../constants/markets';
 
 const ARC_CHAIN_ID = 5042002;
 const FACTORY = '0xd67F63A4F26a497b364d1C82e6747Aec8B5743a5';
@@ -7,15 +8,19 @@ const WUSDC = '0x911b4000D3422F482F4062a913885f7b035382Df';
 const CENT = '0x76e6d50D3151f0B4645ac0E53584F4204Fc6f0e3';
 const NATIVE_USDC = '0x3600000000000000000000000000000000000000';
 const ZERO = '0x0000000000000000000000000000000000000000';
-const MAX_DISPLAY_POOLS = 200;
-const SEARCH_RESULT_LIMIT = 100;
-const BATCH_SIZE = 50;
-const CACHE_TTL_MS = 30_000;
-const META_CACHE_TTL_MS = 5 * 60_000;
-const SEARCH_TIMEOUT_MS = 8_000;
+const MAX_DISPLAY_POOLS = 100;
+const SEARCH_RESULT_LIMIT = 50;
+const RPC_TIMEOUT_MS = 5_000;
 const REQUEST_TIMEOUT_MS = 12_000;
-const PAIR_EVENTS_TTL_MS = 60_000;
+const CACHE_TTL_MS = 30_000;
+const META_CACHE_TTL_MS = 10 * 60_000;
+const PAIR_INDEX_CACHE_TTL_MS = 60_000;
 const PAIR_CREATED_TOPIC0 = '0x0d3648bd0f6ba80134a33ba9275ac585d9d315f0ad8355cddefde31afa28d0e9';
+const ERC20_METHOD_ABI = {
+  symbol: [{ type: 'function', name: 'symbol', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] }],
+  name: [{ type: 'function', name: 'name', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] }],
+  decimals: [{ type: 'function', name: 'decimals', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint8' }] }],
+};
 
 const FACTORY_ABI = [
   { type: 'function', name: 'allPairsLength', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
@@ -30,53 +35,50 @@ const PAIR_ABI = [
   { type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ type: 'address' }], outputs: [{ type: 'uint256' }] },
 ];
 
-const ERC20_ABI = [
-  { type: 'function', name: 'symbol', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] },
-  { type: 'function', name: 'name', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] },
-  { type: 'function', name: 'decimals', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint8' }] },
-];
+const RPC_URLS = [
+  process.env.ARC_RPC_URL,
+  process.env.NEXT_PUBLIC_ARC_RPC_URL,
+  'https://rpc.testnet.arc.network',
+  'https://rpc.drpc.testnet.arc.network',
+  'https://rpc.quicknode.testnet.arc.network',
+  'https://rpc.blockdaemon.testnet.arc.network',
+].filter(Boolean);
 
-const WUSDC_META = { symbol: 'USDC', name: 'USD Coin', decimals: 18 };
-const NATIVE_USDC_META = { symbol: 'USDC', name: 'USD Coin', decimals: 6 };
+const KNOWN_META = new Map(
+  MARKETS.filter((m) => m?.address).map((m) => [m.address.toLowerCase(), {
+    symbol: m.symbol,
+    name: m.name,
+    decimals: Number(m.decimals ?? 18),
+    address: m.address,
+  }]),
+);
+KNOWN_META.set(WUSDC.toLowerCase(), { symbol: 'USDC', name: 'USD Coin', decimals: 18, address: WUSDC });
+KNOWN_META.set(NATIVE_USDC.toLowerCase(), { symbol: 'USDC', name: 'USD Coin', decimals: 6, address: WUSDC });
 
 let recentCache = null;
+let pairIndexCache = null;
 const searchCache = new Map();
-const tokenMetadataCache = new Map();
+const tokenMetadataCache = new Map(KNOWN_META);
 
 function validAddress(value) {
   return typeof value === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value);
 }
 
 function createClient() {
-  const urls = [
-    process.env.ARC_RPC_URL,
-    process.env.NEXT_PUBLIC_ARC_RPC_URL,
-    'https://rpc.testnet.arc.network',
-    'https://rpc.drpc.testnet.arc.network',
-    'https://rpc.quicknode.testnet.arc.network',
-    'https://rpc.blockdaemon.testnet.arc.network',
-  ].filter(Boolean);
-
   return createPublicClient({
     chain: defineChain({
       id: ARC_CHAIN_ID,
       name: 'Arc Testnet',
-      nativeCurrency: { name: 'USD Coin', symbol: 'USDC', decimals: 6 },
-      rpcUrls: { default: { http: urls } },
+      nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 6 },
+      rpcUrls: { default: { http: RPC_URLS } },
     }),
-    // Short per-call timeout + a single retry. Without this, a single dead RPC
-    // in the list can make viem retry (with backoff) across every fallback
-    // transport for 10s+ each, which is how a single request ends up hanging
-    // for minutes instead of failing visibly.
     transport: fallback(
-      urls.map((url) => http(url, { timeout: 6_000, retryCount: 1, retryDelay: 250 })),
-      { rank: true, retryCount: 0 }
+      RPC_URLS.map((url) => http(url, { timeout: RPC_TIMEOUT_MS, retryCount: 0 })),
+      { rank: true, retryCount: 0 },
     ),
   });
 }
 
-// Wraps a promise so the route always resolves (success or a clear error)
-// within `ms`, instead of hanging on a stuck RPC/HyperRPC call.
 function withTimeout(promise, ms, message) {
   let timer;
   const timeout = new Promise((_, reject) => {
@@ -93,12 +95,16 @@ async function readSafe(client, args) {
   }
 }
 
-async function readInBatches(items, worker, batchSize = BATCH_SIZE) {
-  const results = [];
+async function readBatches(items, worker, batchSize = 40) {
+  const out = [];
   for (let i = 0; i < items.length; i += batchSize) {
-    results.push(...await Promise.all(items.slice(i, i + batchSize).map(worker)));
+    out.push(...await Promise.all(items.slice(i, i + batchSize).map(worker)));
   }
-  return results;
+  return out;
+}
+
+function shortAddress(address) {
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
 async function getTokenMeta(client, token) {
@@ -107,111 +113,156 @@ async function getTokenMeta(client, token) {
   const cached = tokenMetadataCache.get(key);
   if (cached && Date.now() - cached.timestamp < META_CACHE_TTL_MS) return cached.meta;
 
-  if (key === WUSDC.toLowerCase()) {
-    tokenMetadataCache.set(key, { timestamp: Date.now(), meta: WUSDC_META });
-    return WUSDC_META;
-  }
-  if (key === NATIVE_USDC.toLowerCase()) {
-    tokenMetadataCache.set(key, { timestamp: Date.now(), meta: NATIVE_USDC_META });
-    return NATIVE_USDC_META;
+  const known = KNOWN_META.get(key);
+  if (known) {
+    tokenMetadataCache.set(key, { timestamp: Date.now(), meta: known });
+    return known;
   }
 
-  const [symbol, name, decimals] = await Promise.all([
-    readSafe(client, { address, abi: ERC20_ABI, functionName: 'symbol' }),
-    readSafe(client, { address, abi: ERC20_ABI, functionName: 'name' }),
-    readSafe(client, { address, abi: ERC20_ABI, functionName: 'decimals' }),
-  ]);
-
-  // If symbol/name/decimals can't be read (proxy weirdness, non-standard token,
-  // RPC hiccup, etc.) we still return a usable object built from the address
-  // itself rather than nulling the field out — the frontend keys off `meta`
-  // being present to decide whether to render the card at all, so this is
-  // what keeps a pool visible (with its address) instead of vanishing.
-  const shortAddress = `${address.slice(0, 6)}…${address.slice(-4)}`;
+  const calls = await Promise.all(['symbol', 'name', 'decimals'].map(async (method) => {
+    const result = await readSafe(client, { address, abi: ERC20_METHOD_ABI[method], functionName: method });
+    return [method, result];
+  }));
+  const byMethod = new Map(calls);
+  const fallbackLabel = shortAddress(address);
   const meta = {
-    symbol: symbol.status === 'success' && symbol.result ? String(symbol.result) : shortAddress,
-    name: name.status === 'success' && name.result ? String(name.result) : `Unknown token (${shortAddress})`,
-    decimals: decimals.status === 'success' ? Number(decimals.result) : 18,
+    symbol: byMethod.get('symbol')?.status === 'success' && byMethod.get('symbol').result ? String(byMethod.get('symbol').result) : fallbackLabel,
+    name: byMethod.get('name')?.status === 'success' && byMethod.get('name').result ? String(byMethod.get('name').result) : `Unknown token (${fallbackLabel})`,
+    decimals: byMethod.get('decimals')?.status === 'success' ? Number(byMethod.get('decimals').result) : 18,
     address,
-    metadataFailed: symbol.status !== 'success' || name.status !== 'success',
   };
   tokenMetadataCache.set(key, { timestamp: Date.now(), meta });
   return meta;
 }
 
-async function getPairDetails(client, pairs, wallet) {
-  const uniquePairs = [...new Set(pairs.filter(Boolean).map((pair) => getAddress(pair)))];
-  const pairData = await readInBatches(uniquePairs, async (pair) => {
-    const [token0, token1, reserves, totalSupply, lpBalance] = await Promise.all([
-      readSafe(client, { address: pair, abi: PAIR_ABI, functionName: 'token0' }),
-      readSafe(client, { address: pair, abi: PAIR_ABI, functionName: 'token1' }),
-      readSafe(client, { address: pair, abi: PAIR_ABI, functionName: 'getReserves' }),
-      readSafe(client, { address: pair, abi: PAIR_ABI, functionName: 'totalSupply' }),
-      wallet ? readSafe(client, { address: pair, abi: PAIR_ABI, functionName: 'balanceOf', args: [wallet] }) : Promise.resolve({ status: 'failure', result: 0n }),
+function normalizePairRecord(record) {
+  if (!record?.pair || !record.token0 || !record.token1) return null;
+  return {
+    pair: getAddress(record.pair),
+    token0: getAddress(record.token0),
+    token1: getAddress(record.token1),
+  };
+}
+
+function parsePairCreatedLog(log) {
+  const topic0 = String(log?.topic0 || log?.topics?.[0] || '').toLowerCase();
+  const topic1 = log?.topic1 || log?.topics?.[1];
+  const topic2 = log?.topic2 || log?.topics?.[2];
+  const data = log?.data;
+  if (topic0 !== PAIR_CREATED_TOPIC0 || !topic1 || !topic2 || !data) return null;
+  const word = (value) => String(value).replace(/^0x/, '').padStart(64, '0');
+  const dataHex = String(data).replace(/^0x/, '');
+  if (dataHex.length < 64) return null;
+  return normalizePairRecord({
+    token0: `0x${word(topic1).slice(-40)}`,
+    token1: `0x${word(topic2).slice(-40)}`,
+    pair: `0x${dataHex.slice(0, 64).slice(-40)}`,
+  });
+}
+
+async function hyperSyncQuery(fromBlock = 0) {
+  const endpoint = process.env.ARC_HYPERSYNC_URL || 'https://arc-testnet.hypersync.xyz/query';
+  const token = process.env.ENVIO_API_TOKEN || process.env.HYPERSYNC_API_TOKEN;
+  if (!token) throw new Error('UnitFlow pool index requires ENVIO_API_TOKEN or HYPERSYNC_API_TOKEN.');
+  return withTimeout(fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${token}`,
+    },
+    cache: 'no-store',
+    body: JSON.stringify({
+      from_block: fromBlock,
+      logs: [{ address: [FACTORY], topics: [[PAIR_CREATED_TOPIC0]] }],
+      field_selection: {
+        log: ['address', 'data', 'topic0', 'topic1', 'topic2', 'block_number', 'log_index'],
+      },
+      max_num_logs: 10_000,
+    }),
+    signal: undefined,
+  }).then(async (response) => {
+    if (!response.ok) throw new Error(`HyperSync HTTP ${response.status}`);
+    const body = await response.json();
+    if (body?.error) throw new Error(body.error.message || 'HyperSync query failed.');
+    return body;
+  }), REQUEST_TIMEOUT_MS, 'UnitFlow pool index timed out.');
+}
+
+async function loadPairIndex() {
+  if (pairIndexCache && Date.now() - pairIndexCache.timestamp < PAIR_INDEX_CACHE_TTL_MS) return pairIndexCache.pairs;
+  const body = await hyperSyncQuery(0);
+  const rawLogs = body?.data?.logs || body?.logs || [];
+  const logs = Array.isArray(rawLogs) ? rawLogs : [];
+  const pairs = [];
+  for (const log of logs) {
+    const parsed = parsePairCreatedLog(log);
+    if (parsed) pairs.push(parsed);
+  }
+  if (!pairs.length) throw new Error('UnitFlow index returned no PairCreated events.');
+  const unique = [...new Map(pairs.map((pair) => [pair.pair.toLowerCase(), pair])).values()];
+  pairIndexCache = { timestamp: Date.now(), pairs: unique };
+  return unique;
+}
+
+async function hydratePairs(client, records, wallet) {
+  const unique = [...new Map(records.map((record) => [record.pair.toLowerCase(), normalizePairRecord(record)]).filter(([, value]) => value)).values()];
+  const pairData = await readBatches(unique, async (record) => {
+    const [reserves, totalSupply, lpBalance] = await Promise.all([
+      readSafe(client, { address: record.pair, abi: PAIR_ABI, functionName: 'getReserves' }),
+      readSafe(client, { address: record.pair, abi: PAIR_ABI, functionName: 'totalSupply' }),
+      wallet ? readSafe(client, { address: record.pair, abi: PAIR_ABI, functionName: 'balanceOf', args: [wallet] }) : Promise.resolve({ status: 'failure', result: 0n }),
     ]);
-    return {
-      pair,
-      token0: token0.status === 'success' && token0.result ? getAddress(token0.result) : null,
-      token1: token1.status === 'success' && token1.result ? getAddress(token1.result) : null,
-      reserves,
-      totalSupply,
-      lpBalance,
-    };
+    return { ...record, reserves, totalSupply, lpBalance };
   });
 
-  const uniqueTokens = [...new Set(pairData.flatMap((item) => [item.token0, item.token1]).filter(Boolean).map((token) => token.toLowerCase()))].map(getAddress);
-  const tokenEntries = await readInBatches(uniqueTokens, async (token) => [token.toLowerCase(), await getTokenMeta(client, token)]);
-  const tokenMeta = new Map(tokenEntries);
+  const tokens = [...new Set(pairData.flatMap((item) => [item.token0, item.token1]).filter(Boolean).map((token) => token.toLowerCase()))].map(getAddress);
+  const metadata = new Map(await readBatches(tokens, async (token) => [token.toLowerCase(), await getTokenMeta(client, token)], 30));
 
   return pairData.map((item) => {
-    if (!item.token0 || !item.token1) return null;
-    const meta0 = tokenMeta.get(item.token0.toLowerCase()) || null;
-    const meta1 = tokenMeta.get(item.token1.toLowerCase()) || null;
-    const reserves = item.reserves.status === 'success' ? item.reserves.result : [0n, 0n, 0];
-    const reserve0 = BigInt(reserves[0] ?? 0);
-    const reserve1 = BigInt(reserves[1] ?? 0);
-    const totalSupply = item.totalSupply.status === 'success' ? item.totalSupply.result : 0n;
-    const lpBalance = wallet && item.lpBalance.status === 'success' ? item.lpBalance.result : 0n;
-
+    const meta0 = metadata.get(item.token0.toLowerCase()) || KNOWN_META.get(item.token0.toLowerCase()) || { symbol: shortAddress(item.token0), name: 'Token', decimals: 18, address: item.token0 };
+    const meta1 = metadata.get(item.token1.toLowerCase()) || KNOWN_META.get(item.token1.toLowerCase()) || { symbol: shortAddress(item.token1), name: 'Token', decimals: 18, address: item.token1 };
+    const reserveValues = item.reserves.status === 'success' ? item.reserves.result : [0n, 0n, 0];
+    const reserve0 = BigInt(reserveValues[0] ?? 0);
+    const reserve1 = BigInt(reserveValues[1] ?? 0);
+    const totalSupply = item.totalSupply.status === 'success' ? BigInt(item.totalSupply.result) : 0n;
+    const lpBalance = wallet && item.lpBalance.status === 'success' ? BigInt(item.lpBalance.result) : 0n;
+    const to18 = (value, decimals) => {
+      const d = Number(decimals ?? 18);
+      return d === 18 ? value : d < 18 ? value * 10n ** BigInt(18 - d) : value / 10n ** BigInt(d - 18);
+    };
+    const a = to18(reserve0, meta0.decimals);
+    const b = to18(reserve1, meta1.decimals);
+    const product = a * b;
+    let liquidityScore = 0n;
+    if (product > 0n) {
+      let x = product;
+      let y = (x + 1n) >> 1n;
+      while (y < x) { x = y; y = (x + product / x) >> 1n; }
+      liquidityScore = x;
+    }
     return {
       pair: item.pair,
       token0: item.token0,
       token1: item.token1,
-      token0Meta: meta0,
-      token1Meta: meta1,
+      token0Meta: { ...meta0, address: meta0.address || item.token0 },
+      token1Meta: { ...meta1, address: meta1.address || item.token1 },
       reserve0: reserve0.toString(),
       reserve1: reserve1.toString(),
-      totalSupply: String(totalSupply),
-      lpBalance: String(lpBalance),
+      totalSupply: totalSupply.toString(),
+      lpBalance: lpBalance.toString(),
       hasPosition: Boolean(wallet && lpBalance > 0n),
       featured: item.token0.toLowerCase() === CENT.toLowerCase() || item.token1.toLowerCase() === CENT.toLowerCase(),
-      liquidityScore: (() => {
-        const to18 = (value, decimals) => {
-          const d = Number(decimals ?? 18);
-          return d === 18 ? value : d < 18 ? value * 10n ** BigInt(18 - d) : value / 10n ** BigInt(d - 18);
-        };
-        const a = to18(reserve0, meta0?.decimals ?? 18);
-        const b = to18(reserve1, meta1?.decimals ?? 18);
-        const x = a * b;
-        if (x <= 0n) return '0';
-        let r = x;
-        let n = (r + 1n) >> 1n;
-        while (n < r) { r = n; n = (r + x / r) >> 1n; }
-        return r.toString();
-      })(),
+      liquidityScore: liquidityScore.toString(),
     };
-  }).filter(Boolean);
+  });
 }
 
 async function loadRecentPools(client, length, wallet) {
   const walletKey = wallet?.toLowerCase() || '';
   if (recentCache && recentCache.length === length && recentCache.walletKey === walletKey && Date.now() - recentCache.timestamp < CACHE_TTL_MS) return recentCache.pools;
-
-  const take = Math.min(MAX_DISPLAY_POOLS, length);
-  const indices = Array.from({ length: take }, (_, offset) => BigInt(length - 1 - offset));
-  const pairResults = await readInBatches(indices, (index) => readSafe(client, { address: FACTORY, abi: FACTORY_ABI, functionName: 'allPairs', args: [index] }));
-  const pairs = pairResults.map((item) => item.status === 'success' && item.result ? getAddress(item.result) : null).filter((pair) => pair && pair !== ZERO);
-  const pools = await getPairDetails(client, pairs, wallet);
+  const index = await loadPairIndex();
+  const records = index.slice(-MAX_DISPLAY_POOLS).reverse();
+  const pools = await hydratePairs(client, records, wallet);
   pools.sort((a, b) => {
     const aa = BigInt(a.liquidityScore || 0);
     const bb = BigInt(b.liquidityScore || 0);
@@ -221,164 +272,76 @@ async function loadRecentPools(client, length, wallet) {
   return pools;
 }
 
-function hyperRpcUrls() {
+function staticMatch(record, query) {
+  const needle = query.toLowerCase();
+  const meta0 = KNOWN_META.get(record.token0.toLowerCase());
+  const meta1 = KNOWN_META.get(record.token1.toLowerCase());
   return [
-    process.env.ARC_HYPERRPC_URL,
-    process.env.HYPERRPC_URL,
-    'https://arc-testnet.rpc.hypersync.xyz',
-  ].filter(Boolean);
+    record.pair,
+    record.token0,
+    record.token1,
+    meta0?.symbol,
+    meta0?.name,
+    meta1?.symbol,
+    meta1?.name,
+    `${meta0?.symbol || ''} / ${meta1?.symbol || ''}`,
+  ].filter(Boolean).join(' ').toLowerCase().includes(needle);
 }
 
-// Envio's HyperRPC auth is a URL path segment (https://host/rpc.hypersync.xyz/<token>),
-// NOT an Authorization header — see docs.envio.dev/docs/HyperRPC/overview-hyperrpc.
-// Sending it as a Bearer header silently does nothing, so unauthenticated requests
-// get rate-limited and can look like "the endpoint doesn't work."
-function withHyperRpcToken(url) {
-  const token = process.env.ENVIO_API_TOKEN || process.env.HYPERSYNC_API_TOKEN;
-  if (!token) return url;
-  return `${url.replace(/\/+$/, '')}/${token}`;
-}
-
-async function hyperRpc(url, method, params) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), SEARCH_TIMEOUT_MS);
-  try {
-    const response = await fetch(withHyperRpcToken(url), {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
-      signal: controller.signal,
-      cache: 'no-store',
-    });
-    if (!response.ok) throw new Error(`HyperRPC HTTP ${response.status}`);
-    const body = await response.json();
-    if (body.error) throw new Error(body.error.message || 'HyperRPC request failed');
-    return body.result;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-// PairCreated(address indexed token0, address indexed token1, address pair, uint256)
-// topics[1] = token0, topics[2] = token1 (each a 32-byte word, address right-aligned)
-// data      = pair (first 32-byte word) ++ allPairsLength at time of creation (second word)
-//
-// The previous version read `data` as a single word and took its LAST 20 bytes —
-// but for a 2-word data payload that lands on the *second* word (the uint256 index),
-// not the pair address. E.g. for the 7th pair created it decoded "pair" as
-// 0x000...0007 instead of the real pair contract address. Every downstream
-// token0()/token1()/getReserves() call against that fake address then fails,
-// which is exactly the "HyperRPC path produces no usable results" symptom.
-function decodePairCreatedLog(log) {
-  if (!log?.topics || log.topics.length < 3 || !log.data) return null;
-  const topicWord = (value) => value.slice(2).padStart(64, '0');
-  const token0 = getAddress(`0x${topicWord(log.topics[1]).slice(-40)}`);
-  const token1 = getAddress(`0x${topicWord(log.topics[2]).slice(-40)}`);
-  const dataHex = log.data.slice(2);
-  if (dataHex.length < 64) return null;
-  const pairWord = dataHex.slice(0, 64); // first word = pair address
-  const pair = getAddress(`0x${pairWord.slice(-40)}`);
-  return { pair, token0, token1 };
-}
-
-async function fetchPairEventsFromUrl(url) {
-  const latest = await hyperRpc(url, 'eth_blockNumber', []);
-  const logs = await hyperRpc(url, 'eth_getLogs', [{
-    address: FACTORY,
-    topics: [PAIR_CREATED_TOPIC0],
-    fromBlock: '0x0',
-    toBlock: latest,
-  }]);
-  const pairs = [];
-  for (const log of logs || []) {
-    const decoded = decodePairCreatedLog(log);
-    if (decoded) pairs.push(decoded);
-  }
-  return pairs;
-}
-
-async function loadPairEventsFromHyperRpc() {
-  const urls = hyperRpcUrls();
-  for (const url of urls) {
-    try {
-      return await fetchPairEventsFromUrl(url);
-    } catch {
-      // Try the next HyperRPC endpoint, then fall back to recent RPC pairs.
-    }
-  }
-  return null;
-}
-
-// The full registry (every PairCreated event ever emitted) rarely changes and is
-// cheap to hold in memory. Caching it means most searches never touch HyperRPC or
-// the RPC at all, and if HyperRPC has a transient hiccup we can still serve the
-// last known-good full list instead of silently degrading to "top 200 only".
-let pairEventsCache = null; // { timestamp, pairs }
-
-async function getAllPairEvents() {
-  if (pairEventsCache && Date.now() - pairEventsCache.timestamp < PAIR_EVENTS_TTL_MS) {
-    return pairEventsCache.pairs;
-  }
-  try {
-    const pairs = await loadPairEventsFromHyperRpc();
-    if (pairs) {
-      pairEventsCache = { timestamp: Date.now(), pairs };
-      return pairs;
-    }
-  } catch {
-    // fall through to stale cache below
-  }
-  return pairEventsCache?.pairs || null;
-}
-
-async function findSearchCandidates(client, length, query) {
-  const cacheKey = query.trim().toLowerCase();
-  const cached = searchCache.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) return cached.candidates;
-
-  const eventPairs = await getAllPairEvents();
-  const pairs = eventPairs || (await loadRecentPools(client, length, null)).map((pool) => ({ pair: pool.pair, token0: pool.token0, token1: pool.token1 }));
+async function searchPairIndex(client, query) {
+  const key = query.trim().toLowerCase();
+  const cached = searchCache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) return cached.pairs;
+  const index = await loadPairIndex();
   const addressQuery = validAddress(query) ? getAddress(query).toLowerCase() : null;
-
   if (addressQuery) {
-    const candidates = pairs.filter((item) => item.pair.toLowerCase() === addressQuery || item.token0.toLowerCase() === addressQuery || item.token1.toLowerCase() === addressQuery).slice(0, SEARCH_RESULT_LIMIT).map((item) => item.pair);
-    searchCache.set(cacheKey, { timestamp: Date.now(), candidates });
-    return candidates;
+    const matches = index.filter((record) => record.pair.toLowerCase() === addressQuery || record.token0.toLowerCase() === addressQuery || record.token1.toLowerCase() === addressQuery).slice(0, SEARCH_RESULT_LIMIT);
+    searchCache.set(key, { timestamp: Date.now(), pairs: matches });
+    return matches;
   }
 
-  const uniqueTokens = [...new Set(pairs.flatMap((item) => [item.token0, item.token1]).map((token) => token.toLowerCase()))].map(getAddress);
-  const metaEntries = await readInBatches(uniqueTokens, async (token) => [token.toLowerCase(), await getTokenMeta(client, token)], 25);
-  const metaMap = new Map(metaEntries);
-  const candidates = pairs.filter((item) => {
-    const meta0 = metaMap.get(item.token0.toLowerCase());
-    const meta1 = metaMap.get(item.token1.toLowerCase());
-    const haystack = [item.pair, item.token0, item.token1, meta0?.symbol, meta1?.symbol, meta0?.name, meta1?.name, `${meta0?.symbol || ''} / ${meta1?.symbol || ''}`].filter(Boolean).join(' ').toLowerCase();
-    return haystack.includes(cacheKey);
-  }).slice(0, SEARCH_RESULT_LIMIT).map((item) => item.pair);
+  const directKnown = index.filter((record) => staticMatch(record, key));
+  if (directKnown.length >= SEARCH_RESULT_LIMIT) {
+    const matches = directKnown.slice(0, SEARCH_RESULT_LIMIT);
+    searchCache.set(key, { timestamp: Date.now(), pairs: matches });
+    return matches;
+  }
 
-  searchCache.set(cacheKey, { timestamp: Date.now(), candidates });
-  return candidates;
+  const unknownTokens = [...new Set(index.flatMap((record) => [record.token0, record.token1]).filter((token) => !KNOWN_META.has(token.toLowerCase())).map((token) => token.toLowerCase()))].map(getAddress);
+  if (!unknownTokens.length) {
+    searchCache.set(key, { timestamp: Date.now(), pairs: directKnown });
+    return directKnown;
+  }
+
+  const metas = await withTimeout(readBatches(unknownTokens, async (token) => [token.toLowerCase(), await getTokenMeta(client, token)], 40), 8_000, 'Token search timed out.');
+  const metadata = new Map(metas);
+  const dynamicMatches = index.filter((record) => {
+    if (staticMatch(record, key)) return true;
+    const meta0 = metadata.get(record.token0.toLowerCase());
+    const meta1 = metadata.get(record.token1.toLowerCase());
+    return [meta0?.symbol, meta0?.name, meta1?.symbol, meta1?.name, `${meta0?.symbol || ''} / ${meta1?.symbol || ''}`].filter(Boolean).join(' ').toLowerCase().includes(key);
+  });
+  const matches = dynamicMatches.slice(0, SEARCH_RESULT_LIMIT);
+  searchCache.set(key, { timestamp: Date.now(), pairs: matches });
+  return matches;
 }
 
-async function handleGet(request) {
-  const { searchParams } = new URL(request.url);
+export async function GET(request) {
+  try {
+    const { searchParams } = new URL(request.url);
     const requestedAddress = searchParams.get('address');
     const query = searchParams.get('q')?.trim() || '';
     const wallet = validAddress(requestedAddress) ? getAddress(requestedAddress) : null;
     const client = createClient();
-    const length = Number(await client.readContract({ address: FACTORY, abi: FACTORY_ABI, functionName: 'allPairsLength' }));
-
-    if (!length) {
-      return NextResponse.json({ success: true, data: { count: 0, loaded: 0, pools: [], wallet, searched: Boolean(query), mode: query ? 'search' : 'recent' } });
-    }
 
     if (!query) {
-      const pools = await loadRecentPools(client, length, wallet);
-      return NextResponse.json({ success: true, data: { count: length, loaded: pools.length, displayLimit: MAX_DISPLAY_POOLS, mode: 'recent', pools, wallet, searched: false } }, { headers: { 'Cache-Control': 's-maxage=30, stale-while-revalidate=120' } });
+      const pools = await withTimeout(loadRecentPools(client, 0, wallet), REQUEST_TIMEOUT_MS, 'UnitFlow pools timed out.');
+      const index = await loadPairIndex();
+      return NextResponse.json({ success: true, data: { count: index.length, loaded: pools.length, displayLimit: MAX_DISPLAY_POOLS, mode: 'recent', pools, wallet, searched: false } }, { headers: { 'Cache-Control': 's-maxage=30, stale-while-revalidate=120' } });
     }
 
-    const candidates = await findSearchCandidates(client, length, query);
-    const pools = await getPairDetails(client, candidates.slice(0, SEARCH_RESULT_LIMIT), wallet);
+    const candidates = await withTimeout(searchPairIndex(client, query), REQUEST_TIMEOUT_MS, 'UnitFlow pool search timed out.');
+    const pools = await withTimeout(hydratePairs(client, candidates.slice(0, SEARCH_RESULT_LIMIT), wallet), REQUEST_TIMEOUT_MS, 'UnitFlow pool details timed out.');
     pools.sort((a, b) => {
       if (a.featured && !b.featured) return -1;
       if (!a.featured && b.featured) return 1;
@@ -386,29 +349,7 @@ async function handleGet(request) {
       const bb = BigInt(b.liquidityScore || 0);
       return aa === bb ? 0 : aa > bb ? -1 : 1;
     });
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        count: length,
-        loaded: pools.length,
-        displayLimit: SEARCH_RESULT_LIMIT,
-        mode: 'search',
-        pools,
-        wallet,
-        searched: true,
-        query,
-      },
-    }, { headers: { 'Cache-Control': 's-maxage=30, stale-while-revalidate=120' } });
-}
-
-export async function GET(request) {
-  try {
-    return await withTimeout(
-      handleGet(request),
-      REQUEST_TIMEOUT_MS,
-      'UnitFlow pool search timed out. The RPC or HyperRPC endpoint may be unresponsive — try again or narrow your search.'
-    );
+    return NextResponse.json({ success: true, data: { count: pools.length, loaded: pools.length, displayLimit: SEARCH_RESULT_LIMIT, mode: 'search', pools, wallet, searched: true, query } }, { headers: { 'Cache-Control': 's-maxage=30, stale-while-revalidate=120' } });
   } catch (error) {
     return NextResponse.json({ success: false, error: error?.message || 'Unable to load UnitFlow pools.' }, { status: 502 });
   }
