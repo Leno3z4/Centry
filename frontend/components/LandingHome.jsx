@@ -12,9 +12,9 @@ const PRODUCTS = [
     },
     {
         number: '02',
-        title: 'Lending',
+        title: 'Markets',
         text: 'Supply liquidity, borrow against supported collateral, and manage your position.',
-        href: '/app/lending',
+        href: '/app/markets',
     },
     {
         number: '03',
@@ -65,7 +65,7 @@ export default function LandingHome() {
 
             <section id="products" className="landing-home-section">
                 <div className="landing-home-section-heading">
-                    <h2>Swap · Lending · Rewards · Governance</h2>
+                    <h2>Swap · Markets · Rewards · Governance</h2>
                 </div>
 
                 <div className="landing-home-products">
