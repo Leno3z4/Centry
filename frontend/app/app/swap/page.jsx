@@ -254,8 +254,11 @@ function SwapContent() {
           {wrongNetwork ? <button type="button" className={styles.primaryButton} disabled={switchingNetwork} onClick={requestArcNetwork}>{switchingNetwork ? 'Switching network…' : 'Switch to Arc Testnet'}</button> : isConnected && quoteReady ? <button type="button" className={styles.primaryButton} disabled={isPreparing || approvalPending || (!approvalComplete && !approvalRequired) || switchingNetwork || !preparedTransactions} onClick={buildAndSwap}>{walletPending ? 'Confirm in wallet…' : approvalPending ? 'Waiting for approval…' : approvalRequired && !approvalComplete ? `Approve ${fromMarket.symbol}` : `Swap ${fromMarket.symbol} → ${toMarket.symbol}`}</button> : <button type="button" className={styles.secondaryButton} disabled>{!isConnected ? 'Connect wallet' : stage === 'quoting' ? 'Finding route…' : stage === 'preparing' ? 'Preparing swap…' : 'Enter an amount'}</button>}
         </section>
 
-        <section className={`${styles.panel} ${styles.bridgeCard}`}>
-          <div><span className={styles.kicker}>EXECUTION</span><h2>Trade details</h2></div>
+        <details className={`${styles.panel} ${styles.bridgeCard}`}>
+          <summary style={{ cursor: 'pointer' }}>
+            <span className={styles.kicker}>TRADE INFO</span>
+            <h2>Trade details</h2>
+          </summary>
           <p className={styles.bridgeDescription}>Tower selects the best available Arc route. CENT routes are handled by UnitFlow v2.5.</p>
           <div className={styles.quoteCard}>
             <div className={styles.bridgeRow}><span>Network</span><strong>Arc Testnet</strong></div>
@@ -264,7 +267,7 @@ function SwapContent() {
             <div className={styles.bridgeRow}><span>Gas</span><strong>{quote?.gasEstimate ? `${quote.gasEstimate} units` : 'Calculated by wallet'}</strong></div>
           </div>
           {quote?.feeBps != null ? <div className={styles.quoteCard}><div className={styles.bridgeRow}><span>Liquidity fee</span><strong>{(Number(quote.feeBps) / 100).toFixed(2)}%</strong></div></div> : null}
-        </section>
+        </details>
       </div>
     </div>
   );
