@@ -3,7 +3,7 @@ import { createPublicClient, defineChain, fallback, http, getAddress, encodeFunc
 import { MARKETS } from '../../../../constants/markets';
 
 const ARC_CHAIN_ID = 5042002;
-const FACTORY = '0xd67F63A4F26a497b364d1C82E6747Aec8B5743a5';
+const FACTORY = '0xd67F63A4F26a497b364d1C82e6747Aec8B5743a5';
 const WUSDC = '0x911b4000D3422F482F4062a913885f7b035382Df';
 const CENT = '0x76e6d50D3151f0B4645ac0E53584F4204Fc6f0e3';
 const NATIVE_USDC = '0x3600000000000000000000000000000000000000';
@@ -379,11 +379,34 @@ export async function GET(request) {
       const { length, pairs } = await loadRecentPairs(client);
       const recentRecords = await loadPairEndpoints(pairs);
       const pools = await loadRecentPools(client, length, wallet, recentRecords);
-      return NextResponse.json({ success: true, data: { count: length, loaded: pools.length, displayLimit: MAX_DISPLAY_POOLS, mode: 'recent', pools, wallet, searched: false } });
+      return NextResponse.json({
+        success: true,
+        data: {
+          count: length,
+          loaded: pools.length,
+          displayLimit: MAX_DISPLAY_POOLS,
+          mode: 'recent',
+          pools,
+          wallet,
+          searched: false,
+        },
+      });
     }
 
     const { count, pools } = await searchRegistry(client, query, wallet);
-    return NextResponse.json({ success: true, data: { count, loaded: pools.length, displayLimit: SEARCH_RESULT_LIMIT, mode: 'search', pools, wallet, searched: true, query } });
+    return NextResponse.json({
+      success: true,
+      data: {
+        count,
+        loaded: pools.length,
+        displayLimit: SEARCH_RESULT_LIMIT,
+        mode: 'search',
+        pools,
+        wallet,
+        searched: true,
+        query,
+      },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to load UnitFlow pools.';
     const status = /timed out/i.test(message) ? 504 : 502;
