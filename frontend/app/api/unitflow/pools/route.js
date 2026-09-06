@@ -8,7 +8,9 @@ const CENT = '0x76e6d50D3151f0B4645ac0E53584F4204Fc6f0e3';
 const NATIVE_USDC = '0x3600000000000000000000000000000000000000';
 const ZERO = '0x0000000000000000000000000000000000000000';
 const MAX_DISPLAY_POOLS = 200;
+const SEARCH_RESULT_LIMIT = 100;
 const BATCH_SIZE = 75;
+const SEARCH_BATCH_SIZE = 50;
 const CACHE_TTL_MS = 30_000;
 const META_CACHE_TTL_MS = 5 * 60_000;
 
@@ -223,65 +225,76 @@ async function findSearchCandidates(client, length, query) {
   const cached = searchCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) return cached.candidates;
 
-  // Address search can use the factory mapping directly and does not require scanning history.
-  if (validAddress(query)) {
-    const address = getAddress(query);
-    const recentIndexes = Array.from({ length: Math.min(MAX_DISPLAY_POOLS, length) }, (_, offset) => BigInt(length - 1 - offset));
-    const recentPairs = await readInBatches(recentIndexes, (index) => readSafe(client, {
+  const target = query.trim().toLowerCase();
+  const candidates = [];
+
+  // Walk the factory registry in bounded chunks. This avoids building the entire
+  // token metadata universe before returning a single search result.
+  for (let start = 0; start < length && candidates.length < SEARCH_RESULT_LIMIT; start += SEARCH_BATCH_SIZE) {
+    const count = Math.min(SEARCH_BATCH_SIZE, length - start);
+    const indices = Array.from({ length: count }, (_, offset) => BigInt(start + offset));
+    const pairResults = await readInBatches(indices, (index) => readSafe(client, {
       address: FACTORY,
       abi: FACTORY_ABI,
       functionName: 'allPairs',
       args: [index],
     }));
-    const pairCandidates = recentPairs
+
+    const pairAddresses = pairResults
       .map((item) => item.status === 'success' && item.result ? getAddress(item.result) : null)
-      .filter(Boolean);
-    const candidates = [...new Set(pairCandidates.filter((pair) => pair.toLowerCase() === address.toLowerCase()))];
-    searchCache.set(cacheKey, { timestamp: Date.now(), candidates });
-    return candidates;
+      .filter((pair) => pair && pair !== ZERO);
+
+    if (!pairAddresses.length) continue;
+
+    // A pair-address search is exact and does not require token metadata.
+    if (validAddress(query)) {
+      const addressMatches = pairAddresses.filter((pair) => pair.toLowerCase() === target);
+      candidates.push(...addressMatches);
+      continue;
+    }
+
+    const endpoints = await readInBatches(pairAddresses, async (pair) => {
+      const [token0, token1] = await Promise.all([
+        readSafe(client, { address: pair, abi: PAIR_ABI, functionName: 'token0' }),
+        readSafe(client, { address: pair, abi: PAIR_ABI, functionName: 'token1' }),
+      ]);
+      return {
+        pair,
+        token0: token0.status === 'success' && token0.result ? getAddress(token0.result) : null,
+        token1: token1.status === 'success' && token1.result ? getAddress(token1.result) : null,
+      };
+    });
+
+    const directAddressMatches = endpoints
+      .filter((item) => item.token0?.toLowerCase() === target || item.token1?.toLowerCase() === target)
+      .map((item) => item.pair);
+    candidates.push(...directAddressMatches);
+
+    if (candidates.length >= SEARCH_RESULT_LIMIT) break;
+
+    const uniqueTokens = [...new Set(
+      endpoints.flatMap((item) => [item.token0, item.token1]).filter(Boolean).map((token) => token.toLowerCase()),
+    )].map(getAddress);
+
+    const metas = await readInBatches(uniqueTokens, async (token) => ({
+      token,
+      meta: await getTokenMeta(client, token),
+    }));
+
+    const matchingTokens = new Set(
+      metas
+        .filter(({ token, meta }) => `${token} ${meta.symbol} ${meta.name}`.toLowerCase().includes(target))
+        .map(({ token }) => token.toLowerCase()),
+    );
+
+    candidates.push(...endpoints
+      .filter((item) => matchingTokens.has(item.token0?.toLowerCase()) || matchingTokens.has(item.token1?.toLowerCase()))
+      .map((item) => item.pair));
   }
 
-  // Symbol/name search needs the complete UnitFlow v2.5 pair registry, but it does
-  // not need historical logs. We scan only token0/token1 for each pair, then fetch
-  // full reserves/metadata only for the matching pairs.
-  const indices = Array.from({ length }, (_, index) => BigInt(index));
-  const pairResults = await readInBatches(indices, (index) => readSafe(client, {
-    address: FACTORY,
-    abi: FACTORY_ABI,
-    functionName: 'allPairs',
-    args: [index],
-  }));
-  const pairAddresses = pairResults
-    .map((item) => item.status === 'success' && item.result ? getAddress(item.result) : null)
-    .filter((pair) => pair && pair !== ZERO);
-
-  const endpoints = await readInBatches(pairAddresses, async (pair) => {
-    const [token0, token1] = await Promise.all([
-      readSafe(client, { address: pair, abi: PAIR_ABI, functionName: 'token0' }),
-      readSafe(client, { address: pair, abi: PAIR_ABI, functionName: 'token1' }),
-    ]);
-    return {
-      pair,
-      token0: token0.status === 'success' && token0.result ? getAddress(token0.result) : null,
-      token1: token1.status === 'success' && token1.result ? getAddress(token1.result) : null,
-    };
-  });
-
-  const uniqueTokens = [...new Set(
-    endpoints.flatMap((item) => [item.token0, item.token1]).filter(Boolean).map((token) => token.toLowerCase()),
-  )].map(getAddress);
-  const metas = await readInBatches(uniqueTokens, async (token) => ({ token, meta: await getTokenMeta(client, token) }));
-  const matchingTokens = new Set(
-    metas
-      .filter(({ token, meta }) => `${token} ${meta.symbol} ${meta.name}`.toLowerCase().includes(cacheKey))
-      .map(({ token }) => token.toLowerCase()),
-  );
-
-  const candidates = endpoints
-    .filter((item) => matchingTokens.has(item.token0?.toLowerCase()) || matchingTokens.has(item.token1?.toLowerCase()))
-    .map((item) => item.pair);
-  searchCache.set(cacheKey, { timestamp: Date.now(), candidates });
-  return candidates;
+  const uniqueCandidates = [...new Set(candidates)];
+  searchCache.set(cacheKey, { timestamp: Date.now(), candidates: uniqueCandidates });
+  return uniqueCandidates;
 }
 
 export async function GET(request) {
@@ -319,7 +332,7 @@ export async function GET(request) {
     }
 
     const candidates = await findSearchCandidates(client, length, query);
-    const pools = await getPairDetails(client, candidates, wallet);
+    const pools = await getPairDetails(client, candidates.slice(0, SEARCH_RESULT_LIMIT), wallet);
     pools.sort((a, b) => {
       if (a.featured && !b.featured) return -1;
       if (!a.featured && b.featured) return 1;
@@ -331,9 +344,9 @@ export async function GET(request) {
       data: {
         count: length,
         loaded: pools.length,
-        displayLimit: 100,
+        displayLimit: SEARCH_RESULT_LIMIT,
         mode: 'exhaustive-search',
-        pools: pools.slice(0, 100),
+        pools,
         wallet,
         searched: true,
       },
