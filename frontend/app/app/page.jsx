@@ -133,17 +133,44 @@ function OverviewContent() {
       </div>
       <section className="hero">
         <div className="hero-copy">
-          <h1>Liquidity,<br /><em>built for Arc.</em></h1>
-          <p>Centry is an Arc-native money market for lending, borrowing, swaps, and onchain risk management.</p>
+          <h1>Your DeFi<br /><em>hub.</em></h1>
+          <p>Swap, lend, earn rewards, and help govern Centry from one place.</p>
           <div className="hero-actions">
-            <a className="primary-btn" href="/app/lending">Open lending</a>
-            <a className="secondary-btn" href="/app/swap">Swap assets</a>
+            <a className="primary-btn" href="/app/swap">Start with Swap</a>
+            <a className="secondary-btn" href="/app/lending">Explore Lending</a>
           </div>
         </div>
         <div className="orbital-art" aria-hidden="true">
           <div className="orbit orbit-a" /><div className="orbit orbit-b" /><div className="orbit orbit-c" />
           <div className="usdc-orb"><span>$</span></div>
         </div>
+      </section>
+
+      <section className="overview-quick-start" aria-label="Start here">
+        <a className="overview-quick-card" href="/app/swap">
+          <span className="overview-quick-kicker">01</span>
+          <strong>Swap</strong>
+          <small>Trade supported assets.</small>
+          <span className="overview-quick-arrow" aria-hidden="true">↗</span>
+        </a>
+        <a className="overview-quick-card" href="/app/lending">
+          <span className="overview-quick-kicker">02</span>
+          <strong>Lending</strong>
+          <small>Supply or borrow assets.</small>
+          <span className="overview-quick-arrow" aria-hidden="true">↗</span>
+        </a>
+        <a className="overview-quick-card" href="/app/rewards">
+          <span className="overview-quick-kicker">03</span>
+          <strong>Rewards</strong>
+          <small>See incentives and claims.</small>
+          <span className="overview-quick-arrow" aria-hidden="true">↗</span>
+        </a>
+        <a className="overview-quick-card" href="/app/governance">
+          <span className="overview-quick-kicker">04</span>
+          <strong>Governance</strong>
+          <small>Manage voting power.</small>
+          <span className="overview-quick-arrow" aria-hidden="true">↗</span>
+        </a>
       </section>
 
       <section className="stats-grid overview-stats-grid">
@@ -200,6 +227,13 @@ function OverviewContent() {
         .page-stack > :not(.overview-aero-background){position:relative;z-index:1}
         .overview-stats-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
         .overview-bottom-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+        .overview-quick-start{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:-18px;margin-bottom:10px}
+        .overview-quick-card{position:relative;min-height:150px;padding:22px 20px 20px;border:1px solid #2a2235;border-radius:14px;background:rgba(15,11,21,.72);transition:background .18s ease,border-color .18s ease,transform .18s ease;text-decoration:none}
+        .overview-quick-card:hover{background:rgba(25,17,34,.85);border-color:#4b3858;transform:translateY(-1px)}
+        .overview-quick-kicker{display:block;color:#766783;font:10px 'DM Mono',monospace}
+        .overview-quick-card strong{display:block;margin-top:20px;color:#eee7f3;font-family:var(--display-font,Georgia,serif);font-size:27px;font-weight:400;letter-spacing:-.7px}
+        .overview-quick-card small{display:block;max-width:150px;margin-top:7px;color:#81778b;font-size:10px;line-height:1.55}
+        .overview-quick-arrow{position:absolute;right:18px;bottom:17px;color:#9a78ad;font-size:17px}
         .panel-head .text-link,.text-link{color:#bda9e9;text-decoration:none;font-size:11px}
         .text-link:hover{color:#e2d7ff}
         .overview-feature-number{margin-top:4px;font-size:34px;font-weight:700;letter-spacing:-.03em}
@@ -210,8 +244,8 @@ function OverviewContent() {
         .overview-reward-value{display:block;margin-top:5px;font-size:30px;letter-spacing:-.02em}
         .overview-reward-right{text-align:right}.reward-mini-status{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.08em}.reward-mini-status.pending{color:#c8b7e4}.reward-mini-status.live{color:#75ddb2}.overview-reward-right small{display:block;margin-top:5px;color:#8f849d;font-size:11px}
         .overview-reward-line{display:flex;justify-content:space-between;align-items:center;padding-top:14px;margin-top:14px;border-top:1px solid #2a2235;color:#8f849d;font-size:11px}.overview-reward-line strong{color:#e9e1f1}
-        @media (max-width:900px){.overview-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-bottom-grid{grid-template-columns:1fr}}
-        @media (max-width:640px){.overview-stats-grid{grid-template-columns:1fr}.overview-reward-row{align-items:flex-start;flex-direction:column}.overview-reward-right{text-align:left}}
+        @media (max-width:900px){.overview-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-bottom-grid{grid-template-columns:1fr}.overview-quick-start{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:-8px}}
+        @media (max-width:640px){.overview-stats-grid{grid-template-columns:1fr}.overview-reward-row{align-items:flex-start;flex-direction:column}.overview-reward-right{text-align:left}.overview-quick-start{grid-template-columns:1fr}.overview-quick-card{min-height:125px}.overview-quick-card strong{margin-top:15px}}
       `}</style>
     </div>
   );
