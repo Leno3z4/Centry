@@ -10,7 +10,7 @@ const ZERO = '0x0000000000000000000000000000000000000000';
 const MAX_DISPLAY_POOLS = 200;
 const SEARCH_RESULT_LIMIT = 100;
 const BATCH_SIZE = 75;
-const SEARCH_BATCH_SIZE = 50;
+const SEARCH_BATCH_SIZE = 15;
 const CACHE_TTL_MS = 30_000;
 const META_CACHE_TTL_MS = 5 * 60_000;
 
@@ -176,7 +176,7 @@ async function getPairDetails(client, pairs, wallet) {
         };
         const a = to18(reserve0, meta0?.decimals ?? 18);
         const b = to18(reserve1, meta1?.decimals ?? 18);
-        let x = a * b;
+        const x = a * b;
         if (x <= 0n) return '0';
         let r = x;
         let n = (r + 1n) >> 1n;
@@ -220,37 +220,33 @@ async function loadRecentPools(client, length, wallet) {
   return pools;
 }
 
+async function loadPairAddresses(client, length) {
+  const indices = Array.from({ length }, (_, index) => BigInt(index));
+  const pairResults = await readInBatches(indices, (index) => readSafe(client, {
+    address: FACTORY,
+    abi: FACTORY_ABI,
+    functionName: 'allPairs',
+    args: [index],
+  }), SEARCH_BATCH_SIZE);
+
+  return pairResults
+    .map((item) => item.status === 'success' && item.result ? getAddress(item.result) : null)
+    .filter((pair) => pair && pair !== ZERO);
+}
+
 async function findSearchCandidates(client, length, query) {
   const cacheKey = query.trim().toLowerCase();
   const cached = searchCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) return cached.candidates;
 
-  const target = query.trim().toLowerCase();
+  const target = cacheKey;
   const candidates = [];
+  const pairAddresses = await loadPairAddresses(client, length);
+  const addressQuery = validAddress(query) ? getAddress(query).toLowerCase() : null;
 
-  for (let start = 0; start < length && candidates.length < SEARCH_RESULT_LIMIT; start += SEARCH_BATCH_SIZE) {
-    const count = Math.min(SEARCH_BATCH_SIZE, length - start);
-    const indices = Array.from({ length: count }, (_, offset) => BigInt(start + offset));
-    const pairResults = await readInBatches(indices, (index) => readSafe(client, {
-      address: FACTORY,
-      abi: FACTORY_ABI,
-      functionName: 'allPairs',
-      args: [index],
-    }));
-
-    const pairAddresses = pairResults
-      .map((item) => item.status === 'success' && item.result ? getAddress(item.result) : null)
-      .filter((pair) => pair && pair !== ZERO);
-
-    if (!pairAddresses.length) continue;
-
-    if (validAddress(query)) {
-      const addressMatches = pairAddresses.filter((pair) => pair.toLowerCase() === target);
-      candidates.push(...addressMatches);
-      continue;
-    }
-
-    const endpoints = await readInBatches(pairAddresses, async (pair) => {
+  for (let start = 0; start < pairAddresses.length && candidates.length < SEARCH_RESULT_LIMIT; start += SEARCH_BATCH_SIZE) {
+    const batch = pairAddresses.slice(start, start + SEARCH_BATCH_SIZE);
+    const endpoints = await readInBatches(batch, async (pair) => {
       const [token0, token1] = await Promise.all([
         readSafe(client, { address: pair, abi: PAIR_ABI, functionName: 'token0' }),
         readSafe(client, { address: pair, abi: PAIR_ABI, functionName: 'token1' }),
@@ -260,14 +256,14 @@ async function findSearchCandidates(client, length, query) {
         token0: token0.status === 'success' && token0.result ? getAddress(token0.result) : null,
         token1: token1.status === 'success' && token1.result ? getAddress(token1.result) : null,
       };
-    });
+    }, SEARCH_BATCH_SIZE);
 
-    const directAddressMatches = endpoints
-      .filter((item) => item.token0?.toLowerCase() === target || item.token1?.toLowerCase() === target)
-      .map((item) => item.pair);
-    candidates.push(...directAddressMatches);
-
-    if (candidates.length >= SEARCH_RESULT_LIMIT) break;
+    if (addressQuery) {
+      candidates.push(...endpoints
+        .filter((item) => item.pair.toLowerCase() === addressQuery || item.token0?.toLowerCase() === addressQuery || item.token1?.toLowerCase() === addressQuery)
+        .map((item) => item.pair));
+      continue;
+    }
 
     const uniqueTokens = [...new Set(
       endpoints.flatMap((item) => [item.token0, item.token1]).filter(Boolean).map((token) => token.toLowerCase()),
@@ -276,16 +272,26 @@ async function findSearchCandidates(client, length, query) {
     const metas = await readInBatches(uniqueTokens, async (token) => ({
       token,
       meta: await getTokenMeta(client, token),
-    }));
+    }), SEARCH_BATCH_SIZE);
 
-    const matchingTokens = new Set(
-      metas
-        .filter(({ token, meta }) => `${token} ${meta.symbol} ${meta.name}`.toLowerCase().includes(target))
-        .map(({ token }) => token.toLowerCase()),
-    );
+    const metadataByToken = new Map(metas.map(({ token, meta }) => [token.toLowerCase(), meta]));
 
     candidates.push(...endpoints
-      .filter((item) => matchingTokens.has(item.token0?.toLowerCase()) || matchingTokens.has(item.token1?.toLowerCase()))
+      .filter((item) => {
+        const meta0 = metadataByToken.get(item.token0?.toLowerCase());
+        const meta1 = metadataByToken.get(item.token1?.toLowerCase());
+        const haystack = [
+          item.pair,
+          item.token0,
+          item.token1,
+          meta0?.symbol,
+          meta1?.symbol,
+          meta0?.name,
+          meta1?.name,
+          `${meta0?.symbol || ''} / ${meta1?.symbol || ''}`,
+        ].filter(Boolean).join(' ').toLowerCase();
+        return haystack.includes(target);
+      })
       .map((item) => item.pair));
   }
 
@@ -333,6 +339,9 @@ export async function GET(request) {
     pools.sort((a, b) => {
       if (a.featured && !b.featured) return -1;
       if (!a.featured && b.featured) return 1;
+      const aa = BigInt(a.liquidityScore || 0);
+      const bb = BigInt(b.liquidityScore || 0);
+      if (aa !== bb) return aa > bb ? -1 : 1;
       return 0;
     });
 
