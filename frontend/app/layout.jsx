@@ -5,6 +5,7 @@ import './mobile-nav.css';
 import './wallet-picker.css';
 import './health-meter.css';
 import './overview.css';
+import './eyebrow-reset.css';
 import { Providers } from '../components/Providers';
 
 export const metadata = {
