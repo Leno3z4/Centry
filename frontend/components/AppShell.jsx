@@ -19,7 +19,7 @@ const NAV_ITEMS = [
 
 const NAV_GROUPS = [
   { key: 'overview', label: null },
-  { key: 'product', label: 'Product' },
+  { key: 'product', label: 'Main' },
   { key: 'explore', label: 'Explore' },
   { key: 'docs', label: null },
 ];
