@@ -9,13 +9,13 @@ const CENT = '0x76e6d50D3151f0B4645ac0E53584F4204Fc6f0e3';
 const ZERO = '0x0000000000000000000000000000000000000000';
 const MAX_DISPLAY_POOLS = 24;
 const SEARCH_RESULT_LIMIT = 50;
-const RPC_TIMEOUT_MS = 4_000;
-const REQUEST_TIMEOUT_MS = 10_000;
-const CACHE_TTL_MS = 30_000;
+const RPC_TIMEOUT_MS = 4000;
+const REQUEST_TIMEOUT_MS = 12000;
+const CACHE_TTL_MS = 30000;
 const META_CACHE_TTL_MS = 10 * 60_000;
-const LOG_PAGE_SIZE = 1_000;
+const LOG_PAGE_SIZE = 1000;
 const MAX_LOG_PAGES = 50;
-const LOG_API = 'https://api-testnet.arc-scan.org/api';
+const ARCSCAN_API = 'https://api-testnet.arc-scan.org';
 const PAIR_CREATED_TOPIC = '0x0d3648bd0f6ba80134a33ba9275ac585d9d315f0ad8355cddefde31afa28d0e';
 
 const FACTORY_ABI = [
@@ -40,9 +40,8 @@ const ERC20_ABI = {
 const RPC_URLS = [
   process.env.ARC_RPC_URL,
   process.env.NEXT_PUBLIC_ARC_RPC_URL,
+  'https://rpc-testnet.arc-scan.org',
   'https://rpc.testnet.arc.network',
-  'https://rpc.quicknode.testnet.arc.network',
-  'https://rpc.blockdaemon.testnet.arc.network',
 ].filter(Boolean);
 
 const KNOWN_META = new Map(
@@ -91,18 +90,12 @@ async function withTimeout(promise, ms, message) {
   return Promise.race([promise, timeoutPromise(ms, message)]);
 }
 
-async function readMany(client, calls, concurrency = 8) {
+async function readMany(client, calls, concurrency = 12) {
   const output = new Array(calls.length);
   for (let start = 0; start < calls.length; start += concurrency) {
     const group = calls.slice(start, start + concurrency);
-    const results = await Promise.allSettled(group.map((call) => withTimeout(
-      client.readContract(call),
-      RPC_TIMEOUT_MS,
-      'Arc RPC call timed out.',
-    )));
-    results.forEach((result, i) => {
-      output[start + i] = result.status === 'fulfilled' ? result.value : null;
-    });
+    const results = await Promise.allSettled(group.map((call) => withTimeout(client.readContract(call), RPC_TIMEOUT_MS, 'Arc RPC call timed out.')));
+    results.forEach((result, i) => { output[start + i] = result.status === 'fulfilled' ? result.value : null; });
   }
   return output;
 }
@@ -121,32 +114,33 @@ async function loadPairCount(client) {
 async function loadPairIndexes(client, start, count) {
   if (count <= 0) return [];
   const values = await readMany(client, Array.from({ length: count }, (_, offset) => ({
-    address: FACTORY,
-    abi: FACTORY_ABI,
-    functionName: 'allPairs',
-    args: [BigInt(start + offset)],
-  })), 8);
+    address: FACTORY, abi: FACTORY_ABI, functionName: 'allPairs', args: [BigInt(start + offset)],
+  })));
   return values.map(normalizeAddress).filter((pair) => pair && pair.toLowerCase() !== ZERO);
 }
 
-async function fetchPairLogs(page, offset = LOG_PAGE_SIZE) {
-  const params = new URLSearchParams({
-    module: 'logs',
-    action: 'getLogs',
-    address: FACTORY,
-    topic0: PAIR_CREATED_TOPIC,
-    page: String(page),
-    offset: String(offset),
-    sort: 'desc',
-  });
-  const response = await withTimeout(fetch(`${LOG_API}?${params.toString()}`, { cache: 'no-store' }), 5_000, 'Arcscan index request timed out.');
-  if (!response.ok) throw new Error(`Arcscan index HTTP ${response.status}`);
-  const body = await response.json();
-  const logs = Array.isArray(body?.result) ? body.result : [];
-  if (body?.status === '0' && logs.length === 0 && body?.message && !/no records/i.test(String(body.message))) {
-    throw new Error(String(body.message));
-  }
-  return logs;
+function extractLogs(body) {
+  if (Array.isArray(body)) return body;
+  if (Array.isArray(body?.logs)) return body.logs;
+  if (Array.isArray(body?.items)) return body.items;
+  if (Array.isArray(body?.data)) return body.data;
+  if (Array.isArray(body?.result)) return body.result;
+  return [];
+}
+
+function extractNextCursor(body) {
+  return body?.page?.next ?? body?.next_cursor ?? body?.nextCursor ?? body?.pagination?.next ?? null;
+}
+
+async function fetchPairLogPage(cursor = null) {
+  const params = new URLSearchParams({ limit: String(LOG_PAGE_SIZE), topic0: PAIR_CREATED_TOPIC });
+  if (cursor) params.set('cursor', cursor);
+  const url = `${ARCSCAN_API}/v1/address/${FACTORY}/logs?${params.toString()}`;
+  const response = await withTimeout(fetch(url, { cache: 'no-store' }), 5000, 'Arcscan index request timed out.');
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(`Arcscan index request failed (${response.status}).`);
+  if (body?.error) throw new Error('Arcscan index unavailable.');
+  return { logs: extractLogs(body), next: extractNextCursor(body) };
 }
 
 function addressFromTopic(topic) {
@@ -159,30 +153,28 @@ function pairFromLog(log) {
   const data = typeof log?.data === 'string' ? log.data : '';
   const token0 = addressFromTopic(topics[1]);
   const token1 = addressFromTopic(topics[2]);
-  const pair = validAddress(data.slice(0, 66)) ? normalizeAddress(`0x${data.slice(26, 66)}`) : null;
-  if (!pair || !token0 || !token1) return null;
-  return { pair, token0, token1 };
+  const pairWord = data.startsWith('0x') ? data.slice(2, 66) : '';
+  const pair = pairWord.length === 64 ? normalizeAddress(`0x${pairWord.slice(24)}`) : null;
+  return pair && token0 && token1 ? { pair, token0, token1 } : null;
 }
 
 async function loadRecentRegistryRecords(client, count) {
   try {
-    const logs = await fetchPairLogs(1, Math.max(LOG_PAGE_SIZE, MAX_DISPLAY_POOLS));
-    const records = logs.map(pairFromLog).filter(Boolean).slice(0, MAX_DISPLAY_POOLS);
+    const page = await fetchPairLogPage();
+    const records = page.logs.map(pairFromLog).filter(Boolean).slice(0, MAX_DISPLAY_POOLS);
     if (records.length) return { records, source: 'arcscan' };
   } catch {}
 
   const take = Math.min(MAX_DISPLAY_POOLS, count);
   const pairs = await loadPairIndexes(client, Math.max(0, count - take), take);
-  const endpointValues = await readMany(client, pairs.flatMap((pair) => [
+  const values = await readMany(client, pairs.flatMap((pair) => [
     { address: pair, abi: PAIR_ABI, functionName: 'token0' },
     { address: pair, abi: PAIR_ABI, functionName: 'token1' },
-  ]), 8);
-  const records = pairs.map((pair, i) => ({
-    pair,
-    token0: normalizeAddress(endpointValues[i * 2]),
-    token1: normalizeAddress(endpointValues[i * 2 + 1]),
-  }));
-  return { records, source: 'rpc' };
+  ]));
+  return {
+    source: 'rpc',
+    records: pairs.map((pair, i) => ({ pair, token0: normalizeAddress(values[i * 2]), token1: normalizeAddress(values[i * 2 + 1]) })),
+  };
 }
 
 function fallbackMeta(address) {
@@ -206,28 +198,27 @@ async function loadTokenMeta(client, addresses) {
       else missing.push(token);
     }
   }
+  if (!missing.length) return result;
 
-  if (missing.length) {
-    const values = await readMany(client, missing.flatMap((token) => [
-      { address: token, abi: ERC20_ABI.symbol, functionName: 'symbol' },
-      { address: token, abi: ERC20_ABI.name, functionName: 'name' },
-      { address: token, abi: ERC20_ABI.decimals, functionName: 'decimals' },
-    ]), 8);
-    missing.forEach((token, i) => {
-      const base = fallbackMeta(token);
-      const symbol = values[i * 3];
-      const name = values[i * 3 + 1];
-      const decimals = values[i * 3 + 2];
-      const meta = {
-        symbol: symbol !== null && symbol !== undefined ? String(symbol) : base.symbol,
-        name: name !== null && name !== undefined ? String(name) : base.name,
-        decimals: decimals !== null && decimals !== undefined ? Number(decimals) : 18,
-        address: token,
-      };
-      result.set(token.toLowerCase(), meta);
-      tokenMetadataCache.set(token.toLowerCase(), { timestamp: Date.now(), meta });
-    });
-  }
+  const values = await readMany(client, missing.flatMap((token) => [
+    { address: token, abi: ERC20_ABI.symbol, functionName: 'symbol' },
+    { address: token, abi: ERC20_ABI.name, functionName: 'name' },
+    { address: token, abi: ERC20_ABI.decimals, functionName: 'decimals' },
+  ]));
+  missing.forEach((token, i) => {
+    const base = fallbackMeta(token);
+    const symbol = values[i * 3];
+    const name = values[i * 3 + 1];
+    const decimals = values[i * 3 + 2];
+    const meta = {
+      symbol: symbol != null ? String(symbol) : base.symbol,
+      name: name != null ? String(name) : base.name,
+      decimals: decimals != null ? Number(decimals) : 18,
+      address: token,
+    };
+    result.set(token.toLowerCase(), meta);
+    tokenMetadataCache.set(token.toLowerCase(), { timestamp: Date.now(), meta });
+  });
   return result;
 }
 
@@ -254,7 +245,7 @@ async function hydratePairs(client, records, wallet) {
     { address: r.pair, abi: PAIR_ABI, functionName: 'getReserves' },
     { address: r.pair, abi: PAIR_ABI, functionName: 'totalSupply' },
     ...(wallet ? [{ address: r.pair, abi: PAIR_ABI, functionName: 'balanceOf', args: [wallet] }] : []),
-  ]), 8);
+  ]));
   const stride = wallet ? 3 : 2;
   return unique.map((r, i) => {
     const m0 = metadata.get(r.token0?.toLowerCase()) || fallbackMeta(r.token0);
@@ -263,7 +254,7 @@ async function hydratePairs(client, records, wallet) {
     const reserve0 = BigInt(reserves[0] ?? 0);
     const reserve1 = BigInt(reserves[1] ?? 0);
     const totalSupply = values[i * stride + 1] ?? 0n;
-    const lpBalance = wallet ? (values[i * stride + 2] ?? 0n) : 0n;
+    const lpBalance = wallet ? values[i * stride + 2] ?? 0n : 0n;
     return {
       pair: r.pair,
       token0: r.token0,
@@ -285,49 +276,36 @@ function knownTokenAddress(query) {
   const exact = normalizeAddress(query);
   if (exact) return exact;
   const key = query.trim().toLowerCase();
-  for (const meta of KNOWN_META.values()) if (meta.symbol?.toLowerCase() === key || meta.name?.toLowerCase() === key) return meta.address;
+  for (const meta of KNOWN_META.values()) {
+    if (meta.symbol?.toLowerCase() === key || meta.name?.toLowerCase() === key) return meta.address;
+  }
   return null;
 }
 
-async function resolveSearchWithArcscan(query) {
-  try {
-    const params = new URLSearchParams({ q: query.trim(), limit: '10' });
-    const response = await withTimeout(fetch(`https://api-testnet.arc-scan.org/v1/search/suggest?${params.toString()}`, { cache: 'no-store' }), 4_000, 'Arcscan search timed out.');
-    if (!response.ok) return null;
-    const body = await response.json();
-    const candidates = Array.isArray(body?.results) ? body.results : Array.isArray(body?.items) ? body.items : Array.isArray(body?.data) ? body.data : [];
-    for (const item of candidates) {
-      const address = normalizeAddress(item?.address || item?.token_address || item?.contract_address || item?.target);
-      if (address) return address;
-    }
-  } catch {}
-  return null;
-}
-
-async function searchByRegistryLogs(tokenAddress, wallet, pairQuery) {
+async function searchByRegistryLogs(tokenAddress, wallet) {
   const wanted = tokenAddress?.toLowerCase() || null;
   const matched = [];
-  for (let page = 1; page <= MAX_LOG_PAGES && matched.length < SEARCH_RESULT_LIMIT; page += 1) {
-    const logs = await fetchPairLogs(page);
-    if (!logs.length) break;
-    for (const log of logs) {
+  let cursor = null;
+  for (let page = 0; page < MAX_LOG_PAGES && matched.length < SEARCH_RESULT_LIMIT; page += 1) {
+    const result = await fetchPairLogPage(cursor);
+    for (const log of result.logs) {
       const record = pairFromLog(log);
       if (!record) continue;
-      if (pairQuery && record.pair.toLowerCase() === pairQuery.toLowerCase()) matched.push(record);
-      else if (wanted && (record.token0.toLowerCase() === wanted || record.token1.toLowerCase() === wanted)) matched.push(record);
+      if (!wanted || record.token0.toLowerCase() === wanted || record.token1.toLowerCase() === wanted) matched.push(record);
       if (matched.length >= SEARCH_RESULT_LIMIT) break;
     }
-    if (logs.length < LOG_PAGE_SIZE) break;
+    if (!result.next || result.next === cursor || result.logs.length < 1) break;
+    cursor = result.next;
   }
-  return matched.slice(0, SEARCH_RESULT_LIMIT);
+  return hydratePairs(createClient(), matched.slice(0, SEARCH_RESULT_LIMIT), wallet);
 }
 
 async function searchRegistry(client, query, wallet) {
-  const pairCount = await loadPairCount(client);
+  const count = await loadPairCount(client);
   const q = query.trim().toLowerCase();
   const cacheKey = `${wallet?.toLowerCase() || ''}:${q}`;
   const cached = searchCache.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) return { count: pairCount, pools: cached.pools, source: cached.source };
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) return { count, pools: cached.pools, source: cached.source };
 
   const directPair = normalizeAddress(query);
   if (directPair) {
@@ -338,30 +316,38 @@ async function searchRegistry(client, query, wallet) {
     if (values[0] && values[1]) {
       const pools = await hydratePairs(client, [{ pair: directPair, token0: values[0], token1: values[1] }], wallet);
       searchCache.set(cacheKey, { timestamp: Date.now(), pools, source: 'rpc-direct' });
-      return { count: pairCount, pools, source: 'rpc-direct' };
+      return { count, pools, source: 'rpc-direct' };
     }
   }
 
-  const tokenAddress = knownTokenAddress(query) || await resolveSearchWithArcscan(query);
+  const tokenAddress = knownTokenAddress(query);
   if (tokenAddress) {
-    const records = await searchByRegistryLogs(tokenAddress, wallet, null);
-    const pools = await hydratePairs(client, records, wallet);
-    searchCache.set(cacheKey, { timestamp: Date.now(), pools, source: 'arcscan-registry' });
-    return { count: pairCount, pools, source: 'arcscan-registry' };
+    try {
+      const pools = await searchByRegistryLogs(tokenAddress, wallet);
+      searchCache.set(cacheKey, { timestamp: Date.now(), pools, source: 'arcscan-registry' });
+      return { count, pools, source: 'arcscan-registry' };
+    } catch {}
   }
 
-  const recentLogs = await fetchPairLogs(1, LOG_PAGE_SIZE);
-  const recentRecords = recentLogs.map(pairFromLog).filter(Boolean);
-  const lowered = q.toLowerCase();
-  const metadata = await loadTokenMeta(client, [...new Set(recentRecords.flatMap((r) => [r.token0, r.token1]))].slice(0, 48));
-  const matched = recentRecords.filter((r) => {
-    const m0 = metadata.get(r.token0.toLowerCase()) || fallbackMeta(r.token0);
-    const m1 = metadata.get(r.token1.toLowerCase()) || fallbackMeta(r.token1);
-    return [r.pair, r.token0, r.token1, m0.name, m0.symbol, m1.name, m1.symbol].join(' ').toLowerCase().includes(lowered);
-  });
-  const pools = await hydratePairs(client, matched.slice(0, SEARCH_RESULT_LIMIT), wallet);
-  searchCache.set(cacheKey, { timestamp: Date.now(), pools, source: 'arcscan-recent' });
-  return { count: pairCount, pools, source: 'arcscan-recent' };
+  let cursor = null;
+  const matched = [];
+  for (let page = 0; page < MAX_LOG_PAGES && matched.length < SEARCH_RESULT_LIMIT; page += 1) {
+    const result = await fetchPairLogPage(cursor);
+    const tokens = result.logs.map(pairFromLog).filter(Boolean);
+    const meta = await loadTokenMeta(client, tokens.flatMap((r) => [r.token0, r.token1]));
+    for (const r of tokens) {
+      const m0 = meta.get(r.token0.toLowerCase()) || fallbackMeta(r.token0);
+      const m1 = meta.get(r.token1.toLowerCase()) || fallbackMeta(r.token1);
+      const haystack = [r.pair, r.token0, r.token1, m0.name, m0.symbol, m1.name, m1.symbol].join(' ').toLowerCase();
+      if (haystack.includes(q)) matched.push(r);
+      if (matched.length >= SEARCH_RESULT_LIMIT) break;
+    }
+    if (!result.next || result.next === cursor || result.logs.length < 1) break;
+    cursor = result.next;
+  }
+  const pools = await hydratePairs(client, matched, wallet);
+  searchCache.set(cacheKey, { timestamp: Date.now(), pools, source: 'arcscan-search' });
+  return { count, pools, source: 'arcscan-search' };
 }
 
 export async function GET(request) {
@@ -388,10 +374,11 @@ export async function GET(request) {
       return NextResponse.json({ success: true, data });
     }
 
-    const result = await withTimeout(searchRegistry(client, query, wallet), REQUEST_TIMEOUT_MS + 5_000, 'UnitFlow pool search timed out.');
+    const result = await withTimeout(searchRegistry(client, query, wallet), REQUEST_TIMEOUT_MS + 5000, 'UnitFlow pool search timed out.');
     return NextResponse.json({ success: true, data: { count: result.count, loaded: result.pools.length, displayLimit: SEARCH_RESULT_LIMIT, mode: 'search', pools: result.pools, wallet, searched: true, query, source: result.source } });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to load UnitFlow pools.';
-    return NextResponse.json({ success: false, error: message }, { status: /timed out/i.test(message) ? 504 : 502 });
+    const safeMessage = message === 'NOTOK' || /Arcscan/i.test(message) ? 'UnitFlow pool registry is temporarily unavailable.' : message;
+    return NextResponse.json({ success: false, error: safeMessage }, { status: /timed out/i.test(safeMessage) ? 504 : 502 });
   }
 }
