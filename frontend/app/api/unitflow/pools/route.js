@@ -17,6 +17,7 @@ const CACHE_TTL_MS = 30_000;
 const META_CACHE_TTL_MS = 10 * 60_000;
 const BATCH_SIZE = 50;
 const BATCH_CONCURRENCY = 4;
+const SEARCH_POOL_BATCH_SIZE = 100;
 
 const FACTORY_ABI = [
   { type: 'function', name: 'allPairsLength', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
@@ -57,8 +58,6 @@ const KNOWN_META = new Map(
 KNOWN_META.set(WUSDC.toLowerCase(), { symbol: 'USDC', name: 'USD Coin', decimals: 18, address: WUSDC });
 KNOWN_META.set(NATIVE_USDC.toLowerCase(), { symbol: 'USDC', name: 'USD Coin', decimals: 6, address: WUSDC });
 
-let registryCache = null;
-let endpointCache = null;
 let recentPairsCache = null;
 let recentCache = null;
 const searchCache = new Map();
@@ -117,6 +116,7 @@ async function rpcBatch(calls) {
 }
 
 async function batchEthCalls(calls) {
+  if (!calls.length) return [];
   const chunks = [];
   for (let i = 0; i < calls.length; i += BATCH_SIZE) chunks.push(calls.slice(i, i + BATCH_SIZE));
   const output = new Array(chunks.length);
@@ -151,12 +151,15 @@ async function loadPairCount(client) {
   ));
 }
 
-async function loadPairIndexes(pairsLength, count = MAX_DISPLAY_POOLS) {
-  if (!pairsLength) return [];
-  const take = Math.min(count, pairsLength);
-  const start = pairsLength - take;
-  const calls = Array.from({ length: take }, (_, offset) => encodedCall(FACTORY, FACTORY_ABI, 'allPairs', [BigInt(start + offset)]));
-  const responses = await withTimeout(batchEthCalls(calls), REQUEST_TIMEOUT_MS, 'UnitFlow pool registry timed out.');
+async function loadPairIndexes(start, count) {
+  if (count <= 0) return [];
+  const calls = Array.from({ length: count }, (_, offset) => encodedCall(
+    FACTORY,
+    FACTORY_ABI,
+    'allPairs',
+    [BigInt(start + offset)],
+  ));
+  const responses = await withTimeout(batchEthCalls(calls), REQUEST_TIMEOUT_MS, 'UnitFlow pool registry batch timed out.');
   return responses.map((item) => {
     const decoded = item?.error ? null : decodeCall(item?.result, FACTORY_ABI, 'allPairs');
     return decoded?.[0] ? getAddress(decoded[0]) : null;
@@ -168,39 +171,19 @@ async function loadRecentPairs(client) {
   if (recentPairsCache && recentPairsCache.length === count && Date.now() - recentPairsCache.timestamp < REGISTRY_TTL_MS) {
     return { length: count, pairs: recentPairsCache.pairs };
   }
-  const pairs = await loadPairIndexes(count, MAX_DISPLAY_POOLS);
+  const take = Math.min(MAX_DISPLAY_POOLS, count);
+  const start = Math.max(0, count - take);
+  const pairs = await loadPairIndexes(start, take);
   recentPairsCache = { timestamp: Date.now(), length: count, pairs };
   return { length: count, pairs };
 }
 
-async function loadRegistry(client) {
-  if (registryCache && Date.now() - registryCache.timestamp < REGISTRY_TTL_MS) return registryCache.pairs;
-  const length = await loadPairCount(client);
-  if (!length) {
-    registryCache = { timestamp: Date.now(), pairs: [] };
-    endpointCache = null;
-    recentPairsCache = { timestamp: Date.now(), length: 0, pairs: [] };
-    recentCache = null;
-    return [];
-  }
-  const calls = Array.from({ length }, (_, index) => encodedCall(FACTORY, FACTORY_ABI, 'allPairs', [BigInt(index)]));
-  const responses = await withTimeout(batchEthCalls(calls), REQUEST_TIMEOUT_MS, 'UnitFlow pool registry timed out.');
-  const pairs = responses.map((item) => {
-    const decoded = item?.error ? null : decodeCall(item?.result, FACTORY_ABI, 'allPairs');
-    return decoded?.[0] ? getAddress(decoded[0]) : null;
-  }).filter((pair) => pair && pair !== ZERO);
-  registryCache = { timestamp: Date.now(), pairs };
-  endpointCache = null;
-  recentPairsCache = { timestamp: Date.now(), length, pairs: pairs.slice(Math.max(0, pairs.length - MAX_DISPLAY_POOLS)) };
-  recentCache = null;
-  return pairs;
-}
-
-async function loadPairEndpoints(client, pairs) {
-  const key = pairs.map((p) => p.toLowerCase()).join(',');
-  if (endpointCache && endpointCache.key === key && Date.now() - endpointCache.timestamp < REGISTRY_TTL_MS) return endpointCache.records;
+async function loadPairEndpoints(pairs) {
   if (!pairs.length) return [];
-  const calls = pairs.flatMap((pair) => [encodedCall(pair, PAIR_ABI, 'token0'), encodedCall(pair, PAIR_ABI, 'token1')]);
+  const calls = pairs.flatMap((pair) => [
+    encodedCall(pair, PAIR_ABI, 'token0'),
+    encodedCall(pair, PAIR_ABI, 'token1'),
+  ]);
   const responses = await withTimeout(batchEthCalls(calls), REQUEST_TIMEOUT_MS, 'UnitFlow token lookup timed out.');
   const records = [];
   for (let i = 0; i < pairs.length; i += 1) {
@@ -208,7 +191,6 @@ async function loadPairEndpoints(client, pairs) {
     const token1 = responses[i * 2 + 1]?.error ? null : decodeCall(responses[i * 2 + 1]?.result, PAIR_ABI, 'token1')?.[0];
     if (token0 && token1) records.push({ pair: pairs[i], token0: getAddress(token0), token1: getAddress(token1) });
   }
-  endpointCache = { timestamp: Date.now(), key, records };
   return records;
 }
 
@@ -274,7 +256,7 @@ function liquidityScore(reserve0, reserve1, decimals0, decimals1) {
   return r;
 }
 
-async function hydratePairs(client, records, wallet) {
+async function hydratePairs(records, wallet) {
   const unique = [...new Map(records.map((record) => [record.pair.toLowerCase(), record])).values()];
   if (!unique.length) return [];
   const tokens = [...new Set(unique.flatMap((record) => [record.token0, record.token1]).map((token) => token.toLowerCase()))].map(getAddress);
@@ -314,7 +296,7 @@ async function hydratePairs(client, records, wallet) {
 async function loadRecentPools(client, length, wallet, recentRecords) {
   const walletKey = wallet?.toLowerCase() || '';
   if (recentCache && recentCache.length === length && recentCache.walletKey === walletKey && Date.now() - recentCache.timestamp < CACHE_TTL_MS) return recentCache.pools;
-  const pools = await hydratePairs(client, recentRecords, wallet);
+  const pools = await hydratePairs(recentRecords, wallet);
   pools.sort((a, b) => {
     const aa = BigInt(a.liquidityScore || 0);
     const bb = BigInt(b.liquidityScore || 0);
@@ -322,6 +304,65 @@ async function loadRecentPools(client, length, wallet, recentRecords) {
   });
   recentCache = { timestamp: Date.now(), length, walletKey, pools };
   return pools;
+}
+
+function matchesRecord(record, tokenMeta, key, addressQuery) {
+  if (addressQuery) {
+    return record.pair.toLowerCase() === addressQuery
+      || record.token0.toLowerCase() === addressQuery
+      || record.token1.toLowerCase() === addressQuery;
+  }
+
+  const meta0 = tokenMeta.get(record.token0.toLowerCase()) || fallbackMeta(record.token0);
+  const meta1 = tokenMeta.get(record.token1.toLowerCase()) || fallbackMeta(record.token1);
+  const haystack = [
+    record.pair,
+    record.token0,
+    record.token1,
+    meta0.name,
+    meta0.symbol,
+    meta1.name,
+    meta1.symbol,
+  ].filter(Boolean).join(' ').toLowerCase();
+  return haystack.includes(key);
+}
+
+async function searchRegistry(client, query, wallet) {
+  const pairCount = await loadPairCount(client);
+  if (!pairCount) return { count: 0, pools: [] };
+
+  const key = query.toLowerCase();
+  const addressQuery = validAddress(query) ? getAddress(query).toLowerCase() : null;
+  const searchKey = `${wallet?.toLowerCase() || ''}:${key}`;
+  const cached = searchCache.get(searchKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) return { count: pairCount, pools: cached.pools };
+
+  const matchedRecords = [];
+  const totalBatches = Math.ceil(pairCount / SEARCH_POOL_BATCH_SIZE);
+
+  for (let batch = 0; batch < totalBatches; batch += 1) {
+    const end = pairCount - (batch * SEARCH_POOL_BATCH_SIZE);
+    const start = Math.max(0, end - SEARCH_POOL_BATCH_SIZE);
+    const pairs = await loadPairIndexes(start, end - start);
+    const records = await loadPairEndpoints(pairs);
+
+    let tokenMeta = new Map();
+    if (!addressQuery) {
+      const tokens = [...new Set(records.flatMap((record) => [record.token0, record.token1]))];
+      tokenMeta = await getAllTokenMeta(tokens);
+    }
+
+    for (const record of records) {
+      if (matchesRecord(record, tokenMeta, key, addressQuery)) matchedRecords.push(record);
+      if (matchedRecords.length >= SEARCH_RESULT_LIMIT) break;
+    }
+
+    if (matchedRecords.length >= SEARCH_RESULT_LIMIT) break;
+  }
+
+  const pools = await hydratePairs(matchedRecords.slice(0, SEARCH_RESULT_LIMIT), wallet);
+  searchCache.set(searchKey, { timestamp: Date.now(), pools });
+  return { count: pairCount, pools };
 }
 
 export async function GET(request) {
@@ -334,7 +375,7 @@ export async function GET(request) {
 
     if (!query) {
       const { length, pairs } = await loadRecentPairs(client);
-      const recentRecords = await loadPairEndpoints(client, pairs);
+      const recentRecords = await loadPairEndpoints(pairs);
       const pools = await loadRecentPools(client, length, wallet, recentRecords);
       return NextResponse.json({
         success: true,
@@ -350,35 +391,20 @@ export async function GET(request) {
       });
     }
 
-    const pairs = await loadRegistry(client);
-    const searchKey = `${wallet?.toLowerCase() || ''}:${query.toLowerCase()}`;
-    const cachedSearch = searchCache.get(searchKey);
-    if (cachedSearch && Date.now() - cachedSearch.timestamp < CACHE_TTL_MS) {
-      return NextResponse.json({ success: true, data: { count: pairs.length, loaded: cachedSearch.pools.length, displayLimit: SEARCH_RESULT_LIMIT, mode: 'search', pools: cachedSearch.pools, wallet, searched: true, query } });
-    }
-
-    const records = await loadPairEndpoints(client, pairs);
-    let candidates = null;
-    const key = query.toLowerCase();
-    const addressQuery = validAddress(query) ? getAddress(query).toLowerCase() : null;
-
-    if (addressQuery) {
-      candidates = records.filter((record) => record.pair.toLowerCase() === addressQuery || record.token0.toLowerCase() === addressQuery || record.token1.toLowerCase() === addressQuery);
-    } else {
-      const tokens = [...new Set(records.flatMap((record) => [record.token0, record.token1]))];
-      const tokenMeta = await getAllTokenMeta(tokens);
-      candidates = records.filter((record) => {
-        const meta0 = tokenMeta.get(record.token0.toLowerCase()) || fallbackMeta(record.token0);
-        const meta1 = tokenMeta.get(record.token1.toLowerCase()) || fallbackMeta(record.token1);
-        const haystack = [record.pair, record.token0, record.token1, meta0.name, meta0.symbol, meta1.name, meta1.symbol].filter(Boolean).join(' ').toLowerCase();
-        return haystack.includes(key);
-      });
-    }
-
-    candidates = candidates.slice(0, SEARCH_RESULT_LIMIT);
-    const pools = await hydratePairs(client, candidates, wallet);
-    searchCache.set(searchKey, { timestamp: Date.now(), pools });
-    return NextResponse.json({ success: true, data: { count: pairs.length, loaded: pools.length, displayLimit: SEARCH_RESULT_LIMIT, mode: 'search', pools, wallet, searched: true, query } });
+    const { count, pools } = await searchRegistry(client, query, wallet);
+    return NextResponse.json({
+      success: true,
+      data: {
+        count,
+        loaded: pools.length,
+        displayLimit: SEARCH_RESULT_LIMIT,
+        mode: 'search',
+        pools,
+        wallet,
+        searched: true,
+        query,
+      },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to load UnitFlow pools.';
     const status = /timed out/i.test(message) ? 504 : 502;
