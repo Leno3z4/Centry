@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useAccount } from 'wagmi';
+import { useAccount, useChainId, useConnectorClient, useSwitchChain } from 'wagmi';
 import { Providers } from '../../../components/Providers';
 import { AppShell } from '../../../components/AppShell';
 import styles from './bridge.module.css';
@@ -10,9 +10,9 @@ const ARC_CHAIN_ID = 5042002;
 
 const BRIDGE_CHAINS = [
   { id: 'arc-testnet', chainId: ARC_CHAIN_ID, name: 'Arc Testnet', short: 'Arc', badge: 'A' },
-  { id: 'base-sepolia', chainId: 84532, name: 'Base Sepolia', short: 'Base', badge: 'B' },
-  { id: 'arbitrum-sepolia', chainId: 421614, name: 'Arbitrum Sepolia', short: 'Arbitrum', badge: 'A' },
-  { id: 'ethereum-sepolia', chainId: 11155111, name: 'Ethereum Sepolia', short: 'Ethereum', badge: 'E' },
+  { id: 'base-sepolia', chainId: 84532, name: 'Base Sepolia', short: 'Base', badge: 'B', rpcUrl: 'https://sepolia.base.org', explorerUrl: 'https://sepolia.basescan.org' },
+  { id: 'arbitrum-sepolia', chainId: 421614, name: 'Arbitrum Sepolia', short: 'Arbitrum', badge: 'A', rpcUrl: 'https://sepolia-rollup.arbitrum.io/rpc', explorerUrl: 'https://sepolia.arbiscan.io' },
+  { id: 'ethereum-sepolia', chainId: 11155111, name: 'Ethereum Sepolia', short: 'Ethereum', badge: 'E', rpcUrl: 'https://rpc.sepolia.org', explorerUrl: 'https://sepolia.etherscan.io' },
 ];
 
 const EXTERNAL_CHAINS = BRIDGE_CHAINS.filter((chain) => chain.chainId !== ARC_CHAIN_ID);
@@ -79,8 +79,11 @@ export default function Page() {
 
 function BridgeContent() {
   const { address, isConnected } = useAccount();
-  const [fromId, setFromId] = useState('base-sepolia');
-  const [toId, setToId] = useState('arc-testnet');
+  const walletChainId = useChainId();
+  const { data: connectorClient } = useConnectorClient();
+  const { switchChain, isPending: switchingArc } = useSwitchChain();
+  const [fromId, setFromId] = useState('arc-testnet');
+  const [toId, setToId] = useState('base-sepolia');
   const [amount, setAmount] = useState('');
   const [balance, setBalance] = useState(null);
   const [checkingBalance, setCheckingBalance] = useState(false);
@@ -92,8 +95,9 @@ function BridgeContent() {
   const toArc = toId === 'arc-testnet';
   const sourceChains = useMemo(() => toArc ? EXTERNAL_CHAINS : [BRIDGE_CHAINS.find((chain) => chain.id === 'arc-testnet')], [toArc]);
   const destinationChains = useMemo(() => fromArc ? EXTERNAL_CHAINS : [BRIDGE_CHAINS.find((chain) => chain.id === 'arc-testnet')], [fromArc]);
-  const source = BRIDGE_CHAINS.find((chain) => chain.id === fromId) || BRIDGE_CHAINS[1];
-  const destination = BRIDGE_CHAINS.find((chain) => chain.id === toId) || BRIDGE_CHAINS[0];
+  const source = BRIDGE_CHAINS.find((chain) => chain.id === fromId) || BRIDGE_CHAINS[0];
+  const destination = BRIDGE_CHAINS.find((chain) => chain.id === toId) || BRIDGE_CHAINS[1];
+  const walletOnSource = !isConnected || walletChainId === source.chainId;
   const validAmount = Number.isFinite(Number(amount)) && Number(amount) > 0;
 
   const detectBalance = async () => {
@@ -153,14 +157,47 @@ function BridgeContent() {
     if (balance && Number(balance) > 0) setAmount(balance);
   };
 
+  const switchToSource = async () => {
+    if (!isConnected || walletChainId === source.chainId) return true;
+    setError('');
+    try {
+      if (source.chainId === ARC_CHAIN_ID) {
+        await switchChain({ chainId: ARC_CHAIN_ID });
+      } else {
+        if (!connectorClient?.request) throw new Error('The connected wallet does not support network switching.');
+        const chainHex = `0x${source.chainId.toString(16)}`;
+        try {
+          await connectorClient.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: chainHex }] });
+        } catch (caughtError) {
+          if (Number(caughtError?.code) !== 4902) throw caughtError;
+          await connectorClient.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: chainHex,
+              chainName: source.name,
+              nativeCurrency: { name: 'USD Coin', symbol: 'USDC', decimals: 6 },
+              rpcUrls: [source.rpcUrl],
+              blockExplorerUrls: [source.explorerUrl],
+            }],
+          });
+          await connectorClient.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: chainHex }] });
+        }
+      }
+      return true;
+    } catch (caughtError) {
+      setError(caughtError?.shortMessage || caughtError?.message || `Switch your wallet to ${source.name} before bridging.`);
+      return false;
+    }
+  };
+
   const bridge = async () => {
     if (!address || !validAmount || fromId === toId) return;
     setLoading(true);
     setError('');
     setResult(null);
     try {
-      // Network failures are safe to retry because no HTTP response was received.
-      // HTTP errors are returned directly to avoid duplicating an accepted bridge request.
+      if (!(await switchToSource())) return;
+
       const { response, data } = await requestJson('/api/tower/bridge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -209,8 +246,10 @@ function BridgeContent() {
           <div><span>Recipient</span><strong>{address ? `${address.slice(0, 6)}…${address.slice(-4)}` : 'Connect wallet'}</strong></div>
         </div>
 
-        <button type="button" className={styles.primaryButton} disabled={!isConnected || !validAmount || fromId === toId || loading} onClick={bridge}>
-          {!isConnected ? 'Connect wallet' : loading ? 'Starting bridge…' : `Bridge USDC to ${destination.short}`}
+        {!walletOnSource && isConnected ? <div className={styles.notice}>Wallet is on chain {walletChainId}. Switch to {source.name} before starting this bridge.</div> : null}
+
+        <button type="button" className={styles.primaryButton} disabled={!isConnected || !validAmount || fromId === toId || loading || switchingArc} onClick={bridge}>
+          {!isConnected ? 'Connect wallet' : loading || switchingArc ? 'Switching network…' : !walletOnSource ? `Switch to ${source.short} & bridge` : `Bridge USDC to ${destination.short}`}
         </button>
 
         {isConnected && <button type="button" className={styles.refreshButton} onClick={detectBalance} disabled={checkingBalance}>{checkingBalance ? 'Checking balance…' : `Refresh ${source.short} USDC balance`}</button>}
