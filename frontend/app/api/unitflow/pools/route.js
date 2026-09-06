@@ -10,12 +10,13 @@ const NATIVE_USDC = '0x3600000000000000000000000000000000000000';
 const ZERO = '0x0000000000000000000000000000000000000000';
 const MAX_DISPLAY_POOLS = 100;
 const SEARCH_RESULT_LIMIT = 50;
-const RPC_TIMEOUT_MS = 5_000;
-const REQUEST_TIMEOUT_MS = 15_000;
+const RPC_TIMEOUT_MS = 4_000;
+const REQUEST_TIMEOUT_MS = 12_000;
 const REGISTRY_TTL_MS = 60_000;
 const CACHE_TTL_MS = 30_000;
 const META_CACHE_TTL_MS = 10 * 60_000;
-const BATCH_SIZE = 250;
+const BATCH_SIZE = 50;
+const BATCH_CONCURRENCY = 4;
 
 const FACTORY_ABI = [
   { type: 'function', name: 'allPairsLength', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
@@ -27,7 +28,7 @@ const PAIR_ABI = [
   { type: 'function', name: 'token1', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'getReserves', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint112' }, { type: 'uint112' }, { type: 'uint32' }] },
   { type: 'function', name: 'totalSupply', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
-  { type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ type: 'address' }], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ type: 'uint256' }] },
 ];
 
 const ERC20_ABI = {
@@ -58,6 +59,7 @@ KNOWN_META.set(NATIVE_USDC.toLowerCase(), { symbol: 'USDC', name: 'USD Coin', de
 
 let registryCache = null;
 let endpointCache = null;
+let recentCache = null;
 const searchCache = new Map();
 const tokenMetadataCache = new Map();
 
@@ -88,32 +90,43 @@ function withTimeout(promise, ms, message) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-function rpcRequestUrl() {
-  return RPC_URLS[0];
-}
-
 async function rpcBatch(calls) {
-  const url = rpcRequestUrl();
-  if (!url) throw new Error('No Arc RPC endpoint configured.');
+  if (!RPC_URLS.length) throw new Error('No Arc RPC endpoint configured.');
   const body = calls.map((call, index) => ({ jsonrpc: '2.0', id: index + 1, method: 'eth_call', params: [call, 'latest'] }));
-  const response = await withTimeout(fetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-    cache: 'no-store',
-  }), REQUEST_TIMEOUT_MS, 'Arc RPC request timed out.');
-  if (!response.ok) throw new Error(`Arc RPC HTTP ${response.status}`);
-  const results = await response.json();
-  if (!Array.isArray(results)) throw new Error('Arc RPC does not support JSON-RPC batching.');
-  return results.sort((a, b) => Number(a.id) - Number(b.id));
+  let lastError = null;
+
+  for (const url of RPC_URLS) {
+    try {
+      const response = await withTimeout(fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+        cache: 'no-store',
+      }), RPC_TIMEOUT_MS, 'Arc RPC request timed out.');
+      if (!response.ok) throw new Error(`Arc RPC HTTP ${response.status}`);
+      const results = await response.json();
+      if (!Array.isArray(results)) throw new Error('Arc RPC does not support JSON-RPC batching.');
+      return results.sort((a, b) => Number(a.id) - Number(b.id));
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error('All Arc RPC endpoints failed.');
 }
 
 async function batchEthCalls(calls) {
-  const output = [];
-  for (let i = 0; i < calls.length; i += BATCH_SIZE) {
-    output.push(...await rpcBatch(calls.slice(i, i + BATCH_SIZE)));
+  const chunks = [];
+  for (let i = 0; i < calls.length; i += BATCH_SIZE) chunks.push(calls.slice(i, i + BATCH_SIZE));
+  const output = new Array(chunks.length);
+
+  for (let start = 0; start < chunks.length; start += BATCH_CONCURRENCY) {
+    const end = Math.min(start + BATCH_CONCURRENCY, chunks.length);
+    const responses = await Promise.all(chunks.slice(start, end).map((chunk) => rpcBatch(chunk)));
+    for (let i = 0; i < responses.length; i += 1) output[start + i] = responses[i];
   }
-  return output;
+
+  return output.flat();
 }
 
 function encodedCall(address, abi, functionName, args = []) {
@@ -135,6 +148,7 @@ async function loadRegistry(client) {
   if (!length) {
     registryCache = { timestamp: Date.now(), pairs: [] };
     endpointCache = null;
+    recentCache = null;
     return [];
   }
   const calls = Array.from({ length }, (_, index) => encodedCall(FACTORY, FACTORY_ABI, 'allPairs', [BigInt(index)]));
@@ -144,6 +158,8 @@ async function loadRegistry(client) {
     return decoded?.[0] ? getAddress(decoded[0]) : null;
   }).filter((pair) => pair && pair !== ZERO);
   registryCache = { timestamp: Date.now(), pairs };
+  endpointCache = null;
+  recentCache = null;
   return pairs;
 }
 
@@ -262,11 +278,9 @@ async function hydratePairs(client, records, wallet) {
   });
 }
 
-async function loadRecentPools(client, length, wallet, records) {
+async function loadRecentPools(client, length, wallet, recentRecords) {
   const walletKey = wallet?.toLowerCase() || '';
   if (recentCache && recentCache.length === length && recentCache.walletKey === walletKey && Date.now() - recentCache.timestamp < CACHE_TTL_MS) return recentCache.pools;
-  const take = Math.min(MAX_DISPLAY_POOLS, records.length);
-  const recentRecords = records.slice(Math.max(0, records.length - take));
   const pools = await hydratePairs(client, recentRecords, wallet);
   pools.sort((a, b) => {
     const aa = BigInt(a.liquidityScore || 0);
@@ -285,45 +299,56 @@ export async function GET(request) {
     const wallet = validAddress(requestedAddress) ? getAddress(requestedAddress) : null;
     const client = createClient();
     const pairs = await loadRegistry(client);
-    const records = await loadPairEndpoints(client, pairs);
 
     if (!query) {
-      const pools = await loadRecentPools(client, pairs.length, wallet, records);
-      return NextResponse.json({ success: true, data: { count: pairs.length, loaded: pools.length, displayLimit: MAX_DISPLAY_POOLS, mode: 'recent', pools, wallet, searched: false } }, { headers: { 'Cache-Control': 's-maxage=30, stale-while-revalidate=120' } });
+      const recentPairs = pairs.slice(Math.max(0, pairs.length - MAX_DISPLAY_POOLS));
+      const recentRecords = await loadPairEndpoints(client, recentPairs);
+      const pools = await loadRecentPools(client, pairs.length, wallet, recentRecords);
+      return NextResponse.json({
+        success: true,
+        data: {
+          count: pairs.length,
+          loaded: pools.length,
+          displayLimit: MAX_DISPLAY_POOLS,
+          mode: 'recent',
+          pools,
+          wallet,
+          searched: false,
+        },
+      });
     }
 
+    const searchKey = `${wallet?.toLowerCase() || ''}:${query.toLowerCase()}`;
+    const cachedSearch = searchCache.get(searchKey);
+    if (cachedSearch && Date.now() - cachedSearch.timestamp < CACHE_TTL_MS) {
+      return NextResponse.json({ success: true, data: { count: pairs.length, loaded: cachedSearch.pools.length, displayLimit: SEARCH_RESULT_LIMIT, mode: 'search', pools: cachedSearch.pools, wallet, searched: true, query } });
+    }
+
+    const records = await loadPairEndpoints(client, pairs);
+    let candidates = null;
     const key = query.toLowerCase();
-    const cached = searchCache.get(key);
-    let candidates = cached && Date.now() - cached.timestamp < CACHE_TTL_MS ? cached.records : null;
-    if (!candidates) {
-      const addressQuery = validAddress(query) ? getAddress(query).toLowerCase() : null;
-      if (addressQuery) {
-        candidates = records.filter((record) => record.pair.toLowerCase() === addressQuery || record.token0.toLowerCase() === addressQuery || record.token1.toLowerCase() === addressQuery);
-      } else {
-        const tokens = [...new Set(records.flatMap((record) => [record.token0, record.token1]).map((token) => token.toLowerCase()))].map(getAddress);
-        const tokenMeta = await getAllTokenMeta(tokens);
-        candidates = records.filter((record) => {
-          const meta0 = tokenMeta.get(record.token0.toLowerCase()) || fallbackMeta(record.token0);
-          const meta1 = tokenMeta.get(record.token1.toLowerCase()) || fallbackMeta(record.token1);
-          const haystack = [record.pair, record.token0, record.token1, meta0.symbol, meta1.symbol, meta0.name, meta1.name, `${meta0.symbol} / ${meta1.symbol}`].join(' ').toLowerCase();
-          return haystack.includes(key);
-        });
-      }
-      candidates = candidates.slice(0, SEARCH_RESULT_LIMIT);
-      searchCache.set(key, { timestamp: Date.now(), records: candidates });
+    const addressQuery = validAddress(query) ? getAddress(query).toLowerCase() : null;
+
+    if (addressQuery) {
+      candidates = records.filter((record) => record.pair.toLowerCase() === addressQuery || record.token0.toLowerCase() === addressQuery || record.token1.toLowerCase() === addressQuery);
+    } else {
+      const tokens = [...new Set(records.flatMap((record) => [record.token0, record.token1]))];
+      const tokenMeta = await getAllTokenMeta(tokens);
+      candidates = records.filter((record) => {
+        const meta0 = tokenMeta.get(record.token0.toLowerCase()) || fallbackMeta(record.token0);
+        const meta1 = tokenMeta.get(record.token1.toLowerCase()) || fallbackMeta(record.token1);
+        const haystack = [record.pair, record.token0, record.token1, meta0.name, meta0.symbol, meta1.name, meta1.symbol].filter(Boolean).join(' ').toLowerCase();
+        return haystack.includes(key);
+      });
     }
 
+    candidates = candidates.slice(0, SEARCH_RESULT_LIMIT);
     const pools = await hydratePairs(client, candidates, wallet);
-    pools.sort((a, b) => {
-      if (a.featured && !b.featured) return -1;
-      if (!a.featured && b.featured) return 1;
-      const aa = BigInt(a.liquidityScore || 0);
-      const bb = BigInt(b.liquidityScore || 0);
-      return aa === bb ? 0 : aa > bb ? -1 : 1;
-    });
-
-    return NextResponse.json({ success: true, data: { count: pools.length, loaded: pools.length, displayLimit: SEARCH_RESULT_LIMIT, mode: 'search', query, pools, wallet, searched: true } }, { headers: { 'Cache-Control': 'no-store' } });
+    searchCache.set(searchKey, { timestamp: Date.now(), pools });
+    return NextResponse.json({ success: true, data: { count: pairs.length, loaded: pools.length, displayLimit: SEARCH_RESULT_LIMIT, mode: 'search', pools, wallet, searched: true, query } });
   } catch (error) {
-    return NextResponse.json({ success: false, error: error?.message || 'Unable to load UnitFlow pools.' }, { status: 502 });
+    const message = error instanceof Error ? error.message : 'Unable to load UnitFlow pools.';
+    const status = /timed out/i.test(message) ? 504 : 502;
+    return NextResponse.json({ success: false, error: message }, { status });
   }
 }
