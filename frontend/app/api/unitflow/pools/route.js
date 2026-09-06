@@ -237,6 +237,16 @@ function liquidityScore(a, b, da, db) {
   return x;
 }
 
+function toDisplayReserve(value, address, decimals) {
+  const raw = BigInt(value ?? 0);
+  const d = Number(decimals ?? 18);
+  if (address?.toLowerCase() === WUSDC.toLowerCase()) {
+    if (d > 6) return (raw / 10n ** BigInt(d - 6)).toString();
+    if (d < 6) return (raw * 10n ** BigInt(6 - d)).toString();
+  }
+  return raw.toString();
+}
+
 async function hydratePairs(client, records, wallet) {
   const unique = [...new Map(records.filter((r) => r?.pair).map((r) => [r.pair.toLowerCase(), r])).values()];
   if (!unique.length) return [];
@@ -251,8 +261,8 @@ async function hydratePairs(client, records, wallet) {
     const m0 = metadata.get(r.token0?.toLowerCase()) || fallbackMeta(r.token0);
     const m1 = metadata.get(r.token1?.toLowerCase()) || fallbackMeta(r.token1);
     const reserves = Array.isArray(values[i * stride]) ? values[i * stride] : [0n, 0n, 0];
-    const reserve0 = BigInt(reserves[0] ?? 0);
-    const reserve1 = BigInt(reserves[1] ?? 0);
+    const reserve0Raw = BigInt(reserves[0] ?? 0);
+    const reserve1Raw = BigInt(reserves[1] ?? 0);
     const totalSupply = values[i * stride + 1] ?? 0n;
     const lpBalance = wallet ? values[i * stride + 2] ?? 0n : 0n;
     return {
@@ -261,13 +271,15 @@ async function hydratePairs(client, records, wallet) {
       token1: r.token1,
       token0Meta: m0,
       token1Meta: m1,
-      reserve0: reserve0.toString(),
-      reserve1: reserve1.toString(),
+      reserve0: toDisplayReserve(reserve0Raw, r.token0, m0.decimals),
+      reserve1: toDisplayReserve(reserve1Raw, r.token1, m1.decimals),
+      reserve0Raw: reserve0Raw.toString(),
+      reserve1Raw: reserve1Raw.toString(),
       totalSupply: String(totalSupply),
       lpBalance: String(lpBalance),
       hasPosition: Boolean(wallet && BigInt(lpBalance) > 0n),
       featured: Boolean(r.token0?.toLowerCase() === CENT.toLowerCase() || r.token1?.toLowerCase() === CENT.toLowerCase()),
-      liquidityScore: liquidityScore(reserve0, reserve1, m0.decimals, m1.decimals).toString(),
+      liquidityScore: liquidityScore(reserve0Raw, reserve1Raw, m0.decimals, m1.decimals).toString(),
     };
   });
 }
