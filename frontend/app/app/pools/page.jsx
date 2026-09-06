@@ -26,7 +26,7 @@ const LIQ_ABI = [
  {type:'function',name:'addLiquidity',stateMutability:'nonpayable',inputs:[{type:'address'},{type:'address'},{type:'uint256'},{type:'uint256'},{type:'uint256'},{type:'uint256'},{type:'address'},{type:'uint256'}],outputs:[{type:'uint256'},{type:'uint256'},{type:'uint256'}]},
  {type:'function',name:'addLiquidityUSDC',stateMutability:'payable',inputs:[{type:'address'},{type:'uint256'},{type:'uint256'},{type:'uint256'},{type:'address'},{type:'uint256'}],outputs:[{type:'uint256'},{type:'uint256'},{type:'uint256'}]},
  {type:'function',name:'removeLiquidity',stateMutability:'nonpayable',inputs:[{type:'address'},{type:'address'},{type:'uint256'},{type:'uint256'},{type:'uint256'},{type:'address'},{type:'uint256'}],outputs:[{type:'uint256'},{type:'uint256'}]},
- {type:'function',name:'removeLiquidityUSDC',stateMutability:'nonpayable',inputs:[{type:'address'},{type:'uint256'},{type:'uint256'},{type:'address'},{type:'uint256'}],outputs:[{type:'uint256'},{type:'uint256'}]},
+ {type:'function',name:'removeLiquidityUSDC',stateMutability:'nonpayable',inputs:[{type:'address'},{type:'uint256'},{type:'uint256'},{type:'uint256'},{type:'address'},{type:'uint256'}],outputs:[{type:'uint256'},{type:'uint256'}]},
 ];
 const SWAP_ABI = [
  {type:'function',name:'getAmountsOut',stateMutability:'view',inputs:[{type:'uint256'},{type:'address[]'}],outputs:[{type:'uint256[]'}]},
@@ -51,25 +51,8 @@ function Pools(){
  useEffect(()=>{const timer=setTimeout(()=>load(q),250);return()=>clearTimeout(timer)},[load,q]);
  const mine=useMemo(()=>pools.filter(p=>p.hasPosition),[pools]);
  const visible=useMemo(()=>{const src=tab==='mine'?mine:pools;const n=q.trim().toLowerCase();if(!n)return src;return src.filter(p=>[poolName(p),p.token0,p.token1,p.pair,p.token0Meta?.name,p.token1Meta?.name,p.token0Meta?.symbol,p.token1Meta?.symbol].filter(Boolean).join(' ').toLowerCase().includes(n));},[mine,pools,q,tab]);
- const previewPairs=useMemo(()=>{
-  const usdc=MARKETS.find(m=>m.id==='usdc'&&m.address);
-  const eurc=MARKETS.find(m=>m.id==='eurc'&&m.address);
-  const cirbtc=MARKETS.find(m=>m.id==='cirbtc'&&m.address);
-  return [
-   [usdc,eurc],
-   [usdc,cirbtc],
-   [eurc,cirbtc],
-  ].filter(pair=>pair[0]&&pair[1]).map(([a,b])=>({
-   key:`${a.id}-${b.id}`,
-   a,
-   b,
-  }));
- },[]);
- const filteredPreviewPairs=useMemo(()=>{
-  const n=q.trim().toLowerCase();
-  if(!n)return previewPairs;
-  return previewPairs.filter(({a,b})=>[a.symbol,a.name,a.address,b.symbol,b.name,b.address,`${a.symbol} / ${b.symbol}`].join(' ').toLowerCase().includes(n));
- },[previewPairs,q]);
+ const previewPairs=useMemo(()=>{const usdc=MARKETS.find(m=>m.id==='usdc'&&m.address);const eurc=MARKETS.find(m=>m.id==='eurc'&&m.address);const cirbtc=MARKETS.find(m=>m.id==='cirbtc'&&m.address);return [[usdc,eurc],[usdc,cirbtc],[eurc,cirbtc]].filter(pair=>pair[0]&&pair[1]).map(([a,b])=>({key:`${a.id}-${b.id}`,a,b}));},[]);
+ const filteredPreviewPairs=useMemo(()=>{const n=q.trim().toLowerCase();if(!n)return previewPairs;return previewPairs.filter(({a,b})=>[a.symbol,a.name,a.address,b.symbol,b.name,b.address,`${a.symbol} / ${b.symbol}`].join(' ').toLowerCase().includes(n));},[previewPairs,q]);
  const realPreviewPools=useMemo(()=>!q.trim()&&tab==='explore'?visible.slice(0,4):[],[q,tab,visible]);
  const {data:lpBalance}=useReadContract({address:selected?.pair,abi:PAIR_ABI,functionName:'balanceOf',args:address?[address]:undefined,query:{enabled:Boolean(selected?.pair&&address&&action==='remove')}});
  const inUSDC=selected?isUSDC(selected.token0):false, outUSDC=selected?isUSDC(selected.token1):false;
