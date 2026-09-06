@@ -1,0 +1,5 @@
+/* Centry intentionally uses direct page headings rather than eyebrow/kicker labels. */
+[class*="eyebrow"],
+[class*="kicker"] {
+  display: none !important;
+}
