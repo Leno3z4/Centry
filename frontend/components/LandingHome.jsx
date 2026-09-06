@@ -8,33 +8,33 @@ const PRODUCTS = [
         number: '01',
         title: 'Swap',
         text: 'Trade supported assets through Centry with a clear route and execution flow.',
-        href: '/app?view=swap',
+        href: '/app/swap',
     },
     {
         number: '02',
         title: 'Lending',
         text: 'Supply liquidity, borrow against supported collateral, and manage your position.',
-        href: '/app?view=lending',
+        href: '/app/lending',
     },
     {
         number: '03',
         title: 'Rewards',
         text: 'Track incentives and the rewards connected to your participation in the protocol.',
-        href: '/app?view=rewards',
+        href: '/app/rewards',
     },
     {
         number: '04',
         title: 'Governance',
         text: 'Lock CENT into veCENT, build voting power, and participate in protocol decisions.',
-        href: '/app?view=governance',
+        href: '/app/governance',
     },
 ];
 
 const EXPLORE = [
-    ['Pools', 'Discover liquidity across the ecosystem.', '/app?view=pools'],
-    ['Bridge', 'Move supported assets into the network.', '/app?view=bridge'],
-    ['Portfolio', 'See your positions and balances in one place.', '/app?view=portfolio'],
-    ['Analytics', 'Understand protocol activity and market data.', '/app?view=analytics'],
+    ['Pools', 'Discover liquidity across the ecosystem.', '/app/pools'],
+    ['Bridge', 'Move supported assets into the network.', '/app/bridge'],
+    ['Portfolio', 'See your positions and balances in one place.', '/app/portfolio'],
+    ['Analytics', 'Understand protocol activity and market data.', '/app/analytics'],
 ];
 
 export default function LandingHome() {
@@ -115,7 +115,7 @@ export default function LandingHome() {
             <footer className="landing-home-footer">
                 <strong>Centry</strong>
                 <span>Experimental software</span>
-                <Link href="/app?view=docs">Docs</Link>
+                <Link href="/app/docs">Docs</Link>
             </footer>
 
             <style jsx global>{`
