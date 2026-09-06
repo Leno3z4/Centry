@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WagmiProvider, useAccount, useChainId, useSwitchChain } from 'wagmi';
 import { config, arcTestnet } from '../config/multiWagmi';
@@ -56,12 +57,19 @@ function PreventInputWheelChanges() {
 }
 
 function AutoSwitchToArc() {
+  const pathname = usePathname();
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { switchChain, isPending } = useSwitchChain();
   const attemptedForAddress = useRef('');
 
   useEffect(() => {
+    // Bridge supports source chains other than Arc, so it owns network switching there.
+    if (pathname?.startsWith('/app/bridge')) {
+      attemptedForAddress.current = '';
+      return;
+    }
+
     if (!isConnected || !address) {
       attemptedForAddress.current = '';
       return;
@@ -80,10 +88,9 @@ function AutoSwitchToArc() {
         await addAndSwitchInjectedArc();
       } catch {
         // Some wallets require the user to approve adding/switching networks manually.
-        // The Swap page still exposes the explicit network switch state.
       }
     });
-  }, [address, isConnected, chainId, isPending, switchChain]);
+  }, [address, isConnected, chainId, isPending, pathname, switchChain]);
 
   return null;
 }
