@@ -390,7 +390,7 @@
   font: inherit;
   font-weight: 700;
   cursor: pointer;
-  transition: transform 160ms ease, filter 160ms ease, border-color 160ms ease;
+  transition: transform 160ms ease, filter 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
 
 .primaryButton {
@@ -411,10 +411,19 @@
   color: #cfc5df;
 }
 
+.secondaryButton:not(:disabled) {
+  border-color: #7146a7;
+  background: linear-gradient(100deg, #7540d8, #a965ee);
+  color: #fff;
+  box-shadow: 0 10px 30px rgba(108,49,181,.22);
+}
+
 .secondaryButton:hover:not(:disabled) {
-  border-color: #65458a;
-  background: #171022;
+  border-color: #8f5ccc;
+  background: linear-gradient(100deg, #8248e8, #b374f5);
+  color: #fff;
   transform: translateY(-1px);
+  filter: brightness(1.04);
 }
 
 .primaryButton:disabled,
