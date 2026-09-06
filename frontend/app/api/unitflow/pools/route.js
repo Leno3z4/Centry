@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createPublicClient, defineChain, fallback, http, getAddress, parseAbiItem } from 'viem';
+import { createPublicClient, defineChain, fallback, http, getAddress } from 'viem';
 
 const ARC_CHAIN_ID = 5042002;
 const FACTORY = '0xd67F63A4F26a497b364d1C82e6747Aec8B5743a5';
@@ -8,13 +8,14 @@ const CENT = '0x76e6d50D3151f0B4645ac0E53584F4204Fc6f0e3';
 const NATIVE_USDC = '0x3600000000000000000000000000000000000000';
 const ZERO = '0x0000000000000000000000000000000000000000';
 const MAX_DISPLAY_POOLS = 200;
-const RECENT_BATCH_SIZE = 75;
-const SEARCH_CACHE_TTL_MS = 30_000;
-const METADATA_CACHE_TTL_MS = 5 * 60_000;
+const BATCH_SIZE = 75;
+const CACHE_TTL_MS = 30_000;
+const META_CACHE_TTL_MS = 5 * 60_000;
 
 const FACTORY_ABI = [
   { type: 'function', name: 'allPairsLength', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'allPairs', stateMutability: 'view', inputs: [{ name: 'index', type: 'uint256' }], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'getPair', stateMutability: 'view', inputs: [{ name: 'tokenA', type: 'address' }, { name: 'tokenB', type: 'address' }], outputs: [{ type: 'address' }] },
 ];
 
 const PAIR_ABI = [
@@ -31,12 +32,11 @@ const ERC20_ABI = [
   { type: 'function', name: 'decimals', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint8' }] },
 ];
 
-const PAIR_CREATED_EVENT = parseAbiItem('event PairCreated(address indexed token0, address indexed token1, address pair, uint256)');
 const WUSDC_META = { symbol: 'USDC', name: 'USD Coin', decimals: 18 };
 const NATIVE_USDC_META = { symbol: 'USDC', name: 'USD Coin', decimals: 6 };
 
 let recentCache = null;
-let searchCache = null;
+const searchCache = new Map();
 const tokenMetadataCache = new Map();
 
 function validAddress(value) {
@@ -72,7 +72,7 @@ async function readSafe(client, args) {
   }
 }
 
-async function readInBatches(items, worker, batchSize = RECENT_BATCH_SIZE) {
+async function readInBatches(items, worker, batchSize = BATCH_SIZE) {
   const results = [];
   for (let i = 0; i < items.length; i += batchSize) {
     results.push(...await Promise.all(items.slice(i, i + batchSize).map(worker)));
@@ -83,8 +83,8 @@ async function readInBatches(items, worker, batchSize = RECENT_BATCH_SIZE) {
 async function getTokenMeta(client, token) {
   const address = getAddress(token);
   const key = address.toLowerCase();
-  const existing = tokenMetadataCache.get(key);
-  if (existing && Date.now() - existing.timestamp < METADATA_CACHE_TTL_MS) return existing.meta;
+  const cached = tokenMetadataCache.get(key);
+  if (cached && Date.now() - cached.timestamp < META_CACHE_TTL_MS) return cached.meta;
 
   if (key === WUSDC.toLowerCase()) {
     tokenMetadataCache.set(key, { timestamp: Date.now(), meta: WUSDC_META });
@@ -111,7 +111,8 @@ async function getTokenMeta(client, token) {
 }
 
 async function getPairDetails(client, pairs, wallet) {
-  const pairData = await readInBatches(pairs, async (pair) => {
+  const uniquePairs = [...new Set(pairs.filter(Boolean).map((pair) => getAddress(pair)))];
+  const pairData = await readInBatches(uniquePairs, async (pair) => {
     const [token0, token1, reserves, totalSupply, lpBalance] = await Promise.all([
       readSafe(client, { address: pair, abi: PAIR_ABI, functionName: 'token0' }),
       readSafe(client, { address: pair, abi: PAIR_ABI, functionName: 'token1' }),
@@ -122,9 +123,14 @@ async function getPairDetails(client, pairs, wallet) {
         : Promise.resolve({ status: 'failure', result: 0n }),
     ]);
 
-    const t0 = token0.status === 'success' && token0.result ? getAddress(token0.result) : null;
-    const t1 = token1.status === 'success' && token1.result ? getAddress(token1.result) : null;
-    return { pair, token0: t0, token1: t1, reserves, totalSupply, lpBalance };
+    return {
+      pair,
+      token0: token0.status === 'success' && token0.result ? getAddress(token0.result) : null,
+      token1: token1.status === 'success' && token1.result ? getAddress(token1.result) : null,
+      reserves,
+      totalSupply,
+      lpBalance,
+    };
   });
 
   const tokenAddresses = [];
@@ -133,8 +139,11 @@ async function getPairDetails(client, pairs, wallet) {
     if (item.token1) tokenAddresses.push(item.token1);
   }
   const uniqueTokens = [...new Set(tokenAddresses.map((token) => token.toLowerCase()))].map(getAddress);
-  const tokenMetaPairs = await readInBatches(uniqueTokens, async (token) => [token.toLowerCase(), await getTokenMeta(client, token)]);
-  const tokenMeta = new Map(tokenMetaPairs);
+  const tokenEntries = await readInBatches(uniqueTokens, async (token) => [
+    token.toLowerCase(),
+    await getTokenMeta(client, token),
+  ]);
+  const tokenMeta = new Map(tokenEntries);
 
   return pairData.map((item) => {
     if (!item.token0 || !item.token1) return null;
@@ -145,6 +154,7 @@ async function getPairDetails(client, pairs, wallet) {
     const reserve1 = BigInt(reserves[1] ?? 0);
     const totalSupply = item.totalSupply.status === 'success' ? item.totalSupply.result : 0n;
     const lpBalance = wallet && item.lpBalance.status === 'success' ? item.lpBalance.result : 0n;
+
     return {
       pair: item.pair,
       token0: item.token0,
@@ -157,30 +167,32 @@ async function getPairDetails(client, pairs, wallet) {
       lpBalance: String(lpBalance),
       hasPosition: Boolean(wallet && lpBalance > 0n),
       featured: item.token0.toLowerCase() === CENT.toLowerCase() || item.token1.toLowerCase() === CENT.toLowerCase(),
+      liquidityScore: (() => {
+        const to18 = (value, decimals) => {
+          const d = Number(decimals ?? 18);
+          return d === 18 ? value : d < 18 ? value * 10n ** BigInt(18 - d) : value / 10n ** BigInt(d - 18);
+        };
+        const a = to18(reserve0, meta0?.decimals ?? 18);
+        const b = to18(reserve1, meta1?.decimals ?? 18);
+        let x = a * b;
+        if (x <= 0n) return '0';
+        let r = x;
+        let n = (r + 1n) >> 1n;
+        while (n < r) { r = n; n = (r + x / r) >> 1n; }
+        return r.toString();
+      })(),
     };
   }).filter(Boolean);
 }
 
-function poolMatches(pool, query) {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  return [
-    pool.pair,
-    pool.token0,
-    pool.token1,
-    pool.token0Meta?.symbol,
-    pool.token1Meta?.symbol,
-    pool.token0Meta?.name,
-    pool.token1Meta?.name,
-    `${pool.token0Meta?.symbol || ''} / ${pool.token1Meta?.symbol || ''}`,
-  ].filter(Boolean).join(' ').toLowerCase().includes(q);
-}
-
-async function recentPools(client, length, wallet) {
+async function loadRecentPools(client, length, wallet) {
   const walletKey = wallet?.toLowerCase() || '';
-  if (recentCache && recentCache.length === length && recentCache.walletKey === walletKey && Date.now() - recentCache.timestamp < SEARCH_CACHE_TTL_MS) {
-    return recentCache.pools;
-  }
+  if (
+    recentCache &&
+    recentCache.length === length &&
+    recentCache.walletKey === walletKey &&
+    Date.now() - recentCache.timestamp < CACHE_TTL_MS
+  ) return recentCache.pools;
 
   const take = Math.min(MAX_DISPLAY_POOLS, length);
   const indices = Array.from({ length: take }, (_, offset) => BigInt(length - 1 - offset));
@@ -193,50 +205,83 @@ async function recentPools(client, length, wallet) {
   const pairs = pairResults
     .map((item) => item.status === 'success' && item.result ? getAddress(item.result) : null)
     .filter((pair) => pair && pair !== ZERO);
-  const pools = await getPairDetails(client, [...new Set(pairs)], wallet);
+
+  const pools = await getPairDetails(client, pairs, wallet);
+  pools.sort((a, b) => {
+    const aa = BigInt(a.liquidityScore || 0);
+    const bb = BigInt(b.liquidityScore || 0);
+    if (aa !== bb) return aa > bb ? -1 : 1;
+    return 0;
+  });
+
   recentCache = { timestamp: Date.now(), length, walletKey, pools };
   return pools;
 }
 
-async function allPairEvents(client) {
-  if (searchCache && Date.now() - searchCache.timestamp < SEARCH_CACHE_TTL_MS) return searchCache.events;
-  const events = await client.getLogs({ address: FACTORY, event: PAIR_CREATED_EVENT, fromBlock: 0n, toBlock: 'latest' });
-  const normalized = events.map((event) => ({
-    pair: event.args?.pair ? getAddress(event.args.pair) : null,
-    token0: event.args?.token0 ? getAddress(event.args.token0) : null,
-    token1: event.args?.token1 ? getAddress(event.args.token1) : null,
-    index: event.args?.[3] != null ? Number(event.args[3]) : null,
-  })).filter((event) => event.pair && event.token0 && event.token1);
-  searchCache = { timestamp: Date.now(), events: normalized };
-  return normalized;
-}
+async function findSearchCandidates(client, length, query) {
+  const cacheKey = query.trim().toLowerCase();
+  const cached = searchCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) return cached.candidates;
 
-async function searchPools(client, query, wallet) {
-  const events = await allPairEvents(client);
-  const q = query.trim().toLowerCase();
-  if (!q) return recentPools(client, events.length, wallet);
-
-  const knownAddress = validAddress(query) ? query.toLowerCase() : null;
-  const uniqueTokens = [...new Set(events.flatMap((event) => [event.token0, event.token1]).filter(Boolean).map((token) => token.toLowerCase()))].map(getAddress);
-
-  const candidateTokenAddresses = new Set();
-  if (knownAddress) {
-    candidateTokenAddresses.add(knownAddress);
-  } else {
-    const metadata = await readInBatches(uniqueTokens, async (token) => ({ token, meta: await getTokenMeta(client, token) }));
-    for (const item of metadata) {
-      const haystack = `${item.token} ${item.meta.symbol} ${item.meta.name}`.toLowerCase();
-      if (haystack.includes(q)) candidateTokenAddresses.add(item.token.toLowerCase());
-    }
+  // Address search can use the factory mapping directly and does not require scanning history.
+  if (validAddress(query)) {
+    const address = getAddress(query);
+    const recentIndexes = Array.from({ length: Math.min(MAX_DISPLAY_POOLS, length) }, (_, offset) => BigInt(length - 1 - offset));
+    const recentPairs = await readInBatches(recentIndexes, (index) => readSafe(client, {
+      address: FACTORY,
+      abi: FACTORY_ABI,
+      functionName: 'allPairs',
+      args: [index],
+    }));
+    const pairCandidates = recentPairs
+      .map((item) => item.status === 'success' && item.result ? getAddress(item.result) : null)
+      .filter(Boolean);
+    const candidates = [...new Set(pairCandidates.filter((pair) => pair.toLowerCase() === address.toLowerCase()))];
+    searchCache.set(cacheKey, { timestamp: Date.now(), candidates });
+    return candidates;
   }
 
-  const matches = events.filter((event) => {
-    if (knownAddress) return event.pair.toLowerCase() === knownAddress || event.token0.toLowerCase() === knownAddress || event.token1.toLowerCase() === knownAddress;
-    return candidateTokenAddresses.has(event.token0.toLowerCase()) || candidateTokenAddresses.has(event.token1.toLowerCase());
+  // Symbol/name search needs the complete UnitFlow v2.5 pair registry, but it does
+  // not need historical logs. We scan only token0/token1 for each pair, then fetch
+  // full reserves/metadata only for the matching pairs.
+  const indices = Array.from({ length }, (_, index) => BigInt(index));
+  const pairResults = await readInBatches(indices, (index) => readSafe(client, {
+    address: FACTORY,
+    abi: FACTORY_ABI,
+    functionName: 'allPairs',
+    args: [index],
+  }));
+  const pairAddresses = pairResults
+    .map((item) => item.status === 'success' && item.result ? getAddress(item.result) : null)
+    .filter((pair) => pair && pair !== ZERO);
+
+  const endpoints = await readInBatches(pairAddresses, async (pair) => {
+    const [token0, token1] = await Promise.all([
+      readSafe(client, { address: pair, abi: PAIR_ABI, functionName: 'token0' }),
+      readSafe(client, { address: pair, abi: PAIR_ABI, functionName: 'token1' }),
+    ]);
+    return {
+      pair,
+      token0: token0.status === 'success' && token0.result ? getAddress(token0.result) : null,
+      token1: token1.status === 'success' && token1.result ? getAddress(token1.result) : null,
+    };
   });
 
-  const pools = await getPairDetails(client, matches.map((event) => event.pair), wallet);
-  return pools.filter((pool) => poolMatches(pool, q)).slice(0, 100);
+  const uniqueTokens = [...new Set(
+    endpoints.flatMap((item) => [item.token0, item.token1]).filter(Boolean).map((token) => token.toLowerCase()),
+  )].map(getAddress);
+  const metas = await readInBatches(uniqueTokens, async (token) => ({ token, meta: await getTokenMeta(client, token) }));
+  const matchingTokens = new Set(
+    metas
+      .filter(({ token, meta }) => `${token} ${meta.symbol} ${meta.name}`.toLowerCase().includes(cacheKey))
+      .map(({ token }) => token.toLowerCase()),
+  );
+
+  const candidates = endpoints
+    .filter((item) => matchingTokens.has(item.token0?.toLowerCase()) || matchingTokens.has(item.token1?.toLowerCase()))
+    .map((item) => item.pair);
+  searchCache.set(cacheKey, { timestamp: Date.now(), candidates });
+  return candidates;
 }
 
 export async function GET(request) {
@@ -253,25 +298,46 @@ export async function GET(request) {
       functionName: 'allPairsLength',
     }));
 
-    if (!length) return NextResponse.json({ success: true, data: { count: 0, loaded: 0, pools: [], wallet, searched: Boolean(query) } });
+    if (!length) {
+      return NextResponse.json({ success: true, data: { count: 0, loaded: 0, pools: [], wallet, searched: Boolean(query), mode: query ? 'exhaustive-search' : 'recent' } });
+    }
 
-    const pools = query ? await searchPools(client, query, wallet) : await recentPools(client, length, wallet);
-
-    return NextResponse.json(
-      {
+    if (!query) {
+      const pools = await loadRecentPools(client, length, wallet);
+      return NextResponse.json({
         success: true,
         data: {
           count: length,
           loaded: pools.length,
-          displayLimit: query ? 100 : MAX_DISPLAY_POOLS,
-          mode: query ? 'exhaustive-search' : 'recent',
+          displayLimit: MAX_DISPLAY_POOLS,
+          mode: 'recent',
           pools,
           wallet,
-          searched: Boolean(query),
+          searched: false,
         },
+      }, { headers: { 'Cache-Control': 's-maxage=30, stale-while-revalidate=120' } });
+    }
+
+    const candidates = await findSearchCandidates(client, length, query);
+    const pools = await getPairDetails(client, candidates, wallet);
+    pools.sort((a, b) => {
+      if (a.featured && !b.featured) return -1;
+      if (!a.featured && b.featured) return 1;
+      return 0;
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        count: length,
+        loaded: pools.length,
+        displayLimit: 100,
+        mode: 'exhaustive-search',
+        pools: pools.slice(0, 100),
+        wallet,
+        searched: true,
       },
-      { headers: { 'Cache-Control': query ? 's-maxage=30, stale-while-revalidate=60' : 's-maxage=30, stale-while-revalidate=120' } },
-    );
+    }, { headers: { 'Cache-Control': 's-maxage=30, stale-while-revalidate=60' } });
   } catch (error) {
     return NextResponse.json({ success: false, error: error?.message || 'Unable to load UnitFlow pools.' }, { status: 502 });
   }
