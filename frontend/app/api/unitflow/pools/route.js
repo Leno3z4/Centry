@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createPublicClient, defineChain, fallback, http, getAddress } from 'viem';
+import { createPublicClient, defineChain, fallback, http, getAddress, parseAbiItem } from 'viem';
 
 const ARC_CHAIN_ID = 5042002;
 const FACTORY = '0xd67F63A4F26a497b364d1C82e6747Aec8B5743a5';
@@ -8,12 +8,13 @@ const CENT = '0x76e6d50D3151f0B4645ac0E53584F4204Fc6f0e3';
 const NATIVE_USDC = '0x3600000000000000000000000000000000000000';
 const ZERO = '0x0000000000000000000000000000000000000000';
 const MAX_DISPLAY_POOLS = 200;
-const BATCH_SIZE = 75;
-const CACHE_TTL_MS = 60_000;
+const RECENT_BATCH_SIZE = 75;
+const SEARCH_CACHE_TTL_MS = 30_000;
+const METADATA_CACHE_TTL_MS = 5 * 60_000;
 
 const FACTORY_ABI = [
   { type: 'function', name: 'allPairsLength', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
-  { type: 'function', name: 'allPairs', stateMutability: 'view', inputs: [{ type: 'uint256' }], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'allPairs', stateMutability: 'view', inputs: [{ name: 'index', type: 'uint256' }], outputs: [{ type: 'address' }] },
 ];
 
 const PAIR_ABI = [
@@ -30,9 +31,13 @@ const ERC20_ABI = [
   { type: 'function', name: 'decimals', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint8' }] },
 ];
 
+const PAIR_CREATED_EVENT = parseAbiItem('event PairCreated(address indexed token0, address indexed token1, address pair, uint256)');
 const WUSDC_META = { symbol: 'USDC', name: 'USD Coin', decimals: 18 };
 const NATIVE_USDC_META = { symbol: 'USDC', name: 'USD Coin', decimals: 6 };
-let registryCache = null;
+
+let recentCache = null;
+let searchCache = null;
+const tokenMetadataCache = new Map();
 
 function validAddress(value) {
   return typeof value === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value);
@@ -67,35 +72,98 @@ async function readSafe(client, args) {
   }
 }
 
-async function readInBatches(items, worker) {
+async function readInBatches(items, worker, batchSize = RECENT_BATCH_SIZE) {
   const results = [];
-  for (let i = 0; i < items.length; i += BATCH_SIZE) {
-    results.push(...await Promise.all(items.slice(i, i + BATCH_SIZE).map(worker)));
+  for (let i = 0; i < items.length; i += batchSize) {
+    results.push(...await Promise.all(items.slice(i, i + batchSize).map(worker)));
   }
   return results;
 }
 
-function normalizeTo18(raw, decimals) {
-  const value = BigInt(raw || 0);
-  const d = Number(decimals ?? 18);
-  if (d === 18) return value;
-  if (d < 18) return value * 10n ** BigInt(18 - d);
-  return value / 10n ** BigInt(d - 18);
-}
+async function getTokenMeta(client, token) {
+  const address = getAddress(token);
+  const key = address.toLowerCase();
+  const existing = tokenMetadataCache.get(key);
+  if (existing && Date.now() - existing.timestamp < METADATA_CACHE_TTL_MS) return existing.meta;
 
-function sqrt(value) {
-  if (value <= 0n) return 0n;
-  let x = value;
-  let y = (x + 1n) >> 1n;
-  while (y < x) {
-    x = y;
-    y = (x + value / x) >> 1n;
+  if (key === WUSDC.toLowerCase()) {
+    tokenMetadataCache.set(key, { timestamp: Date.now(), meta: WUSDC_META });
+    return WUSDC_META;
   }
-  return x;
+  if (key === NATIVE_USDC.toLowerCase()) {
+    tokenMetadataCache.set(key, { timestamp: Date.now(), meta: NATIVE_USDC_META });
+    return NATIVE_USDC_META;
+  }
+
+  const [symbol, name, decimals] = await Promise.all([
+    readSafe(client, { address, abi: ERC20_ABI, functionName: 'symbol' }),
+    readSafe(client, { address, abi: ERC20_ABI, functionName: 'name' }),
+    readSafe(client, { address, abi: ERC20_ABI, functionName: 'decimals' }),
+  ]);
+
+  const meta = {
+    symbol: symbol.status === 'success' ? String(symbol.result) : `${address.slice(0, 6)}…`,
+    name: name.status === 'success' ? String(name.result) : 'Token',
+    decimals: decimals.status === 'success' ? Number(decimals.result) : 18,
+  };
+  tokenMetadataCache.set(key, { timestamp: Date.now(), meta });
+  return meta;
 }
 
-function matchesQuery(pool, query) {
-  const q = query.toLowerCase();
+async function getPairDetails(client, pairs, wallet) {
+  const pairData = await readInBatches(pairs, async (pair) => {
+    const [token0, token1, reserves, totalSupply, lpBalance] = await Promise.all([
+      readSafe(client, { address: pair, abi: PAIR_ABI, functionName: 'token0' }),
+      readSafe(client, { address: pair, abi: PAIR_ABI, functionName: 'token1' }),
+      readSafe(client, { address: pair, abi: PAIR_ABI, functionName: 'getReserves' }),
+      readSafe(client, { address: pair, abi: PAIR_ABI, functionName: 'totalSupply' }),
+      wallet
+        ? readSafe(client, { address: pair, abi: PAIR_ABI, functionName: 'balanceOf', args: [wallet] })
+        : Promise.resolve({ status: 'failure', result: 0n }),
+    ]);
+
+    const t0 = token0.status === 'success' && token0.result ? getAddress(token0.result) : null;
+    const t1 = token1.status === 'success' && token1.result ? getAddress(token1.result) : null;
+    return { pair, token0: t0, token1: t1, reserves, totalSupply, lpBalance };
+  });
+
+  const tokenAddresses = [];
+  for (const item of pairData) {
+    if (item.token0) tokenAddresses.push(item.token0);
+    if (item.token1) tokenAddresses.push(item.token1);
+  }
+  const uniqueTokens = [...new Set(tokenAddresses.map((token) => token.toLowerCase()))].map(getAddress);
+  const tokenMetaPairs = await readInBatches(uniqueTokens, async (token) => [token.toLowerCase(), await getTokenMeta(client, token)]);
+  const tokenMeta = new Map(tokenMetaPairs);
+
+  return pairData.map((item) => {
+    if (!item.token0 || !item.token1) return null;
+    const meta0 = tokenMeta.get(item.token0.toLowerCase()) || null;
+    const meta1 = tokenMeta.get(item.token1.toLowerCase()) || null;
+    const reserves = item.reserves.status === 'success' ? item.reserves.result : [0n, 0n, 0];
+    const reserve0 = BigInt(reserves[0] ?? 0);
+    const reserve1 = BigInt(reserves[1] ?? 0);
+    const totalSupply = item.totalSupply.status === 'success' ? item.totalSupply.result : 0n;
+    const lpBalance = wallet && item.lpBalance.status === 'success' ? item.lpBalance.result : 0n;
+    return {
+      pair: item.pair,
+      token0: item.token0,
+      token1: item.token1,
+      token0Meta: meta0,
+      token1Meta: meta1,
+      reserve0: reserve0.toString(),
+      reserve1: reserve1.toString(),
+      totalSupply: String(totalSupply),
+      lpBalance: String(lpBalance),
+      hasPosition: Boolean(wallet && lpBalance > 0n),
+      featured: item.token0.toLowerCase() === CENT.toLowerCase() || item.token1.toLowerCase() === CENT.toLowerCase(),
+    };
+  }).filter(Boolean);
+}
+
+function poolMatches(pool, query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
   return [
     pool.pair,
     pool.token0,
@@ -108,109 +176,67 @@ function matchesQuery(pool, query) {
   ].filter(Boolean).join(' ').toLowerCase().includes(q);
 }
 
-async function loadRegistry(client, length, wallet) {
+async function recentPools(client, length, wallet) {
   const walletKey = wallet?.toLowerCase() || '';
-  if (
-    registryCache &&
-    registryCache.count === length &&
-    registryCache.walletKey === walletKey &&
-    Date.now() - registryCache.timestamp < CACHE_TTL_MS
-  ) {
-    return registryCache;
+  if (recentCache && recentCache.length === length && recentCache.walletKey === walletKey && Date.now() - recentCache.timestamp < SEARCH_CACHE_TTL_MS) {
+    return recentCache.pools;
   }
 
-  const indices = Array.from({ length }, (_, index) => BigInt(index));
+  const take = Math.min(MAX_DISPLAY_POOLS, length);
+  const indices = Array.from({ length: take }, (_, offset) => BigInt(length - 1 - offset));
   const pairResults = await readInBatches(indices, (index) => readSafe(client, {
     address: FACTORY,
     abi: FACTORY_ABI,
     functionName: 'allPairs',
     args: [index],
   }));
-
-  const pairAddresses = pairResults
+  const pairs = pairResults
     .map((item) => item.status === 'success' && item.result ? getAddress(item.result) : null)
-    .filter(Boolean)
-    .filter((pair) => pair !== ZERO);
+    .filter((pair) => pair && pair !== ZERO);
+  const pools = await getPairDetails(client, [...new Set(pairs)], wallet);
+  recentCache = { timestamp: Date.now(), length, walletKey, pools };
+  return pools;
+}
 
-  const pairData = await readInBatches(pairAddresses, async (pair) => {
-    const [token0, token1, reserves, totalSupply, lpBalance] = await Promise.all([
-      readSafe(client, { address: pair, abi: PAIR_ABI, functionName: 'token0' }),
-      readSafe(client, { address: pair, abi: PAIR_ABI, functionName: 'token1' }),
-      readSafe(client, { address: pair, abi: PAIR_ABI, functionName: 'getReserves' }),
-      readSafe(client, { address: pair, abi: PAIR_ABI, functionName: 'totalSupply' }),
-      wallet
-        ? readSafe(client, { address: pair, abi: PAIR_ABI, functionName: 'balanceOf', args: [wallet] })
-        : Promise.resolve({ status: 'failure', result: 0n }),
-    ]);
-    return { pair, token0, token1, reserves, totalSupply, lpBalance };
-  });
+async function allPairEvents(client) {
+  if (searchCache && Date.now() - searchCache.timestamp < SEARCH_CACHE_TTL_MS) return searchCache.events;
+  const events = await client.getLogs({ address: FACTORY, event: PAIR_CREATED_EVENT, fromBlock: 0n, toBlock: 'latest' });
+  const normalized = events.map((event) => ({
+    pair: event.args?.pair ? getAddress(event.args.pair) : null,
+    token0: event.args?.token0 ? getAddress(event.args.token0) : null,
+    token1: event.args?.token1 ? getAddress(event.args.token1) : null,
+    index: event.args?.[3] != null ? Number(event.args[3]) : null,
+  })).filter((event) => event.pair && event.token0 && event.token1);
+  searchCache = { timestamp: Date.now(), events: normalized };
+  return normalized;
+}
 
-  const addresses = [];
-  for (const item of pairData) {
-    if (item.token0.status === 'success' && item.token0.result) addresses.push(getAddress(item.token0.result));
-    if (item.token1.status === 'success' && item.token1.result) addresses.push(getAddress(item.token1.result));
+async function searchPools(client, query, wallet) {
+  const events = await allPairEvents(client);
+  const q = query.trim().toLowerCase();
+  if (!q) return recentPools(client, events.length, wallet);
+
+  const knownAddress = validAddress(query) ? query.toLowerCase() : null;
+  const uniqueTokens = [...new Set(events.flatMap((event) => [event.token0, event.token1]).filter(Boolean).map((token) => token.toLowerCase()))].map(getAddress);
+
+  const candidateTokenAddresses = new Set();
+  if (knownAddress) {
+    candidateTokenAddresses.add(knownAddress);
+  } else {
+    const metadata = await readInBatches(uniqueTokens, async (token) => ({ token, meta: await getTokenMeta(client, token) }));
+    for (const item of metadata) {
+      const haystack = `${item.token} ${item.meta.symbol} ${item.meta.name}`.toLowerCase();
+      if (haystack.includes(q)) candidateTokenAddresses.add(item.token.toLowerCase());
+    }
   }
-  const uniqueTokens = [...new Set(addresses.map((address) => address.toLowerCase()))].map(getAddress);
 
-  const tokenMetaEntries = await readInBatches(uniqueTokens, async (token) => {
-    const normalized = token.toLowerCase();
-    if (normalized === WUSDC.toLowerCase()) return [normalized, WUSDC_META];
-    if (normalized === NATIVE_USDC.toLowerCase()) return [normalized, NATIVE_USDC_META];
-    const [symbol, name, decimals] = await Promise.all([
-      readSafe(client, { address: token, abi: ERC20_ABI, functionName: 'symbol' }),
-      readSafe(client, { address: token, abi: ERC20_ABI, functionName: 'name' }),
-      readSafe(client, { address: token, abi: ERC20_ABI, functionName: 'decimals' }),
-    ]);
-    return [normalized, {
-      symbol: symbol.status === 'success' ? String(symbol.result) : `${token.slice(0, 6)}…`,
-      name: name.status === 'success' ? String(name.result) : 'Token',
-      decimals: decimals.status === 'success' ? Number(decimals.result) : 18,
-    }];
+  const matches = events.filter((event) => {
+    if (knownAddress) return event.pair.toLowerCase() === knownAddress || event.token0.toLowerCase() === knownAddress || event.token1.toLowerCase() === knownAddress;
+    return candidateTokenAddresses.has(event.token0.toLowerCase()) || candidateTokenAddresses.has(event.token1.toLowerCase());
   });
 
-  const tokenMeta = new Map(tokenMetaEntries);
-  const pools = pairData.map((item, index) => {
-    const token0 = item.token0.status === 'success' && item.token0.result ? getAddress(item.token0.result) : null;
-    const token1 = item.token1.status === 'success' && item.token1.result ? getAddress(item.token1.result) : null;
-    if (!token0 || !token1) return null;
-
-    const meta0 = tokenMeta.get(token0.toLowerCase()) || { symbol: `${token0.slice(0, 6)}…`, name: 'Token', decimals: 18 };
-    const meta1 = tokenMeta.get(token1.toLowerCase()) || { symbol: `${token1.slice(0, 6)}…`, name: 'Token', decimals: 18 };
-    const reserves = item.reserves.status === 'success' ? item.reserves.result : [0n, 0n, 0];
-    const reserve0 = BigInt(reserves[0] ?? 0);
-    const reserve1 = BigInt(reserves[1] ?? 0);
-    const normalized0 = normalizeTo18(reserve0, meta0.decimals);
-    const normalized1 = normalizeTo18(reserve1, meta1.decimals);
-    const liquidityScore = sqrt(normalized0 * normalized1);
-    const totalSupply = item.totalSupply.status === 'success' ? item.totalSupply.result : 0n;
-    const lpBalance = wallet && item.lpBalance.status === 'success' ? item.lpBalance.result : 0n;
-
-    return {
-      pair: item.pair,
-      token0,
-      token1,
-      token0Meta: meta0,
-      token1Meta: meta1,
-      reserve0: reserve0.toString(),
-      reserve1: reserve1.toString(),
-      totalSupply: String(totalSupply),
-      lpBalance: String(lpBalance),
-      liquidityScore: liquidityScore.toString(),
-      createdIndex: index,
-      hasPosition: Boolean(wallet && lpBalance > 0n),
-      featured: token0.toLowerCase() === CENT.toLowerCase() || token1.toLowerCase() === CENT.toLowerCase(),
-    };
-  }).filter(Boolean);
-
-  pools.sort((a, b) => {
-    const aa = BigInt(a.liquidityScore || 0);
-    const bb = BigInt(b.liquidityScore || 0);
-    if (aa === bb) return b.createdIndex - a.createdIndex;
-    return aa > bb ? -1 : 1;
-  });
-
-  registryCache = { timestamp: Date.now(), count: length, walletKey, pools };
-  return registryCache;
+  const pools = await getPairDetails(client, matches.map((event) => event.pair), wallet);
+  return pools.filter((pool) => poolMatches(pool, q)).slice(0, 100);
 }
 
 export async function GET(request) {
@@ -227,18 +253,9 @@ export async function GET(request) {
       functionName: 'allPairsLength',
     }));
 
-    if (!length) return NextResponse.json({ success: true, data: { count: 0, pools: [], wallet } });
+    if (!length) return NextResponse.json({ success: true, data: { count: 0, loaded: 0, pools: [], wallet, searched: Boolean(query) } });
 
-    const registry = await loadRegistry(client, length, wallet);
-    const topPools = registry.pools.slice(0, MAX_DISPLAY_POOLS);
-    const matches = query ? registry.pools.filter((pool) => matchesQuery(pool, query)).slice(0, 50) : [];
-    const seen = new Set();
-    const pools = [...matches, ...topPools].filter((pool) => {
-      const key = pool.pair.toLowerCase();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    const pools = query ? await searchPools(client, query, wallet) : await recentPools(client, length, wallet);
 
     return NextResponse.json(
       {
@@ -246,14 +263,14 @@ export async function GET(request) {
         data: {
           count: length,
           loaded: pools.length,
-          topLimit: MAX_DISPLAY_POOLS,
-          rankedBy: 'normalized-reserve-liquidity',
+          displayLimit: query ? 100 : MAX_DISPLAY_POOLS,
+          mode: query ? 'exhaustive-search' : 'recent',
           pools,
           wallet,
-          searchMatches: matches.length,
+          searched: Boolean(query),
         },
       },
-      { headers: { 'Cache-Control': 's-maxage=60, stale-while-revalidate=300' } },
+      { headers: { 'Cache-Control': query ? 's-maxage=30, stale-while-revalidate=60' : 's-maxage=30, stale-while-revalidate=120' } },
     );
   } catch (error) {
     return NextResponse.json({ success: false, error: error?.message || 'Unable to load UnitFlow pools.' }, { status: 502 });
