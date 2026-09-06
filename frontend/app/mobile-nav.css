@@ -1,3 +1,28 @@
+.nav-group {
+  display: grid;
+  gap: 5px;
+}
+
+.nav-group + .nav-group {
+  margin-top: 18px;
+}
+
+.nav-group-label {
+  padding: 0 13px 6px;
+  color: #5f566c;
+  font: 9px 'DM Mono', monospace;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.nav-group-product .nav-item {
+  color: #b7aec4;
+}
+
+.nav-group-product .nav-item.active {
+  color: #fff;
+}
+
 @media (max-width: 760px) {
   /* Mobile navigation is a full-width floating drawer so it stays above the
      sticky header/content and remains readable on small screens. */
@@ -43,6 +68,23 @@
 
   .app-shell .sidebar.mobile-nav-open .side-nav {
     display: flex;
+  }
+
+  .app-shell .sidebar .nav-group {
+    display: grid;
+    gap: 4px;
+  }
+
+  .app-shell .sidebar .nav-group + .nav-group {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,.05);
+  }
+
+  .app-shell .sidebar .nav-group-label {
+    padding: 2px 14px 5px;
+    color: #5f566c;
+    font-size: 8px;
   }
 
   /* The nav labels are intentionally restored on mobile. An older global
