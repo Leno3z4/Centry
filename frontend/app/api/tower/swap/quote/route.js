@@ -41,100 +41,85 @@ function isStructurallyValidQuote(quote) {
   } catch { return false; }
 }
 
-function findUsdPrice(prices, tokenAddress) {
-  if (!prices || !tokenAddress) return null;
-  const normalized = tokenAddress.toLowerCase();
-  const market = ACTIVE_MARKETS.find((item) => item.address?.toLowerCase() === normalized);
-  if (!market) return null;
-  const aliases = {
-    usdc: ['usd-coin', 'usdc'], eurc: ['eurc', 'euro-coin'], usdt: ['tether', 'usdt'],
-    cirbtc: ['wrapped-bitcoin', 'bitcoin', 'btc', 'cirbtc'],
-  };
-  const keys = [...(aliases[market.id] || []), market.id, market.symbol?.toLowerCase(), market.name?.toLowerCase()].filter(Boolean);
-  for (const key of keys) {
-    const value = prices?.[key]?.usd;
-    if (Number.isFinite(Number(value)) && Number(value) > 0) return Number(value);
-  }
-  return null;
+async function getTowerQuote(apiKey, inputToken, outputToken, inputAmount, slippageTolerance, dexId) {
+  const response = await fetch(`${TOWER_BASE_URL}/swap/quote`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      inputToken,
+      outputToken,
+      inputAmount: String(inputAmount),
+      slippageTolerance,
+      ...(dexId ? { dexId } : {}),
+    }),
+    cache: 'no-store',
+  });
+  const data = await response.json();
+  return { response, data };
 }
 
-async function getCoinbaseSpotPrice(pair) {
+function deriveReferenceInput(inputRaw, inputDecimals) {
   try {
-    const response = await fetch(`https://api.coinbase.com/v2/prices/${pair}/spot`, { method: 'GET', headers: { Accept: 'application/json' }, cache: 'no-store' });
-    if (!response.ok) return null;
-    const payload = await response.json();
-    const value = Number(payload?.data?.amount);
-    return Number.isFinite(value) && value > 0 ? value : null;
-  } catch { return null; }
+    const raw = BigInt(String(inputRaw));
+    const oneUnit = 10n ** BigInt(Math.max(0, Number(inputDecimals ?? 6)));
+    const fivePercent = raw / 20n;
+    return raw > 0n ? (fivePercent > 0n ? fivePercent : 1n) < oneUnit ? (fivePercent > 0n ? fivePercent : 1n) : oneUnit : 0n;
+  } catch {
+    return 0n;
+  }
 }
 
-function toUnits(raw, decimals) {
-  try { return Number(BigInt(String(raw))) / 10 ** decimals; } catch { return null; }
-}
+function microQuotePriceImpact(mainQuote, referenceQuote) {
+  try {
+    const mainInput = BigInt(String(mainQuote?.inputAmount || '0'));
+    const mainOutput = BigInt(String(mainQuote?.outputAmount || '0'));
+    const referenceInput = BigInt(String(referenceQuote?.inputAmount || '0'));
+    const referenceOutput = BigInt(String(referenceQuote?.outputAmount || '0'));
+    if (mainInput <= 0n || mainOutput <= 0n || referenceInput <= 0n || referenceOutput <= 0n) return null;
 
-function executionPriceImpact(inputUnits, outputUnits, inputPriceUsd, outputPriceUsd) {
-  if (![inputUnits, outputUnits, inputPriceUsd, outputPriceUsd].every((value) => Number.isFinite(value) && value > 0)) return null;
-  const fairOutput = (inputUnits * inputPriceUsd) / outputPriceUsd;
-  if (!Number.isFinite(fairOutput) || fairOutput <= 0) return null;
-  return Math.max(0, Math.min(100, (1 - outputUnits / fairOutput) * 100));
-}
+    const mainNumerator = mainOutput * referenceInput;
+    const referenceNumerator = referenceOutput * mainInput;
+    if (referenceNumerator <= 0n) return null;
 
-function chooseOutputUnits(raw, outputMarket, inputUnits, inputPriceUsd, outputPriceUsd) {
-  const decimalsCandidates = [...new Set([Number(outputMarket.decimals ?? 6), 18])];
-  const fairOutput = (inputUnits * inputPriceUsd) / outputPriceUsd;
-  if (!Number.isFinite(fairOutput) || fairOutput <= 0) return null;
-
-  const candidates = decimalsCandidates
-    .map((decimals) => ({ decimals, units: toUnits(raw, decimals) }))
-    .filter((candidate) => Number.isFinite(candidate.units) && candidate.units > 0)
-    .map((candidate) => ({ ...candidate, score: Math.abs(Math.log(candidate.units / fairOutput)) }))
-    .sort((a, b) => a.score - b.score);
-
-  return candidates[0]?.units ?? null;
-}
-
-async function getReferenceUsdPrice(market, tokenAddress, towerPrices) {
-  if (!market) return null;
-  if (market.id === 'usdc') return 1;
-  if (market.id === 'eurc') return await getCoinbaseSpotPrice('EUR-USD');
-  if (market.id === 'cirbtc') return await getCoinbaseSpotPrice('BTC-USD');
-  return findUsdPrice(towerPrices, tokenAddress);
+    const impactBpsScaled = (referenceNumerator - mainNumerator) * 1_000_000n / referenceNumerator;
+    const impact = Number(impactBpsScaled) / 10_000;
+    if (!Number.isFinite(impact)) return null;
+    return Math.max(0, Math.min(100, impact));
+  } catch {
+    return null;
+  }
 }
 
 async function calculateQuotePriceImpact(quote, inputToken, outputToken) {
-  const providerImpact = Number(quote?.priceImpact);
-  const providerIsSane = Number.isFinite(providerImpact) && providerImpact >= 0 && providerImpact <= 100;
   const inputMarket = ACTIVE_MARKETS.find((item) => item.address?.toLowerCase() === inputToken.toLowerCase());
   const outputMarket = ACTIVE_MARKETS.find((item) => item.address?.toLowerCase() === outputToken.toLowerCase());
-  if (!inputMarket || !outputMarket) return providerIsSane ? providerImpact : null;
+  if (!inputMarket || !outputMarket) return null;
 
   const apiKey = process.env.TOWER_API_KEY;
-  if (!apiKey) return providerIsSane ? providerImpact : null;
+  if (!apiKey) return null;
 
   try {
-    let towerPrices = null;
-    const response = await fetch(`${TOWER_BASE_URL}/prices`, { method: 'GET', headers: { Authorization: `Bearer ${apiKey}` }, cache: 'no-store' });
-    if (response.ok) {
-      const payload = await response.json();
-      towerPrices = payload?.data && typeof payload.data === 'object' ? payload.data : payload;
-    }
-
-    const inputPriceUsd = await getReferenceUsdPrice(inputMarket, inputToken, towerPrices);
-    const outputPriceUsd = await getReferenceUsdPrice(outputMarket, outputToken, towerPrices);
-    if (!inputPriceUsd || !outputPriceUsd) return providerIsSane ? providerImpact : null;
-
     const inputRaw = BigInt(String(quote.inputAmount || '0'));
-    const outputRaw = BigInt(String(quote.outputAmount || '0'));
-    if (inputRaw <= 0n || outputRaw <= 0n) return providerIsSane ? providerImpact : null;
+    if (inputRaw <= 0n) return null;
 
-    const inputUnits = toUnits(inputRaw, Number(inputMarket.decimals ?? 6));
-    const outputUnits = chooseOutputUnits(outputRaw, outputMarket, inputUnits, inputPriceUsd, outputPriceUsd);
-    const calculated = executionPriceImpact(inputUnits, outputUnits, inputPriceUsd, outputPriceUsd);
-    if (calculated == null) return providerIsSane ? providerImpact : null;
+    const referenceInput = deriveReferenceInput(inputRaw, inputMarket.decimals);
+    if (referenceInput <= 0n || referenceInput >= inputRaw) return null;
 
-    return Number(calculated.toFixed(4));
+    const dexId = quote?.dexId || quote?.route?.hops?.[0]?.dexId;
+    const { response, data } = await getTowerQuote(
+      apiKey,
+      inputToken,
+      outputToken,
+      referenceInput.toString(),
+      0,
+      dexId,
+    );
+
+    if (!response.ok || data?.success !== true || !isStructurallyValidQuote(data.data)) return null;
+
+    return microQuotePriceImpact(quote, data.data);
   } catch {
-    return providerIsSane ? providerImpact : null;
+    return null;
   }
 }
 
@@ -174,14 +159,7 @@ export async function POST(request) {
     const apiKey = process.env.TOWER_API_KEY;
     if (!apiKey) return NextResponse.json({ success: false, error: 'Tower is not configured. Set TOWER_API_KEY on the server.' }, { status: 503 });
 
-    const response = await fetch(`${TOWER_BASE_URL}/swap/quote`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ inputToken, outputToken, inputAmount: String(inputAmount), slippageTolerance: slippage }),
-      cache: 'no-store',
-    });
-    const data = await response.json();
-
+    const { response, data } = await getTowerQuote(apiKey, inputToken, outputToken, inputAmount, slippage);
     if (response.ok && data?.success === true) {
       if (!isStructurallyValidQuote(data.data)) {
         return NextResponse.json(
@@ -191,13 +169,8 @@ export async function POST(request) {
       }
 
       const calculatedImpact = await calculateQuotePriceImpact(data.data, inputToken, outputToken);
-      if (calculatedImpact != null) {
-        data.data.priceImpact = calculatedImpact;
-        data.data.priceImpactSource = 'execution-vs-reference';
-      } else {
-        data.data.priceImpact = null;
-        data.data.priceImpactSource = 'unavailable';
-      }
+      data.data.priceImpact = calculatedImpact;
+      data.data.priceImpactSource = calculatedImpact == null ? 'unavailable' : 'micro-quote';
     }
 
     return NextResponse.json(data, { status: response.status });
