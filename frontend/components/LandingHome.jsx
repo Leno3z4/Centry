@@ -45,7 +45,7 @@ export default function LandingHome() {
             <nav className="landing-home-nav">
                 <Link href="/" className="landing-home-brand">Centry</Link>
                 <div className="landing-home-nav-links">
-                    <a href="#main">Main</a>
+                    <a href="#products">Main</a>
                     <a href="#explore">Explore</a>
                     <Link href="/app" className="landing-home-open">Open app</Link>
                 </div>
@@ -55,20 +55,17 @@ export default function LandingHome() {
                 <div className="landing-home-kicker">DECENTRALIZED FINANCE, IN ONE PLACE</div>
                 <h1>Your DeFi hub.</h1>
                 <p>
-                    Swap, lend, earn rewards, and help govern Centry from one focused interface.
-                    Explore the wider ecosystem when you need it.
+                    Swap, lend, earn rewards, and help govern Centry.
                 </p>
                 <div className="landing-home-actions">
                     <Link href="/app" className="landing-home-primary">Enter Centry</Link>
-                    <a href="#products" className="landing-home-secondary">Explore products</a>
+                    <a href="#products" className="landing-home-secondary">Explore</a>
                 </div>
             </section>
 
             <section id="products" className="landing-home-section">
                 <div className="landing-home-section-heading">
-                    <span>THE CORE</span>
-                    <h2>Four products. One protocol.</h2>
-                    <p>These are the main ways to use Centry.</p>
+                    <h2>Swap · Lending · Rewards · Governance</h2>
                 </div>
 
                 <div className="landing-home-products">
@@ -87,9 +84,8 @@ export default function LandingHome() {
 
             <section id="explore" className="landing-home-section landing-home-explore">
                 <div className="landing-home-section-heading">
-                    <span>THE ECOSYSTEM</span>
-                    <h2>Everything around the core.</h2>
-                    <p>Pools, bridging, portfolio tools, and analytics extend the Centry experience.</p>
+                    <h2>Explore Centry</h2>
+                    <p>Pools · Bridge · Portfolio · Analytics</p>
                 </div>
 
                 <div className="landing-home-explore-grid">
@@ -106,7 +102,7 @@ export default function LandingHome() {
             <section className="landing-home-cta">
                 <div>
                     <span>READY WHEN YOU ARE</span>
-                    <h2>Start with the product you need.</h2>
+                    <h2>Start with what you need.</h2>
                     <p>Centry keeps the primary DeFi actions close and the rest of the ecosystem within reach.</p>
                 </div>
                 <Link href="/app" className="landing-home-primary">Launch app</Link>
