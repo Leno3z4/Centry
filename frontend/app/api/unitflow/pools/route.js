@@ -3,7 +3,7 @@ import { createPublicClient, defineChain, fallback, http, getAddress, encodeFunc
 import { MARKETS } from '../../../../constants/markets';
 
 const ARC_CHAIN_ID = 5042002;
-const FACTORY = '0xd67F63A4F26a497b364d1C82e6747Aec8B5743a5';
+const FACTORY = '0xd67F63A4F26a497b364d1C82E6747Aec8B5743a5';
 const WUSDC = '0x911b4000D3422F482F4062a913885f7b035382Df';
 const CENT = '0x76e6d50D3151f0B4645ac0E53584F4204Fc6f0e3';
 const NATIVE_USDC = '0x3600000000000000000000000000000000000000';
@@ -67,6 +67,15 @@ function validAddress(value) {
   return typeof value === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value);
 }
 
+function normalizeAddress(value) {
+  if (!validAddress(value)) return null;
+  try {
+    return getAddress(value.toLowerCase());
+  } catch {
+    return null;
+  }
+}
+
 function createClient() {
   return createPublicClient({
     chain: defineChain({
@@ -92,9 +101,14 @@ function withTimeout(promise, ms, message) {
 
 async function rpcBatch(calls) {
   if (!RPC_URLS.length) throw new Error('No Arc RPC endpoint configured.');
-  const body = calls.map((call, index) => ({ jsonrpc: '2.0', id: index + 1, method: 'eth_call', params: [call, 'latest'] }));
+  if (!calls.length) return [];
+  const body = calls.map((call, index) => ({
+    jsonrpc: '2.0',
+    id: index + 1,
+    method: 'eth_call',
+    params: [call, 'latest'],
+  }));
   let lastError = null;
-
   for (const url of RPC_URLS) {
     try {
       const response = await withTimeout(fetch(url, {
@@ -111,7 +125,6 @@ async function rpcBatch(calls) {
       lastError = error;
     }
   }
-
   throw lastError || new Error('All Arc RPC endpoints failed.');
 }
 
@@ -120,13 +133,11 @@ async function batchEthCalls(calls) {
   const chunks = [];
   for (let i = 0; i < calls.length; i += BATCH_SIZE) chunks.push(calls.slice(i, i + BATCH_SIZE));
   const output = new Array(chunks.length);
-
   for (let start = 0; start < chunks.length; start += BATCH_CONCURRENCY) {
     const end = Math.min(start + BATCH_CONCURRENCY, chunks.length);
     const responses = await Promise.all(chunks.slice(start, end).map((chunk) => rpcBatch(chunk)));
     for (let i = 0; i < responses.length; i += 1) output[start + i] = responses[i];
   }
-
   return output.flat();
 }
 
@@ -144,11 +155,14 @@ function decodeCall(result, abi, functionName) {
 }
 
 async function loadPairCount(client) {
-  return Number(await withTimeout(
+  const length = await withTimeout(
     client.readContract({ address: FACTORY, abi: FACTORY_ABI, functionName: 'allPairsLength' }),
     REQUEST_TIMEOUT_MS,
     'UnitFlow factory lookup timed out.',
-  ));
+  );
+  const numeric = Number(length);
+  if (!Number.isSafeInteger(numeric) || numeric < 0) throw new Error('UnitFlow factory returned an invalid pool count.');
+  return numeric;
 }
 
 async function loadPairIndexes(start, count) {
@@ -162,8 +176,8 @@ async function loadPairIndexes(start, count) {
   const responses = await withTimeout(batchEthCalls(calls), REQUEST_TIMEOUT_MS, 'UnitFlow pool registry batch timed out.');
   return responses.map((item) => {
     const decoded = item?.error ? null : decodeCall(item?.result, FACTORY_ABI, 'allPairs');
-    return decoded?.[0] ? getAddress(decoded[0]) : null;
-  }).filter((pair) => pair && pair !== ZERO);
+    return normalizeAddress(decoded?.[0]);
+  }).filter((pair) => pair && pair.toLowerCase() !== ZERO.toLowerCase());
 }
 
 async function loadRecentPairs(client) {
@@ -187,9 +201,9 @@ async function loadPairEndpoints(pairs) {
   const responses = await withTimeout(batchEthCalls(calls), REQUEST_TIMEOUT_MS, 'UnitFlow token lookup timed out.');
   const records = [];
   for (let i = 0; i < pairs.length; i += 1) {
-    const token0 = responses[i * 2]?.error ? null : decodeCall(responses[i * 2]?.result, PAIR_ABI, 'token0')?.[0];
-    const token1 = responses[i * 2 + 1]?.error ? null : decodeCall(responses[i * 2 + 1]?.result, PAIR_ABI, 'token1')?.[0];
-    if (token0 && token1) records.push({ pair: pairs[i], token0: getAddress(token0), token1: getAddress(token1) });
+    const token0 = normalizeAddress(responses[i * 2]?.error ? null : decodeCall(responses[i * 2]?.result, PAIR_ABI, 'token0')?.[0]);
+    const token1 = normalizeAddress(responses[i * 2 + 1]?.error ? null : decodeCall(responses[i * 2 + 1]?.result, PAIR_ABI, 'token1')?.[0]);
+    if (token0 && token1) records.push({ pair: pairs[i], token0, token1 });
   }
   return records;
 }
@@ -206,14 +220,16 @@ function fallbackMeta(address) {
 async function getAllTokenMeta(tokens) {
   const result = new Map();
   const missing = [];
-  for (const token of tokens) {
+  for (const rawToken of tokens) {
+    const token = normalizeAddress(rawToken);
+    if (!token) continue;
     const key = token.toLowerCase();
     const known = KNOWN_META.get(key);
     if (known) result.set(key, known);
     else {
       const cached = tokenMetadataCache.get(key);
       if (cached?.meta && Date.now() - cached.timestamp < META_CACHE_TTL_MS) result.set(key, cached.meta);
-      else missing.push(getAddress(token));
+      else missing.push(token);
     }
   }
   if (!missing.length) return result;
@@ -259,7 +275,7 @@ function liquidityScore(reserve0, reserve1, decimals0, decimals1) {
 async function hydratePairs(records, wallet) {
   const unique = [...new Map(records.map((record) => [record.pair.toLowerCase(), record])).values()];
   if (!unique.length) return [];
-  const tokens = [...new Set(unique.flatMap((record) => [record.token0, record.token1]).map((token) => token.toLowerCase()))].map(getAddress);
+  const tokens = [...new Set(unique.flatMap((record) => [record.token0, record.token1]))];
   const tokenMeta = await getAllTokenMeta(tokens);
   const calls = unique.flatMap((record) => [
     encodedCall(record.pair, PAIR_ABI, 'getReserves'),
@@ -312,51 +328,37 @@ function matchesRecord(record, tokenMeta, key, addressQuery) {
       || record.token0.toLowerCase() === addressQuery
       || record.token1.toLowerCase() === addressQuery;
   }
-
   const meta0 = tokenMeta.get(record.token0.toLowerCase()) || fallbackMeta(record.token0);
   const meta1 = tokenMeta.get(record.token1.toLowerCase()) || fallbackMeta(record.token1);
-  const haystack = [
-    record.pair,
-    record.token0,
-    record.token1,
-    meta0.name,
-    meta0.symbol,
-    meta1.name,
-    meta1.symbol,
-  ].filter(Boolean).join(' ').toLowerCase();
-  return haystack.includes(key);
+  return [record.pair, record.token0, record.token1, meta0.name, meta0.symbol, meta1.name, meta1.symbol]
+    .filter(Boolean).join(' ').toLowerCase().includes(key);
 }
 
 async function searchRegistry(client, query, wallet) {
   const pairCount = await loadPairCount(client);
   if (!pairCount) return { count: 0, pools: [] };
-
   const key = query.toLowerCase();
-  const addressQuery = validAddress(query) ? getAddress(query).toLowerCase() : null;
+  const addressQuery = validAddress(query) ? normalizeAddress(query)?.toLowerCase() : null;
   const searchKey = `${wallet?.toLowerCase() || ''}:${key}`;
   const cached = searchCache.get(searchKey);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) return { count: pairCount, pools: cached.pools };
 
   const matchedRecords = [];
   const totalBatches = Math.ceil(pairCount / SEARCH_POOL_BATCH_SIZE);
-
   for (let batch = 0; batch < totalBatches; batch += 1) {
-    const end = pairCount - (batch * SEARCH_POOL_BATCH_SIZE);
+    const end = pairCount - batch * SEARCH_POOL_BATCH_SIZE;
     const start = Math.max(0, end - SEARCH_POOL_BATCH_SIZE);
     const pairs = await loadPairIndexes(start, end - start);
     const records = await loadPairEndpoints(pairs);
-
     let tokenMeta = new Map();
     if (!addressQuery) {
       const tokens = [...new Set(records.flatMap((record) => [record.token0, record.token1]))];
       tokenMeta = await getAllTokenMeta(tokens);
     }
-
     for (const record of records) {
       if (matchesRecord(record, tokenMeta, key, addressQuery)) matchedRecords.push(record);
       if (matchedRecords.length >= SEARCH_RESULT_LIMIT) break;
     }
-
     if (matchedRecords.length >= SEARCH_RESULT_LIMIT) break;
   }
 
@@ -370,41 +372,18 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const requestedAddress = searchParams.get('address');
     const query = searchParams.get('q')?.trim() || '';
-    const wallet = validAddress(requestedAddress) ? getAddress(requestedAddress) : null;
+    const wallet = normalizeAddress(requestedAddress);
     const client = createClient();
 
     if (!query) {
       const { length, pairs } = await loadRecentPairs(client);
       const recentRecords = await loadPairEndpoints(pairs);
       const pools = await loadRecentPools(client, length, wallet, recentRecords);
-      return NextResponse.json({
-        success: true,
-        data: {
-          count: length,
-          loaded: pools.length,
-          displayLimit: MAX_DISPLAY_POOLS,
-          mode: 'recent',
-          pools,
-          wallet,
-          searched: false,
-        },
-      });
+      return NextResponse.json({ success: true, data: { count: length, loaded: pools.length, displayLimit: MAX_DISPLAY_POOLS, mode: 'recent', pools, wallet, searched: false } });
     }
 
     const { count, pools } = await searchRegistry(client, query, wallet);
-    return NextResponse.json({
-      success: true,
-      data: {
-        count,
-        loaded: pools.length,
-        displayLimit: SEARCH_RESULT_LIMIT,
-        mode: 'search',
-        pools,
-        wallet,
-        searched: true,
-        query,
-      },
-    });
+    return NextResponse.json({ success: true, data: { count, loaded: pools.length, displayLimit: SEARCH_RESULT_LIMIT, mode: 'search', pools, wallet, searched: true, query } });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to load UnitFlow pools.';
     const status = /timed out/i.test(message) ? 504 : 502;
