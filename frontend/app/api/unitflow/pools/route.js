@@ -132,14 +132,20 @@ function extractNextCursor(body) {
   return body?.page?.next ?? body?.next_cursor ?? body?.nextCursor ?? body?.pagination?.next ?? null;
 }
 
-async function fetchPairLogPage(cursor = null) {
+async function fetchPairLogPage(address = FACTORY, cursor = null) {
   const params = new URLSearchParams({ limit: String(LOG_PAGE_SIZE), topic0: PAIR_CREATED_TOPIC });
   if (cursor) params.set('cursor', cursor);
-  const url = `${ARCSCAN_API}/v1/address/${FACTORY}/logs?${params.toString()}`;
+  const url = `${ARCSCAN_API}/v1/address/${address}/logs?${params.toString()}`;
   const response = await withTimeout(fetch(url, { cache: 'no-store' }), 5000, 'Arcscan index request timed out.');
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(`Arcscan index request failed (${response.status}).`);
-  if (body?.error) throw new Error('Arcscan index unavailable.');
+  if (!response.ok) {
+    const code = body?.error?.code;
+    if (code === 'RATE_LIMITED') throw new Error('UnitFlow pool registry is temporarily rate limited.');
+    if (code === 'INDEX_OVERLOADED') throw new Error('UnitFlow pool registry is temporarily busy.');
+    if (code === 'UPSTREAM_TIMEOUT') throw new Error('UnitFlow pool registry is temporarily unavailable.');
+    throw new Error(`Arcscan index request failed (${response.status}).`);
+  }
+  if (body?.error) throw new Error(body.error.message || 'UnitFlow pool registry is temporarily unavailable.');
   return { logs: extractLogs(body), next: extractNextCursor(body) };
 }
 
@@ -282,22 +288,38 @@ function knownTokenAddress(query) {
   return null;
 }
 
-async function searchByRegistryLogs(tokenAddress, wallet) {
+async function resolveSearchWithArcscan(query) {
+  try {
+    const params = new URLSearchParams({ q: query.trim(), limit: '10' });
+    const response = await withTimeout(fetch(`${ARCSCAN_API}/v1/search/suggest?${params.toString()}`, { cache: 'no-store' }), 4000, 'Arcscan search timed out.');
+    if (!response.ok) return null;
+    const body = await response.json();
+    const candidates = Array.isArray(body?.results) ? body.results : Array.isArray(body?.items) ? body.items : Array.isArray(body?.data) ? body.data : [];
+    for (const item of candidates) {
+      const address = normalizeAddress(item?.address || item?.token_address || item?.contract_address || item?.target);
+      if (address) return address;
+    }
+  } catch {}
+  return null;
+}
+
+async function searchByRegistryLogs(client, tokenAddress, wallet) {
   const wanted = tokenAddress?.toLowerCase() || null;
+  if (!wanted) return [];
   const matched = [];
   let cursor = null;
   for (let page = 0; page < MAX_LOG_PAGES && matched.length < SEARCH_RESULT_LIMIT; page += 1) {
-    const result = await fetchPairLogPage(cursor);
+    const result = await fetchPairLogPage(tokenAddress, cursor);
     for (const log of result.logs) {
       const record = pairFromLog(log);
       if (!record) continue;
-      if (!wanted || record.token0.toLowerCase() === wanted || record.token1.toLowerCase() === wanted) matched.push(record);
+      if (record.token0.toLowerCase() === wanted || record.token1.toLowerCase() === wanted) matched.push(record);
       if (matched.length >= SEARCH_RESULT_LIMIT) break;
     }
     if (!result.next || result.next === cursor || result.logs.length < 1) break;
     cursor = result.next;
   }
-  return hydratePairs(createClient(), matched.slice(0, SEARCH_RESULT_LIMIT), wallet);
+  return hydratePairs(client, matched.slice(0, SEARCH_RESULT_LIMIT), wallet);
 }
 
 async function searchRegistry(client, query, wallet) {
@@ -320,34 +342,24 @@ async function searchRegistry(client, query, wallet) {
     }
   }
 
-  const tokenAddress = knownTokenAddress(query);
+  const tokenAddress = knownTokenAddress(query) || await resolveSearchWithArcscan(query);
   if (tokenAddress) {
-    try {
-      const pools = await searchByRegistryLogs(tokenAddress, wallet);
-      searchCache.set(cacheKey, { timestamp: Date.now(), pools, source: 'arcscan-registry' });
-      return { count, pools, source: 'arcscan-registry' };
-    } catch {}
+    const pools = await searchByRegistryLogs(client, tokenAddress, wallet);
+    searchCache.set(cacheKey, { timestamp: Date.now(), pools, source: 'arcscan-token-registry' });
+    return { count, pools, source: 'arcscan-token-registry' };
   }
 
-  let cursor = null;
-  const matched = [];
-  for (let page = 0; page < MAX_LOG_PAGES && matched.length < SEARCH_RESULT_LIMIT; page += 1) {
-    const result = await fetchPairLogPage(cursor);
-    const tokens = result.logs.map(pairFromLog).filter(Boolean);
-    const meta = await loadTokenMeta(client, tokens.flatMap((r) => [r.token0, r.token1]));
-    for (const r of tokens) {
-      const m0 = meta.get(r.token0.toLowerCase()) || fallbackMeta(r.token0);
-      const m1 = meta.get(r.token1.toLowerCase()) || fallbackMeta(r.token1);
-      const haystack = [r.pair, r.token0, r.token1, m0.name, m0.symbol, m1.name, m1.symbol].join(' ').toLowerCase();
-      if (haystack.includes(q)) matched.push(r);
-      if (matched.length >= SEARCH_RESULT_LIMIT) break;
-    }
-    if (!result.next || result.next === cursor || result.logs.length < 1) break;
-    cursor = result.next;
-  }
-  const pools = await hydratePairs(client, matched, wallet);
-  searchCache.set(cacheKey, { timestamp: Date.now(), pools, source: 'arcscan-search' });
-  return { count, pools, source: 'arcscan-search' };
+  const page = await fetchPairLogPage();
+  const recentRecords = page.logs.map(pairFromLog).filter(Boolean);
+  const metadata = await loadTokenMeta(client, [...new Set(recentRecords.flatMap((r) => [r.token0, r.token1]))].slice(0, 48));
+  const matched = recentRecords.filter((r) => {
+    const m0 = metadata.get(r.token0.toLowerCase()) || fallbackMeta(r.token0);
+    const m1 = metadata.get(r.token1.toLowerCase()) || fallbackMeta(r.token1);
+    return [r.pair, r.token0, r.token1, m0.name, m0.symbol, m1.name, m1.symbol].join(' ').toLowerCase().includes(q);
+  });
+  const pools = await hydratePairs(client, matched.slice(0, SEARCH_RESULT_LIMIT), wallet);
+  searchCache.set(cacheKey, { timestamp: Date.now(), pools, source: 'arcscan-recent' });
+  return { count, pools, source: 'arcscan-recent' };
 }
 
 export async function GET(request) {
@@ -374,11 +386,10 @@ export async function GET(request) {
       return NextResponse.json({ success: true, data });
     }
 
-    const result = await withTimeout(searchRegistry(client, query, wallet), REQUEST_TIMEOUT_MS + 5000, 'UnitFlow pool search timed out.');
+    const result = await withTimeout(searchRegistry(client, query, wallet), REQUEST_TIMEOUT_MS + 5_000, 'UnitFlow pool search timed out.');
     return NextResponse.json({ success: true, data: { count: result.count, loaded: result.pools.length, displayLimit: SEARCH_RESULT_LIMIT, mode: 'search', pools: result.pools, wallet, searched: true, query, source: result.source } });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to load UnitFlow pools.';
-    const safeMessage = message === 'NOTOK' || /Arcscan/i.test(message) ? 'UnitFlow pool registry is temporarily unavailable.' : message;
-    return NextResponse.json({ success: false, error: safeMessage }, { status: /timed out/i.test(safeMessage) ? 504 : 502 });
+    return NextResponse.json({ success: false, error: message }, { status: /timed out|temporarily/i.test(message) ? 504 : 502 });
   }
 }
