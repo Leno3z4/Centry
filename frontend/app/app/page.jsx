@@ -137,7 +137,7 @@ function OverviewContent() {
           <p>Swap, lend, earn rewards, and help govern Centry from one place.</p>
           <div className="hero-actions">
             <a className="primary-btn" href="/app/swap">Start with Swap</a>
-            <a className="secondary-btn" href="/app/lending">Explore Lending</a>
+            <a className="secondary-btn" href="/app/markets">Explore Markets</a>
           </div>
         </div>
         <div className="orbital-art" aria-hidden="true">
@@ -155,10 +155,10 @@ function OverviewContent() {
 
       <section className="content-grid">
         <div className="panel panel-large">
-          <div className="panel-head"><div><h2>Available markets</h2></div><a className="text-link" href="/app/lending">View lending →</a></div>
+          <div className="panel-head"><div><h2>Available markets</h2></div><a className="text-link" href="/app/markets">View markets →</a></div>
           <div className="market-list">
             {ACTIVE_MARKETS.map((market) => (
-              <a key={market.id} href="/app/lending" className="market-list-item">
+              <a key={market.id} href={`/app/markets/${market.id}`} className="market-list-item">
                 <div className="asset"><span className="token usdc">{market.symbol === 'cirBTC' ? '₿' : market.symbol === 'EURC' ? '€' : '$'}</span><div><strong>{market.symbol}</strong><small>{market.name}</small></div></div>
                 <div><span>Status</span><strong className="status-live">Live</strong></div>
                 <span className="market-arrow">Open</span>
