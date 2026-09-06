@@ -58,9 +58,9 @@ function findUsdPrice(prices, tokenAddress) {
   return null;
 }
 
-async function getExternalBtcUsd() {
+async function getCoinbaseSpotPrice(pair) {
   try {
-    const response = await fetch('https://api.coinbase.com/v2/prices/BTC-USD/spot', { method: 'GET', headers: { Accept: 'application/json' }, cache: 'no-store' });
+    const response = await fetch(`https://api.coinbase.com/v2/prices/${pair}/spot`, { method: 'GET', headers: { Accept: 'application/json' }, cache: 'no-store' });
     if (!response.ok) return null;
     const payload = await response.json();
     const value = Number(payload?.data?.amount);
@@ -87,13 +87,18 @@ function chooseOutputUnits(raw, outputMarket, inputUnits, inputPriceUsd, outputP
   const candidates = decimalsCandidates
     .map((decimals) => ({ decimals, units: toUnits(raw, decimals) }))
     .filter((candidate) => Number.isFinite(candidate.units) && candidate.units > 0)
-    .map((candidate) => ({
-      ...candidate,
-      score: Math.abs(Math.log(candidate.units / fairOutput)),
-    }))
+    .map((candidate) => ({ ...candidate, score: Math.abs(Math.log(candidate.units / fairOutput)) }))
     .sort((a, b) => a.score - b.score);
 
   return candidates[0]?.units ?? null;
+}
+
+async function getReferenceUsdPrice(market, tokenAddress, towerPrices) {
+  if (!market) return null;
+  if (market.id === 'usdc') return 1;
+  if (market.id === 'eurc') return await getCoinbaseSpotPrice('EUR-USD');
+  if (market.id === 'cirbtc') return await getCoinbaseSpotPrice('BTC-USD');
+  return findUsdPrice(towerPrices, tokenAddress);
 }
 
 async function calculateQuotePriceImpact(quote, inputToken, outputToken) {
@@ -107,17 +112,15 @@ async function calculateQuotePriceImpact(quote, inputToken, outputToken) {
   if (!apiKey) return providerIsSane ? providerImpact : null;
 
   try {
+    let towerPrices = null;
     const response = await fetch(`${TOWER_BASE_URL}/prices`, { method: 'GET', headers: { Authorization: `Bearer ${apiKey}` }, cache: 'no-store' });
-    let prices = null;
     if (response.ok) {
       const payload = await response.json();
-      prices = payload?.data && typeof payload.data === 'object' ? payload.data : payload;
+      towerPrices = payload?.data && typeof payload.data === 'object' ? payload.data : payload;
     }
 
-    let inputPriceUsd = findUsdPrice(prices, inputToken);
-    let outputPriceUsd = findUsdPrice(prices, outputToken);
-    if (inputMarket.id === 'cirbtc') inputPriceUsd = inputPriceUsd || await getExternalBtcUsd();
-    if (outputMarket.id === 'cirbtc') outputPriceUsd = outputPriceUsd || await getExternalBtcUsd();
+    const inputPriceUsd = await getReferenceUsdPrice(inputMarket, inputToken, towerPrices);
+    const outputPriceUsd = await getReferenceUsdPrice(outputMarket, outputToken, towerPrices);
     if (!inputPriceUsd || !outputPriceUsd) return providerIsSane ? providerImpact : null;
 
     const inputRaw = BigInt(String(quote.inputAmount || '0'));
@@ -129,10 +132,6 @@ async function calculateQuotePriceImpact(quote, inputToken, outputToken) {
     const calculated = executionPriceImpact(inputUnits, outputUnits, inputPriceUsd, outputPriceUsd);
     if (calculated == null) return providerIsSane ? providerImpact : null;
 
-    // Tower examples use 18-decimal quote outputs for EURC, while Arc cirBTC is
-    // an 8-decimal token. Choose the quote interpretation closest to fair USD value
-    // instead of hard-coding either precision, which prevents 100% artifacts from
-    // decimal mismatches while preserving a genuinely large pool impact.
     return Number(calculated.toFixed(4));
   } catch {
     return providerIsSane ? providerImpact : null;
@@ -182,17 +181,25 @@ export async function POST(request) {
       cache: 'no-store',
     });
     const data = await response.json();
+
     if (response.ok && data?.success === true) {
-      if (!isStructurallyValidQuote(data.data)) return NextResponse.json({ success: false, error: 'Tower returned an incomplete quote. Try refreshing the quote or using a smaller amount.' }, { status: 422 });
+      if (!isStructurallyValidQuote(data.data)) {
+        return NextResponse.json(
+          { success: false, error: 'Tower returned an incomplete quote. Try refreshing the quote or using a smaller amount.' },
+          { status: 422 },
+        );
+      }
+
       const calculatedImpact = await calculateQuotePriceImpact(data.data, inputToken, outputToken);
       if (calculatedImpact != null) {
         data.data.priceImpact = calculatedImpact;
-        data.data.priceImpactSource = 'execution-vs-spot';
-      } else if (!Number.isFinite(Number(data.data.priceImpact)) || Number(data.data.priceImpact) < 0 || Number(data.data.priceImpact) > 100) {
+        data.data.priceImpactSource = 'execution-vs-reference';
+      } else {
         data.data.priceImpact = null;
         data.data.priceImpactSource = 'unavailable';
       }
     }
+
     return NextResponse.json(data, { status: response.status });
   } catch (error) {
     return NextResponse.json({ success: false, error: error?.message || 'Unable to reach a swap routing provider.' }, { status: 502 });
