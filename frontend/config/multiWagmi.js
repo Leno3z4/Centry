@@ -67,12 +67,12 @@ function centryWalletConnect() {
       provider = await EthereumProvider.init({
         projectId: walletConnectProjectId,
         chains: [arcTestnet.id],
-        optionalChains: [],
+        optionalChains: [arcTestnet.id],
         showQrModal: true,
         metadata: {
           name: 'Centry',
           description: 'Arc-native lending protocol',
-          url: 'https://centry-car-xen.vercel.app',
+          url: 'https://centry.ink',
           icons: [],
         },
       });
