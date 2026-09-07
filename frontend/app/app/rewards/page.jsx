@@ -16,6 +16,7 @@ import { CONTRACT_ADDRESSES } from '../../../constants/contracts';
 import { VE_CENTRY_ABI } from '../../../constants/abis';
 
 const ARC_CHAIN_ID = 5042002;
+const SELF_REPAY_EXECUTOR = '0x1672667EdB27fDF687A0Fe485EeE1240650dF4a9';
 const ROOT_DELAY_SECONDS = 2 * 24 * 60 * 60;
 const REWARDS_ABI = [
   { type: 'function', name: 'latestEpoch', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
@@ -34,6 +35,22 @@ const REWARDS_ABI = [
     type: 'function', name: 'claimed', stateMutability: 'view',
     inputs: [{ name: '', type: 'uint256' }, { name: '', type: 'uint256' }],
     outputs: [{ type: 'bool' }],
+  },
+  {
+    type: 'function', name: 'selfRepayRecipient', stateMutability: 'view',
+    inputs: [{ name: 'tokenId', type: 'uint256' }], outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function', name: 'selfRepayOwner', stateMutability: 'view',
+    inputs: [{ name: 'tokenId', type: 'uint256' }], outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function', name: 'setSelfRepayRecipient', stateMutability: 'nonpayable',
+    inputs: [{ name: 'tokenId', type: 'uint256' }, { name: 'recipient', type: 'address' }], outputs: [],
+  },
+  {
+    type: 'function', name: 'disableSelfRepay', stateMutability: 'nonpayable',
+    inputs: [{ name: 'tokenId', type: 'uint256' }], outputs: [],
   },
   {
     type: 'function', name: 'claim', stateMutability: 'nonpayable',
@@ -94,6 +111,7 @@ function RewardsContent() {
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [claimingTokenId, setClaimingTokenId] = useState(null);
+  const [repayActionTokenId, setRepayActionTokenId] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -168,9 +186,27 @@ function RewardsContent() {
     functionName: 'claimed',
     args: [manifestEpoch, BigInt(position.tokenId)],
   }));
+  const selfRepayContracts = userPositions.flatMap((position) => ([
+    {
+      address: CONTRACT_ADDRESSES.veCentryRewards,
+      abi: REWARDS_ABI,
+      functionName: 'selfRepayRecipient',
+      args: [BigInt(position.tokenId)],
+    },
+    {
+      address: CONTRACT_ADDRESSES.veCentryRewards,
+      abi: REWARDS_ABI,
+      functionName: 'selfRepayOwner',
+      args: [BigInt(position.tokenId)],
+    },
+  ]));
   const { data: positionState, refetch: refetchPositionState } = useReadContracts({
     contracts: positionContracts,
     query: { enabled: Boolean(isConnected && manifest && userPositions.length > 0 && chainId === ARC_CHAIN_ID) },
+  });
+  const { data: selfRepayState, refetch: refetchSelfRepayState } = useReadContracts({
+    contracts: selfRepayContracts,
+    query: { enabled: Boolean(isConnected && userPositions.length > 0 && chainId === ARC_CHAIN_ID) },
   });
 
   const rootMatches = Boolean(
@@ -189,9 +225,44 @@ function RewardsContent() {
       ? Math.min(100, Math.max(0, ((ROOT_DELAY_SECONDS - pendingCountdown) / ROOT_DELAY_SECONDS) * 100))
       : 0;
 
+  const isSelfRepayEnabled = (index) => {
+    const recipient = selfRepayState?.[index * 2]?.result;
+    const configuredOwner = selfRepayState?.[index * 2 + 1]?.result;
+    return Boolean(
+      recipient &&
+      configuredOwner &&
+      String(recipient).toLowerCase() === SELF_REPAY_EXECUTOR.toLowerCase() &&
+      String(configuredOwner).toLowerCase() === String(address || '').toLowerCase(),
+    );
+  };
+
+  const configureSelfRepay = async (position, index) => {
+    if (!isConnected || chainId !== ARC_CHAIN_ID) return;
+    setRepayActionTokenId(String(position.tokenId));
+    setNotice('');
+    setError('');
+    try {
+      if (!publicClient) throw new Error('Wallet client is not ready.');
+      const enabled = isSelfRepayEnabled(index);
+      const hash = await writeContractAsync({
+        address: CONTRACT_ADDRESSES.veCentryRewards,
+        abi: REWARDS_ABI,
+        functionName: enabled ? 'disableSelfRepay' : 'setSelfRepayRecipient',
+        args: enabled ? [BigInt(position.tokenId)] : [BigInt(position.tokenId), SELF_REPAY_EXECUTOR],
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+      await refetchSelfRepayState();
+      setNotice(enabled ? 'Self-repay disabled for this veCENT position.' : 'Self-repay enabled. Future eligible CENT rewards will be routed through the debt-repayment executor.');
+    } catch (caughtError) {
+      setError(errorText(caughtError));
+    } finally {
+      setRepayActionTokenId(null);
+    }
+  };
+
   const claimPosition = async (position, index) => {
     if (!isConnected || chainId !== ARC_CHAIN_ID || !active || !rootMatches) return;
-    if (Boolean(positionState?.[index]?.result)) return;
+    if (Boolean(positionState?.[index]?.result) || isSelfRepayEnabled(index)) return;
     setClaimingTokenId(String(position.tokenId));
     setNotice('');
     setError('');
@@ -272,7 +343,9 @@ function RewardsContent() {
             <div className="reward-position-list">
               {userPositions.map((position, index) => {
                 const claimed = Boolean(positionState?.[index]?.result);
+                const selfRepayEnabled = isSelfRepayEnabled(index);
                 const claiming = claimingTokenId === String(position.tokenId) || isPending;
+                const configuring = repayActionTokenId === String(position.tokenId);
                 return (
                   <article className="reward-position" key={position.tokenId}>
                     <div className="reward-position-main">
@@ -288,14 +361,28 @@ function RewardsContent() {
                         <span>{claimed ? 'Already claimed' : active ? 'Available now' : 'Pending epoch activation'}</span>
                       </div>
                     </div>
+                    <div className="reward-self-repay">
+                      <div>
+                        <strong>Self-repay</strong>
+                        <span>{selfRepayEnabled ? 'Enabled · future rewards route to debt repayment' : 'Disabled · rewards claim to your wallet'}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        disabled={configuring || claiming}
+                        onClick={() => configureSelfRepay(position, index)}
+                      >
+                        {configuring ? 'Updating…' : selfRepayEnabled ? 'Disable' : 'Enable'}
+                      </button>
+                    </div>
                     <div className="reward-position-actions">
                       <button
                         type="button"
                         className="primary-btn"
-                        disabled={claimed || !active || !rootMatches || claiming}
+                        disabled={claimed || selfRepayEnabled || !active || !rootMatches || claiming || configuring}
                         onClick={() => claimPosition(position, index)}
                       >
-                        {claimed ? 'Claimed' : claiming ? 'Claiming…' : active ? 'Claim reward' : 'Not claimable yet'}
+                        {selfRepayEnabled ? 'Self-repay active' : claimed ? 'Claimed' : claiming ? 'Claiming…' : active ? 'Claim reward' : 'Not claimable yet'}
                       </button>
                     </div>
                   </article>
@@ -350,6 +437,12 @@ function RewardsContent() {
         .reward-position-title strong,.reward-position-amount strong{display:block}
         .reward-position-title small,.reward-position-amount span{display:block;margin-top:4px;color:#8f849d;font-size:11px}
         .reward-position-amount{text-align:right}
+        .reward-self-repay{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:14px;padding:12px 13px;border:1px solid #32283f;border-radius:11px;background:rgba(27,18,39,.6)}
+        .reward-self-repay strong{display:block;font-size:12px}
+        .reward-self-repay span{display:block;margin-top:4px;color:#91869f;font-size:10px;line-height:1.5}
+        .secondary-btn{min-width:86px;border:1px solid #493a58;border-radius:9px;background:#171020;color:#d7cbe4;padding:9px 11px;font-size:10px;font-weight:700;cursor:pointer}
+        .secondary-btn:hover:not(:disabled){border-color:#6a5680;background:#21162d}
+        .secondary-btn:disabled{opacity:.48;cursor:not-allowed}
         .reward-position-actions{display:flex;justify-content:flex-end;margin-top:15px}
         .reward-position-actions .primary-btn{min-width:150px}
         .reward-position-actions .primary-btn:disabled{opacity:.48;cursor:not-allowed}
@@ -368,7 +461,7 @@ function RewardsContent() {
         .reward-progress-fill.complete{background:#55dca1;box-shadow:0 0 14px rgba(85,220,161,.18)}
         .reward-progress p{margin:12px 0 0;color:#8f849d;font-size:11px;line-height:1.6}
         @media (max-width:900px){.rewards-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-        @media (max-width:640px){.rewards-stats-grid{grid-template-columns:1fr}.reward-position-main{align-items:flex-start;flex-direction:column}.reward-position-amount{text-align:left}.reward-header-status{display:none}}
+        @media (max-width:640px){.rewards-stats-grid{grid-template-columns:1fr}.reward-position-main{align-items:flex-start;flex-direction:column}.reward-position-amount{text-align:left}.reward-header-status{display:none}.reward-self-repay{align-items:flex-start;flex-direction:column}.reward-self-repay .secondary-btn{width:100%}}
       `}</style>
     </div>
   );
