@@ -2,6 +2,7 @@
   "version": 1,
   "generatedAt": "2026-09-04T22:19:18.751Z",
   "epoch": 1,
+  "rewardBudget": "250000000000000000",
   "root": "0xa8c83cdd9dca4ce3418cb536b599cf0b803e1398b281cd207624d58e4dfce000",
   "source": "Centry deterministic voting-power reward allocation",
   "positions": [
