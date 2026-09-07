@@ -15,6 +15,8 @@ on:
         description: "Reward budget in raw token units (leave blank to use all uncommitted balance)"
         required: false
         default: ""
+  schedule:
+    - cron: "0 * * * *"
 
 permissions:
   contents: write
@@ -46,7 +48,7 @@ jobs:
         env:
           ARC_RPC_URL_SECRET: ${{ secrets.ARC_RPC_URL }}
           ARC_RPC_URL_VARIABLE: ${{ vars.ARC_RPC_URL }}
-          CENTRY_REVENUE_REWARDS: ${{ inputs.rewards_contract }}
+          CENTRY_REVENUE_REWARDS: ${{ inputs.rewards_contract || '0xFE791C5141ef417100Ce56624bc975DA1fBE9815' }}
           CENTRY_REWARD_EPOCH: ${{ inputs.reward_epoch }}
           CENTRY_REWARD_BUDGET: ${{ inputs.reward_budget }}
         run: npm run generate:rewards
@@ -73,7 +75,7 @@ jobs:
             fs.readFileSync("keeper/reward-manifest.json", "utf8")
           );
 
-          console.log(`Rewards contract: ${{ inputs.rewards_contract }}`);
+          console.log(`Rewards contract: ${{ inputs.rewards_contract || '0xFE791C5141ef417100Ce56624bc975DA1fBE9815' }}`);
           console.log(`Epoch: ${allocations.epoch}`);
           console.log(`Reward budget: ${allocations.rewardBudget}`);
           console.log(`Total voting power: ${allocations.totalVotingPower}`);
