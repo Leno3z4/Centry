@@ -50,6 +50,25 @@ if (
   );
 }
 
+if (
+  input.rewardBudget === undefined ||
+  input.rewardBudget === ""
+) {
+  throw new Error(
+    "Input reward budget is missing"
+  );
+}
+
+const rewardBudget = BigInt(input.rewardBudget);
+
+if (
+  rewardBudget <= 0n
+) {
+  throw new Error(
+    "Reward budget must be greater than zero"
+  );
+}
+
 const epoch =
   Number(
     input.epoch
@@ -412,6 +431,9 @@ const manifest =
 
     epoch,
 
+    rewardBudget:
+      rewardBudget.toString(),
+
     root,
 
     source:
@@ -466,6 +488,10 @@ console.log(
 
 console.log(
   `Epoch: ${epoch}`
+);
+
+console.log(
+  `Reward budget: ${rewardBudget.toString()}`
 );
 
 console.log(
