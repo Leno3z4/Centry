@@ -113,18 +113,32 @@ function RewardsContent() {
   const [claimingTokenId, setClaimingTokenId] = useState(null);
   const [repayActionTokenId, setRepayActionTokenId] = useState(null);
 
+  const loadManifest = async () => {
+    try {
+      const response = await fetch(`/reward-manifest.json?ts=${Date.now()}`, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`Manifest request failed (${response.status}).`);
+      const data = await response.json();
+      setManifest(data);
+      setManifestError('');
+      return data;
+    } catch (caughtError) {
+      setManifestError(errorText(caughtError));
+      return null;
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
-    fetch('/reward-manifest.json', { cache: 'no-store' })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`Manifest request failed (${response.status}).`);
-        const data = await response.json();
-        if (!cancelled) setManifest(data);
-      })
-      .catch((caughtError) => {
-        if (!cancelled) setManifestError(errorText(caughtError));
-      });
-    return () => { cancelled = true; };
+    const refresh = async () => {
+      if (cancelled) return;
+      await loadManifest();
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, []);
 
   useEffect(() => {
@@ -276,7 +290,8 @@ function RewardsContent() {
       });
       await publicClient.waitForTransactionReceipt({ hash });
       await refetchPositionState();
-      setNotice('Reward claimed successfully.');
+      await loadManifest();
+      setNotice('Reward claimed. Checking for the next published epoch…');
     } catch (caughtError) {
       setError(errorText(caughtError));
     } finally {
@@ -287,6 +302,7 @@ function RewardsContent() {
   const manifestFallbackBudget = manifest?.positions?.reduce((sum, position) => sum + BigInt(position.amount), 0n) ?? 0n;
   const epochStatus = active ? 'ACTIVE' : pendingForManifest ? 'IN PROGRESS' : 'AWAITING';
   const epochStatusHint = active ? 'Claims are live' : pendingForManifest ? 'Timelock is running' : 'Waiting for distribution';
+  const newerEpochAvailable = Boolean(latestEpoch !== undefined && manifest?.epoch && latestEpoch > manifestEpoch);
 
   return (
     <div className="page-stack">
@@ -303,13 +319,14 @@ function RewardsContent() {
 
       {manifestError ? <div className="notice reward-error">{manifestError}</div> : null}
       {error ? <div className="notice reward-error">{error}</div> : null}
+      {newerEpochAvailable ? <div className="notice reward-notice">A newer reward epoch is active onchain. Refreshing the published reward data…</div> : null}
       {notice ? <div className="notice reward-notice">{notice}</div> : null}
 
       <section className="stats-grid rewards-stats-grid">
         <div className="metric reward-metric">
           <span>Current epoch</span>
           <strong>{manifest?.epoch ?? '—'}</strong>
-          <small>{active ? 'Active onchain' : pendingForManifest ? 'Queued onchain' : 'Not active'}</small>
+          <small>{newerEpochAvailable ? 'Newer epoch detected' : active ? 'Active onchain' : pendingForManifest ? 'Queued onchain' : 'Not active'}</small>
         </div>
         <div className="metric reward-metric">
           <span>Reward budget</span>
