@@ -300,8 +300,11 @@ function RewardsContent() {
   };
 
   const manifestFallbackBudget = manifest?.positions?.reduce((sum, position) => sum + BigInt(position.amount), 0n) ?? 0n;
-  const epochStatus = active ? 'ACTIVE' : pendingForManifest ? 'IN PROGRESS' : 'AWAITING';
-  const epochStatusHint = active ? 'Claims are live' : pendingForManifest ? 'Timelock is running' : 'Waiting for distribution';
+  const rewardBudgetRaw = epochBudget ?? manifestFallbackBudget;
+  const rewardClaimedRaw = epochClaimed ?? 0n;
+  const epochFullyDistributed = Boolean(active && rewardBudgetRaw > 0n && rewardClaimedRaw >= rewardBudgetRaw);
+  const epochStatus = epochFullyDistributed ? 'FULLY DISTRIBUTED' : active ? 'ACTIVE' : pendingForManifest ? 'IN PROGRESS' : 'AWAITING';
+  const epochStatusHint = epochFullyDistributed ? 'All rewards for this epoch are claimed' : active ? 'Claims are live' : pendingForManifest ? 'Timelock is running' : 'Waiting for distribution';
   const newerEpochAvailable = Boolean(latestEpoch !== undefined && manifest?.epoch && latestEpoch > manifestEpoch);
 
   return (
@@ -311,9 +314,9 @@ function RewardsContent() {
           <h1>Protocol rewards</h1>
           <p>Revenue-funded CENT rewards are published by epoch and verified onchain.</p>
         </div>
-        <div className={`reward-header-status ${active ? 'is-active' : pendingForManifest ? 'is-progress' : ''}`}>
+        <div className={`reward-header-status ${epochFullyDistributed ? 'is-complete' : active ? 'is-active' : pendingForManifest ? 'is-progress' : ''}`}>
           <span className="reward-status-dot" />
-          <span>{active ? 'Epoch active' : pendingForManifest ? 'Epoch in progress' : 'Awaiting distribution'}</span>
+          <span>{epochFullyDistributed ? 'Epoch fully distributed' : active ? 'Epoch active' : pendingForManifest ? 'Epoch in progress' : 'Awaiting distribution'}</span>
         </div>
       </div>
 
@@ -326,17 +329,17 @@ function RewardsContent() {
         <div className="metric reward-metric">
           <span>Current epoch</span>
           <strong>{manifest?.epoch ?? '—'}</strong>
-          <small>{newerEpochAvailable ? 'Newer epoch detected' : active ? 'Active onchain' : pendingForManifest ? 'Queued onchain' : 'Not active'}</small>
+          <small>{newerEpochAvailable ? 'Newer epoch detected' : epochFullyDistributed ? 'Fully distributed' : active ? 'Active onchain' : pendingForManifest ? 'Queued onchain' : 'Not active'}</small>
         </div>
         <div className="metric reward-metric">
           <span>Reward budget</span>
-          <strong>{formatCENT(epochBudget ?? manifestFallbackBudget)} CENT</strong>
+          <strong>{formatCENT(rewardBudgetRaw)} CENT</strong>
           <small>{epochBudget !== undefined ? 'Onchain budget' : 'Manifest total'}</small>
         </div>
         <div className="metric reward-metric">
           <span>Distributed</span>
-          <strong>{formatCENT(epochClaimed ?? 0n)} CENT</strong>
-          <small>Claimed from this epoch</small>
+          <strong>{formatCENT(rewardClaimedRaw)} CENT</strong>
+          <small>{epochFullyDistributed ? 'Fully distributed' : 'Claimed from this epoch'}</small>
         </div>
         <div className="metric reward-metric reward-status-metric">
           <span>Root status</span>
@@ -422,14 +425,14 @@ function RewardsContent() {
             <div><span>Timelock</span><strong>{pendingForManifest ? formatCountdown(pendingCountdown) : active ? 'Complete' : '—'}</strong></div>
           </div>
           <div className="reward-progress">
-            <div className="reward-progress-head"><span>Distribution progress</span><strong>{active ? 'Live' : pendingForManifest ? `${progressPercent.toFixed(0)}%` : 'Waiting'}</strong></div>
+            <div className="reward-progress-head"><span>Distribution progress</span><strong>{epochFullyDistributed ? 'Complete' : active ? 'Live' : pendingForManifest ? `${progressPercent.toFixed(0)}%` : 'Waiting'}</strong></div>
             <div className="reward-progress-track">
               <div
-                className={`reward-progress-fill ${active ? 'complete' : pendingForManifest ? 'running' : ''}`}
+                className={`reward-progress-fill ${epochFullyDistributed ? 'complete' : active ? 'complete' : pendingForManifest ? 'running' : ''}`}
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
-            <p>{pendingForManifest ? 'The epoch has been queued and is moving through its safety delay before activation.' : active ? 'The epoch is active and rewards can be claimed.' : 'The protocol is waiting for the next distribution to be queued.'}</p>
+            <p>{pendingForManifest ? 'The epoch has been queued and is moving through its safety delay before activation.' : epochFullyDistributed ? 'This epoch is fully distributed. The next epoch will appear after a new reward allocation is published and activated.' : active ? 'The epoch is active and rewards can be claimed.' : 'The protocol is waiting for the next distribution to be queued.'}</p>
           </div>
         </div>
       </section>
@@ -439,9 +442,10 @@ function RewardsContent() {
         .reward-header-status{display:inline-flex;align-items:center;gap:9px;align-self:flex-start;padding:10px 12px;border:1px solid #30263d;border-radius:10px;background:#0e0a16;color:#bcb2c8;font-size:10px;font-weight:700;letter-spacing:.02em}
         .reward-header-status.is-progress{border-color:#4a3d5c;color:#d8cff0}
         .reward-header-status.is-active{border-color:#315744;color:#b5e8ce}
+        .reward-header-status.is-complete{border-color:#315744;color:#b5e8ce}
         .reward-status-dot{width:7px;height:7px;border-radius:50%;background:#8f849c}
         .reward-header-status.is-progress .reward-status-dot{background:#b99be8;box-shadow:0 0 10px rgba(185,155,232,.45)}
-        .reward-header-status.is-active .reward-status-dot{background:#55dca1;box-shadow:0 0 9px rgba(85,220,161,.65)}
+        .reward-header-status.is-active .reward-status-dot,.reward-header-status.is-complete .reward-status-dot{background:#55dca1;box-shadow:0 0 9px rgba(85,220,161,.65)}
         .reward-notice,.reward-error{margin:0}.reward-error{border-color:#633243;background:rgba(94,30,52,.26);color:#f2a5b7}
         .rewards-stats-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
         .reward-metric strong{font-variant-numeric:tabular-nums}
