@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useAccount, useChainId, useConnectorClient, useSwitchChain } from 'wagmi';
+import { useAccount, useChainId, useConnectorClient } from 'wagmi';
 import { decodeFunctionResult, encodeFunctionData, formatUnits, parseUnits } from 'viem';
 import { Providers } from '../../../components/Providers';
 import { AppShell } from '../../../components/AppShell';
@@ -98,7 +98,6 @@ function BridgeContent() {
   const { address, isConnected } = useAccount();
   const walletChainId = useChainId();
   const { data: connectorClient } = useConnectorClient();
-  const { switchChain, isPending: switchingArc } = useSwitchChain();
   const [fromId, setFromId] = useState('arc-testnet');
   const [toId, setToId] = useState('base-sepolia');
   const [amount, setAmount] = useState('');
@@ -172,32 +171,43 @@ function BridgeContent() {
     if (balance && Number(balance) > 0) setAmount(balance);
   };
 
+  const waitForChain = async (targetChainId) => {
+    if (!connectorClient?.request) throw new Error('The connected wallet does not expose a network provider.');
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const current = await connectorClient.request({ method: 'eth_chainId' });
+      if (Number(BigInt(current)) === targetChainId) return;
+      await sleep(250);
+    }
+    throw new Error(`Wallet did not switch to ${BRIDGE_CHAINS.find((chain) => chain.chainId === targetChainId)?.name || 'the selected source chain'}.`);
+  };
+
   const switchToSource = async () => {
     if (!isConnected || walletChainId === source.chainId) return true;
+    if (!connectorClient?.request) {
+      setError('The connected wallet does not expose a network switch provider.');
+      return false;
+    }
     setError('');
     try {
-      if (source.chainId === ARC_CHAIN_ID) {
-        await switchChain({ chainId: ARC_CHAIN_ID });
-      } else {
-        if (!connectorClient?.request) throw new Error('The connected wallet does not support network switching.');
-        const chainHex = `0x${source.chainId.toString(16)}`;
-        try {
-          await connectorClient.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: chainHex }] });
-        } catch (caughtError) {
-          if (Number(caughtError?.code) !== 4902) throw caughtError;
-          await connectorClient.request({
-            method: 'wallet_addEthereumChain',
-            params: [{
-              chainId: chainHex,
-              chainName: source.name,
-              nativeCurrency: source.native,
-              rpcUrls: [source.rpcUrl],
-              blockExplorerUrls: [source.explorerUrl],
-            }],
-          });
-          await connectorClient.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: chainHex }] });
-        }
+      const chainHex = `0x${source.chainId.toString(16)}`;
+      try {
+        await connectorClient.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: chainHex }] });
+      } catch (caughtError) {
+        const code = Number(caughtError?.code);
+        if (code !== 4902 && code !== -32603 && code !== -32602) throw caughtError;
+        await connectorClient.request({
+          method: 'wallet_addEthereumChain',
+          params: [{
+            chainId: chainHex,
+            chainName: source.name,
+            nativeCurrency: source.native,
+            rpcUrls: [source.rpcUrl],
+            blockExplorerUrls: [source.explorerUrl],
+          }],
+        });
+        await connectorClient.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: chainHex }] });
       }
+      await waitForChain(source.chainId);
       return true;
     } catch (caughtError) {
       setError(errorText(caughtError));
@@ -225,7 +235,7 @@ function BridgeContent() {
   };
 
   const bridge = async () => {
-    if (!address || !validAmount || fromId === toId || !connectorClient?.request || stage === 'approval' || stage === 'bridging') return;
+    if (!address || !validAmount || fromId === toId || !connectorClient?.request || stage === 'approval' || stage === 'bridging' || stage === 'submitted') return;
     setError('');
     setTxHash('');
     setStage('switching');
@@ -258,7 +268,10 @@ function BridgeContent() {
       setTxHash(hash);
       const receipt = await waitForReceipt(connectorClient, hash);
       if (receipt.status === '0x0') throw new Error('The bridge transaction was reverted on the source chain.');
+      setAmount('');
       setStage('submitted');
+      setError('');
+      void readBalance();
     } catch (caughtError) {
       setError(errorText(caughtError));
       setStage('idle');
@@ -267,14 +280,14 @@ function BridgeContent() {
 
   const buttonLabel = !isConnected
     ? 'Connect wallet'
-    : stage === 'switching' || switchingArc
+    : stage === 'switching'
       ? `Switching to ${source.short}…`
       : stage === 'approval'
         ? 'Approve USDC in wallet…'
         : stage === 'bridging'
           ? 'Confirm bridge in wallet…'
           : stage === 'submitted'
-            ? 'Bridge submitted'
+            ? 'Bridge complete'
             : !walletOnSource
               ? `Switch to ${source.short} & bridge`
               : `Bridge USDC to ${destination.short}`;
@@ -304,14 +317,21 @@ function BridgeContent() {
           <div><span>Recipient</span><strong>{address ? `${address.slice(0, 6)}…${address.slice(-4)}` : 'Connect wallet'}</strong></div>
         </div>
 
-        {!walletOnSource && isConnected ? <div className={styles.notice}>Wallet is on chain {walletChainId}. Switch to {source.name} before starting this bridge.</div> : null}
+        {stage !== 'submitted' && !walletOnSource && isConnected ? <div className={styles.notice}>Wallet is on chain {walletChainId}. Switch to {source.name} before starting this bridge.</div> : null}
         {stage === 'approval' ? <div className={styles.notice}>Approve USDC in your wallet. The bridge will continue automatically after the approval confirms.</div> : null}
         {stage === 'bridging' ? <div className={styles.notice}>Confirm the bridge transaction in your wallet. Your USDC stays in your wallet until you approve the transaction.</div> : null}
 
-        <button type="button" className={styles.primaryButton} disabled={!isConnected || !validAmount || fromId === toId || stage === 'approval' || stage === 'bridging' || stage === 'submitted' || switchingArc} onClick={bridge}>{buttonLabel}</button>
-        {isConnected && <button type="button" className={styles.refreshButton} onClick={readBalance} disabled={loadingBalance}>{loadingBalance ? 'Checking balance…' : `Refresh ${source.short} USDC balance`}</button>}
+        <button type="button" className={styles.primaryButton} disabled={!isConnected || !validAmount || fromId === toId || stage === 'approval' || stage === 'bridging' || stage === 'submitted'} onClick={bridge}>{buttonLabel}</button>
+        {stage !== 'submitted' && isConnected && <button type="button" className={styles.refreshButton} onClick={readBalance} disabled={loadingBalance}>{loadingBalance ? 'Checking balance…' : `Refresh ${source.short} USDC balance`}</button>}
         {error && <div className={`${styles.notice} ${styles.noticeError}`} role="alert">{error}</div>}
-        {stage === 'submitted' && txHash ? <div className={`${styles.notice} ${styles.noticeSuccess}`}><strong>Bridge transaction submitted.</strong><span>The source-chain burn was confirmed. Circle can now attest the transfer for destination minting.</span><code>{txHash}</code></div> : null}
+        {stage === 'submitted' && txHash ? (
+          <div className={`${styles.notice} ${styles.noticeSuccess}`}>
+            <strong>Bridge complete.</strong>
+            <span>The source-chain burn was confirmed. Circle can now attest the transfer for destination minting.</span>
+            <a href={`${source.explorerUrl}/tx/${txHash}`} target="_blank" rel="noreferrer">View source transaction ↗</a>
+            <button type="button" className={styles.refreshButton} onClick={resetFlow}>Start another bridge</button>
+          </div>
+        ) : null}
       </section>
 
       <p className={styles.disclaimer}>Bridge support is currently limited to USDC and the supported testnet networks shown above.</p>
