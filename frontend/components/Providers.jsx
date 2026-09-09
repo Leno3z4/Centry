@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { WagmiProvider, useAccount, useChainId, useSwitchChain } from 'wagmi';
+import { WagmiProvider, useAccount, useChainId, useConnectorClient } from 'wagmi';
 import { config, arcTestnet } from '../config/multiWagmi';
 import { MobileMenuController } from './MobileMenuController';
 
@@ -17,8 +17,7 @@ const ARC_ADD_CHAIN_PARAMS = {
   blockExplorerUrls: ['https://testnet.arcscan.app'],
 };
 
-async function addAndSwitchInjectedArc() {
-  const provider = typeof window !== 'undefined' ? window.ethereum : null;
+async function addAndSwitchSelectedArc(provider) {
   if (!provider?.request) throw new Error('Wallet does not expose a switchable provider.');
 
   try {
@@ -60,7 +59,7 @@ function AutoSwitchToArc() {
   const pathname = usePathname();
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
-  const { switchChain, isPending } = useSwitchChain();
+  const { data: connectorClient } = useConnectorClient();
   const attemptedForAddress = useRef('');
 
   useEffect(() => {
@@ -70,7 +69,7 @@ function AutoSwitchToArc() {
       return;
     }
 
-    if (!isConnected || !address) {
+    if (!isConnected || !address || !connectorClient?.request) {
       attemptedForAddress.current = '';
       return;
     }
@@ -80,17 +79,13 @@ function AutoSwitchToArc() {
       return;
     }
 
-    if (isPending || attemptedForAddress.current === address) return;
+    if (attemptedForAddress.current === address) return;
     attemptedForAddress.current = address;
 
-    switchChain({ chainId: arcTestnet.id }).catch(async () => {
-      try {
-        await addAndSwitchInjectedArc();
-      } catch {
-        // Some wallets require the user to approve adding/switching networks manually.
-      }
+    addAndSwitchSelectedArc(connectorClient).catch(() => {
+      // Some wallets require the user to approve adding/switching networks manually.
     });
-  }, [address, isConnected, chainId, isPending, pathname, switchChain]);
+  }, [address, isConnected, chainId, connectorClient, pathname]);
 
   return null;
 }
