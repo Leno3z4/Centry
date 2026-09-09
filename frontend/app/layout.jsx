@@ -3,6 +3,7 @@ import './typography.css';
 import './mobile.css';
 import './mobile-nav.css';
 import './wallet-picker.css';
+import './wallet-mobile-fix.css';
 import './health-meter.css';
 import './overview.css';
 import './eyebrow-reset.css';
