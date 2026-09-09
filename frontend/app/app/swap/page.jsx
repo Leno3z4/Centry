@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useAccount, useChainId, useConnectorClient, useReadContract, useSendTransaction, useSwitchChain, useWaitForTransactionReceipt } from 'wagmi';
+import { useAccount, useChainId, useConnectorClient, useReadContract, useSendTransaction, useWaitForTransactionReceipt } from 'wagmi';
 import { formatUnits, parseUnits } from 'viem';
 import { Providers } from '../../../components/Providers';
 import { AppShell } from '../../../components/AppShell';
@@ -91,7 +91,6 @@ function SwapContent() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { data: connectorClient } = useConnectorClient();
-  const { switchChain, isPending: switchingNetwork } = useSwitchChain();
   const { sendTransactionAsync, isPending: walletPending } = useSendTransaction();
   const [fromId, setFromId] = useState('usdc');
   const [toId, setToId] = useState('eurc');
@@ -104,6 +103,7 @@ function SwapContent() {
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [stage, setStage] = useState('idle');
+  const [switchingNetwork, setSwitchingNetwork] = useState(false);
   const requestIdRef = useRef(0);
 
   const fromMarket = LIVE_MARKETS.find((market) => market.id === fromId) || LIVE_MARKETS[0];
@@ -209,12 +209,15 @@ function SwapContent() {
 
   const requestArcNetwork = async () => {
     if (!isConnected || switchingNetwork || chainId === ARC_CHAIN_ID) return;
+    setSwitchingNetwork(true);
     setNotice('Switching wallet to Arc Testnet…'); setError('');
     try {
       await switchToSelectedArc();
       setQuote(null); setPreparedTransactions(null); setApprovalTx(null); setNotice('Arc Testnet selected. Fetching a fresh quote…'); setStage('idle');
     } catch (caughtError) {
       setError(errorText(caughtError)); setStage('network');
+    } finally {
+      setSwitchingNetwork(false);
     }
   };
 
