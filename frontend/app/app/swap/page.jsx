@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useAccount, useChainId, useReadContract, useSendTransaction, useSwitchChain, useWaitForTransactionReceipt } from 'wagmi';
+import { useAccount, useChainId, useConnectorClient, useReadContract, useSendTransaction, useSwitchChain, useWaitForTransactionReceipt } from 'wagmi';
 import { formatUnits, parseUnits } from 'viem';
 import { Providers } from '../../../components/Providers';
 import { AppShell } from '../../../components/AppShell';
@@ -90,6 +90,7 @@ export default function Page() {
 function SwapContent() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
+  const { data: connectorClient } = useConnectorClient();
   const { switchChain, isPending: switchingNetwork } = useSwitchChain();
   const { sendTransactionAsync, isPending: walletPending } = useSendTransaction();
   const [fromId, setFromId] = useState('usdc');
@@ -173,11 +174,44 @@ function SwapContent() {
   const changeFrom = (next) => { setFromId(next); if (next === toId) { const replacement = LIVE_MARKETS.find((market) => market.id !== next); if (replacement) setToId(replacement.id); } invalidateQuote(); };
   const changeTo = (next) => { setToId(next); invalidateQuote(); };
 
+  const waitForChain = async (targetChainId) => {
+    if (!connectorClient?.request) throw new Error('The connected wallet does not expose a network provider.');
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const current = await connectorClient.request({ method: 'eth_chainId' });
+      if (Number(BigInt(current)) === targetChainId) return;
+      await new Promise((resolve) => window.setTimeout(resolve, 250));
+    }
+    throw new Error(`Wallet did not switch to Arc Testnet. Current wallet chain is ${chainId}.`);
+  };
+
+  const switchToSelectedArc = async () => {
+    if (!connectorClient?.request) throw new Error('The connected wallet does not expose a switchable provider.');
+    const chainHex = `0x${ARC_CHAIN_ID.toString(16)}`;
+    try {
+      await connectorClient.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: chainHex }] });
+    } catch (caughtError) {
+      const code = Number(caughtError?.code);
+      if (code !== 4902 && code !== -32603 && code !== -32602) throw caughtError;
+      await connectorClient.request({
+        method: 'wallet_addEthereumChain',
+        params: [{
+          chainId: chainHex,
+          chainName: 'Arc Testnet',
+          nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 6 },
+          rpcUrls: ['https://rpc.testnet.arc.network'],
+          blockExplorerUrls: ['https://testnet.arcscan.app'],
+        }],
+      });
+      await connectorClient.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: chainHex }] });
+    }
+    await waitForChain(ARC_CHAIN_ID);
+  };
+
   const requestArcNetwork = async () => {
     if (!isConnected || switchingNetwork || chainId === ARC_CHAIN_ID) return;
     setNotice('Switching wallet to Arc Testnet…'); setError('');
     try {
-      await switchChain({ chainId: ARC_CHAIN_ID });
+      await switchToSelectedArc();
       setQuote(null); setPreparedTransactions(null); setApprovalTx(null); setNotice('Arc Testnet selected. Fetching a fresh quote…'); setStage('idle');
     } catch (caughtError) {
       setError(errorText(caughtError)); setStage('network');
