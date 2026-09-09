@@ -1,0 +1,29 @@
+@media (max-width: 640px) {
+  .topbar {
+    min-width: 0;
+    overflow: visible;
+  }
+
+  .topbar .breadcrumb {
+    min-width: 0;
+    max-width: 48%;
+  }
+
+  .topbar .wallet-area {
+    display: flex !important;
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 0;
+    max-width: none !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    overflow: visible;
+  }
+
+  .topbar .wallet-area .wallet-address {
+    display: inline-flex !important;
+    flex: 0 0 auto;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+}
