@@ -134,7 +134,6 @@ async function normalizeTowerApproval(data, quote, userAddress) {
       },
     };
   } catch {
-    // Fail closed: if allowance cannot be verified, require approval instead of risking execution first.
     if (data.data.approval) return data;
     return {
       ...data,
@@ -226,10 +225,11 @@ async function buildCentSwap(quote, userAddress) {
       [
         { type: 'address' },
         { type: 'uint256' },
+        { type: 'uint256' },
         { type: 'address[]' },
         { type: 'bool' },
       ],
-      [ROUTER_MSG_SENDER, nativeAmount, path, false],
+      [ROUTER_MSG_SENDER, nativeAmount, minOut, path, false],
     ),
   ];
 
