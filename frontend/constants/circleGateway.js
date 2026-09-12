@@ -2,6 +2,7 @@ export const GATEWAY_WALLET_ADDRESS = '0x0077777d7EBA4688BDeF3E311b846F25870A19B
 export const GATEWAY_MINTER_ADDRESS = '0x0022222ABE238Cc2C7Bb1f21003F0a260052475B';
 
 export const CIRCLE_GATEWAY_TESTNET_API = 'https://gateway-api-testnet.circle.com';
+export const GATEWAY_ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000';
 
 export const GATEWAY_TESTNET_CHAINS = [
   {
@@ -63,6 +64,19 @@ export const GATEWAY_WALLET_ABI = [
   },
 ];
 
+export const GATEWAY_MINTER_ABI = [
+  {
+    type: 'function',
+    name: 'gatewayMint',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'attestationPayload', type: 'bytes' },
+      { name: 'signature', type: 'bytes' },
+    ],
+    outputs: [],
+  },
+];
+
 export const ERC20_ALLOWANCE_ABI = [
   {
     type: 'function',
@@ -85,3 +99,36 @@ export const ERC20_ALLOWANCE_ABI = [
     outputs: [{ name: '', type: 'bool' }],
   },
 ];
+
+export const GATEWAY_EIP712_TYPES = {
+  EIP712Domain: [
+    { name: 'name', type: 'string' },
+    { name: 'version', type: 'string' },
+  ],
+  TransferSpec: [
+    { name: 'version', type: 'uint32' },
+    { name: 'sourceDomain', type: 'uint32' },
+    { name: 'destinationDomain', type: 'uint32' },
+    { name: 'sourceContract', type: 'bytes32' },
+    { name: 'destinationContract', type: 'bytes32' },
+    { name: 'sourceToken', type: 'bytes32' },
+    { name: 'destinationToken', type: 'bytes32' },
+    { name: 'sourceDepositor', type: 'bytes32' },
+    { name: 'destinationRecipient', type: 'bytes32' },
+    { name: 'sourceSigner', type: 'bytes32' },
+    { name: 'destinationCaller', type: 'bytes32' },
+    { name: 'value', type: 'uint256' },
+    { name: 'salt', type: 'bytes32' },
+    { name: 'hookData', type: 'bytes' },
+  ],
+  BurnIntent: [
+    { name: 'maxBlockHeight', type: 'uint256' },
+    { name: 'maxFee', type: 'uint256' },
+    { name: 'spec', type: 'TransferSpec' },
+  ],
+};
+
+export const GATEWAY_EIP712_DOMAIN = {
+  name: 'GatewayWallet',
+  version: '1',
+};
