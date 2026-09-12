@@ -85,8 +85,7 @@ export default function MarketDetail({ marketId }) {
       if (gatewayEnabled && fundingSource === 'gateway') {
         setNotice('Finding your finalized Gateway balance…');
         await gateway.ensureArcUsdc(amount);
-        setNotice('Gateway USDC is on Arc. Continue with the Centry transaction.');
-        await new Promise((resolve) => window.setTimeout(resolve, 250));
+        setNotice('Gateway USDC is ready on Arc. Continue with the Centry transaction.');
       }
       if (needsApproval) {
         await lending.approveAsset(amount);
@@ -175,7 +174,7 @@ export default function MarketDetail({ marketId }) {
             : noRoom ? <div className="connect-prompt">You have no remaining borrowing room.</div>
             : fundingSource === 'gateway' && gatewayEnabled && Number(gateway.total || 0) < numericAmount ? <div className="connect-prompt">Gateway does not currently have enough finalized USDC for this amount.</div>
             : <button type="button" className="primary-btn full-btn large-btn" disabled={busy || refreshingPosition || !amount || numericAmount <= 0 || (action === 'repay' && debt <= 0) || (action === 'borrow' && numericAmount > maxBorrowNumber)} onClick={run}>
-                {busy ? 'Waiting for confirmation…' : refreshingPosition ? 'Updating borrow capacity…' : fundingSource === 'gateway' && gatewayEnabled ? 'Use Gateway USDC' : needsApproval ? `Approve ${market.symbol}` : `${action[0].toUpperCase()}${action.slice(1)} ${market.symbol}`}
+                {busy ? 'Waiting for confirmation…' : refreshingPosition ? 'Updating borrow capacity…' : needsApproval ? `Approve ${market.symbol}` : `${action[0].toUpperCase()}${action.slice(1)} ${market.symbol}`}
               </button>}
           {notice && <div className="notice" aria-live="polite">{notice}</div>}
         </div>
