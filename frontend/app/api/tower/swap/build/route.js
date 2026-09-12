@@ -95,9 +95,20 @@ async function normalizeTowerApproval(data, quote, userAddress) {
   if (amountIn <= 0n) return data;
 
   const spender = data.data.swap.to;
-  if (!validAddress(spender) || spender === ZERO_ADDRESS || spender.toLowerCase() === userAddress.toLowerCase()) {
+  if (!validAddress(spender) || spender.toLowerCase() === ZERO_ADDRESS) {
     return data;
   }
+
+  const buildApproval = () => ({
+    to: quote.inputToken,
+    data: encodeFunctionData({
+      abi: ERC20_ABI,
+      functionName: 'approve',
+      args: [spender, amountIn],
+    }),
+    value: '0',
+    chainId: ARC_CHAIN_ID,
+  });
 
   try {
     const client = createArcClient();
@@ -119,22 +130,19 @@ async function normalizeTowerApproval(data, quote, userAddress) {
       ...data,
       data: {
         ...data.data,
-        approval: {
-          to: quote.inputToken,
-          data: encodeFunctionData({
-            abi: ERC20_ABI,
-            functionName: 'approve',
-            args: [spender, amountIn],
-          }),
-          value: '0',
-          chainId: ARC_CHAIN_ID,
-        },
+        approval: buildApproval(),
       },
     };
   } catch {
-    // If the allowance RPC read is temporarily unavailable, preserve Tower's response.
-    // The client will still surface Tower's original approval payload when one exists.
-    return data;
+    // Fail closed: if allowance cannot be verified, require approval instead of risking execution first.
+    if (data.data.approval) return data;
+    return {
+      ...data,
+      data: {
+        ...data.data,
+        approval: buildApproval(),
+      },
+    };
   }
 }
 
@@ -218,11 +226,10 @@ async function buildCentSwap(quote, userAddress) {
       [
         { type: 'address' },
         { type: 'uint256' },
-        { type: 'uint256' },
         { type: 'address[]' },
         { type: 'bool' },
       ],
-      [ROUTER_MSG_SENDER, nativeAmount, minOut, path, false],
+      [ROUTER_MSG_SENDER, nativeAmount, path, false],
     ),
   ];
 
