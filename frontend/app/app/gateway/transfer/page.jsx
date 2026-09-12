@@ -1,0 +1,9 @@
+'use client';
+
+import { Providers } from '../../../../components/Providers';
+import { AppShell } from '../../../../components/AppShell';
+import { GatewayPage } from '../../../../components/GatewayPage';
+
+export default function Page() {
+  return <Providers><AppShell><GatewayPage /></AppShell></Providers>;
+}
