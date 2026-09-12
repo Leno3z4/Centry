@@ -1,0 +1,35 @@
+.sideNav {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: #5b3a83 transparent;
+}
+
+.sideNav::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sideNav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sideNav::-webkit-scrollbar-thumb {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #8d5ac2, #4d2b70);
+  background-clip: padding-box;
+}
+
+.sideNav::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #a06ddd, #62408b);
+  background-clip: padding-box;
+}
+
+.sideNav::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
