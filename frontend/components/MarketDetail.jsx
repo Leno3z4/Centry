@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useAccount } from 'wagmi';
 import { ACTIVE_MARKETS } from '../constants/markets';
 import { useMultiMarketLending } from '../hooks/useMultiMarketLending';
+import { useGatewayFunding } from '../hooks/useGatewayFunding';
+import BalanceSourceSelector from './BalanceSourceSelector';
 import styles from '../app/app/markets/markets.module.css';
 
 function num(value, digits = 2) {
@@ -31,8 +33,10 @@ export default function MarketDetail({ marketId }) {
   const [amount, setAmount] = useState('');
   const [notice, setNotice] = useState('');
   const [refreshingPosition, setRefreshingPosition] = useState(false);
+  const [fundingSource, setFundingSource] = useState('wallet');
   const refreshTimerRef = useRef(null);
   const lending = useMultiMarketLending(market?.address, market?.decimals);
+  const gateway = useGatewayFunding();
   const busy = lending.isPending || lending.isConfirming;
   const numericAmount = Number(amount || 0);
   const debt = Number(lending.borrowBalance || 0);
@@ -40,6 +44,7 @@ export default function MarketDetail({ marketId }) {
   const maxBorrow = lending.maxBorrowAmount || '0';
   const maxBorrowNumber = Number(maxBorrow);
   const liquidity = Number(lending.reserveData?.totalLiquidity || 0);
+  const gatewayEnabled = market?.symbol === 'USDC' && ['supply', 'repay'].includes(action);
   const needsApproval = isConnected && ['supply', 'repay'].includes(action) && numericAmount > allowance;
 
   useEffect(() => () => {
@@ -47,15 +52,8 @@ export default function MarketDetail({ marketId }) {
   }, []);
 
   const refreshPosition = async (attempt = 0) => {
-    try {
-      await lending.refetchAll();
-    } catch {
-      // Keep polling; the underlying RPC may be temporarily busy while the position updates.
-    }
-    if (attempt >= 15) {
-      setRefreshingPosition(false);
-      return;
-    }
+    try { await lending.refetchAll(); } catch { /* Keep polling through temporary RPC pressure. */ }
+    if (attempt >= 15) { setRefreshingPosition(false); return; }
     refreshTimerRef.current = window.setTimeout(() => refreshPosition(attempt + 1), 3000);
   };
 
@@ -63,7 +61,7 @@ export default function MarketDetail({ marketId }) {
     if (action === 'withdraw') setAmount(lending.supplyBalance || '0');
     else if (action === 'repay') setAmount(lending.borrowBalance || '0');
     else if (action === 'borrow') setAmount(maxBorrow);
-    else setAmount(lending.walletBalance || '0');
+    else setAmount(fundingSource === 'gateway' && gatewayEnabled ? gateway.total : lending.walletBalance || '0');
   };
 
   const onAmount = (event) => {
@@ -76,10 +74,19 @@ export default function MarketDetail({ marketId }) {
     setAmount(value);
   };
 
+  useEffect(() => {
+    if (!gatewayEnabled) setFundingSource('wallet');
+  }, [gatewayEnabled]);
+
   const run = async () => {
     if (!isConnected || !market?.address || lending.reserveActive !== true || !amount || numericAmount <= 0 || busy || refreshingPosition) return;
     try {
       setNotice('');
+      if (gatewayEnabled && fundingSource === 'gateway') {
+        setNotice('Finding your finalized Gateway balance…');
+        await gateway.ensureArcUsdc(amount);
+        setNotice('Gateway USDC is ready on Arc. Continue with the Centry transaction.');
+      }
       if (needsApproval) {
         await lending.approveAsset(amount);
         setNotice(`Approved ${amount} ${market.symbol}.`);
@@ -102,17 +109,14 @@ export default function MarketDetail({ marketId }) {
       setNotice(`${action[0].toUpperCase()}${action.slice(1)} confirmed onchain.`);
     } catch (error) {
       setRefreshingPosition(false);
-      setNotice(error?.shortMessage || error?.message || 'Transaction failed. Check your wallet, network, allowance, and reserve state.');
+      setNotice(error?.shortMessage || error?.message || 'Transaction failed. Check your wallet, network, allowance, Gateway balance, and reserve state.');
     }
   };
 
   if (!market) {
     return (
       <div className={styles.page}>
-        <div className="connect-prompt">
-          This market is not available.
-          <Link href="/app/markets">Back to Markets</Link>
-        </div>
+        <div className="connect-prompt">This market is not available.<Link href="/app/markets">Back to Markets</Link></div>
       </div>
     );
   }
@@ -124,9 +128,7 @@ export default function MarketDetail({ marketId }) {
     <div className={styles.page}>
       <div className={styles.detailTop}>
         <Link href="/app/markets" className={styles.backLink}>← All markets</Link>
-        <div className={styles.header}>
-          <div><h1>{market.symbol}</h1><p>{market.description}</p></div>
-        </div>
+        <div className={styles.header}><div><h1>{market.symbol}</h1><p>{market.description}</p></div></div>
       </div>
 
       <section className={styles.summary}>
@@ -153,8 +155,14 @@ export default function MarketDetail({ marketId }) {
             <span>{market.symbol}</span>
           </div>
 
+          {gatewayEnabled ? (
+            <div style={{ marginTop: 12 }}>
+              <BalanceSourceSelector value={fundingSource} onChange={setFundingSource} walletBalance={lending.walletBalance} gatewayBalances={gateway.balances} disabled={busy || refreshingPosition} />
+            </div>
+          ) : null}
+
           <div className={styles.formMeta}>
-            <span>{action === 'repay' ? `Owed: ${isConnected ? `${num(lending.borrowBalance, Math.min(market.decimals, 8))} ${market.symbol}` : 'Connect wallet'}` : action === 'borrow' ? `Max: ${isConnected ? `${num(maxBorrow, Math.min(market.decimals, 8))} ${market.symbol}` : 'Connect wallet'}` : `Wallet: ${isConnected ? `${num(lending.walletBalance)} ${market.symbol}` : 'Connect wallet'}`}</span>
+            <span>{action === 'repay' ? `Owed: ${isConnected ? `${num(lending.borrowBalance, Math.min(market.decimals, 8))} ${market.symbol}` : 'Connect wallet'}` : action === 'borrow' ? `Max: ${isConnected ? `${num(maxBorrow, Math.min(market.decimals, 8))} ${market.symbol}` : 'Connect wallet'}` : fundingSource === 'gateway' && gatewayEnabled ? `Gateway: ${num(gateway.total, 6)} USDC` : `Wallet: ${isConnected ? `${num(lending.walletBalance)} ${market.symbol}` : 'Connect wallet'}`}</span>
             {isConnected && <button type="button" onClick={setMax} disabled={refreshingPosition}>Max</button>}
           </div>
 
@@ -164,6 +172,7 @@ export default function MarketDetail({ marketId }) {
             : lending.reserveActive !== true ? <div className="connect-prompt">{market.symbol} is not enabled in the connected Centry LendingPool.</div>
             : noLiquidity ? <div className="connect-prompt">There is no {market.symbol} liquidity available to borrow right now.</div>
             : noRoom ? <div className="connect-prompt">You have no remaining borrowing room.</div>
+            : fundingSource === 'gateway' && gatewayEnabled && Number(gateway.total || 0) < numericAmount ? <div className="connect-prompt">Gateway does not currently have enough finalized USDC for this amount.</div>
             : <button type="button" className="primary-btn full-btn large-btn" disabled={busy || refreshingPosition || !amount || numericAmount <= 0 || (action === 'repay' && debt <= 0) || (action === 'borrow' && numericAmount > maxBorrowNumber)} onClick={run}>
                 {busy ? 'Waiting for confirmation…' : refreshingPosition ? 'Updating borrow capacity…' : needsApproval ? `Approve ${market.symbol}` : `${action[0].toUpperCase()}${action.slice(1)} ${market.symbol}`}
               </button>}
