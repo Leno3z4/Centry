@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 import { useAccount } from 'wagmi';
 import { WalletConnect } from './WalletConnect';
+import styles from './AppShell.module.css';
 
 const NAV_ITEMS = [
   { href: '/app', label: 'Overview', icon: '⌂', group: 'overview' },
@@ -35,7 +36,7 @@ export function AppShell({ children }) {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark">C</span><span>Centry</span></div>
-        <nav className="side-nav" aria-label="Primary navigation" style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', scrollbarWidth: 'thin' }}>
+        <nav className={`${styles.sideNav} side-nav`} aria-label="Primary navigation">
           {NAV_GROUPS.map((group) => (
             <div key={group.key} className={`nav-group nav-group-${group.key}`}>
               {group.label && <div className="nav-group-label">{group.label}</div>}
