@@ -12,7 +12,6 @@ const NAV_ITEMS = [
   { href: '/app/governance', label: 'Governance', icon: '♢', group: 'product' },
   { href: '/app/pools', label: 'Pools', icon: '◒', group: 'explore' },
   { href: '/app/bridge', label: 'Bridge', icon: '↗', group: 'explore' },
-  { href: '/app/gateway', label: 'Gateway', icon: '◎', group: 'explore' },
   { href: '/app/portfolio', label: 'Portfolio', icon: '◐', group: 'explore' },
   { href: '/app/analytics', label: 'Analytics', icon: '⌁', group: 'explore' },
   { href: '/app/docs', label: 'Docs', icon: '□', group: 'docs' },
@@ -36,17 +35,12 @@ export function AppShell({ children }) {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark">C</span><span>Centry</span></div>
-        <nav className="side-nav" aria-label="Primary navigation">
+        <nav className="side-nav" aria-label="Primary navigation" style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', scrollbarWidth: 'thin' }}>
           {NAV_GROUPS.map((group) => (
             <div key={group.key} className={`nav-group nav-group-${group.key}`}>
               {group.label && <div className="nav-group-label">{group.label}</div>}
               {NAV_ITEMS.filter((item) => item.group === group.key).map((item) => (
-                <a
-                  key={item.href}
-                  href={item.href}
-                  className={`nav-item ${active === item.href ? 'active' : ''}`}
-                  aria-current={active === item.href ? 'page' : undefined}
-                >
+                <a key={item.href} href={item.href} className={`nav-item ${active === item.href ? 'active' : ''}`} aria-current={active === item.href ? 'page' : undefined}>
                   <span className="nav-icon">{item.icon}</span>
                   <span>{item.label}</span>
                 </a>
@@ -59,9 +53,7 @@ export function AppShell({ children }) {
 
       <main className="main-content">
         <header className="topbar">
-          <div className="breadcrumb">
-            <span>CENTRY</span><b>/</b>{NAV_ITEMS.find((item) => item.href === active)?.label}
-          </div>
+          <div className="breadcrumb"><span>CENTRY</span><b>/</b>{NAV_ITEMS.find((item) => item.href === active)?.label}</div>
           <WalletConnect />
         </header>
         <div className="page-view">{children}</div>
