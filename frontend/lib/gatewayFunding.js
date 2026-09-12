@@ -1,6 +1,5 @@
 import { pad, parseUnits } from 'viem';
 import {
-  CIRCLE_GATEWAY_TESTNET_API,
   GATEWAY_MINTER_ADDRESS,
   GATEWAY_TESTNET_CHAINS,
   GATEWAY_WALLET_ADDRESS,
@@ -49,16 +48,16 @@ export function pickGatewaySource(balances, amountRaw) {
   const needed = typeof amountRaw === 'bigint' ? amountRaw : BigInt(String(amountRaw));
   const normalized = (Array.isArray(balances) ? balances : []).filter((chain) => chain?.chainId != null);
 
-  const sufficient = normalized
+  return normalized
     .filter((chain) => {
       try { return parseUnits(String(chain.balance || '0'), 6) >= needed; } catch { return false; }
     })
-    .sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0));
-
-  return sufficient[0] || null;
+    .sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0))[0] || null;
 }
 
 export function buildTransferSpec({ source, destination = ARC_GATEWAY_CHAIN, depositor, recipient, value }) {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
   return {
     version: 1,
     sourceDomain: source.domain,
@@ -72,32 +71,28 @@ export function buildTransferSpec({ source, destination = ARC_GATEWAY_CHAIN, dep
     sourceSigner: addressToBytes32(depositor),
     destinationCaller: ZERO_BYTES32,
     value: String(value),
-    salt: `0x${Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, '0')).join('')}`,
+    salt: `0x${Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')}`,
     hookData: '0x',
   };
 }
 
-async function gatewayRequest(path, body) {
-  const response = await fetch(`${CIRCLE_GATEWAY_TESTNET_API}${path}`, {
+async function apiRequest(path, body) {
+  const response = await fetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
     cache: 'no-store',
   });
   const json = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(json?.message || json?.error || `Circle Gateway returned HTTP ${response.status}.`);
+  if (!response.ok || !json?.success) throw new Error(json?.error || `Gateway request failed with HTTP ${response.status}.`);
   return json;
 }
 
 export async function estimateGatewayTransfer(spec) {
-  const json = await gatewayRequest('/v1/estimate', [{ spec }]);
-  const estimate = json?.body?.[0]?.burnIntent || json?.burnIntent;
-  if (!estimate?.maxFee || !estimate?.maxBlockHeight) throw new Error('Circle Gateway did not return a usable transfer estimate.');
-  return estimate;
+  const json = await apiRequest('/api/circle/gateway/estimate', { spec });
+  return json.burnIntent;
 }
 
 export async function requestGatewayAttestation(burnIntent, signature) {
-  const json = await gatewayRequest('/v1/transfer', [{ burnIntent, signature }]);
-  if (!json?.attestation || !json?.signature) throw new Error('Circle Gateway did not return a usable attestation.');
-  return json;
+  return apiRequest('/api/circle/gateway/transfer', { burnIntent, signature });
 }
