@@ -15,10 +15,7 @@ const LIVE_MARKETS = MARKETS.filter((market) => market.status === 'live' && mark
 const ARC_CHAIN_ID = 5042002;
 const TOWER_QUOTE_DECIMALS = 18;
 
-function safeNumber(value) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
+function safeNumber(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
 
 function formatQuoteAmount(raw, outputDecimals) {
   if (raw == null || outputDecimals == null) return '—';
@@ -41,21 +38,17 @@ function formatPriceImpact(value) {
   return `${parsed.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}%`;
 }
 
-function errorText(error) {
-  return error?.shortMessage || error?.message || 'The transaction could not be completed.';
-}
+function errorText(error) { return error?.shortMessage || error?.message || 'The transaction could not be completed.'; }
 
 function TokenDropdown({ value, markets, onChange, label }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const selected = markets.find((market) => market.id === value) || markets[0];
-
   useEffect(() => {
     const close = (event) => { if (!rootRef.current?.contains(event.target)) setOpen(false); };
     document.addEventListener('pointerdown', close);
     return () => document.removeEventListener('pointerdown', close);
   }, []);
-
   return (
     <div className={styles.tokenPicker} ref={rootRef}>
       <button type="button" className={`${styles.tokenTrigger} ${open ? styles.tokenTriggerOpen : ''}`} onClick={() => setOpen((current) => !current)} aria-haspopup="listbox" aria-expanded={open} aria-label={label}>
@@ -74,9 +67,7 @@ function TokenDropdown({ value, markets, onChange, label }) {
   );
 }
 
-export default function Page() {
-  return <Providers><AppShell><SwapContent /></AppShell></Providers>;
-}
+export default function Page() { return <Providers><AppShell><SwapContent /></AppShell></Providers>; }
 
 function SwapContent() {
   const { address, isConnected } = useAccount();
@@ -111,9 +102,12 @@ function SwapContent() {
     try { return parseUnits(String(gateway.total || '0'), 6); } catch { return 0n; }
   }, [gateway.total]);
   const gatewayAmountUnavailable = fundingSource === 'gateway' && gatewayEnabled && gatewayAmountRaw > gatewayTotalRaw;
-
+  const gatewayCanQuoteOffArc = fundingSource === 'gateway' && gatewayEnabled;
+  const networkBlocksAction = wrongNetwork && !gatewayCanQuoteOffArc;
   const { data: inputDecimals } = useReadContract({ address: fromMarket?.address, abi: ERC20_ABI, functionName: 'decimals', query: { enabled: Boolean(fromMarket?.address) } });
   const { data: outputDecimals } = useReadContract({ address: toMarket?.address, abi: ERC20_ABI, functionName: 'decimals', query: { enabled: Boolean(toMarket?.address) } });
+  const { data: arcWalletBalanceRaw } = useReadContract({ address: gatewayEnabled ? fromMarket?.address : undefined, abi: ERC20_ABI, functionName: 'balanceOf', args: address ? [address] : undefined, query: { enabled: Boolean(address && gatewayEnabled) } });
+  const arcWalletBalance = gatewayEnabled && arcWalletBalanceRaw != null ? formatUnits(arcWalletBalanceRaw, 6) : '0';
   const fromTokenDecimals = Number(inputDecimals ?? fromMarket?.decimals ?? 6);
   const toTokenDecimals = Number(outputDecimals ?? toMarket?.decimals ?? 6);
 
@@ -128,14 +122,12 @@ function SwapContent() {
     try { return parseUnits(amount, fromTokenDecimals).toString(); } catch { return ''; }
   }, [amount, fromTokenDecimals]);
 
-  useEffect(() => {
-    if (!gatewayEnabled) setFundingSource('wallet');
-  }, [gatewayEnabled]);
+  useEffect(() => { if (!gatewayEnabled) setFundingSource('wallet'); }, [gatewayEnabled]);
 
   useEffect(() => {
     const requestId = ++requestIdRef.current;
-    if (!amountRaw || !fromMarket?.address || !toMarket?.address || wrongNetwork) {
-      setQuote(null); setPreparedTransactions(null); setApprovalTx(null); setError(''); setNotice(''); setStage(wrongNetwork ? 'network' : 'idle');
+    if (!amountRaw || !fromMarket?.address || !toMarket?.address || networkBlocksAction) {
+      setQuote(null); setPreparedTransactions(null); setApprovalTx(null); setError(''); setNotice(''); setStage(networkBlocksAction ? 'network' : 'idle');
       return undefined;
     }
     setQuote(null); setPreparedTransactions(null); setApprovalTx(null); setError(''); setNotice(''); setStage('quoting');
@@ -152,10 +144,10 @@ function SwapContent() {
       }
     }, 450);
     return () => window.clearTimeout(timer);
-  }, [amountRaw, fromMarket?.address, toMarket?.address, slippageBps, wrongNetwork]);
+  }, [amountRaw, fromMarket?.address, toMarket?.address, slippageBps, networkBlocksAction]);
 
   useEffect(() => {
-    if (!quote || !address || !isConnected || wrongNetwork) { setPreparedTransactions(null); return undefined; }
+    if (!quote || !address || !isConnected || networkBlocksAction) { setPreparedTransactions(null); return undefined; }
     const requestId = ++requestIdRef.current;
     setPreparedTransactions(null); setApprovalTx(null); setNotice(''); setError(''); setStage('preparing');
     const prepare = async () => {
@@ -173,9 +165,9 @@ function SwapContent() {
     };
     prepare();
     return () => { requestIdRef.current += 1; };
-  }, [quote, address, isConnected, wrongNetwork]);
+  }, [quote, address, isConnected, networkBlocksAction]);
 
-  const invalidateQuote = () => { requestIdRef.current += 1; setQuote(null); setPreparedTransactions(null); setApprovalTx(null); setSwapTx(null); setNotice(''); setError(''); setStage(wrongNetwork ? 'network' : 'idle'); };
+  const invalidateQuote = () => { requestIdRef.current += 1; setQuote(null); setPreparedTransactions(null); setApprovalTx(null); setSwapTx(null); setNotice(''); setError(''); setStage(networkBlocksAction ? 'network' : 'idle'); };
   const swapTokens = () => { const currentFrom = fromId; setFromId(toId); setToId(currentFrom); invalidateQuote(); };
   const changeFrom = (next) => { setFromId(next); if (next === toId) { const replacement = LIVE_MARKETS.find((market) => market.id !== next); if (replacement) setToId(replacement.id); } invalidateQuote(); };
   const changeTo = (next) => { setToId(next); invalidateQuote(); };
@@ -193,9 +185,8 @@ function SwapContent() {
   const switchToSelectedArc = async () => {
     if (!connectorClient?.request) throw new Error('The connected wallet does not expose a switchable provider.');
     const chainHex = `0x${ARC_CHAIN_ID.toString(16)}`;
-    try {
-      await connectorClient.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: chainHex }] });
-    } catch (caughtError) {
+    try { await connectorClient.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: chainHex }] }); }
+    catch (caughtError) {
       const code = Number(caughtError?.code);
       if (code !== 4902 && code !== -32603 && code !== -32602) throw caughtError;
       await connectorClient.request({ method: 'wallet_addEthereumChain', params: [{ chainId: chainHex, chainName: 'Arc Testnet', nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 6 }, rpcUrls: ['https://rpc.testnet.arc.network'], blockExplorerUrls: ['https://testnet.arcscan.app'] }] });
@@ -207,10 +198,8 @@ function SwapContent() {
   const requestArcNetwork = async () => {
     if (!isConnected || switchingNetwork || chainId === ARC_CHAIN_ID) return;
     setSwitchingNetwork(true); setNotice('Switching wallet to Arc Testnet…'); setError('');
-    try {
-      await switchToSelectedArc();
-      setQuote(null); setPreparedTransactions(null); setApprovalTx(null); setNotice('Arc Testnet selected. Fetching a fresh quote…'); setStage('idle');
-    } catch (caughtError) { setError(errorText(caughtError)); setStage('network'); }
+    try { await switchToSelectedArc(); setQuote(null); setPreparedTransactions(null); setApprovalTx(null); setNotice('Arc Testnet selected. Fetching a fresh quote…'); setStage('idle'); }
+    catch (caughtError) { setError(errorText(caughtError)); setStage('network'); }
     finally { setSwitchingNetwork(false); }
   };
 
@@ -233,8 +222,7 @@ function SwapContent() {
         await gateway.ensureArcUsdc(amount);
         setNotice('Gateway USDC is ready on Arc. Continuing with the swap…');
       } else if (chainId !== ARC_CHAIN_ID) {
-        await requestArcNetwork();
-        return;
+        await requestArcNetwork(); return;
       }
 
       let transactions = preparedTransactions;
@@ -275,22 +263,22 @@ function SwapContent() {
       <div className={styles.panelGrid}>
         <section className={styles.panel}>
           <div className={styles.panelHead}><div><span className={styles.kicker}>ARC SWAP</span><h2>Exchange</h2></div></div>
-          {wrongNetwork && fundingSource !== 'gateway' ? <div className={`${styles.notice} ${styles.noticeError}`}><strong>Wallet is on chain {chainId}.</strong> Arc Testnet is required for swaps.<button type="button" className={styles.inlineButton} onClick={requestArcNetwork} disabled={switchingNetwork}>{switchingNetwork ? 'Switching…' : 'Switch to Arc Testnet'}</button></div> : null}
+          {wrongNetwork && !gatewayCanQuoteOffArc ? <div className={`${styles.notice} ${styles.noticeError}`}><strong>Wallet is on chain {chainId}.</strong> Arc Testnet is required for swaps.<button type="button" className={styles.inlineButton} onClick={requestArcNetwork} disabled={switchingNetwork}>{switchingNetwork ? 'Switching…' : 'Switch to Arc Testnet'}</button></div> : null}
           <div className={styles.swapStack}>
             <div className={styles.assetField}><label htmlFor="swap-amount">You pay</label><div className={styles.assetRow}><input id="swap-amount" className={styles.amountInput} type="text" inputMode="decimal" placeholder="0.00" value={amount} onChange={(event) => { const value = event.target.value; if (value === '' || /^\d*(\.\d*)?$/.test(value)) setAmount(value); }} /><TokenDropdown value={fromId} markets={LIVE_MARKETS} onChange={changeFrom} label="Input token" /></div></div>
-            <button type="button" className={styles.switchButton} onClick={swapTokens} disabled={wrongNetwork || isPreparing || approvalPending} aria-label="Reverse swap">↕</button>
+            <button type="button" className={styles.switchButton} onClick={swapTokens} disabled={networkBlocksAction || isPreparing || approvalPending} aria-label="Reverse swap">↕</button>
             <div className={styles.assetField}><label>Receive</label><div className={styles.assetRow}><div className={styles.amountInput}>{outputAmount}</div><TokenDropdown value={toId} markets={LIVE_MARKETS} onChange={changeTo} label="Output token" /></div></div>
           </div>
-          {gatewayEnabled ? <div style={{ marginTop: 12 }}><BalanceSourceSelector value={fundingSource} onChange={setFundingSource} walletBalance="0" gatewayBalances={gateway.balances} disabled={isPreparing || approvalPending} /></div> : null}
+          {gatewayEnabled ? <div style={{ marginTop: 12 }}><BalanceSourceSelector value={fundingSource} onChange={setFundingSource} walletBalance={arcWalletBalance} gatewayBalances={gateway.balances} disabled={isPreparing || approvalPending} /></div> : null}
           <div className={styles.metaRow}><span>Slippage</span><input className={styles.slippageInput} value={slippage} onChange={(event) => setSlippage(event.target.value)} inputMode="decimal" aria-label="Slippage percentage" /><span>%</span></div>
-          {quote ? <div className={styles.quoteCard}><div className={styles.quoteRow}><span>Expected output</span><strong className={styles.quoteOutput}>{outputAmount} {toMarket.symbol}</strong></div><div className={styles.quoteRow}><span>Minimum received</span><strong>{minOutput} {toMarket.symbol}</strong></div><div className={styles.quoteRow}><span>Price impact</span><strong>{formatPriceImpact(safePriceImpactPercent)}</strong></div>{safePriceImpactPercent != null && safePriceImpactPercent >= 5 ? <div className={`${styles.notice} ${styles.noticeError}`}>High price impact: {formatPriceImpact(safePriceImpactPercent)}. Consider a smaller trade or a different route.</div> : null}<div className={styles.quoteRow}><span>Route</span><strong>{typeof quote.route === 'string' ? quote.route : quote.dexName || quote.dexId || 'Tower routing'}</strong></div></div> : <div className={styles.quoteStatus}>{wrongNetwork && fundingSource !== 'gateway' ? 'Switch to Arc Testnet to quote this swap.' : stage === 'quoting' ? 'Fetching the best Arc route…' : stage === 'preparing' ? 'Preparing the transaction…' : 'Enter an amount to get a quote.'}</div>}
+          {quote ? <div className={styles.quoteCard}><div className={styles.quoteRow}><span>Expected output</span><strong className={styles.quoteOutput}>{outputAmount} {toMarket.symbol}</strong></div><div className={styles.quoteRow}><span>Minimum received</span><strong>{minOutput} {toMarket.symbol}</strong></div><div className={styles.quoteRow}><span>Price impact</span><strong>{formatPriceImpact(safePriceImpactPercent)}</strong></div>{safePriceImpactPercent != null && safePriceImpactPercent >= 5 ? <div className={`${styles.notice} ${styles.noticeError}`}>High price impact: {formatPriceImpact(safePriceImpactPercent)}. Consider a smaller trade or a different route.</div> : null}<div className={styles.quoteRow}><span>Route</span><strong>{typeof quote.route === 'string' ? quote.route : quote.dexName || quote.dexId || 'Tower routing'}</strong></div></div> : <div className={styles.quoteStatus}>{networkBlocksAction ? 'Switch to Arc Testnet or select Gateway unified.' : stage === 'quoting' ? 'Fetching the best Arc route…' : stage === 'preparing' ? 'Preparing the transaction…' : 'Enter an amount to get a quote.'}</div>}
           {gatewayAmountUnavailable ? <div className={`${styles.notice} ${styles.noticeError}`}>Gateway unified balance is too low for this amount.</div> : null}
           {notice && <div className={styles.notice}>{notice}</div>}
           {error && <div className={`${styles.notice} ${styles.noticeError}`}>{error}</div>}
           {approvalReceipt.isLoading ? <div className={styles.notice}>Waiting for approval confirmation…</div> : null}
           {swapReceipt.isLoading ? <div className={styles.notice}>Waiting for swap confirmation…</div> : null}
           {swapReceipt.isSuccess ? <div className={`${styles.notice} ${styles.noticeSuccess}`}>Swap confirmed on Arc.</div> : null}
-          {wrongNetwork && fundingSource !== 'gateway' ? <button type="button" className={styles.primaryButton} disabled={switchingNetwork} onClick={requestArcNetwork}>{switchingNetwork ? 'Switching network…' : 'Switch to Arc Testnet'}</button> : isConnected && quoteReady ? <>{approvalRequired && !approvalComplete ? <button type="button" className={styles.secondaryButton} disabled={isPreparing || approvalPending || switchingNetwork || !preparedTransactions} onClick={approveToken}>{walletPending ? 'Confirm in wallet…' : approvalPending ? `Waiting for ${fromMarket.symbol} approval…` : `Approve ${fromMarket.symbol}`}</button> : <button type="button" className={styles.primaryButton} disabled={isPreparing || switchingNetwork || !preparedTransactions || !approvalComplete || gatewayAmountUnavailable} onClick={buildAndSwap}>{walletPending ? 'Confirm in wallet…' : fundingSource === 'gateway' && gatewayEnabled ? 'Use Gateway USDC' : `Swap ${fromMarket.symbol} → ${toMarket.symbol}`}</button>}</> : <button type="button" className={styles.secondaryButton} disabled>{!isConnected ? 'Connect wallet' : stage === 'quoting' ? 'Finding route…' : stage === 'preparing' ? 'Preparing swap…' : 'Enter an amount'}</button>}
+          {networkBlocksAction ? <button type="button" className={styles.primaryButton} disabled={switchingNetwork} onClick={requestArcNetwork}>{switchingNetwork ? 'Switching network…' : 'Switch to Arc Testnet'}</button> : isConnected && quoteReady ? <>{approvalRequired && !approvalComplete ? <button type="button" className={styles.secondaryButton} disabled={isPreparing || approvalPending || switchingNetwork || !preparedTransactions} onClick={approveToken}>{walletPending ? 'Confirm in wallet…' : approvalPending ? `Waiting for ${fromMarket.symbol} approval…` : `Approve ${fromMarket.symbol}`}</button> : <button type="button" className={styles.primaryButton} disabled={isPreparing || switchingNetwork || !preparedTransactions || !approvalComplete || gatewayAmountUnavailable} onClick={buildAndSwap}>{walletPending ? 'Confirm in wallet…' : fundingSource === 'gateway' && gatewayEnabled ? 'Use Gateway USDC' : `Swap ${fromMarket.symbol} → ${toMarket.symbol}`}</button>}</> : <button type="button" className={styles.secondaryButton} disabled>{!isConnected ? 'Connect wallet' : stage === 'quoting' ? 'Finding route…' : stage === 'preparing' ? 'Preparing swap…' : 'Enter an amount'}</button>}
         </section>
 
         <details className={`${styles.panel} ${styles.bridgeCard}`}>
