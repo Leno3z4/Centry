@@ -68,19 +68,81 @@ function parseQuoteBigInt(quote, key) {
   }
 }
 
-async function getCentAllowance(userAddress, amountIn) {
+function createArcClient() {
   const rpcUrl = process.env.ARC_RPC_URL || process.env.ARC_RPC_URL_VARIABLE || 'https://rpc.testnet.arc.network';
-  const client = createPublicClient({
+  return createPublicClient({
     chain: { ...arc, id: ARC_CHAIN_ID },
     transport: http(rpcUrl),
   });
+}
 
+async function getCentAllowance(userAddress, amountIn) {
+  const client = createArcClient();
   return client.readContract({
     address: CENT,
     abi: ERC20_ABI,
     functionName: 'allowance',
     args: [userAddress, UNITFLOW_UNIVERSAL_ROUTER],
   }) >= amountIn;
+}
+
+async function normalizeTowerApproval(data, quote, userAddress) {
+  if (!data?.success || !data?.data?.swap?.to || !validAddress(quote?.inputToken) || isCentPair(quote.inputToken, quote.outputToken)) {
+    return data;
+  }
+
+  const amountIn = parseQuoteBigInt(quote, 'inputAmount');
+  if (amountIn <= 0n) return data;
+
+  const spender = data.data.swap.to;
+  if (!validAddress(spender) || spender.toLowerCase() === ZERO_ADDRESS) {
+    return data;
+  }
+
+  const buildApproval = () => ({
+    to: quote.inputToken,
+    data: encodeFunctionData({
+      abi: ERC20_ABI,
+      functionName: 'approve',
+      args: [spender, amountIn],
+    }),
+    value: '0',
+    chainId: ARC_CHAIN_ID,
+  });
+
+  try {
+    const client = createArcClient();
+    const allowance = await client.readContract({
+      address: quote.inputToken,
+      abi: ERC20_ABI,
+      functionName: 'allowance',
+      args: [userAddress, spender],
+    });
+
+    if (allowance >= amountIn) {
+      return {
+        ...data,
+        data: { ...data.data, approval: null },
+      };
+    }
+
+    return {
+      ...data,
+      data: {
+        ...data.data,
+        approval: buildApproval(),
+      },
+    };
+  } catch {
+    if (data.data.approval) return data;
+    return {
+      ...data,
+      data: {
+        ...data.data,
+        approval: buildApproval(),
+      },
+    };
+  }
 }
 
 async function buildCentSwap(quote, userAddress) {
@@ -227,7 +289,12 @@ export async function POST(request) {
     });
 
     const data = await response.json();
-    return NextResponse.json(data, { status: response.status });
+    if (!response.ok || !data?.success) {
+      return NextResponse.json(data, { status: response.status });
+    }
+
+    const normalized = await normalizeTowerApproval(data, quote, userAddress);
+    return NextResponse.json(normalized, { status: response.status });
   } catch (error) {
     return NextResponse.json(
       { success: false, error: error?.message || 'Unable to build the swap transaction.' },
