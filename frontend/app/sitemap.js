@@ -12,7 +12,6 @@ export default function sitemap() {
     '/app/governance',
     '/app/pools',
     '/app/bridge',
-    '/app/gateway',
     '/app/portfolio',
     '/app/analytics',
     '/app/docs',
