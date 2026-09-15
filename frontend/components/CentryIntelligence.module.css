@@ -1,0 +1,36 @@
+.card {
+  border: 1px solid rgba(146, 92, 255, 0.22);
+  border-radius: 18px;
+  padding: 20px;
+  margin-bottom: 20px;
+  background: linear-gradient(135deg, rgba(146, 92, 255, 0.08), rgba(255, 255, 255, 0.025));
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.12);
+}
+
+.header { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; }
+.eyebrow { display: block; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.66; margin-bottom: 6px; }
+.header h2 { margin: 0; font-size: 20px; }
+.header p { margin: 7px 0 0; max-width: 640px; font-size: 13px; opacity: 0.68; line-height: 1.5; }
+.status { min-width: 94px; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 10px 12px; text-align: right; }
+.status span { display: block; font-size: 11px; opacity: 0.66; }
+.status strong { display: block; margin-top: 2px; font-size: 17px; }
+.status_healthy { border-color: rgba(124, 255, 191, 0.22); }
+.status_caution { border-color: rgba(255, 202, 97, 0.24); }
+.status_danger { border-color: rgba(255, 113, 113, 0.28); }
+.status_unknown { opacity: 0.72; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 12px; }
+.chips button { border: 1px solid rgba(255,255,255,0.10); background: rgba(255,255,255,0.035); color: inherit; border-radius: 999px; padding: 8px 11px; font-size: 12px; cursor: pointer; }
+.chips button:hover:not(:disabled) { background: rgba(255,255,255,0.065); }
+.form { display: flex; gap: 8px; }
+.form input { flex: 1; min-width: 0; border: 1px solid rgba(255,255,255,0.10); background: rgba(0,0,0,0.12); color: inherit; border-radius: 11px; padding: 11px 12px; outline: none; }
+.form input:focus { border-color: rgba(146, 92, 255, 0.5); }
+.form button { border: 0; border-radius: 11px; padding: 0 16px; font-weight: 600; cursor: pointer; color: inherit; background: rgba(146, 92, 255, 0.2); }
+.form button:disabled, .chips button:disabled { opacity: 0.45; cursor: not-allowed; }
+.answer { margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 12px; }
+.answer span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.55; }
+.answer p { margin: 6px 0 0; font-size: 13px; line-height: 1.55; white-space: pre-wrap; }
+
+@media (max-width: 680px) {
+  .header { flex-direction: column; }
+  .status { width: 100%; text-align: left; }
+}
