@@ -4,6 +4,11 @@ function isEvmAddress(value) {
   return /^0x[a-fA-F0-9]{40}$/.test(String(value || ''));
 }
 
+function decimal(value) {
+  const number = Number(value || 0);
+  return Number.isFinite(number) && number >= 0 ? number : 0;
+}
+
 export async function POST(request) {
   try {
     const body = await request.json();
@@ -35,15 +40,27 @@ export async function POST(request) {
     const balances = Array.isArray(json?.balances) ? json.balances : [];
     const normalized = GATEWAY_TESTNET_CHAINS.map((chain) => {
       const match = balances.find((item) => Number(item?.domain) === chain.domain);
+      const finalized = decimal(match?.balance);
+      const pending = decimal(match?.pendingBalance ?? match?.pending);
       return {
         ...chain,
-        balance: match?.balance || '0',
+        balance: finalized.toFixed(6),
+        pendingBalance: pending.toFixed(6),
+        spendable: finalized > 0,
       };
     });
 
-    const total = normalized.reduce((sum, chain) => sum + Number(chain.balance || 0), 0);
+    const total = normalized.reduce((sum, chain) => sum + decimal(chain.balance), 0);
+    const pendingTotal = normalized.reduce((sum, chain) => sum + decimal(chain.pendingBalance), 0);
 
-    return Response.json({ success: true, depositor, balances: normalized, total: total.toFixed(6) }, { status: 200 });
+    return Response.json({
+      success: true,
+      depositor,
+      balances: normalized,
+      total: total.toFixed(6),
+      pendingTotal: pendingTotal.toFixed(6),
+      hasPending: pendingTotal > 0,
+    }, { status: 200 });
   } catch (error) {
     return Response.json({ success: false, error: error?.message || 'Unable to query Circle Gateway.' }, { status: 500 });
   }
