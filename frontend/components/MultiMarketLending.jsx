@@ -5,6 +5,7 @@ import { useAccount } from 'wagmi';
 import { ACTIVE_MARKETS } from '../constants/markets';
 import { useMultiMarketLending } from '../hooks/useMultiMarketLending';
 import { useGatewayFunding } from '../hooks/useGatewayFunding';
+import BalanceSourceSelector from './BalanceSourceSelector';
 import styles from '../app/app/markets/markets.module.css';
 import CentryIntelligence from './CentryIntelligence';
 
@@ -31,6 +32,7 @@ export default function MultiMarketLending() {
   const [marketId, setMarketId] = useState(supportedMarkets[0]?.id || 'usdc');
   const [action, setAction] = useState('supply');
   const [amount, setAmount] = useState('');
+  const [fundingSource, setFundingSource] = useState('wallet');
   const [notice, setNotice] = useState('');
   const [refreshingPosition, setRefreshingPosition] = useState(false);
   const refreshTimerRef = useRef(null);
@@ -45,13 +47,17 @@ export default function MultiMarketLending() {
   const maxBorrowNumber = Number(maxBorrow);
   const liquidity = Number(lending.reserveData?.totalLiquidity || 0);
   const gatewayEnabled = market?.symbol === 'USDC';
-  const gatewayTotal = Number(gateway.total || 0);
-  const gatewayCanCover = gatewayEnabled && numericAmount > 0 && gatewayTotal >= numericAmount;
+  const needsGatewayFunding = gatewayEnabled && action === 'supply' && fundingSource === 'gateway';
+  const gatewayAmountUnavailable = needsGatewayFunding && (numericAmount <= 0 || Number(gateway.total || 0) < numericAmount);
   const needsApproval = isConnected && ['supply', 'repay'].includes(action) && numericAmount > allowance;
 
   useEffect(() => () => {
     if (refreshTimerRef.current) window.clearTimeout(refreshTimerRef.current);
   }, []);
+
+  useEffect(() => {
+    if (!gatewayEnabled) setFundingSource('wallet');
+  }, [gatewayEnabled]);
 
   const refreshPosition = async (attempt = 0) => {
     try {
@@ -72,7 +78,7 @@ export default function MultiMarketLending() {
     if (action === 'withdraw') setAmount(lending.supplyBalance || '0');
     else if (action === 'repay') setAmount(lending.borrowBalance || '0');
     else if (action === 'borrow') setAmount(maxBorrow);
-    else setAmount(lending.walletBalance || '0');
+    else setAmount(fundingSource === 'gateway' && gatewayEnabled ? gateway.total || '0' : lending.walletBalance || '0');
   };
 
   const onAmount = (event) => {
@@ -89,11 +95,13 @@ export default function MultiMarketLending() {
     setAction(next);
     setAmount('');
     setNotice('');
+    if (next !== 'supply') setFundingSource('wallet');
   };
 
   const changeMarket = (next) => {
     setMarketId(next);
     setAction('supply');
+    setFundingSource('wallet');
     setAmount('');
     setNotice('');
     setRefreshingPosition(false);
@@ -103,9 +111,15 @@ export default function MultiMarketLending() {
     if (!isConnected || !market?.address || lending.reserveActive !== true || !amount || numericAmount <= 0 || busy || refreshingPosition) return;
     try {
       setNotice('');
-      if (action === 'supply' && gatewayEnabled && gatewayCanCover && numericAmount > Number(lending.walletBalance || 0)) {
-        setNotice('Use the Swap or Gateway funding flow to move unified USDC onto Arc before supplying.');
-        return;
+
+      if (needsGatewayFunding) {
+        if (gatewayAmountUnavailable) {
+          throw new Error(`Gateway does not have enough finalized USDC to cover ${amount} USDC.`);
+        }
+        setNotice('Preparing finalized Gateway USDC on Arc…');
+        await gateway.ensureArcUsdc(amount);
+        await lending.refetchAll();
+        setNotice('Gateway USDC is on Arc. Continuing with the supply transaction…');
       }
 
       if (needsApproval) {
@@ -115,6 +129,9 @@ export default function MultiMarketLending() {
       }
 
       if (action === 'supply') {
+        if (numericAmount > Number(lending.walletBalance || 0)) {
+          throw new Error(`You have ${num(lending.walletBalance)} ${market.symbol} in your Arc wallet, which is not enough to supply ${amount}.`);
+        }
         await lending.supply(amount);
         setAmount('');
         setRefreshingPosition(true);
@@ -140,6 +157,7 @@ export default function MultiMarketLending() {
 
   const noLiquidity = action === 'borrow' && liquidity <= 0;
   const noRoom = action === 'borrow' && maxBorrowNumber <= 0 && !noLiquidity;
+  const displayedFundingBalance = fundingSource === 'gateway' && gatewayEnabled ? gateway.total : lending.walletBalance;
 
   return (
     <div className={styles.page}>
@@ -160,7 +178,7 @@ export default function MultiMarketLending() {
       </div>
 
       <section className={styles.summary}>
-        <div className="metric"><span>Wallet</span><strong>{isConnected ? `${num(lending.walletBalance)} ${market.symbol}` : '—'}</strong><small>Available in wallet</small></div>
+        <div className="metric"><span>Wallet</span><strong>{isConnected ? `${num(lending.walletBalance)} ${market.symbol}` : '—'}</strong><small>Available on Arc</small></div>
         <div className="metric"><span>Supplied</span><strong>{isConnected ? `${num(lending.supplyBalance)} ${market.symbol}` : '—'}</strong><small>Your supplied balance</small></div>
         <div className="metric"><span>Borrowed</span><strong>{isConnected ? `${num(lending.borrowBalance)} ${market.symbol}` : '—'}</strong><small>Your debt in this market</small></div>
         <div className="metric"><span>Borrow limit</span><strong>{isConnected ? `$${num(lending.borrowLimit)}` : '—'}</strong><small>Remaining borrowing room</small></div>
@@ -177,6 +195,16 @@ export default function MultiMarketLending() {
             ))}
           </div>
 
+          {gatewayEnabled && action === 'supply' && isConnected ? (
+            <BalanceSourceSelector
+              value={fundingSource}
+              onChange={setFundingSource}
+              walletBalance={lending.walletBalance}
+              gatewayBalances={gateway.balances}
+              disabled={busy || refreshingPosition}
+            />
+          ) : null}
+
           <label className="field-label" htmlFor="multi-market-amount">Amount</label>
           <div className="amount-input-wrap">
             <input id="multi-market-amount" type="number" min="0"
@@ -190,7 +218,7 @@ export default function MultiMarketLending() {
               ? `Owed: ${isConnected ? `${num(lending.borrowBalance, Math.min(market.decimals, 8))} ${market.symbol}` : 'Connect wallet'}`
               : action === 'borrow'
                 ? `Max: ${isConnected ? `${num(maxBorrow, Math.min(market.decimals, 8))} ${market.symbol}` : 'Connect wallet'}`
-                : `Wallet: ${isConnected ? `${num(lending.walletBalance)} ${market.symbol}` : 'Connect wallet'}`}</span>
+                : `${fundingSource === 'gateway' && gatewayEnabled ? 'Gateway:' : 'Wallet:'} ${isConnected ? `${num(displayedFundingBalance)} ${market.symbol}` : 'Connect wallet'}`}</span>
             {isConnected && <button type="button" onClick={setMax} disabled={refreshingPosition}>Max</button>}
           </div>
 
@@ -200,12 +228,11 @@ export default function MultiMarketLending() {
             : lending.reserveActive !== true ? <div className="connect-prompt">{market.symbol} is not enabled in the connected Centry LendingPool.</div>
             : noLiquidity ? <div className="connect-prompt">There is no {market.symbol} liquidity available to borrow right now.</div>
             : noRoom ? <div className="connect-prompt">You have no remaining borrowing room.</div>
-            : gatewayEnabled && action === 'supply' && numericAmount > Number(lending.walletBalance || 0) && gatewayCanCover
-              ? <div className="connect-prompt">You have enough finalized Gateway USDC available. Use the Gateway funding control to move it onto Arc, then return here to supply.</div>
+            : needsGatewayFunding && gatewayAmountUnavailable ? <div className="connect-prompt">Enter an amount covered by your finalized Gateway USDC balance.</div>
             : <button type="button" className="primary-btn full-btn large-btn"
-                disabled={busy || refreshingPosition || !amount || numericAmount <= 0 || (action === 'repay' && debt <= 0) || (action === 'borrow' && numericAmount > maxBorrowNumber)}
+                disabled={busy || refreshingPosition || !amount || numericAmount <= 0 || (action === 'repay' && debt <= 0) || (action === 'borrow' && numericAmount > maxBorrowNumber) || (needsGatewayFunding && gatewayAmountUnavailable)}
                 onClick={run}>
-                {busy ? 'Waiting for confirmation…' : refreshingPosition ? 'Updating borrow capacity…' : needsApproval ? `Approve ${market.symbol}` : `${action[0].toUpperCase()}${action.slice(1)} ${market.symbol}`}
+                {busy ? 'Waiting for confirmation…' : refreshingPosition ? 'Updating borrow capacity…' : needsGatewayFunding ? `Supply ${market.symbol}` : needsApproval ? `Approve ${market.symbol}` : `${action[0].toUpperCase()}${action.slice(1)} ${market.symbol}`}
               </button>}
           {notice && <div className="notice" aria-live="polite">{notice}</div>}
         </div>
