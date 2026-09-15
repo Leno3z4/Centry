@@ -4,7 +4,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { ACTIVE_MARKETS } from '../constants/markets';
 import { useMultiMarketLending } from '../hooks/useMultiMarketLending';
+import { useGatewayFunding } from '../hooks/useGatewayFunding';
 import styles from '../app/app/markets/markets.module.css';
+import CentryIntelligence from './CentryIntelligence';
 
 function num(value, digits = 2) {
   const n = Number(value || 0);
@@ -34,13 +36,17 @@ export default function MultiMarketLending() {
   const refreshTimerRef = useRef(null);
   const market = supportedMarkets.find((item) => item.id === marketId) || supportedMarkets[0];
   const lending = useMultiMarketLending(market?.address, market?.decimals);
-  const busy = lending.isPending || lending.isConfirming;
+  const gateway = useGatewayFunding();
+  const busy = lending.isPending || lending.isConfirming || gateway.loading;
   const numericAmount = Number(amount || 0);
   const debt = Number(lending.borrowBalance || 0);
   const allowance = Number(lending.allowance || 0);
   const maxBorrow = lending.maxBorrowAmount || '0';
   const maxBorrowNumber = Number(maxBorrow);
   const liquidity = Number(lending.reserveData?.totalLiquidity || 0);
+  const gatewayEnabled = market?.symbol === 'USDC';
+  const gatewayTotal = Number(gateway.total || 0);
+  const gatewayCanCover = gatewayEnabled && numericAmount > 0 && gatewayTotal >= numericAmount;
   const needsApproval = isConnected && ['supply', 'repay'].includes(action) && numericAmount > allowance;
 
   useEffect(() => () => {
@@ -97,6 +103,11 @@ export default function MultiMarketLending() {
     if (!isConnected || !market?.address || lending.reserveActive !== true || !amount || numericAmount <= 0 || busy || refreshingPosition) return;
     try {
       setNotice('');
+      if (action === 'supply' && gatewayEnabled && gatewayCanCover && numericAmount > Number(lending.walletBalance || 0)) {
+        setNotice('Use the Swap or Gateway funding flow to move unified USDC onto Arc before supplying.');
+        return;
+      }
+
       if (needsApproval) {
         await lending.approveAsset(amount);
         setNotice(`Approved ${amount} ${market.symbol}.`);
@@ -135,6 +146,8 @@ export default function MultiMarketLending() {
       <div className={styles.header}>
         <div><h1>Borrow & lend</h1><p>Supply, borrow and manage your position across Centry markets.</p></div>
       </div>
+
+      {isConnected ? <CentryIntelligence market={market} lending={lending} /> : null}
 
       <div className={styles.marketTabs} role="tablist" aria-label="Lending markets">
         {supportedMarkets.map((item) => (
@@ -187,6 +200,8 @@ export default function MultiMarketLending() {
             : lending.reserveActive !== true ? <div className="connect-prompt">{market.symbol} is not enabled in the connected Centry LendingPool.</div>
             : noLiquidity ? <div className="connect-prompt">There is no {market.symbol} liquidity available to borrow right now.</div>
             : noRoom ? <div className="connect-prompt">You have no remaining borrowing room.</div>
+            : gatewayEnabled && action === 'supply' && numericAmount > Number(lending.walletBalance || 0) && gatewayCanCover
+              ? <div className="connect-prompt">You have enough finalized Gateway USDC available. Use the Gateway funding control to move it onto Arc, then return here to supply.</div>
             : <button type="button" className="primary-btn full-btn large-btn"
                 disabled={busy || refreshingPosition || !amount || numericAmount <= 0 || (action === 'repay' && debt <= 0) || (action === 'borrow' && numericAmount > maxBorrowNumber)}
                 onClick={run}>
