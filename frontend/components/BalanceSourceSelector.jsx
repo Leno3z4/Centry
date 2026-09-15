@@ -14,6 +14,7 @@ export default function BalanceSourceSelector({ value, onChange, walletBalance =
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const gatewayTotal = gatewayBalances.reduce((sum, item) => sum + Number(item?.balance || 0), 0);
+  const gatewayPending = gatewayBalances.reduce((sum, item) => sum + Number(item?.pendingBalance || 0), 0);
   const selectedGateway = gatewayBalances
     .filter((item) => Number(item?.balance || 0) > 0)
     .sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0))[0];
@@ -49,8 +50,11 @@ export default function BalanceSourceSelector({ value, onChange, walletBalance =
           </button>
           <button type="button" className={`${styles.option} ${value === 'gateway' ? styles.active : ''}`} role="option" aria-selected={value === 'gateway'} onClick={() => { onChange('gateway'); setOpen(false); }}>
             <span className={styles.optionIcon}>◎</span>
-            <span className={styles.optionCopy}><strong>Gateway unified</strong><small>Finalized USDC across supported chains</small></span>
-            <span className={styles.optionAmount}>{formatBalance(gatewayTotal)}<small>USDC</small></span>
+            <span className={styles.optionCopy}>
+              <strong>Gateway unified</strong>
+              <small>Finalized USDC across supported chains{gatewayPending > 0 ? ` · ${formatBalance(gatewayPending)} pending` : ''}</small>
+            </span>
+            <span className={styles.optionAmount}>{formatBalance(gatewayTotal)}<small>finalized USDC</small></span>
           </button>
         </div>
       ) : null}
