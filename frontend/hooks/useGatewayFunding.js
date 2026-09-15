@@ -27,14 +27,6 @@ const GATEWAY_MINTER_ABI = [{
   outputs: [],
 }];
 
-const ERC20_BALANCE_ABI = [{
-  type: 'function',
-  name: 'balanceOf',
-  stateMutability: 'view',
-  inputs: [{ name: 'owner', type: 'address' }],
-  outputs: [{ name: '', type: 'uint256' }],
-}];
-
 const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
 export function useGatewayFunding() {
@@ -110,11 +102,8 @@ export function useGatewayFunding() {
     const source = pickGatewaySource(currentBalances, value);
     if (!source) throw new Error(`Gateway does not have enough finalized USDC to cover ${amount} USDC.`);
 
-    if (source.chainId === ARC_CHAIN_ID) {
-      throw new Error('Gateway balance is on Arc. Select Arc wallet for an on-Arc transaction; Gateway cannot be used as a direct contract balance.');
-    }
-
-    await switchToChain(GATEWAY_TESTNET_CHAINS.find((chain) => chain.chainId === source.chainId) || source);
+    const sourceChain = GATEWAY_TESTNET_CHAINS.find((chain) => chain.chainId === source.chainId) || source;
+    await switchToChain(sourceChain);
 
     const spec = buildTransferSpec({
       source,
