@@ -5,7 +5,7 @@
   overflow-x: hidden;
   padding-right: 4px;
   scrollbar-width: thin;
-  scrollbar-color: #5b3a83 transparent;
+  scrollbar-color: #684594 transparent;
 }
 
 .sideNav::-webkit-scrollbar {
@@ -19,12 +19,12 @@
 .sideNav::-webkit-scrollbar-thumb {
   border: 1px solid transparent;
   border-radius: 999px;
-  background: linear-gradient(180deg, #8d5ac2, #4d2b70);
+  background: linear-gradient(180deg, #9a65d0, #553176);
   background-clip: padding-box;
 }
 
 .sideNav::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, #a06ddd, #62408b);
+  background: linear-gradient(180deg, #b17ce9, #6d4799);
   background-clip: padding-box;
 }
 
