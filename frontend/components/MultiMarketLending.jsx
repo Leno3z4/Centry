@@ -48,8 +48,10 @@ export default function MultiMarketLending() {
   const liquidity = Number(lending.reserveData?.totalLiquidity || 0);
   const gatewayEnabled = market?.symbol === 'USDC';
   const needsGatewayFunding = gatewayEnabled && action === 'supply' && fundingSource === 'gateway';
-  const arcWalletCoversAmount = needsGatewayFunding && Number(lending.walletBalance || 0) >= numericAmount && numericAmount > 0;
-  const gatewayAmountUnavailable = needsGatewayFunding && !arcWalletCoversAmount && (numericAmount <= 0 || Number(gateway.total || 0) < numericAmount);
+  const arcWalletBalanceNumber = Number(lending.walletBalance || 0);
+  const gatewayBalanceNumber = Number(gateway.total || 0);
+  const gatewayShortfall = Math.max(numericAmount - arcWalletBalanceNumber, 0);
+  const gatewayAmountUnavailable = needsGatewayFunding && numericAmount > 0 && gatewayShortfall > gatewayBalanceNumber;
   const needsApproval = isConnected && ['supply', 'repay'].includes(action) && numericAmount > allowance;
 
   useEffect(() => () => {
@@ -79,7 +81,7 @@ export default function MultiMarketLending() {
     if (action === 'withdraw') setAmount(lending.supplyBalance || '0');
     else if (action === 'repay') setAmount(lending.borrowBalance || '0');
     else if (action === 'borrow') setAmount(maxBorrow);
-    else setAmount(fundingSource === 'gateway' && gatewayEnabled ? gateway.total || lending.walletBalance || '0' : lending.walletBalance || '0');
+    else setAmount(fundingSource === 'gateway' && gatewayEnabled ? String(arcWalletBalanceNumber + gatewayBalanceNumber) : lending.walletBalance || '0');
   };
 
   const onAmount = (event) => {
@@ -115,12 +117,12 @@ export default function MultiMarketLending() {
 
       if (needsGatewayFunding) {
         if (gatewayAmountUnavailable) {
-          throw new Error(`Neither your Arc wallet nor Gateway has enough finalized USDC to cover ${amount} USDC.`);
+          throw new Error(`Your Arc wallet plus finalized Gateway USDC cannot cover ${amount} USDC.`);
         }
         setNotice('Checking unified USDC liquidity…');
         const funding = await gateway.ensureArcUsdc(amount, { arcBalance: lending.walletBalance });
         if (funding.usedGateway) {
-          setNotice('Gateway USDC is on Arc. Continuing with the supply transaction…');
+          setNotice(`Funding the ${num(Number(funding.requiredGatewayAmount), 6)} USDC shortfall through Gateway…`);
           await lending.refetchAll();
         } else {
           setNotice('Using USDC already available on Arc. No Gateway transfer needed.');
@@ -233,7 +235,7 @@ export default function MultiMarketLending() {
             : lending.reserveActive !== true ? <div className="connect-prompt">{market.symbol} is not enabled in the connected Centry LendingPool.</div>
             : noLiquidity ? <div className="connect-prompt">There is no {market.symbol} liquidity available to borrow right now.</div>
             : noRoom ? <div className="connect-prompt">You have no remaining borrowing room.</div>
-            : needsGatewayFunding && gatewayAmountUnavailable ? <div className="connect-prompt">Enter an amount covered by your Arc wallet or finalized Gateway USDC balance.</div>
+            : needsGatewayFunding && gatewayAmountUnavailable ? <div className="connect-prompt">Enter an amount covered by your Arc wallet plus finalized Gateway USDC.</div>
             : <button type="button" className="primary-btn full-btn large-btn"
                 disabled={busy || refreshingPosition || !amount || numericAmount <= 0 || (action === 'repay' && debt <= 0) || (action === 'borrow' && numericAmount > maxBorrowNumber) || (needsGatewayFunding && gatewayAmountUnavailable)}
                 onClick={run}>
