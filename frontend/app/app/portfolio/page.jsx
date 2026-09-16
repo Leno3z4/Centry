@@ -3,6 +3,7 @@
 import { useAccount } from 'wagmi';
 import { Providers } from '../../../components/Providers';
 import { AppShell } from '../../../components/AppShell';
+import TransactionHistory from '../../../components/TransactionHistory';
 import { ACTIVE_MARKETS } from '../../../constants/markets';
 import { useMultiMarketLending } from '../../../hooks/useMultiMarketLending';
 
@@ -110,6 +111,8 @@ function PortfolioContent() {
           </p>
         </div>
       </div>
+
+      <TransactionHistory />
     </div>
   );
 }
