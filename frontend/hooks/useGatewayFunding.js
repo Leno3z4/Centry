@@ -29,6 +29,14 @@ const GATEWAY_MINTER_ABI = [{
 
 const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
+function hasEnoughArcBalance(balance, amount) {
+  try {
+    return parseUnits(String(balance || '0'), 6) >= parseUnits(String(amount || '0'), 6);
+  } catch {
+    return false;
+  }
+}
+
 export function useGatewayFunding() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
@@ -95,8 +103,15 @@ export function useGatewayFunding() {
     throw new Error(`Wallet did not switch to ${target.name}.`);
   }, [chainId, connectorClient, isConnected]);
 
-  const ensureArcUsdc = useCallback(async (amount) => {
+  const ensureArcUsdc = useCallback(async (amount, { arcBalance = '0' } = {}) => {
     if (!address || !isConnected) throw new Error('Connect your wallet first.');
+
+    // Unified liquidity behavior: use already-settled Arc USDC first.
+    // Gateway is only invoked for the amount that cannot be satisfied locally.
+    if (hasEnoughArcBalance(arcBalance, amount)) {
+      return { source: { id: 'arc-wallet', name: 'Arc wallet', balance: String(arcBalance) }, requiredGatewayAmount: '0', usedGateway: false };
+    }
+
     const value = parseUnits(String(amount), 6);
     const currentBalances = await refresh();
     const source = pickGatewaySource(currentBalances, value);
@@ -142,7 +157,7 @@ export function useGatewayFunding() {
       if (receipt) {
         if (receipt.status === '0x0') throw new Error('Gateway mint was reverted on Arc Testnet.');
         await refresh();
-        return { source, mintHash, attestation };
+        return { source, mintHash, attestation, requiredGatewayAmount: String(amount), usedGateway: true };
       }
       await sleep(1500);
     }
