@@ -5,6 +5,7 @@ import { useAccount } from 'wagmi';
 import { WalletConnect } from './WalletConnect';
 import CentryAssistantBubble from './CentryAssistantBubble';
 import styles from './AppShell.module.css';
+import surfaceStyles from './DesignSurface.module.css';
 
 const NAV_ITEMS = [
   { href: '/app', label: 'Overview', icon: '⌂', group: 'overview' },
@@ -34,7 +35,7 @@ export function AppShell({ children }) {
     : NAV_ITEMS.find((item) => item.href !== '/app' && pathname.startsWith(item.href))?.href || '/app';
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${surfaceStyles.surfaceRoot}`}>
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark">C</span><span>Centry</span></div>
         <nav className={`${styles.sideNav} side-nav`} aria-label="Primary navigation">
