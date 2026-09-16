@@ -1,7 +1,10 @@
 'use client';
+
 import { useMemo, useRef, useState } from 'react';
 import { buildCentryPositionContext, getLiquidationRisk } from '../lib/agentContext';
+import { useCentryPositionEvents } from '../hooks/useCentryPositionEvents';
 import CentryExecutionPanel from './CentryExecutionPanel';
+import CentryTransactionPreview from './CentryTransactionPreview';
 import styles from './CentryIntelligence.module.css';
 
 const SUGGESTED = ['What can I do with my position?', 'Show my borrow capacity', 'What is my market liquidity?'];
@@ -19,6 +22,10 @@ export default function CentryIntelligence({ market, lending, compact: compactMo
   const account = lending?.accountPosition;
   const markets = Array.isArray(account?.markets) ? account.markets : [];
 
+  useCentryPositionEvents(() => {
+    void lending?.refetchAll?.();
+  });
+
   const resizeInput = () => {
     const element = inputRef.current;
     if (!element) return;
@@ -34,14 +41,19 @@ export default function CentryIntelligence({ market, lending, compact: compactMo
     setPlan(null);
     setLoading(true);
     try {
-      const response = await fetch('/api/assistant', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: next, context }) });
+      const response = await fetch('/api/assistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: next, context }),
+      });
       const result = await response.json().catch(() => ({}));
       if (!response.ok || !result.success) throw new Error(result.error || 'Unable to analyze the request.');
       setAnswer(result.answer || '');
       setPlan(result.plan || null);
       setQuestion('');
+      await lending?.refetchAll?.();
       requestAnimationFrame(() => {
-        if (inputRef.current) inputRef.current.style.height = 'auto';
+        if (inputRef.current) inputRef.current.style.height = '30px';
       });
     } catch (error) {
       setAnswer(error?.message || 'Unable to analyze the request right now.');
@@ -66,6 +78,7 @@ export default function CentryIntelligence({ market, lending, compact: compactMo
       <textarea ref={inputRef} value={question} onChange={(event) => { setQuestion(event.target.value); resizeInput(); }} onKeyDown={onComposerKeyDown} placeholder="Ask Centrion or tell it what to do…" aria-label="Ask Centrion" maxLength={500} disabled={loading} rows={1} />
       <button type="submit" disabled={loading || !question.trim()} aria-label="Send">{loading ? '…' : '➤'}</button>
     </form>
+    {plan ? <CentryTransactionPreview plan={plan} context={context} /> : null}
     {answer ? <div className={styles.answer} aria-live="polite"><span>Centrion</span><p>{answer}</p></div> : null}
     {plan ? <CentryExecutionPanel plan={plan} onDone={() => setPlan(null)} /> : null}
   </section>;
