@@ -115,7 +115,13 @@ export function useMultiMarketLending(asset, decimals = 18) {
     query: walletQuery,
   });
 
-  const globalDebtContracts = ACTIVE_MARKETS.flatMap((market) => [
+  const globalPositionContracts = ACTIVE_MARKETS.flatMap((market) => [
+    {
+      address: CONTRACT_ADDRESSES.lendingPool,
+      abi: LENDING_POOL_ABI,
+      functionName: 'supplyBalance',
+      args: [address, market.address],
+    },
     {
       address: CONTRACT_ADDRESSES.lendingPool,
       abi: LENDING_POOL_ABI,
@@ -131,10 +137,10 @@ export function useMultiMarketLending(asset, decimals = 18) {
   ]);
 
   const {
-    data: globalDebtResults,
-    refetch: refetchGlobalDebt,
+    data: globalPositionResults,
+    refetch: refetchGlobalPosition,
   } = useReadContracts({
-    contracts: globalDebtContracts,
+    contracts: globalPositionContracts,
     query: walletQuery,
   });
 
@@ -267,7 +273,7 @@ export function useMultiMarketLending(asset, decimals = 18) {
       refetchUserBorrow(),
       refetchHealth(),
       refetchBorrowPower(),
-      refetchGlobalDebt(),
+      refetchGlobalPosition(),
       refetchSelectedPrice(),
       refetchBalance(),
       refetchAllowance(),
@@ -309,45 +315,55 @@ export function useMultiMarketLending(asset, decimals = 18) {
               ),
             );
 
+  let totalCollateralValueRaw = ZERO;
   let totalDebtValueRaw = ZERO;
-  let globalDebtReady = Boolean(address) && Array.isArray(globalDebtResults);
+  let globalPositionReady = Boolean(address) && Array.isArray(globalPositionResults);
+  const positionBreakdown = [];
 
-  if (Array.isArray(globalDebtResults)) {
+  if (Array.isArray(globalPositionResults)) {
     for (let index = 0; index < ACTIVE_MARKETS.length; index += 1) {
-      const borrowResult = globalDebtResults[index * 2];
-      const priceResult = globalDebtResults[index * 2 + 1];
-      const amountRaw = borrowResult?.result ?? ZERO;
       const market = ACTIVE_MARKETS[index];
+      const supplyResult = globalPositionResults[index * 3];
+      const borrowResult = globalPositionResults[index * 3 + 1];
+      const priceResult = globalPositionResults[index * 3 + 2];
 
-      if (borrowResult?.status !== 'success') {
-        globalDebtReady = false;
+      if (supplyResult?.status !== 'success' || borrowResult?.status !== 'success' || priceResult?.status !== 'success') {
+        globalPositionReady = false;
         continue;
       }
 
-      if (amountRaw === ZERO) {
-        continue;
-      }
-
-      if (priceResult?.status !== 'success') {
-        globalDebtReady = false;
-        continue;
-      }
-
-      const priceRaw = Array.isArray(priceResult.result)
-        ? priceResult.result[0]
-        : ZERO;
+      const suppliedRaw = supplyResult.result ?? ZERO;
+      const borrowedRaw = borrowResult.result ?? ZERO;
+      const priceRaw = Array.isArray(priceResult.result) ? priceResult.result[0] : ZERO;
 
       if (priceRaw === ZERO) {
-        globalDebtReady = false;
+        globalPositionReady = false;
         continue;
       }
 
-      totalDebtValueRaw +=
-        (amountRaw * priceRaw) /
+      const suppliedValueRaw =
+        (suppliedRaw * priceRaw) /
         (TEN ** BigInt(market.decimals));
+      const borrowedValueRaw =
+        (borrowedRaw * priceRaw) /
+        (TEN ** BigInt(market.decimals));
+
+      totalCollateralValueRaw += suppliedValueRaw;
+      totalDebtValueRaw += borrowedValueRaw;
+
+      positionBreakdown.push({
+        marketId: market.id,
+        symbol: market.symbol,
+        supplied: formatUnits(suppliedRaw, market.decimals),
+        borrowed: formatUnits(borrowedRaw, market.decimals),
+        suppliedValueUsd: Number(formatUnits(suppliedValueRaw, 18)),
+        borrowedValueUsd: Number(formatUnits(borrowedValueRaw, 18)),
+      });
     }
   }
 
+  const totalCollateralValue = Number(formatUnits(totalCollateralValueRaw, 18));
+  const totalDebtValue = Number(formatUnits(totalDebtValueRaw, 18));
   const totalBorrowPowerRaw = borrowPowerRaw ?? ZERO;
   const remainingBorrowPowerRaw =
     totalBorrowPowerRaw > totalDebtValueRaw
@@ -356,7 +372,7 @@ export function useMultiMarketLending(asset, decimals = 18) {
 
   const totalBorrowPower = Number(formatUnits(totalBorrowPowerRaw, 18));
   const borrowLimit =
-    globalDebtReady && Number.isFinite(totalBorrowPower)
+    globalPositionReady && Number.isFinite(totalBorrowPower)
       ? Number(formatUnits(remainingBorrowPowerRaw, 18))
       : 0;
 
@@ -365,7 +381,7 @@ export function useMultiMarketLending(asset, decimals = 18) {
     : ZERO;
 
   const riskLimitedBorrowRaw =
-    globalDebtReady &&
+    globalPositionReady &&
     selectedPriceRaw > ZERO
       ? (remainingBorrowPowerRaw * (TEN ** BigInt(decimals))) /
         selectedPriceRaw
@@ -399,11 +415,19 @@ export function useMultiMarketLending(asset, decimals = 18) {
       totalBorrows: formatDynamic(currentBorrowRaw, decimals),
       utilization: Number(formatUnits(utilizationRaw ?? ZERO, 18)) * 100,
     },
+    accountPosition: {
+      ready: globalPositionReady,
+      totalCollateralValueUsd: totalCollateralValue,
+      totalDebtValueUsd: totalDebtValue,
+      totalBorrowPowerUsd: totalBorrowPower,
+      remainingBorrowCapacityUsd: borrowLimit,
+      markets: positionBreakdown,
+    },
     healthFactor,
     healthFactorPercent,
     borrowPower: totalBorrowPower.toFixed(2),
     borrowLimit: borrowLimit.toFixed(2),
-    totalDebtValue: Number(formatUnits(totalDebtValueRaw, 18)).toFixed(2),
+    totalDebtValue: totalDebtValue.toFixed(2),
     maxBorrowAmount,
     approveAsset,
     supply,
