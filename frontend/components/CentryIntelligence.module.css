@@ -29,8 +29,19 @@
 .answer { margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 12px; }
 .answer span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.55; }
 .answer p { margin: 6px 0 0; font-size: 13px; line-height: 1.55; white-space: pre-wrap; }
+.snapshot { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }
+.snapshot > div { padding: 10px; border: 1px solid rgba(255,255,255,.07); border-radius: 11px; background: rgba(255,255,255,.025); }
+.snapshot span { display: block; font-size: 10px; opacity: .58; }
+.snapshot strong { display: block; margin-top: 4px; font-size: 12px; }
+.compactCard { border: 0; border-radius: 0; padding: 16px; margin: 0; background: transparent; box-shadow: none; }
+.compactContext { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; padding: 10px 12px; border: 1px solid rgba(255,255,255,.07); border-radius: 12px; background: rgba(255,255,255,.025); }
+.compactContext span { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; opacity: .58; }
+.compactContext strong { font-size: 11px; font-weight: 650; }
+.compactCard .chips { margin-top: 0; }
+.compactCard .answer { margin-top: 16px; }
 
 @media (max-width: 680px) {
   .header { flex-direction: column; }
   .status { width: 100%; text-align: left; }
+  .snapshot { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
