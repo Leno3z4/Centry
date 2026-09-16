@@ -35,7 +35,7 @@ export function AppShell({ children }) {
     : NAV_ITEMS.find((item) => item.href !== '/app' && pathname.startsWith(item.href))?.href || '/app';
 
   return (
-    <div className={`app-shell ${surfaceStyles.surfaceRoot}`}>
+    <div className={`app-shell ${styles.appleShell} ${surfaceStyles.surfaceRoot}`}>
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark">C</span><span>Centry</span></div>
         <nav className={`${styles.sideNav} side-nav`} aria-label="Primary navigation">
