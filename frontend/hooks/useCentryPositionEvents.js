@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useAccount, usePublicClient } from 'wagmi';
 import { CONTRACT_ADDRESSES } from '../constants/contracts';
 import { LENDING_POOL_ABI } from '../constants/abis';
@@ -16,18 +16,21 @@ const POSITION_EVENTS = [
 export function useCentryPositionEvents(onPositionChanged) {
   const { address } = useAccount();
   const publicClient = usePublicClient();
+  const callbackRef = useRef(onPositionChanged);
 
   useEffect(() => {
-    if (!address || !publicClient?.watchContractEvent || !CONTRACT_ADDRESSES.lendingPool || typeof onPositionChanged !== 'function') {
-      return undefined;
-    }
+    callbackRef.current = onPositionChanged;
+  }, [onPositionChanged]);
+
+  useEffect(() => {
+    if (!address || !publicClient?.watchContractEvent || !CONTRACT_ADDRESSES.lendingPool) return undefined;
 
     const unwatchers = POSITION_EVENTS.map(({ name, key }) => publicClient.watchContractEvent({
       address: CONTRACT_ADDRESSES.lendingPool,
       abi: LENDING_POOL_ABI,
       eventName: name,
       args: { [key]: address },
-      onLogs: () => onPositionChanged(name),
+      onLogs: () => callbackRef.current?.(name),
       poll: true,
       pollingInterval: 2000,
     }));
@@ -37,5 +40,5 @@ export function useCentryPositionEvents(onPositionChanged) {
         try { unwatch?.(); } catch { /* noop */ }
       });
     };
-  }, [address, onPositionChanged, publicClient]);
+  }, [address, publicClient]);
 }
