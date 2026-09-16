@@ -1,5 +1,5 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { buildCentryPositionContext, getLiquidationRisk } from '../lib/agentContext';
 import CentryExecutionPanel from './CentryExecutionPanel';
 import styles from './CentryIntelligence.module.css';
@@ -13,10 +13,18 @@ export default function CentryIntelligence({ market, lending, compact: compactMo
   const [answer, setAnswer] = useState('');
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(false);
+  const inputRef = useRef(null);
   const context = useMemo(() => buildCentryPositionContext({ marketSymbol: market?.symbol, walletBalance: lending?.walletBalance, supplied: lending?.supplyBalance, borrowed: lending?.borrowBalance, borrowLimit: lending?.borrowLimit, healthFactor: lending?.healthFactor, marketLiquidity: lending?.reserveData?.totalLiquidity, marketBorrowed: lending?.reserveData?.totalBorrows, utilization: lending?.reserveData?.utilization, accountPosition: lending?.accountPosition }), [lending, market]);
   const liquidation = getLiquidationRisk(lending?.healthFactor);
   const account = lending?.accountPosition;
   const markets = Array.isArray(account?.markets) ? account.markets : [];
+
+  const resizeInput = () => {
+    const element = inputRef.current;
+    if (!element) return;
+    element.style.height = 'auto';
+    element.style.height = `${Math.min(element.scrollHeight, 120)}px`;
+  };
 
   const ask = async (value) => {
     const next = String(value || '').trim();
@@ -32,6 +40,9 @@ export default function CentryIntelligence({ market, lending, compact: compactMo
       setAnswer(result.answer || '');
       setPlan(result.plan || null);
       setQuestion('');
+      requestAnimationFrame(() => {
+        if (inputRef.current) inputRef.current.style.height = 'auto';
+      });
     } catch (error) {
       setAnswer(error?.message || 'Unable to analyze the request right now.');
     } finally {
@@ -52,7 +63,7 @@ export default function CentryIntelligence({ market, lending, compact: compactMo
     {compactMode && liquidation.atRisk ? <div className={styles.compactContext}><span>Liquidation risk</span><strong>HF {lending.healthFactor}</strong></div> : null}
     <div className={styles.chips}>{SUGGESTED.map((item) => <button key={item} type="button" onClick={() => ask(item)} disabled={loading}>{item}</button>)}</div>
     <form className={styles.form} onSubmit={(event) => { event.preventDefault(); void ask(question); }}>
-      <textarea value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={onComposerKeyDown} placeholder="Ask Centrion or tell it what to do…" aria-label="Ask Centrion" maxLength={500} disabled={loading} rows={2} />
+      <textarea ref={inputRef} value={question} onChange={(event) => { setQuestion(event.target.value); resizeInput(); }} onKeyDown={onComposerKeyDown} placeholder="Ask Centrion or tell it what to do…" aria-label="Ask Centrion" maxLength={500} disabled={loading} rows={1} />
       <button type="submit" disabled={loading || !question.trim()} aria-label="Send">{loading ? '…' : '➤'}</button>
     </form>
     {answer ? <div className={styles.answer} aria-live="polite"><span>Centrion</span><p>{answer}</p></div> : null}
