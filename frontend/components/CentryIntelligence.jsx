@@ -15,6 +15,13 @@ function compact(value) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function money(value) {
+  const n = Number(value);
+  return Number.isFinite(n)
+    ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : '—';
+}
+
 export default function CentryIntelligence({ market, lending }) {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
@@ -30,9 +37,12 @@ export default function CentryIntelligence({ market, lending }) {
     marketLiquidity: lending?.reserveData?.totalLiquidity,
     marketBorrowed: lending?.reserveData?.totalBorrows,
     utilization: lending?.reserveData?.utilization,
+    accountPosition: lending?.accountPosition,
   }), [lending, market]);
 
   const risk = getPositionRisk(lending?.healthFactor);
+  const account = lending?.accountPosition;
+  const markets = Array.isArray(account?.markets) ? account.markets : [];
 
   const ask = async (value) => {
     const nextQuestion = String(value || '').trim();
@@ -69,6 +79,15 @@ export default function CentryIntelligence({ market, lending }) {
           {Number.isFinite(compact(lending?.healthFactor)) ? <strong>{lending.healthFactor}</strong> : null}
         </div>
       </div>
+
+      {account?.ready ? (
+        <div className={styles.snapshot} aria-label="Account snapshot">
+          <div><span>Collateral</span><strong>${money(account.totalCollateralValueUsd)}</strong></div>
+          <div><span>Debt</span><strong>${money(account.totalDebtValueUsd)}</strong></div>
+          <div><span>Remaining capacity</span><strong>${money(account.remainingBorrowCapacityUsd)}</strong></div>
+          <div><span>Markets</span><strong>{markets.length}</strong></div>
+        </div>
+      ) : null}
 
       <div className={styles.chips}>
         {SUGGESTED.map((item) => (
