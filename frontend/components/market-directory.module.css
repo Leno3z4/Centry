@@ -42,22 +42,38 @@
 }
 
 .marketCard {
+  position: relative;
   display: flex;
   min-height: 250px;
   flex-direction: column;
   padding: 20px;
+  overflow: hidden;
   border: 1px solid #282033;
   border-radius: 16px;
   background: linear-gradient(145deg, #100b1a, #0b0813);
-  box-shadow: 0 18px 50px rgba(0,0,0,.18);
+  box-shadow: 0 18px 50px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.012);
   transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
 
+.marketCard::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(197,156,255,.25), transparent);
+  pointer-events: none;
+}
+
 .marketCard:hover {
-  transform: translateY(-2px);
-  border-color: #563b73;
+  transform: translateY(-3px);
+  border-color: #65458a;
   background: linear-gradient(145deg, #130d20, #0c0815);
-  box-shadow: 0 22px 60px rgba(0,0,0,.25), 0 0 0 1px rgba(155,98,255,.04);
+  box-shadow: 0 26px 70px rgba(0,0,0,.28), 0 0 0 1px rgba(155,98,255,.04);
+}
+
+.marketCard:focus-visible {
+  outline: 2px solid rgba(168,85,247,.42);
+  outline-offset: 3px;
 }
 
 .cardTop {
@@ -76,7 +92,7 @@
   border-radius: 50%;
   font-size: 15px;
   font-weight: 800;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 8px 22px rgba(0,0,0,.14);
 }
 
 .tokenIcon_usdc {
@@ -103,6 +119,7 @@
   padding: 6px 9px;
   color: #8fd7b5;
   font: 9px 'DM Mono', monospace;
+  background: rgba(78,227,154,.035);
 }
 
 .status i {
