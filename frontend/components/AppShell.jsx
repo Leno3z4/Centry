@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { href: '/app', label: 'Overview', icon: '⌂', group: 'overview' },
   { href: '/app/swap', label: 'Swap', icon: '⇄', group: 'product' },
   { href: '/app/markets', label: 'Markets', icon: '◈', group: 'product' },
+  { href: '/app/gateway', label: 'Gateway', icon: '◉', group: 'product' },
   { href: '/app/rewards', label: 'Rewards', icon: '✦', group: 'product' },
   { href: '/app/governance', label: 'Governance', icon: '♢', group: 'product' },
   { href: '/app/pools', label: 'Pools', icon: '◒', group: 'explore' },
