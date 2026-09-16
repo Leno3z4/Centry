@@ -1,0 +1,135 @@
+.surfaceRoot :global(.panel),
+.surfaceRoot :global(.metric),
+.surfaceRoot :global(.form-card),
+.surfaceRoot :global(.risk-card),
+.surfaceRoot :global(.action-card),
+.surfaceRoot :global(.feature-card),
+.surfaceRoot :global(.doc-card) {
+  position: relative;
+  overflow: hidden;
+}
+
+.surfaceRoot :global(.panel)::before,
+.surfaceRoot :global(.metric)::before,
+.surfaceRoot :global(.form-card)::before,
+.surfaceRoot :global(.risk-card)::before,
+.surfaceRoot :global(.action-card)::before,
+.surfaceRoot :global(.feature-card)::before,
+.surfaceRoot :global(.doc-card)::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(197,156,255,.22), transparent);
+  pointer-events: none;
+}
+
+.surfaceRoot :global(.panel),
+.surfaceRoot :global(.metric),
+.surfaceRoot :global(.form-card),
+.surfaceRoot :global(.risk-card),
+.surfaceRoot :global(.action-card),
+.surfaceRoot :global(.feature-card),
+.surfaceRoot :global(.doc-card) {
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease, background 160ms ease;
+}
+
+.surfaceRoot :global(.panel:hover),
+.surfaceRoot :global(.metric:hover),
+.surfaceRoot :global(.form-card:hover),
+.surfaceRoot :global(.risk-card:hover),
+.surfaceRoot :global(.action-card:hover),
+.surfaceRoot :global(.feature-card:hover),
+.surfaceRoot :global(.doc-card:hover) {
+  border-color: #342642;
+  box-shadow: 0 24px 68px rgba(0,0,0,.26), inset 0 1px 0 rgba(255,255,255,.018);
+}
+
+.surfaceRoot :global(.amount-input-wrap:focus-within) {
+  border-color: #6b4595;
+  box-shadow: 0 0 0 3px rgba(155,98,255,.08), inset 0 1px 0 rgba(255,255,255,.02);
+}
+
+.surfaceRoot :global(.action-tabs) {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.025), 0 14px 34px rgba(0,0,0,.16);
+}
+
+.surfaceRoot :global(.action-tabs button:focus-visible),
+.surfaceRoot :global(.form-meta button:focus-visible),
+.surfaceRoot :global(.market-list-item:focus-visible),
+.surfaceRoot :global(.doc-item:focus-visible) {
+  outline: 2px solid rgba(168,85,247,.42);
+  outline-offset: 2px;
+}
+
+.surfaceRoot :global(.market-chip),
+.surfaceRoot :global(.doc-item) {
+  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+}
+
+.surfaceRoot :global(.market-chip:hover),
+.surfaceRoot :global(.doc-item:hover) {
+  border-color: #3b2b4d;
+  background: #110c1c;
+  transform: translateY(-1px);
+}
+
+.surfaceRoot :global(button:not(:disabled)) {
+  transition: filter 160ms ease, transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.surfaceRoot :global(button:not(:disabled):focus-visible),
+.surfaceRoot :global(a:focus-visible),
+.surfaceRoot :global(input:focus-visible),
+.surfaceRoot :global(select:focus-visible) {
+  outline: 2px solid rgba(168,85,247,.40);
+  outline-offset: 2px;
+}
+
+.surfaceRoot :global(.status-live),
+.surfaceRoot :global(.reward-mini-status.live) {
+  text-shadow: 0 0 14px rgba(78,227,154,.18);
+}
+
+.surfaceRoot :global(.warning-banner),
+.surfaceRoot :global(.notice) {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.018);
+}
+
+.surfaceRoot :global(.page-footer) {
+  opacity: .9;
+}
+
+.surfaceRoot :global(.page-footer span:last-child) {
+  font-family: 'DM Mono', monospace;
+}
+
+.surfaceRoot :global(.health-meter) {
+  padding: 14px;
+  border: 1px solid #292139;
+  border-radius: 13px;
+  background: rgba(10,7,17,.46);
+}
+
+@media (max-width: 900px) {
+  .surfaceRoot :global(.panel),
+  .surfaceRoot :global(.form-card) {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 640px) {
+  .surfaceRoot :global(.panel),
+  .surfaceRoot :global(.form-card),
+  .surfaceRoot :global(.metric),
+  .surfaceRoot :global(.risk-card),
+  .surfaceRoot :global(.action-card),
+  .surfaceRoot :global(.feature-card),
+  .surfaceRoot :global(.doc-card) {
+    border-radius: 13px;
+  }
+
+  .surfaceRoot :global(button:not(:disabled)) {
+    min-height: 44px;
+  }
+}
