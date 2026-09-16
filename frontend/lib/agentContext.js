@@ -1,8 +1,4 @@
-const DEFAULT_THRESHOLDS = Object.freeze({
-  healthy: 1.5,
-  caution: 1.2,
-  danger: 1.0,
-});
+const LIQUIDATION_THRESHOLD = 1;
 
 function finiteNumber(value) {
   const parsed = Number(value);
@@ -15,23 +11,11 @@ function usd(value) {
   return parsed.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-export function buildCentryPositionContext({
-  marketSymbol,
-  walletBalance,
-  supplied,
-  borrowed,
-  borrowLimit,
-  healthFactor,
-  marketLiquidity,
-  marketBorrowed,
-  utilization,
-  accountPosition,
-}) {
+export function buildCentryPositionContext({ marketSymbol, walletBalance, supplied, borrowed, borrowLimit, healthFactor, marketLiquidity, marketBorrowed, utilization, accountPosition }) {
   const numericHealth = finiteNumber(healthFactor);
   const numericCapacity = finiteNumber(borrowLimit);
   const numericUtilization = finiteNumber(utilization);
   const account = accountPosition && typeof accountPosition === 'object' ? accountPosition : null;
-
   return {
     market: marketSymbol || 'USDC',
     walletBalance: String(walletBalance ?? '0'),
@@ -39,6 +23,7 @@ export function buildCentryPositionContext({
     borrowed: String(borrowed ?? '0'),
     remainingBorrowCapacity: String(borrowLimit ?? '0'),
     healthFactor: String(healthFactor ?? '—'),
+    liquidationRisk: numericHealth != null && numericHealth < LIQUIDATION_THRESHOLD,
     marketLiquidity: String(marketLiquidity ?? '0'),
     marketBorrowed: String(marketBorrowed ?? '0'),
     utilizationPercent: numericUtilization == null ? 0 : numericUtilization,
@@ -48,36 +33,27 @@ export function buildCentryPositionContext({
       totalDebtValueUsd: finiteNumber(account.totalDebtValueUsd),
       totalBorrowPowerUsd: finiteNumber(account.totalBorrowPowerUsd),
       remainingBorrowCapacityUsd: finiteNumber(account.remainingBorrowCapacityUsd),
-      markets: Array.isArray(account.markets)
-        ? account.markets.map((item) => ({
-            market: item?.symbol || item?.marketId || 'unknown',
-            supplied: String(item?.supplied ?? '0'),
-            borrowed: String(item?.borrowed ?? '0'),
-            suppliedValueUsd: finiteNumber(item?.suppliedValueUsd),
-            borrowedValueUsd: finiteNumber(item?.borrowedValueUsd),
-          }))
-        : [],
+      markets: Array.isArray(account.markets) ? account.markets.map((item) => ({ market: item?.symbol || item?.marketId || 'unknown', supplied: String(item?.supplied ?? '0'), borrowed: String(item?.borrowed ?? '0'), suppliedValueUsd: finiteNumber(item?.suppliedValueUsd), borrowedValueUsd: finiteNumber(item?.borrowedValueUsd) })) : [],
     } : null,
-    dataQuality: {
-      healthFactor: numericHealth != null,
-      borrowCapacity: numericCapacity != null,
-      utilization: numericUtilization != null,
-      accountPosition: Boolean(account?.ready),
-    },
+    dataQuality: { healthFactor: numericHealth != null, borrowCapacity: numericCapacity != null, utilization: numericUtilization != null, accountPosition: Boolean(account?.ready) },
   };
+}
+
+export function getLiquidationRisk(healthFactor) {
+  const value = finiteNumber(healthFactor);
+  if (value == null) return { atRisk: false, threshold: LIQUIDATION_THRESHOLD };
+  return { atRisk: value < LIQUIDATION_THRESHOLD, threshold: LIQUIDATION_THRESHOLD };
 }
 
 export function getPositionRisk(healthFactor) {
   const value = finiteNumber(healthFactor);
   if (value == null) return { level: 'unknown', label: 'No debt signal', threshold: null };
-  if (value >= DEFAULT_THRESHOLDS.healthy) return { level: 'healthy', label: 'Healthy', threshold: DEFAULT_THRESHOLDS.healthy };
-  if (value >= DEFAULT_THRESHOLDS.caution) return { level: 'caution', label: 'Caution', threshold: DEFAULT_THRESHOLDS.caution };
-  return { level: 'danger', label: 'High risk', threshold: DEFAULT_THRESHOLDS.danger };
+  return value < LIQUIDATION_THRESHOLD ? { level: 'danger', label: 'Liquidation risk', threshold: LIQUIDATION_THRESHOLD } : { level: 'normal', label: 'Position healthy', threshold: LIQUIDATION_THRESHOLD };
 }
 
 export function fallbackPositionAnswer(context, question) {
   const lower = String(question || '').toLowerCase();
-  const risk = getPositionRisk(context.healthFactor);
+  const risk = getLiquidationRisk(context.healthFactor);
   const capacity = finiteNumber(context.remainingBorrowCapacity);
   const utilization = finiteNumber(context.utilizationPercent) ?? 0;
   const borrowed = context.borrowed;
@@ -85,46 +61,32 @@ export function fallbackPositionAnswer(context, question) {
   const account = context.accountPosition;
 
   if (lower.includes('borrow') || lower.includes('safe')) {
-    if (risk.level === 'danger') {
-      return `Your health factor is ${context.healthFactor}. The current position is in a high-risk zone, so increasing debt would reduce the remaining buffer.`;
-    }
-    if (capacity != null && capacity > 0) {
-      return `Your displayed remaining borrow capacity is about ${usd(capacity)} ${market}. Your health factor is ${context.healthFactor}. Capacity is a protocol limit, not a recommendation; leaving additional collateral buffer can reduce liquidation risk.`;
-    }
-    return `I don't see usable remaining borrow capacity in the current onchain snapshot. Check the position again after the latest transaction settles.`;
+    if (risk.atRisk) return `Liquidation risk is active: your health factor is ${context.healthFactor}, below Centry's liquidation threshold of 1.00.`;
+    if (capacity != null && capacity > 0) return `Health factor: ${context.healthFactor}. Remaining borrow capacity: about $${usd(capacity)}. Your account is not currently below the liquidation threshold.`;
+    return `Health factor: ${context.healthFactor}. I don't see usable remaining borrow capacity in the current onchain snapshot.`;
   }
 
   if (lower.includes('health') || lower.includes('risk')) {
-    if (risk.level === 'healthy') return `Your health factor is ${context.healthFactor}. The current account-wide signal is above Centry's healthy threshold.`;
-    if (risk.level === 'caution') return `Your health factor is ${context.healthFactor}. The position is in a caution zone, so additional borrowing would reduce the available buffer.`;
-    if (risk.level === 'danger') return `Your health factor is ${context.healthFactor}. The position is in a high-risk zone and has limited safety buffer.`;
+    if (risk.atRisk) return `Liquidation risk is active: health factor ${context.healthFactor} is below 1.00.`;
+    return `Health factor: ${context.healthFactor}. The position is not currently below Centry's 1.00 liquidation threshold.`;
   }
 
-  if (lower.includes('liquidity') || lower.includes('utilization')) {
-    return `The ${market} market currently shows ${context.marketLiquidity} available liquidity, ${context.marketBorrowed} borrowed, and about ${utilization.toFixed(2)}% utilization.`;
-  }
-
+  if (lower.includes('liquidity') || lower.includes('utilization')) return `${market} liquidity: ${context.marketLiquidity}. Borrowed: ${context.marketBorrowed}. Utilization: ${utilization.toFixed(2)}%.`;
   if (lower.includes('position') || lower.includes('balance') || lower.includes('debt')) {
-    if (account?.ready) {
-      return `Account-wide snapshot: about $${usd(account.totalCollateralValueUsd)} supplied value, $${usd(account.totalDebtValueUsd)} debt, and $${usd(account.remainingBorrowCapacityUsd)} remaining borrow capacity. Current ${market} debt is ${borrowed}.`;
-    }
-    return `Current ${market} snapshot: wallet ${context.walletBalance}, supplied ${context.supplied}, borrowed ${borrowed}, remaining borrow capacity ${context.remainingBorrowCapacity}, health factor ${context.healthFactor}.`;
+    if (account?.ready) return `Collateral value: $${usd(account.totalCollateralValueUsd)}. Debt: $${usd(account.totalDebtValueUsd)}. Remaining borrow capacity: $${usd(account.remainingBorrowCapacityUsd)}. Current ${market} debt: ${borrowed}.`;
+    return `${market}: wallet ${context.walletBalance}, supplied ${context.supplied}, borrowed ${borrowed}, remaining capacity ${context.remainingBorrowCapacity}, health factor ${context.healthFactor}.`;
   }
-
-  return `I can analyze your current Centry position using the latest onchain snapshot. Ask about borrowing capacity, health, debt, liquidity, or utilization.`;
+  return `I can analyze the current Centry position from the latest onchain snapshot.`;
 }
 
-export const CENTRY_AGENT_SYSTEM_PROMPT = `You are Centrion, a financial-position assistant inside the Centry lending app.
+export const CENTRY_AGENT_SYSTEM_PROMPT = `You are Centrion, the onchain assistant inside the Centry lending app.
 
 Rules:
-- Use only the position data supplied by the application and clearly label uncertainty.
-- Treat supplied numbers as a point-in-time onchain snapshot; never invent missing values.
-- Do not invent balances, prices, health factors, limits, transactions, or protocol behavior.
-- Do not execute transactions, produce transaction calldata, or imply that an AI response is financial advice.
-- Be concise and practical.
-- Explain the relevant risk signal before discussing an action.
-- Distinguish protocol borrowing capacity from a prudent user-defined buffer.
-- Never proactively promote or mention self-repayment unless the user explicitly asks about it or it is directly necessary to answer their question.
-- Never claim a transaction happened unless the application explicitly provides a confirmed transaction result.
-- When account-wide market data is available, use it instead of treating the selected market as the whole account.
-- If the snapshot is missing a value needed to answer, say so instead of estimating it.`;
+- Use only the position data supplied by the application.
+- For ordinary questions, answer with the actual numbers in the snapshot, not generic financial boilerplate.
+- Only mention liquidation risk when healthFactor is below 1.00. Do not label 1.2, 1.5, or other values as danger/caution.
+- When the user explicitly asks for an action, return an execution plan and prioritize the requested action over commentary.
+- Never invent balances, prices, health factors, limits, transactions, calldata, tokenIds, reward proofs, or hashes.
+- Never claim a transaction happened until the application reports a confirmed receipt.
+- Self-repay is background infrastructure unless explicitly requested.
+- Be concise and specific.`;
