@@ -67,11 +67,11 @@ export default function CentryIntelligence({ market, lending, compact: compactMo
   };
 
   return (
-    <section className={`${styles.card} ${compactMode ? styles.compactCard : ''}`} aria-label="Centry Intelligence">
+    <section className={`${styles.card} ${compactMode ? styles.compactCard : ''}`} aria-label="Centrion assistant">
       {!compactMode ? (
         <div className={styles.header}>
           <div>
-            <span className={styles.eyebrow}>Centry Intelligence</span>
+            <span className={styles.eyebrow}>Centrion</span>
             <h2>Understand your position</h2>
             <p>Ask about risk, borrowing capacity, or market liquidity using your current onchain data.</p>
           </div>
@@ -108,8 +108,8 @@ export default function CentryIntelligence({ market, lending, compact: compactMo
         <input
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
-          placeholder="Ask Centry about your position…"
-          aria-label="Ask Centry Intelligence"
+          placeholder="Ask Centrion about your position…"
+          aria-label="Ask Centrion"
           maxLength={500}
           disabled={loading}
         />
