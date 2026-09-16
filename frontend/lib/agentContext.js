@@ -25,10 +25,12 @@ export function buildCentryPositionContext({
   marketLiquidity,
   marketBorrowed,
   utilization,
+  accountPosition,
 }) {
   const numericHealth = finiteNumber(healthFactor);
   const numericCapacity = finiteNumber(borrowLimit);
   const numericUtilization = finiteNumber(utilization);
+  const account = accountPosition && typeof accountPosition === 'object' ? accountPosition : null;
 
   return {
     market: marketSymbol || 'USDC',
@@ -40,10 +42,27 @@ export function buildCentryPositionContext({
     marketLiquidity: String(marketLiquidity ?? '0'),
     marketBorrowed: String(marketBorrowed ?? '0'),
     utilizationPercent: numericUtilization == null ? 0 : numericUtilization,
+    accountPosition: account ? {
+      ready: Boolean(account.ready),
+      totalCollateralValueUsd: finiteNumber(account.totalCollateralValueUsd),
+      totalDebtValueUsd: finiteNumber(account.totalDebtValueUsd),
+      totalBorrowPowerUsd: finiteNumber(account.totalBorrowPowerUsd),
+      remainingBorrowCapacityUsd: finiteNumber(account.remainingBorrowCapacityUsd),
+      markets: Array.isArray(account.markets)
+        ? account.markets.map((item) => ({
+            market: item?.symbol || item?.marketId || 'unknown',
+            supplied: String(item?.supplied ?? '0'),
+            borrowed: String(item?.borrowed ?? '0'),
+            suppliedValueUsd: finiteNumber(item?.suppliedValueUsd),
+            borrowedValueUsd: finiteNumber(item?.borrowedValueUsd),
+          }))
+        : [],
+    } : null,
     dataQuality: {
       healthFactor: numericHealth != null,
       borrowCapacity: numericCapacity != null,
       utilization: numericUtilization != null,
+      accountPosition: Boolean(account?.ready),
     },
   };
 }
@@ -63,6 +82,7 @@ export function fallbackPositionAnswer(context, question) {
   const utilization = finiteNumber(context.utilizationPercent) ?? 0;
   const borrowed = context.borrowed;
   const market = context.market;
+  const account = context.accountPosition;
 
   if (lower.includes('borrow') || lower.includes('safe')) {
     if (risk.level === 'danger') {
@@ -85,6 +105,9 @@ export function fallbackPositionAnswer(context, question) {
   }
 
   if (lower.includes('position') || lower.includes('balance') || lower.includes('debt')) {
+    if (account?.ready) {
+      return `Account-wide snapshot: about $${usd(account.totalCollateralValueUsd)} supplied value, $${usd(account.totalDebtValueUsd)} debt, and $${usd(account.remainingBorrowCapacityUsd)} remaining borrow capacity. Current ${market} debt is ${borrowed}.`;
+    }
     return `Current ${market} snapshot: wallet ${context.walletBalance}, supplied ${context.supplied}, borrowed ${borrowed}, remaining borrow capacity ${context.remainingBorrowCapacity}, health factor ${context.healthFactor}.`;
   }
 
@@ -103,4 +126,5 @@ Rules:
 - Distinguish protocol borrowing capacity from a prudent user-defined buffer.
 - Never proactively promote or mention self-repayment unless the user explicitly asks about it or it is directly necessary to answer their question.
 - Never claim a transaction happened unless the application explicitly provides a confirmed transaction result.
+- When account-wide market data is available, use it instead of treating the selected market as the whole account.
 - If the snapshot is missing a value needed to answer, say so instead of estimating it.`;
