@@ -1,36 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { encodeFunctionData, parseUnits } from 'viem';
 import { useAccount, useChainId, useConnectorClient } from 'wagmi';
-import {
-  GATEWAY_TESTNET_CHAINS,
-  GATEWAY_MINTER_ADDRESS,
-} from '../constants/circleGateway';
-import {
-  ARC_GATEWAY_CHAIN,
-  GATEWAY_EIP712_DOMAIN,
-  GATEWAY_EIP712_TYPES,
-  buildTransferSpec,
-  estimateGatewayTransfer,
-  pickGatewaySource,
-  requestGatewayAttestation,
-} from '../lib/gatewayFunding';
+import { GATEWAY_TESTNET_CHAINS, GATEWAY_MINTER_ADDRESS } from '../constants/circleGateway';
+import { ARC_GATEWAY_CHAIN, GATEWAY_EIP712_DOMAIN, GATEWAY_EIP712_TYPES, buildTransferSpec, estimateGatewayTransfer, pickGatewaySources, requestGatewayAttestation } from '../lib/gatewayFunding';
 
-const GATEWAY_MINTER_ABI = [{
-  type: 'function',
-  name: 'gatewayMint',
-  stateMutability: 'nonpayable',
-  inputs: [
-    { name: 'attestationPayload', type: 'bytes' },
-    { name: 'signature', type: 'bytes' },
-  ],
-  outputs: [],
-}];
-
+const GATEWAY_MINTER_ABI = [{ type: 'function', name: 'gatewayMint', stateMutability: 'nonpayable', inputs: [{ name: 'attestationPayload', type: 'bytes' }, { name: 'signature', type: 'bytes' }], outputs: [] }];
 const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
-
-function amountRaw(value) {
-  return parseUnits(String(value || '0'), 6);
-}
+const amountRaw = (value) => parseUnits(String(value || '0'), 6);
+const formatRaw = (value) => (Number(value) / 1e6).toFixed(6).replace(/\.?0+$/, '');
 
 export function useGatewayFunding() {
   const { address, isConnected } = useAccount();
@@ -46,28 +23,15 @@ export function useGatewayFunding() {
   }, [connectorClient]);
 
   const refresh = useCallback(async () => {
-    if (!address) {
-      setBalances([]);
-      setTotal('0');
-      return [];
-    }
+    if (!address) { setBalances([]); setTotal('0'); return []; }
     setLoading(true);
     try {
-      const response = await fetch('/api/circle/gateway/balances', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ depositor: address }),
-        cache: 'no-store',
-      });
+      const response = await fetch('/api/circle/gateway/balances', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ depositor: address }), cache: 'no-store' });
       const result = await response.json().catch(() => ({}));
       if (!response.ok || !result.success) throw new Error(result.error || 'Unable to read Gateway balance.');
       const nextBalances = Array.isArray(result.balances) ? result.balances : [];
-      setBalances(nextBalances);
-      setTotal(result.total || '0');
-      return nextBalances;
-    } finally {
-      setLoading(false);
-    }
+      setBalances(nextBalances); setTotal(result.total || '0'); return nextBalances;
+    } finally { setLoading(false); }
   }, [address]);
 
   useEffect(() => { void refresh().catch(() => undefined); }, [refresh]);
@@ -76,18 +40,11 @@ export function useGatewayFunding() {
     if (!connectorClient?.request || !isConnected) throw new Error('Connect your wallet first.');
     if (chainId === target.chainId) return;
     const chainHex = `0x${target.chainId.toString(16)}`;
-    try {
-      await connectorClient.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: chainHex }] });
-    } catch (caughtError) {
+    try { await connectorClient.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: chainHex }] }); }
+    catch (caughtError) {
       const code = Number(caughtError?.code);
       if (code !== 4902 && code !== -32603 && code !== -32602) throw caughtError;
-      await connectorClient.request({ method: 'wallet_addEthereumChain', params: [{
-        chainId: chainHex,
-        chainName: target.name,
-        nativeCurrency: target.nativeCurrency,
-        rpcUrls: [target.rpcUrl],
-        blockExplorerUrls: [target.explorerUrl],
-      }] });
+      await connectorClient.request({ method: 'wallet_addEthereumChain', params: [{ chainId: chainHex, chainName: target.name, nativeCurrency: target.nativeCurrency, rpcUrls: [target.rpcUrl], blockExplorerUrls: [target.explorerUrl] }] });
       await connectorClient.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: chainHex }] });
     }
     for (let attempt = 0; attempt < 30; attempt += 1) {
@@ -100,58 +57,31 @@ export function useGatewayFunding() {
 
   const ensureArcUsdc = useCallback(async (amount, { arcBalance = '0' } = {}) => {
     if (!address || !isConnected) throw new Error('Connect your wallet first.');
-
     const requested = amountRaw(amount);
     const local = amountRaw(arcBalance);
     const shortfall = requested > local ? requested - local : 0n;
+    if (shortfall === 0n) return { source: { id: 'arc-wallet', name: 'Arc wallet', balance: String(arcBalance) }, requiredGatewayAmount: '0', usedGateway: false };
 
-    // Unified liquidity: Arc balance satisfies the request first; Gateway funds only the shortfall.
-    if (shortfall === 0n) {
-      return {
-        source: { id: 'arc-wallet', name: 'Arc wallet', balance: String(arcBalance) },
-        requiredGatewayAmount: '0',
-        usedGateway: false,
-      };
+    const currentBalances = await refresh();
+    const sources = pickGatewaySources(currentBalances, shortfall);
+    if (!sources.length) throw new Error(`Gateway does not have enough finalized USDC to cover the ${formatRaw(shortfall)} USDC shortfall.`);
+
+    const specs = sources.map((source) => buildTransferSpec({ source, destination: ARC_GATEWAY_CHAIN, depositor: address, recipient: address, value: source.allocationRaw }));
+    const estimates = await estimateGatewayTransfer(specs);
+    if (estimates.length !== specs.length) throw new Error('Gateway did not return an estimate for every source allocation.');
+
+    const signedRequests = [];
+    for (let index = 0; index < sources.length; index += 1) {
+      const intent = { maxBlockHeight: String(estimates[index].maxBlockHeight), maxFee: String(estimates[index].maxFee), spec: estimates[index].spec || specs[index] };
+      await switchToChain(sources[index]);
+      const typedData = { domain: GATEWAY_EIP712_DOMAIN, types: GATEWAY_EIP712_TYPES, primaryType: 'BurnIntent', message: intent };
+      const signature = await request('eth_signTypedData_v4', [address, JSON.stringify(typedData)]);
+      signedRequests.push({ burnIntent: intent, signature });
     }
 
-    const shortfallFormatted = String(Number(shortfall) / 1e6);
-    const currentBalances = await refresh();
-    const source = pickGatewaySource(currentBalances, shortfall);
-    if (!source) throw new Error(`Gateway does not have enough finalized USDC to cover the ${shortfallFormatted} USDC shortfall.`);
-
-    const sourceChain = GATEWAY_TESTNET_CHAINS.find((chain) => chain.chainId === source.chainId) || source;
-    await switchToChain(sourceChain);
-
-    const spec = buildTransferSpec({
-      source,
-      destination: ARC_GATEWAY_CHAIN,
-      depositor: address,
-      recipient: address,
-      value: shortfall,
-    });
-    const estimated = await estimateGatewayTransfer(spec);
-    const burnIntent = {
-      maxBlockHeight: String(estimated.maxBlockHeight),
-      maxFee: String(estimated.maxFee),
-      spec: estimated.spec || spec,
-    };
-
-    const typedData = {
-      domain: GATEWAY_EIP712_DOMAIN,
-      types: GATEWAY_EIP712_TYPES,
-      primaryType: 'BurnIntent',
-      message: burnIntent,
-    };
-
-    const signature = await request('eth_signTypedData_v4', [address, JSON.stringify(typedData)]);
-    const attestation = await requestGatewayAttestation(burnIntent, signature);
-
+    const attestation = await requestGatewayAttestation(signedRequests);
     await switchToChain(ARC_GATEWAY_CHAIN);
-    const mintData = encodeFunctionData({
-      abi: GATEWAY_MINTER_ABI,
-      functionName: 'gatewayMint',
-      args: [attestation.attestation, attestation.signature],
-    });
+    const mintData = encodeFunctionData({ abi: GATEWAY_MINTER_ABI, functionName: 'gatewayMint', args: [attestation.attestation, attestation.signature] });
     const mintHash = await request('eth_sendTransaction', [{ from: address, to: GATEWAY_MINTER_ADDRESS, data: mintData, value: '0x0' }]);
 
     for (let attempt = 0; attempt < 80; attempt += 1) {
@@ -159,24 +89,12 @@ export function useGatewayFunding() {
       if (receipt) {
         if (receipt.status === '0x0') throw new Error('Gateway mint was reverted on Arc Testnet.');
         await refresh();
-        return {
-          source,
-          mintHash,
-          attestation,
-          requiredGatewayAmount: shortfallFormatted,
-          usedGateway: true,
-        };
+        return { sources, mintHash, attestation, requiredGatewayAmount: formatRaw(shortfall), usedGateway: true, sourceCount: sources.length };
       }
       await sleep(1500);
     }
     throw new Error('Timed out waiting for the Gateway mint to confirm on Arc Testnet.');
   }, [address, isConnected, refresh, request, switchToChain]);
 
-  return {
-    balances,
-    total,
-    loading,
-    refresh,
-    ensureArcUsdc,
-  };
+  return { balances, total, loading, refresh, ensureArcUsdc };
 }
