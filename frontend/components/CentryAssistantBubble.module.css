@@ -1,0 +1,58 @@
+.bubble {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 90;
+  width: 54px;
+  height: 54px;
+  border: 1px solid rgba(189, 169, 233, .30);
+  border-radius: 999px;
+  background: rgba(26, 21, 33, .92);
+  color: #eee7f5;
+  box-shadow: 0 14px 42px rgba(0, 0, 0, .30), inset 0 0 0 1px rgba(255,255,255,.03);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: width .18s ease, border-color .18s ease, transform .18s ease;
+  backdrop-filter: blur(14px);
+}
+
+.bubble:hover { transform: translateY(-1px); border-color: rgba(189, 169, 233, .55); }
+.bubbleOpen { width: 74px; }
+.bubbleMark { font-size: 15px; font-weight: 800; letter-spacing: -.03em; }
+.bubbleLabel { font-size: 11px; font-weight: 700; opacity: .78; }
+
+.panel {
+  position: fixed;
+  top: 76px;
+  right: 22px;
+  bottom: 22px;
+  z-index: 89;
+  width: min(390px, calc(100vw - 44px));
+  border: 1px solid rgba(189, 169, 233, .18);
+  border-radius: 16px;
+  background: rgba(18, 15, 23, .97);
+  box-shadow: 0 24px 80px rgba(0,0,0,.40), 0 2px 12px rgba(0,0,0,.20);
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(18px, 0, 0);
+  transition: opacity .18s ease, transform .18s ease;
+  backdrop-filter: blur(18px);
+}
+
+.panelOpen { opacity: 1; pointer-events: auto; transform: translate3d(0, 0, 0); }
+.panelHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 17px 18px 14px; border-bottom: 1px solid rgba(255,255,255,.07); }
+.panelHeader h2 { margin: 3px 0 0; font-size: 17px; letter-spacing: -.02em; }
+.eyebrow { color: #a99bb8; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.close { border: 0; background: transparent; color: #9d91a8; font-size: 23px; line-height: 1; cursor: pointer; padding: 2px 4px; }
+.close:hover { color: #eee7f5; }
+.panelBody { height: calc(100% - 69px); overflow: auto; padding: 0; }
+.panelBody > * { min-height: 100%; }
+
+@media (max-width: 640px) {
+  .bubble { right: 14px; bottom: 14px; }
+  .panel { top: 68px; right: 12px; bottom: 12px; width: calc(100vw - 24px); }
+}
