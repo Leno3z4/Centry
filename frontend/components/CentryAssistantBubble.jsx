@@ -32,11 +32,10 @@ export default function CentryAssistantBubble() {
 
       <aside id="centrion-panel" ref={panelRef} className={`${styles.panel} ${open ? styles.panelOpen : ''}`} aria-hidden={!open} aria-label="Centrion assistant">
         <div className={styles.panelHeader}>
-          <div className={styles.toolbarLeft}><span className={styles.grip} aria-hidden="true">⠿</span><button type="button" aria-label="New chat">✎</button><button type="button" aria-label="Chat history">◷</button></div>
           <div className={styles.brand}><span className={styles.brandMark}>C</span><span>Centrion</span></div>
-          <div className={styles.toolbarRight}><button type="button" aria-label="Expand">⛶</button><button type="button" aria-label="More">⌄</button><button type="button" onClick={() => setOpen(false)} aria-label="Close Centrion">×</button></div>
+          <button type="button" onClick={() => setOpen(false)} className={styles.close} aria-label="Close Centrion">×</button>
         </div>
-        <div className={styles.aiNotice}><span>Centrion uses AI.</span> Review transaction details before signing.</div>
+        <div className={styles.aiNotice}>Review transaction details before signing.</div>
         <div className={styles.panelBody}><CentryIntelligence market={market} lending={lending} compact /></div>
       </aside>
     </>
