@@ -15,13 +15,14 @@
   justify-content: center;
   gap: 5px;
   cursor: pointer;
-  transition: width .18s ease, border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+  transition: width .18s ease, border-color .18s ease, transform .18s ease, box-shadow .18s ease, background .18s ease;
   backdrop-filter: blur(16px) saturate(120%);
 }
 
 .bubble:hover {
   transform: translateY(-2px);
   border-color: rgba(189, 169, 233, .58);
+  background: rgba(25, 20, 35, .97);
   box-shadow: 0 20px 54px rgba(0,0,0,.38), 0 0 0 4px rgba(146,92,255,.07);
 }
 
@@ -42,6 +43,7 @@
   font-size: 13px;
   font-weight: 800;
   letter-spacing: -.03em;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
 }
 .bubbleLabel { font-size: 11px; font-weight: 700; opacity: .82; }
 
@@ -61,11 +63,11 @@
   pointer-events: none;
   transform: translate3d(18px, 0, 0) scale(.985);
   transform-origin: right bottom;
-  transition: opacity .18s ease, transform .18s ease;
+  transition: opacity .18s ease, transform .18s ease, border-color .18s ease;
   backdrop-filter: blur(20px) saturate(115%);
 }
 
-.panelOpen { opacity: 1; pointer-events: auto; transform: translate3d(0, 0, 0) scale(1); }
+.panelOpen { opacity: 1; pointer-events: auto; transform: translate3d(0, 0, 0) scale(1); border-color: rgba(189,169,233,.24); }
 
 .panelHeader {
   min-height: 78px;
@@ -94,15 +96,16 @@
   font-size: 20px;
   line-height: 1;
   cursor: pointer;
-  transition: border-color .15s ease, color .15s ease, background .15s ease;
+  transition: border-color .15s ease, color .15s ease, background .15s ease, transform .15s ease;
 }
-.close:hover { color: #eee7f5; border-color: rgba(189,169,233,.24); background: rgba(255,255,255,.05); }
+.close:hover { color: #eee7f5; border-color: rgba(189,169,233,.24); background: rgba(255,255,255,.05); transform: translateY(-1px); }
 .close:focus-visible { outline: 2px solid rgba(168,85,247,.38); outline-offset: 2px; }
 
 .panelBody { height: calc(100% - 78px); overflow: auto; padding: 0; }
 .panelBody > * { min-height: 100%; }
 .panelBody::-webkit-scrollbar { width: 8px; }
 .panelBody::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 999px; }
+.panelBody::-webkit-scrollbar-thumb:hover { background: rgba(189,169,233,.16); }
 
 @media (max-width: 640px) {
   .bubble { right: 14px; bottom: 14px; width: 56px; height: 56px; }
