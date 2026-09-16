@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useAccount, useReadContract } from 'wagmi';
-import { formatUnits, parseUnits } from 'viem';
+import { formatUnits } from 'viem';
 import { Providers } from '../../../components/Providers';
 import { AppShell } from '../../../components/AppShell';
 import { useGatewayFunding } from '../../../hooks/useGatewayFunding';
@@ -73,8 +73,6 @@ function GatewayContent() {
       setNotice(error?.message || 'Gateway funding could not be completed.');
     }
   };
-
-  const setMax = () => setAmount(gatewayTotal || '0');
 
   return (
     <div className={styles.page}>
