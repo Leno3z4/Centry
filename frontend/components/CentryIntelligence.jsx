@@ -22,7 +22,7 @@ function money(value) {
     : '—';
 }
 
-export default function CentryIntelligence({ market, lending }) {
+export default function CentryIntelligence({ market, lending, compact: compactMode = false }) {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [loading, setLoading] = useState(false);
@@ -67,25 +67,34 @@ export default function CentryIntelligence({ market, lending }) {
   };
 
   return (
-    <section className={styles.card} aria-label="Centry Intelligence">
-      <div className={styles.header}>
-        <div>
-          <span className={styles.eyebrow}>Centry Intelligence</span>
-          <h2>Understand your position</h2>
-          <p>Ask about risk, borrowing capacity, or market liquidity using your current onchain data.</p>
+    <section className={`${styles.card} ${compactMode ? styles.compactCard : ''}`} aria-label="Centry Intelligence">
+      {!compactMode ? (
+        <div className={styles.header}>
+          <div>
+            <span className={styles.eyebrow}>Centry Intelligence</span>
+            <h2>Understand your position</h2>
+            <p>Ask about risk, borrowing capacity, or market liquidity using your current onchain data.</p>
+          </div>
+          <div className={`${styles.status} ${styles[`status_${risk.level}`]}`}>
+            <span>{risk.label}</span>
+            {Number.isFinite(compact(lending?.healthFactor)) ? <strong>{lending.healthFactor}</strong> : null}
+          </div>
         </div>
-        <div className={`${styles.status} ${styles[`status_${risk.level}`]}`}>
-          <span>{risk.label}</span>
-          {Number.isFinite(compact(lending?.healthFactor)) ? <strong>{lending.healthFactor}</strong> : null}
-        </div>
-      </div>
+      ) : null}
 
-      {account?.ready ? (
+      {account?.ready && !compactMode ? (
         <div className={styles.snapshot} aria-label="Account snapshot">
           <div><span>Collateral</span><strong>${money(account.totalCollateralValueUsd)}</strong></div>
           <div><span>Debt</span><strong>${money(account.totalDebtValueUsd)}</strong></div>
           <div><span>Remaining capacity</span><strong>${money(account.remainingBorrowCapacityUsd)}</strong></div>
           <div><span>Markets</span><strong>{markets.length}</strong></div>
+        </div>
+      ) : null}
+
+      {compactMode ? (
+        <div className={styles.compactContext}>
+          <span>{risk.label}</span>
+          <strong>{Number.isFinite(compact(lending?.healthFactor)) ? `HF ${lending.healthFactor}` : 'Position data loading'}</strong>
         </div>
       ) : null}
 
