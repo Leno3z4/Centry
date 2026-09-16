@@ -15,6 +15,7 @@ export function useGatewayFunding() {
   const { data: connectorClient } = useConnectorClient();
   const [balances, setBalances] = useState([]);
   const [total, setTotal] = useState('0');
+  const [pendingTotal, setPendingTotal] = useState('0');
   const [loading, setLoading] = useState(false);
 
   const request = useCallback(async (method, params = []) => {
@@ -23,14 +24,17 @@ export function useGatewayFunding() {
   }, [connectorClient]);
 
   const refresh = useCallback(async () => {
-    if (!address) { setBalances([]); setTotal('0'); return []; }
+    if (!address) { setBalances([]); setTotal('0'); setPendingTotal('0'); return []; }
     setLoading(true);
     try {
       const response = await fetch('/api/circle/gateway/balances', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ depositor: address }), cache: 'no-store' });
       const result = await response.json().catch(() => ({}));
       if (!response.ok || !result.success) throw new Error(result.error || 'Unable to read Gateway balance.');
       const nextBalances = Array.isArray(result.balances) ? result.balances : [];
-      setBalances(nextBalances); setTotal(result.total || '0'); return nextBalances;
+      setBalances(nextBalances);
+      setTotal(result.total || '0');
+      setPendingTotal(result.pendingTotal || '0');
+      return nextBalances;
     } finally { setLoading(false); }
   }, [address]);
 
@@ -96,5 +100,5 @@ export function useGatewayFunding() {
     throw new Error('Timed out waiting for the Gateway mint to confirm on Arc Testnet.');
   }, [address, isConnected, refresh, request, switchToChain]);
 
-  return { balances, total, loading, refresh, ensureArcUsdc };
+  return { balances, total, pendingTotal, loading, refresh, ensureArcUsdc };
 }
