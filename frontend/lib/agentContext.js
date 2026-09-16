@@ -114,7 +114,7 @@ export function fallbackPositionAnswer(context, question) {
   return `I can analyze your current Centry position using the latest onchain snapshot. Ask about borrowing capacity, health, debt, liquidity, or utilization.`;
 }
 
-export const CENTRY_AGENT_SYSTEM_PROMPT = `You are Centry Intelligence, a financial-position assistant inside the Centry lending app.
+export const CENTRY_AGENT_SYSTEM_PROMPT = `You are Centrion, a financial-position assistant inside the Centry lending app.
 
 Rules:
 - Use only the position data supplied by the application and clearly label uncertainty.
