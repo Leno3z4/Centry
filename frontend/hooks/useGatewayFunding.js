@@ -6,7 +6,6 @@ import {
   GATEWAY_MINTER_ADDRESS,
 } from '../constants/circleGateway';
 import {
-  ARC_CHAIN_ID,
   ARC_GATEWAY_CHAIN,
   GATEWAY_EIP712_DOMAIN,
   GATEWAY_EIP712_TYPES,
@@ -29,12 +28,8 @@ const GATEWAY_MINTER_ABI = [{
 
 const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
-function hasEnoughArcBalance(balance, amount) {
-  try {
-    return parseUnits(String(balance || '0'), 6) >= parseUnits(String(amount || '0'), 6);
-  } catch {
-    return false;
-  }
+function amountRaw(value) {
+  return parseUnits(String(value || '0'), 6);
 }
 
 export function useGatewayFunding() {
@@ -106,16 +101,23 @@ export function useGatewayFunding() {
   const ensureArcUsdc = useCallback(async (amount, { arcBalance = '0' } = {}) => {
     if (!address || !isConnected) throw new Error('Connect your wallet first.');
 
-    // Unified liquidity behavior: use already-settled Arc USDC first.
-    // Gateway is only invoked for the amount that cannot be satisfied locally.
-    if (hasEnoughArcBalance(arcBalance, amount)) {
-      return { source: { id: 'arc-wallet', name: 'Arc wallet', balance: String(arcBalance) }, requiredGatewayAmount: '0', usedGateway: false };
+    const requested = amountRaw(amount);
+    const local = amountRaw(arcBalance);
+    const shortfall = requested > local ? requested - local : 0n;
+
+    // Unified liquidity: Arc balance satisfies the request first; Gateway funds only the shortfall.
+    if (shortfall === 0n) {
+      return {
+        source: { id: 'arc-wallet', name: 'Arc wallet', balance: String(arcBalance) },
+        requiredGatewayAmount: '0',
+        usedGateway: false,
+      };
     }
 
-    const value = parseUnits(String(amount), 6);
+    const shortfallFormatted = String(Number(shortfall) / 1e6);
     const currentBalances = await refresh();
-    const source = pickGatewaySource(currentBalances, value);
-    if (!source) throw new Error(`Gateway does not have enough finalized USDC to cover ${amount} USDC.`);
+    const source = pickGatewaySource(currentBalances, shortfall);
+    if (!source) throw new Error(`Gateway does not have enough finalized USDC to cover the ${shortfallFormatted} USDC shortfall.`);
 
     const sourceChain = GATEWAY_TESTNET_CHAINS.find((chain) => chain.chainId === source.chainId) || source;
     await switchToChain(sourceChain);
@@ -125,7 +127,7 @@ export function useGatewayFunding() {
       destination: ARC_GATEWAY_CHAIN,
       depositor: address,
       recipient: address,
-      value,
+      value: shortfall,
     });
     const estimated = await estimateGatewayTransfer(spec);
     const burnIntent = {
@@ -157,7 +159,13 @@ export function useGatewayFunding() {
       if (receipt) {
         if (receipt.status === '0x0') throw new Error('Gateway mint was reverted on Arc Testnet.');
         await refresh();
-        return { source, mintHash, attestation, requiredGatewayAmount: String(amount), usedGateway: true };
+        return {
+          source,
+          mintHash,
+          attestation,
+          requiredGatewayAmount: shortfallFormatted,
+          usedGateway: true,
+        };
       }
       await sleep(1500);
     }
