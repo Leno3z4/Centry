@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 import { useAccount } from 'wagmi';
 import { WalletConnect } from './WalletConnect';
+import CentryAssistantBubble from './CentryAssistantBubble';
 import styles from './AppShell.module.css';
 
 const NAV_ITEMS = [
@@ -63,6 +64,8 @@ export function AppShell({ children }) {
           <span>{address ? `${address.slice(0, 6)}…${address.slice(-4)}` : 'Wallet not connected'}</span>
         </footer>
       </main>
+
+      <CentryAssistantBubble />
     </div>
   );
 }
