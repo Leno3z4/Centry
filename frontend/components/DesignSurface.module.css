@@ -7,6 +7,10 @@
 .surfaceRoot :global(.doc-card) {
   position: relative;
   overflow: hidden;
+  isolation: isolate;
+  border-color: rgba(255,255,255,.085);
+  background: linear-gradient(150deg, rgba(255,255,255,.055), rgba(255,255,255,.017));
+  box-shadow: 0 24px 70px rgba(0,0,0,.18), inset 0 1px rgba(255,255,255,.055);
 }
 
 .surfaceRoot :global(.panel)::before,
@@ -18,10 +22,10 @@
 .surfaceRoot :global(.doc-card)::before {
   content: '';
   position: absolute;
-  inset: 0 0 auto;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(197,156,255,.22), transparent);
+  inset: 0;
+  background: radial-gradient(360px 120px at 16% 0%, rgba(255,255,255,.055), transparent 70%);
   pointer-events: none;
+  z-index: -1;
 }
 
 .surfaceRoot :global(.panel),
@@ -30,8 +34,11 @@
 .surfaceRoot :global(.risk-card),
 .surfaceRoot :global(.action-card),
 .surfaceRoot :global(.feature-card),
-.surfaceRoot :global(.doc-card) {
-  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease, background 160ms ease;
+.surfaceRoot :global(.doc-card),
+.surfaceRoot :global(.market-list-item),
+.surfaceRoot :global(.market-chip),
+.surfaceRoot :global(.doc-item) {
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease, background 180ms ease;
 }
 
 .surfaceRoot :global(.panel:hover),
@@ -41,81 +48,105 @@
 .surfaceRoot :global(.action-card:hover),
 .surfaceRoot :global(.feature-card:hover),
 .surfaceRoot :global(.doc-card:hover) {
-  border-color: #342642;
-  box-shadow: 0 24px 68px rgba(0,0,0,.26), inset 0 1px 0 rgba(255,255,255,.018);
+  border-color: rgba(167,139,250,.18);
+  box-shadow: 0 28px 78px rgba(0,0,0,.23), inset 0 1px rgba(255,255,255,.07);
+}
+
+.surfaceRoot :global(.market-list-item:hover),
+.surfaceRoot :global(.market-chip:hover),
+.surfaceRoot :global(.doc-item:hover) {
+  border-color: rgba(167,139,250,.20);
+  background: rgba(255,255,255,.05);
+  transform: translateY(-1px);
+}
+
+.surfaceRoot :global(.amount-input-wrap) {
+  border-color: rgba(255,255,255,.095);
+  background: rgba(0,0,0,.16);
 }
 
 .surfaceRoot :global(.amount-input-wrap:focus-within) {
-  border-color: #6b4595;
-  box-shadow: 0 0 0 3px rgba(155,98,255,.08), inset 0 1px 0 rgba(255,255,255,.02);
+  border-color: rgba(167,139,250,.42);
+  box-shadow: 0 0 0 3px rgba(167,139,250,.10), inset 0 1px rgba(255,255,255,.05);
 }
 
 .surfaceRoot :global(.action-tabs) {
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.025), 0 14px 34px rgba(0,0,0,.16);
+  border-color: rgba(255,255,255,.075);
+  background: rgba(0,0,0,.18);
+  box-shadow: inset 0 1px rgba(255,255,255,.04), 0 14px 34px rgba(0,0,0,.16);
 }
 
-.surfaceRoot :global(.action-tabs button:focus-visible),
-.surfaceRoot :global(.form-meta button:focus-visible),
-.surfaceRoot :global(.market-list-item:focus-visible),
-.surfaceRoot :global(.doc-item:focus-visible) {
-  outline: 2px solid rgba(168,85,247,.42);
-  outline-offset: 2px;
+.surfaceRoot :global(.action-tabs button.active) {
+  border-color: rgba(255,255,255,.09);
+  background: rgba(255,255,255,.09);
+  box-shadow: inset 0 1px rgba(255,255,255,.06), 0 5px 18px rgba(0,0,0,.12);
 }
 
 .surfaceRoot :global(.market-chip),
 .surfaceRoot :global(.doc-item) {
-  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
-}
-
-.surfaceRoot :global(.market-chip:hover),
-.surfaceRoot :global(.doc-item:hover) {
-  border-color: #3b2b4d;
-  background: #110c1c;
-  transform: translateY(-1px);
-}
-
-.surfaceRoot :global(button:not(:disabled)) {
-  transition: filter 160ms ease, transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
-}
-
-.surfaceRoot :global(button:not(:disabled):focus-visible),
-.surfaceRoot :global(a:focus-visible),
-.surfaceRoot :global(input:focus-visible),
-.surfaceRoot :global(select:focus-visible) {
-  outline: 2px solid rgba(168,85,247,.40);
-  outline-offset: 2px;
+  border-color: rgba(255,255,255,.065);
+  background: rgba(255,255,255,.025);
 }
 
 .surfaceRoot :global(.status-live),
 .surfaceRoot :global(.reward-mini-status.live) {
-  text-shadow: 0 0 14px rgba(78,227,154,.18);
-}
-
-.surfaceRoot :global(.warning-banner),
-.surfaceRoot :global(.notice) {
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.018);
-}
-
-.surfaceRoot :global(.page-footer) {
-  opacity: .9;
-}
-
-.surfaceRoot :global(.page-footer span:last-child) {
-  font-family: 'DM Mono', monospace;
+  text-shadow: 0 0 12px rgba(98,215,162,.20);
 }
 
 .surfaceRoot :global(.health-meter) {
   padding: 14px;
-  border: 1px solid #292139;
-  border-radius: 13px;
-  background: rgba(10,7,17,.46);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 16px;
+  background: rgba(255,255,255,.025);
+  box-shadow: inset 0 1px rgba(255,255,255,.045);
+}
+
+.surfaceRoot :global(.health-track) { background: rgba(255,255,255,.075); }
+.surfaceRoot :global(.health-fill) {
+  background: linear-gradient(90deg, #6f55aa, #a991e2);
+  box-shadow: 0 0 18px rgba(167,139,250,.25);
+}
+
+.surfaceRoot :global(.warning-banner),
+.surfaceRoot :global(.notice),
+.surfaceRoot :global(.info-banner) {
+  border-color: rgba(255,255,255,.075);
+  box-shadow: inset 0 1px rgba(255,255,255,.04);
+}
+
+.surfaceRoot :global(.page-footer) { opacity: .82; }
+.surfaceRoot :global(.page-footer span:last-child) { font-family: 'DM Mono', monospace; }
+
+.surfaceRoot :global(button:not(:disabled)) {
+  transition: filter 180ms ease, transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.surfaceRoot :global(button:not(:disabled):active),
+.surfaceRoot :global(.primary-btn:active),
+.surfaceRoot :global(.secondary-btn:active) {
+  transform: scale(.985);
+}
+
+.surfaceRoot :global(button:focus-visible),
+.surfaceRoot :global(a:focus-visible),
+.surfaceRoot :global(input:focus-visible),
+.surfaceRoot :global(select:focus-visible) {
+  outline: 2px solid rgba(187,166,255,.78);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surfaceRoot :global(*), .surfaceRoot :global(*::before), .surfaceRoot :global(*::after) {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
 
 @media (max-width: 900px) {
   .surfaceRoot :global(.panel),
-  .surfaceRoot :global(.form-card) {
-    padding: 20px;
-  }
+  .surfaceRoot :global(.form-card) { padding: 20px; }
 }
 
 @media (max-width: 640px) {
@@ -125,11 +156,7 @@
   .surfaceRoot :global(.risk-card),
   .surfaceRoot :global(.action-card),
   .surfaceRoot :global(.feature-card),
-  .surfaceRoot :global(.doc-card) {
-    border-radius: 13px;
-  }
+  .surfaceRoot :global(.doc-card) { border-radius: 16px; }
 
-  .surfaceRoot :global(button:not(:disabled)) {
-    min-height: 44px;
-  }
+  .surfaceRoot :global(button:not(:disabled)) { min-height: 44px; }
 }
