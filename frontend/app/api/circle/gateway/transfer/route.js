@@ -6,14 +6,15 @@ export async function POST(request) {
   if (!limit.allowed) return rateLimitResponse(limit);
   try {
     const body = await request.json();
-    const burnIntent = body?.burnIntent;
-    const signature = body?.signature;
-    if (!burnIntent?.spec || !signature) return withRateLimitHeaders(Response.json({ success: false, error: 'A signed Gateway burn intent is required.' }, { status: 400 }), limit);
-    const response = await fetch(`${CIRCLE_GATEWAY_TESTNET_API}/v1/transfer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify([{ burnIntent, signature }]), cache: 'no-store' });
+    const requests = Array.isArray(body?.requests)
+      ? body.requests
+      : (body?.burnIntent && body?.signature ? [{ burnIntent: body.burnIntent, signature: body.signature }] : []);
+    if (!requests.length) return withRateLimitHeaders(Response.json({ success: false, error: 'Signed Gateway transfer intents are required.' }, { status: 400 }), limit);
+    const response = await fetch(`${CIRCLE_GATEWAY_TESTNET_API}/v1/transfer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requests), cache: 'no-store' });
     const json = await response.json().catch(() => ({}));
     if (!response.ok) return withRateLimitHeaders(Response.json({ success: false, error: json?.message || json?.error || `Circle Gateway returned HTTP ${response.status}.` }, { status: response.status }), limit);
     if (!json?.attestation || !json?.signature) return withRateLimitHeaders(Response.json({ success: false, error: 'Circle Gateway did not return a usable attestation.' }, { status: 502 }), limit);
-    return withRateLimitHeaders(Response.json({ success: true, transferId: json.transferId || null, attestation: json.attestation, signature: json.signature, fees: json.fees || null, expirationBlock: json.expirationBlock || null }, { status: 200 }), limit);
+    return withRateLimitHeaders(Response.json({ success: true, transferId: json.transferId || null, attestation: json.attestation, signature: json.signature, fees: json.fees || null, expirationBlock: json.expirationBlock || null, intents: requests.length }, { status: 200 }), limit);
   } catch (error) {
     return withRateLimitHeaders(Response.json({ success: false, error: error?.message || 'Unable to request a Gateway attestation.' }, { status: 500 }), limit);
   }
