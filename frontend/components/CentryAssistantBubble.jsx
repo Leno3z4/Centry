@@ -46,27 +46,28 @@ export default function CentryAssistantBubble() {
         type="button"
         className={`${styles.bubble} ${open ? styles.bubbleOpen : ''}`}
         onClick={() => setOpen((value) => !value)}
-        aria-label={open ? 'Close Centry Intelligence' : 'Open Centry Intelligence'}
+        aria-label={open ? 'Close Centrion' : 'Ask Centrion'}
         aria-expanded={open}
-        aria-controls="centry-intelligence-panel"
+        aria-controls="centrion-panel"
       >
         <span className={styles.bubbleMark} aria-hidden="true">C</span>
         <span className={styles.bubbleLabel}>Ask</span>
       </button>
 
       <aside
-        id="centry-intelligence-panel"
+        id="centrion-panel"
         ref={panelRef}
         className={`${styles.panel} ${open ? styles.panelOpen : ''}`}
         aria-hidden={!open}
-        aria-label="Centry Intelligence"
+        aria-label="Centrion assistant"
       >
         <div className={styles.panelHeader}>
-          <div>
-            <span className={styles.eyebrow}>Centry Intelligence</span>
-            <h2>Ask Centry</h2>
+          <div className={styles.panelTitleGroup}>
+            <span className={styles.eyebrow}>Centrion</span>
+            <h2>Ask Centrion</h2>
+            <p>Onchain position intelligence</p>
           </div>
-          <button type="button" onClick={() => setOpen(false)} className={styles.close} aria-label="Close assistant">×</button>
+          <button type="button" onClick={() => setOpen(false)} className={styles.close} aria-label="Close Centrion">×</button>
         </div>
         <div className={styles.panelBody}>
           <CentryIntelligence market={market} lending={lending} compact />
