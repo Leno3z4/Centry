@@ -1,0 +1,17 @@
+.panel { margin-top: 20px; border: 1px solid rgba(255,255,255,.08); border-radius: 18px; padding: 18px 20px; background: rgba(255,255,255,.018); }
+.head { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; }
+.head h2 { margin:0; font-size:18px; }
+.head p { margin:5px 0 0; color:#8f849d; font-size:11px; }
+.head a { color:#bda9e9; text-decoration:none; font-size:11px; white-space:nowrap; }
+.head a:hover { color:#e2d7ff; }
+.list { display:flex; flex-direction:column; margin-top:14px; }
+.item { display:flex; align-items:center; gap:12px; padding:12px 2px; border-top:1px solid rgba(255,255,255,.06); color:inherit; text-decoration:none; }
+.item:first-child { border-top:0; }
+.item:hover { background:rgba(255,255,255,.018); }
+.icon { width:28px; height:28px; border:1px solid rgba(255,255,255,.08); border-radius:9px; display:grid; place-items:center; color:#75ddb2; font-size:12px; flex:0 0 auto; }
+.main { min-width:0; flex:1; }
+.main strong { display:block; font-size:12px; font-weight:650; }
+.main span { display:block; margin-top:3px; color:#8f849d; font-size:10px; }
+.arrow { color:#7f738a; font-size:12px; }
+.empty { margin-top:14px; padding:18px; border:1px dashed rgba(255,255,255,.08); border-radius:12px; color:#8f849d; font-size:11px; text-align:center; }
+@media (max-width:640px){ .panel{padding:16px}.head{flex-direction:column}.head a{white-space:normal} }
