@@ -1,11 +1,14 @@
-import { Contract, JsonRpcProvider, getAddress, verifyMessage } from "ethers";
+import { Contract, JsonRpcProvider, getAddress, isAddress, verifyMessage } from "ethers";
 import {
   issueAgentConnection,
   verifyAgentChallenge,
   verifyAgentConnection,
 } from "../../../../../lib/agentConnectionTokens";
 
-const ACCOUNT_ABI = ["function owner() view returns (address)"];
+const ACCOUNT_ABI = [
+  "function owner() view returns (address)",
+  "function agentOperators(address) view returns (bool)",
+];
 const ALLOWED_SCOPES = new Set([
   "read",
   "lend",
@@ -59,9 +62,12 @@ export async function POST(request) {
 
   const challengeToken = typeof body?.challengeToken === "string" ? body.challengeToken : "";
   const signature = typeof body?.signature === "string" ? body.signature : "";
+  const operator = typeof body?.operator === "string" && isAddress(body.operator)
+    ? getAddress(body.operator)
+    : null;
   const scopes = normalizeScopes(body?.scopes);
 
-  if (!challengeToken || !signature || !scopes) {
+  if (!challengeToken || !signature || !operator || !scopes) {
     return noStore({ error: "invalid_connection_request" }, 400);
   }
 
@@ -99,17 +105,23 @@ export async function POST(request) {
     const provider = new JsonRpcProvider(rpcUrl);
     const account = getAddress(challenge.account);
     const contract = new Contract(account, ACCOUNT_ABI, provider);
-    const onchainOwner = getAddress(await contract.owner());
+    const [onchainOwner, operatorAuthorized] = await Promise.all([
+      contract.owner(),
+      contract.agentOperators(operator),
+    ]);
 
-    if (onchainOwner.toLowerCase() !== signer.toLowerCase()) {
+    if (getAddress(onchainOwner).toLowerCase() !== signer.toLowerCase()) {
       return noStore({ error: "account_owner_mismatch" }, 403);
+    }
+
+    if (!operatorAuthorized) {
+      return noStore({ error: "operator_not_authorized" }, 403);
     }
   } catch {
     return noStore({ error: "account_owner_verification_failed" }, 503);
   }
 
   try {
-    const operator = process.env.CENTRY_AGENT_OPERATOR || null;
     const connectionToken = await issueAgentConnection({
       owner: challenge.owner,
       account: challenge.account,
@@ -126,6 +138,8 @@ export async function POST(request) {
       "Read the Centry skill at the following URL and follow its instructions to establish the connection.",
       connectionUrl,
       "",
+      `Your authorized operator address is ${operator}. Include it as the \\`operator\\` query parameter when fetching the connection URL.`,
+      "",
       "After connecting, use only the capabilities returned by Centry for this connection.",
     ].join("\n");
 
@@ -134,6 +148,7 @@ export async function POST(request) {
       connectionId: issuedConnection?.connectionId || null,
       account: challenge.account,
       owner: challenge.owner,
+      operator,
       scopes,
       connectionUrl,
       prompt,
