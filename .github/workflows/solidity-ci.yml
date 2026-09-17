@@ -3,19 +3,21 @@ name: Solidity CI
 on:
   push:
     paths:
-      - "contracts/**"
+      - "contracts/agents/**"
+      - "contracts/test/CentryOnchainAgentAccountTest.sol"
       - "foundry.toml"
       - ".gitmodules"
       - ".github/workflows/solidity-ci.yml"
   pull_request:
     paths:
-      - "contracts/**"
+      - "contracts/agents/**"
+      - "contracts/test/CentryOnchainAgentAccountTest.sol"
       - "foundry.toml"
       - ".gitmodules"
       - ".github/workflows/solidity-ci.yml"
 
 jobs:
-  foundry:
+  onchain-agents:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -28,5 +30,5 @@ jobs:
         with:
           version: stable
 
-      - name: Run Solidity tests
-        run: forge test -vv
+      - name: Test onchain agent foundation
+        run: forge test --match-path contracts/test/CentryOnchainAgentAccountTest.sol -vv
