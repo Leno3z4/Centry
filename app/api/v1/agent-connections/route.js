@@ -69,8 +69,12 @@ export async function POST(request) {
   if (!challenge) return noStore({ error: "invalid_or_expired_challenge" }, 401);
 
   const origin = connectionOrigin(request);
+  if (challenge.origin !== origin) {
+    return noStore({ error: "challenge_origin_mismatch" }, 403);
+  }
+
   const message = buildChallengeMessage({
-    origin,
+    origin: challenge.origin,
     account: challenge.account,
     owner: challenge.owner,
     nonce: challenge.nonce,
