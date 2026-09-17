@@ -1,4 +1,5 @@
 import { verifyAgentSession } from "../../../../../lib/agentConnectionTokens";
+import { actionCatalog, ARC_TESTNET_CHAIN_ID } from "../../../../../lib/agentExecutionRuntime";
 
 function unauthorized() {
   return Response.json(
@@ -15,6 +16,8 @@ export async function GET(request) {
   const session = await verifyAgentSession(match[1]);
   if (!session) return unauthorized();
 
+  const scopes = session.scopes || [];
+
   return Response.json(
     {
       connected: true,
@@ -22,19 +25,22 @@ export async function GET(request) {
       owner: session.owner,
       account: session.account,
       operator: session.operator,
-      scopes: session.scopes || [],
+      chainId: ARC_TESTNET_CHAIN_ID,
+      scopes,
       capabilities: {
-        read: (session.scopes || []).includes("read"),
-        lend: (session.scopes || []).includes("lend"),
-        borrow: (session.scopes || []).includes("borrow"),
-        repay: (session.scopes || []).includes("repay"),
-        swap: (session.scopes || []).includes("swap"),
-        governance: (session.scopes || []).includes("governance"),
-        agentManagement: (session.scopes || []).includes("agent-management"),
+        read: scopes.includes("read"),
+        lend: scopes.includes("lend"),
+        borrow: scopes.includes("borrow"),
+        repay: scopes.includes("repay"),
+        swap: scopes.includes("swap"),
+        governance: scopes.includes("governance"),
+        agentManagement: scopes.includes("agent-management"),
       },
+      actions: actionCatalog().filter((action) => scopes.includes(action.scope)),
       authorization: {
         model: "user-scoped-session-plus-onchain-policy",
         note: "A capability being present does not bypass the user's current onchain smart-account permissions.",
+        transactionModel: "Centry prepares a bounded smart-account call; the authorized operator wallet signs and broadcasts it.",
       },
     },
     { status: 200, headers: { "Cache-Control": "no-store" } }
