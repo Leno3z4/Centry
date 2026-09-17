@@ -244,7 +244,7 @@ function AgentPageContent() {
             <div className={styles.scopeList}>{OPTIONAL_SCOPES.map(([scope, description]) => <label key={scope} className={styles.scopeRow}><input type="checkbox" checked={scopes.includes(scope)} onChange={() => toggleScope(scope)} /><span><strong>{scope}</strong><small>{description}</small></span></label>)}</div>
             {scopes.includes('swap') ? <><label className={styles.label}>Maximum native USDC value per swap</label><input className={styles.input} inputMode="decimal" value={swapLimit} onChange={(event) => { setSwapLimit(event.target.value); setPermissionsReady(false); }} placeholder="e.g. 1000" /><p className={styles.hint}>Sets the smart-account native-value cap for the external agent's swap permission.</p></> : null}
             {hasStateChangingScope ? <button type="button" className={styles.secondaryButton} disabled={isWritePending || !operatorAuthorized} onClick={configurePermissions}>{permissionsReady ? 'Permissions configured' : 'Apply onchain permissions'}</button> : null}
-            <button type="button'" className={styles.primaryButton} disabled={isWritePending || !operatorAuthorized || (hasStateChangingScope && !permissionsReady)} onClick={createConnection}>Generate connection prompt</button>
+            <button type="button" className={styles.primaryButton} disabled={isWritePending || !operatorAuthorized || (hasStateChangingScope && !permissionsReady)} onClick={createConnection}>Generate connection prompt</button>
           </section>
         </div>
       )}
