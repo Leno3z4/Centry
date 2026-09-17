@@ -21,31 +21,39 @@ const ACTIONS = Object.freeze({
   gateway: 'gateway.fund',
 });
 
-const MARKET_REFERENCE = SWAP_MARKETS.filter((market) => market.address).map((market) => ({ id: market.id, symbol: market.symbol, decimals: market.decimals, address: market.address, status: market.status }));
+const MARKET_REFERENCE = SWAP_MARKETS
+  .filter((market) => market.address)
+  .map((market) => ({
+    id: market.id,
+    symbol: market.symbol,
+    decimals: market.decimals,
+    address: market.address,
+    status: market.status,
+  }));
 
-function cleanText(value, maxLength) { return String(value ?? '').trim().slice(0, maxLength); }
-function parseNumber(value) { const parsed = Number(value); return Number.isFinite(parsed) && parsed > 0 ? parsed : null; }
+function cleanText(value, maxLength) {
+  return String(value ?? '').trim().slice(0, maxLength);
+}
+
+function parseNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
 function marketBySymbol(symbol, context) {
   const requested = String(symbol || context?.market || 'USDC').toLowerCase();
-  return MARKET_REFERENCE.find((market) => market.symbol.toLowerCase() === requested || market.id.toLowerCase() === requested) || MARKET_REFERENCE.find((market) => market.symbol === 'USDC');
-}
-function maybeGatewayShortfall(kind, market, amount, context) {
-  if (kind !== 'supply' && kind !== 'repay') return null;
-  if (market?.symbol !== 'USDC') return null;
-  const walletBalance = parseNumber(context?.walletBalance);
-  if (walletBalance == null || amount <= walletBalance) return null;
-  return Number((amount - walletBalance).toFixed(6));
-}
-function buildLendingActions({ kind, market, amount, context }) {
-  const actions = [];
-  const gatewayShortfall = maybeGatewayShortfall(kind, market, amount, context);
-  if (gatewayShortfall) actions.push({ type: ACTIONS.gateway, amount: String(gatewayShortfall), assetSymbol: 'USDC' });
-  actions.push({ type: ACTIONS[kind], asset: market.address, assetSymbol: market.symbol, decimals: market.decimals, amount: String(amount) });
-  return actions;
+  return (
+    MARKET_REFERENCE.find(
+      (market) =>
+        market.symbol.toLowerCase() === requested ||
+        market.id.toLowerCase() === requested,
+    ) || MARKET_REFERENCE.find((market) => market.symbol === 'USDC')
+  );
 }
 
 function parseExplicitExecution(question, context) {
   const text = question.toLowerCase().replace(/[,]/g, ' ').replace(/\s+/g, ' ').trim();
+
   let match = text.match(/\b(borrow|supply|deposit|withdraw|repay)\s+(\d+(?:\.\d+)?)\s*(usdc|eurc|cirbtc|cent)?\b/);
   if (match) {
     const kind = match[1] === 'deposit' ? 'supply' : match[1];
@@ -77,6 +85,10 @@ function parseExplicitExecution(question, context) {
     if (amount) return { answer: `Bridge ${amount} USDC from ${match[2]} to ${match[3]}. Opening the wallet signature now.`, plan: { title: 'Bridge USDC', reason: 'Explicit bridge request.', autoExecute: true, actions: [{ type: ACTIONS.bridge, fromChain: match[2], toChain: match[3], amount: String(amount) }] } };
   }
 
+  if (/^bridge\b/.test(text)) {
+    return { answer: 'Tell me the source and destination, for example: “bridge 10 USDC from Base to Arc”.', plan: null };
+  }
+
   match = text.match(/\b(?:claim|claim my)\s+(?:reward|rewards)\s+(?:for\s+)?(?:vec?ent\s*)?#?(\d+)\b/);
   if (match) return { answer: `Claim reward for veCENT #${match[1]}. Opening the wallet signature now.`, plan: { title: `Claim veCENT #${match[1]} reward`, reason: 'Explicit reward claim request.', autoExecute: true, actions: [{ type: ACTIONS.reward, tokenId: Number(match[1]) }] } };
 
@@ -87,16 +99,31 @@ function parseExplicitExecution(question, context) {
     if (amount && weeks > 0) return { answer: `Lock ${amount} CENT for ${weeks} weeks. Opening the wallet signature now.`, plan: { title: `Create ${weeks}-week veCENT lock`, reason: 'Explicit governance request.', autoExecute: true, actions: [{ type: ACTIONS.lock, amount: String(amount), weeks }] } };
   }
 
+  if (/^lock\b/.test(text)) {
+    return { answer: 'Tell me the lock duration too, for example: “lock 500 CENT for 52 weeks”.', plan: null };
+  }
+
   return null;
 }
 
 const EXECUTION_SCHEMA = `Return JSON only. If the user asks to transact, return {"answer":"...","plan":{"title":"...","reason":"...","autoExecute":false,"actions":[...]}}. Allowed actions: lending.supply, lending.withdraw, lending.borrow, lending.repay, token.approve, token.approveCent, governance.createLock, governance.increaseLock, governance.extendLock, governance.withdrawLock, rewards.claim, swap, bridge, gateway.fund. Supported bridge keys: arc, base, arbitrum, ethereum. Never invent token addresses, balances, tokenIds, reward proofs, calldata, or hashes. For rewards.claim provide only tokenId. For gateway.fund provide amount. For swap provide inputToken, outputToken, amount, inputDecimals, inputSymbol, outputSymbol, amountRaw, slippage. For bridge provide fromChain, toChain, amount. Do not warn about liquidation unless the supplied health factor is below 1.0. When the user explicitly asks for an action, prioritize the action plan over generic financial commentary.`;
-function buildPrompt({ question, context }) { return `${CENTRY_AGENT_SYSTEM_PROMPT}\n\n${EXECUTION_SCHEMA}\n\nMARKETS:\n${JSON.stringify(MARKET_REFERENCE)}\n\nPOSITION:\n${JSON.stringify(context, null, 2)}\n\nREQUEST:\n${question}`; }
-function parseModelJson(text) { try { return JSON.parse(String(text || '').trim()); } catch { return null; } }
+
+function buildPrompt({ question, context }) {
+  return `${CENTRY_AGENT_SYSTEM_PROMPT}\n\n${EXECUTION_SCHEMA}\n\nMARKETS:\n${JSON.stringify(MARKET_REFERENCE)}\n\nPOSITION:\n${JSON.stringify(context, null, 2)}\n\nREQUEST:\n${question}`;
+}
+
+function parseModelJson(text) {
+  try {
+    return JSON.parse(String(text || '').trim());
+  } catch {
+    return null;
+  }
+}
 
 export async function POST(request) {
   const limit = rateLimit(request, 'assistant', { max: 12, windowMs: 60_000 });
   if (!limit.allowed) return rateLimitResponse(limit);
+
   try {
     const body = await request.json();
     const question = cleanText(body?.question, 500);
