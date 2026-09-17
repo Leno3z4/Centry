@@ -43,6 +43,9 @@ jobs:
           optimizer = true
           optimizer_runs = 200
           via_ir = false
+          allow_paths = [
+            "../../lib/openzeppelin-contracts"
+          ]
           remappings = [
             "@openzeppelin/=../../lib/openzeppelin-contracts/"
           ]
