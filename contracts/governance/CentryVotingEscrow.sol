@@ -84,6 +84,7 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard, Ownable2Step, IVotes {
         _checkpointAccount(msg.sender); _addVotingPosition(msg.sender, amount, end);
         _checkpointTotal(); _addTotalVotingPosition(amount, end);
         _mint(msg.sender, tokenId);
+        _checkpointAccount(msg.sender); _checkpointTotal();
         emit LockCreated(msg.sender, tokenId, amount, end);
     }
 
@@ -98,6 +99,7 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard, Ownable2Step, IVotes {
         _removeVotingPosition(msg.sender, lock.amount, lock.end); _removeTotalVotingPosition(lock.amount, lock.end);
         lock.amount = uint128(uint256(lock.amount) + amount);
         _addVotingPosition(msg.sender, lock.amount, lock.end); _addTotalVotingPosition(lock.amount, lock.end);
+        _checkpointAccount(msg.sender); _checkpointTotal();
         emit LockIncreased(msg.sender, tokenId, amount, lock.amount);
     }
 
@@ -112,6 +114,7 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard, Ownable2Step, IVotes {
         _removeVotingPosition(msg.sender, lock.amount, lock.end); _removeTotalVotingPosition(lock.amount, lock.end);
         lock.end = uint64(newEnd);
         _addVotingPosition(msg.sender, lock.amount, newEnd); _addTotalVotingPosition(lock.amount, newEnd);
+        _checkpointAccount(msg.sender); _checkpointTotal();
         emit LockExtended(msg.sender, tokenId, newEnd);
     }
 
@@ -200,13 +203,11 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard, Ownable2Step, IVotes {
     }
 
     function delegates(address account) public pure returns (address) { return account; }
-
     function delegate(address delegatee) public {
         if (delegatee != msg.sender) revert DelegationDisabled();
         emit DelegateChanged(msg.sender, msg.sender, msg.sender);
         emit DelegateVotesChanged(msg.sender, getVotes(msg.sender), getVotes(msg.sender));
     }
-
     function delegateBySig(address, uint256, uint256, uint8, bytes32, bytes32) public pure { revert DelegationDisabled(); }
 
     function _currentVotingPower(uint256 bias, uint256 slope, uint256 timestamp) internal pure returns (uint256) {
@@ -242,17 +243,14 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard, Ownable2Step, IVotes {
     function _update(address to, uint256 tokenId, address auth) internal override returns (address previousOwner) {
         previousOwner = _ownerOf(tokenId);
         Lock memory lock = locks[tokenId];
-
         if (previousOwner != address(0) && to != previousOwner) {
             _checkpointVotingPower(tokenId); _checkpointAccount(previousOwner);
             _removeVotingPosition(previousOwner, lock.amount, lock.end);
             if (to == address(0)) { _checkpointTotal(); _removeTotalVotingPosition(lock.amount, lock.end); }
         }
-
         if (to != address(0) && previousOwner != to && previousOwner != address(0)) {
             _checkpointAccount(to); _addVotingPosition(to, lock.amount, lock.end);
         }
-
         previousOwner = super._update(to, tokenId, auth);
         if (previousOwner != address(0)) {
             uint256[] storage fromTokens = _ownedTokenIds[previousOwner];
@@ -261,10 +259,10 @@ contract CentryVotingEscrow is ERC721, ReentrancyGuard, Ownable2Step, IVotes {
             fromTokens.pop(); delete _ownedTokenIndex[tokenId];
         }
         if (to != address(0)) { _ownedTokenIndex[tokenId] = _ownedTokenIds[to].length; _ownedTokenIds[to].push(tokenId); }
-
+        if (previousOwner != address(0) && to != previousOwner) _checkpointAccount(previousOwner);
+        if (to != address(0) && previousOwner != to && previousOwner != address(0)) _checkpointAccount(to);
+        if (to == address(0) && previousOwner != address(0)) _checkpointTotal();
         address hook = transferHook;
-        if (hook != address(0) && previousOwner != address(0) && to != previousOwner) {
-            ICentryVeCENTTransferHook(hook).onVeCENTTransfer(tokenId, previousOwner, to);
-        }
+        if (hook != address(0) && previousOwner != address(0) && to != previousOwner) ICentryVeCENTTransferHook(hook).onVeCENTTransfer(tokenId, previousOwner, to);
     }
 }
