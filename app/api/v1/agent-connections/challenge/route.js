@@ -28,12 +28,12 @@ export async function POST(request) {
   }
 
   try {
-    const challenge = await issueAgentChallenge({ owner, account });
     const origin = connectionOrigin(request);
+    const challenge = await issueAgentChallenge({ owner, account, origin });
     const message = [
       "Centry agent connection",
       "",
-      `Origin: ${origin}`,
+      `Origin: ${challenge.origin}`,
       `Account: ${challenge.account}`,
       `Owner: ${challenge.owner}`,
       `Nonce: ${challenge.nonce}`,
