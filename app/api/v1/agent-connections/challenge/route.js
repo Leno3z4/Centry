@@ -1,6 +1,16 @@
 import { getAddress, isAddress } from "ethers";
 import { issueAgentChallenge } from "../../../../../lib/agentConnectionTokens";
 
+const ALLOWED_SCOPES = new Set([
+  "read",
+  "lend",
+  "borrow",
+  "repay",
+  "swap",
+  "governance",
+  "agent-management",
+]);
+
 function noStore(body, status = 200) {
   return Response.json(body, {
     status,
@@ -10,6 +20,14 @@ function noStore(body, status = 200) {
 
 function connectionOrigin(request) {
   return (process.env.CENTRY_AGENT_BASE_URL || new URL(request.url).origin).replace(/\/$/, "");
+}
+
+function normalizeScopes(scopes) {
+  if (!Array.isArray(scopes)) return ["read"];
+  const unique = [...new Set(scopes.filter((scope) => typeof scope === "string"))];
+  if (unique.length === 0) return ["read"];
+  if (unique.some((scope) => !ALLOWED_SCOPES.has(scope))) return null;
+  return unique.sort();
 }
 
 export async function POST(request) {
@@ -22,24 +40,26 @@ export async function POST(request) {
 
   const owner = typeof body?.owner === "string" && isAddress(body.owner) ? getAddress(body.owner) : null;
   const account = typeof body?.account === "string" && isAddress(body.account) ? getAddress(body.account) : null;
+  const scopes = normalizeScopes(body?.scopes);
 
-  if (!owner || !account) {
-    return noStore({ error: "invalid_owner_or_account" }, 400);
+  if (!owner || !account || !scopes) {
+    return noStore({ error: "invalid_owner_account_or_scopes" }, 400);
   }
 
   try {
     const origin = connectionOrigin(request);
-    const challenge = await issueAgentChallenge({ owner, account, origin });
+    const challenge = await issueAgentChallenge({ owner, account, origin, scopes });
     const message = [
       "Centry agent connection",
       "",
       `Origin: ${challenge.origin}`,
       `Account: ${challenge.account}`,
       `Owner: ${challenge.owner}`,
+      `Scopes: ${challenge.scopes.join(", ")}`,
       `Nonce: ${challenge.nonce}`,
       `Expires: ${challenge.exp}`,
       "",
-      "I authorize Centry to create an external-agent connection for this account.",
+      "I authorize Centry to create an external-agent connection for this account with exactly the scopes listed above.",
     ].join("\n");
 
     return noStore({
@@ -48,6 +68,7 @@ export async function POST(request) {
       expiresAt: challenge.exp,
       owner: challenge.owner,
       account: challenge.account,
+      scopes: challenge.scopes,
       message,
     });
   } catch {
