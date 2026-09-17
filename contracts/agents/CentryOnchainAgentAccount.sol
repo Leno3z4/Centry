@@ -21,7 +21,7 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
 
     address public owner;
     address public pendingOwner;
-    address public factory;
+    address public immutable factory;
     bool public initialized;
 
     bytes32 public templateId;
@@ -35,6 +35,7 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
     error InvalidOwner();
     error NotOwner();
     error NotPendingOwner();
+    error NotFactory();
     error NotAgent();
     error AgentNotPermitted();
     error PermissionExpired();
@@ -70,6 +71,11 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
     event AgentBatchExecuted(address indexed operator, uint256 callCount);
     event AgentMetadataUpdated(bytes32 indexed configHash, string metadataURI);
 
+    constructor() {
+        factory = msg.sender;
+        initialized = true;
+    }
+
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
         _;
@@ -82,12 +88,12 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
         string calldata metadataURI_,
         address initialOperator
     ) external {
+        if (msg.sender != factory) revert NotFactory();
         if (initialized) revert AlreadyInitialized();
         if (owner_ == address(0)) revert InvalidOwner();
 
         initialized = true;
         owner = owner_;
-        factory = msg.sender;
         templateId = templateId_;
         configHash = configHash_;
         metadataURI = metadataURI_;
