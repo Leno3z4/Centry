@@ -138,24 +138,28 @@ function AgentPageContent() {
     }
   }
 
-  async function authorizeOperator() {
+  async function setOperator(active) {
     setError('');
     setStatus('');
     if (!activeAccount) return setError('Create or select an agent account first.');
     if (!isAddress(operator)) return setError('Enter a valid operator address.');
 
     try {
-      setStatus('Waiting for wallet approval…');
+      setStatus(active ? 'Waiting for wallet approval…' : 'Revoking operator…');
       const txHash = await writeContractAsync({
         address: activeAccount,
         abi: ACCOUNT_ABI,
         functionName: 'setAgentOperator',
-        args: [operator, true],
+        args: [operator, active],
       });
-      setStatus(`Operator authorization submitted: ${txHash}`);
+      setStatus(`${active ? 'Operator authorization' : 'Operator revocation'} submitted: ${txHash}`);
       await operatorQuery.refetch();
+      if (!active) {
+        setPrompt('');
+        setConnectionUrl('');
+      }
     } catch (err) {
-      setError(err?.shortMessage || err?.message || 'Failed to authorize the operator.');
+      setError(err?.shortMessage || err?.message || `Failed to ${active ? 'authorize' : 'revoke'} the operator.`);
       setStatus('');
     }
   }
@@ -253,9 +257,11 @@ function AgentPageContent() {
                 </select>
                 <div className={`${styles.authState} ${operatorAuthorized ? styles.authorized : ''}`}>
                   <span>{operatorAuthorized ? 'Operator authorized' : 'Operator not yet authorized'}</span>
-                  {!operatorAuthorized ? (
-                    <button type="button" className={styles.secondaryButton} disabled={isWritePending} onClick={authorizeOperator}>Authorize</button>
-                  ) : null}
+                  {operatorAuthorized ? (
+                    <button type="button" className={styles.secondaryButton} disabled={isWritePending} onClick={() => setOperator(false)}>Revoke</button>
+                  ) : (
+                    <button type="button" className={styles.secondaryButton} disabled={isWritePending} onClick={() => setOperator(true)}>Authorize</button>
+                  )}
                 </div>
               </>
             ) : (
