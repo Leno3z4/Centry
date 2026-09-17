@@ -1,5 +1,6 @@
 name: Application CI
 
+# Build both Next.js surfaces so agent/API and agent UI changes are validated together.
 on:
   push:
     paths:
