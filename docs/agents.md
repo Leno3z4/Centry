@@ -43,6 +43,25 @@ CENTRY_AGENT_ACTIVE=true
 
 Only the first three variables are required for the registry/account binding check. Service endpoints are optional.
 
+## Read-only permission check
+
+`POST /api/v1/agents/:agentId/authorize`
+
+This endpoint does not execute a transaction. It resolves the ERC-8004 identity, verifies the account binding, and asks the account's onchain `canExecute()` policy whether the supplied operator may call the supplied target, selector, calldata, and native value.
+
+Example request:
+
+```json
+{
+  "operator": "0x...",
+  "target": "0x...",
+  "value": "0",
+  "data": "0x12345678..."
+}
+```
+
+A `200` response means the current onchain permission policy allows the call. A `403` means the permission policy denies it. The endpoint is deliberately read-only so the HTTP/API layer cannot become an alternative custody authority.
+
 ## Request authorization model
 
 The next transport layer will use the ERC-8004 agent ID as the discovery handle and the Centry account as the authorization anchor:
@@ -60,6 +79,6 @@ The API must never treat a database row, Cloudflare Worker, or API key as suffic
 
 ## Cloudflare deployment
 
-The transport layer can run behind Cloudflare Workers/Agents. Cloudflare's agentic-payment tooling can later expose paid read/API/MCP capabilities with x402 or MPP, while ERC-8004 remains the agent identity/discovery layer.
+The transport layer can run behind Cloudflare Workers/Agents. Cloudflare's agentic-payment tooling can later expose paid read/API/MCP capabilities with x402 or MPP, while ERC-8004 remains the agent identity/discovery layer. citeturn984529search0turn984529search1turn984529search7
 
 For privileged user actions, keep authentication and policy state in a durable, replay-resistant store and submit only authorized calls to the onchain account.
