@@ -10,7 +10,6 @@ const USDC = '0x3600000000000000000000000000000000000000';
 const WUSDC = '0x911b4000D3422F482F4062a913885f7b035382Df';
 const UNITFLOW_UNIVERSAL_ROUTER = '0xEaF3195bE51861632cd32850973C9515DA48e76F';
 const WUSDC_SCALE = 10n ** 12n;
-const ROUTER_MSG_SENDER = '0x0000000000000000000000000000000000000002';
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 const UNITFLOW_UNIVERSAL_ROUTER_ABI = [{ type: 'function', name: 'execute', stateMutability: 'payable', inputs: [{ name: 'commands', type: 'bytes' }, { name: 'inputs', type: 'bytes[]' }, { name: 'deadline', type: 'uint256' }], outputs: [] }];
@@ -21,8 +20,55 @@ function parseQuoteBigInt(quote, key) { try { return BigInt(String(quote?.[key] 
 function createArcClient() { const rpcUrl = process.env.ARC_RPC_URL || process.env.ARC_RPC_URL_VARIABLE || 'https://rpc.testnet.arc.network'; return createPublicClient({ chain: { ...arc, id: ARC_CHAIN_ID }, transport: http(rpcUrl) }); }
 async function getCentAllowance(userAddress, amountIn) { const client = createArcClient(); return client.readContract({ address: CENT, abi: ERC20_ABI, functionName: 'allowance', args: [userAddress, UNITFLOW_UNIVERSAL_ROUTER] }) >= amountIn; }
 async function normalizeTowerApproval(data, quote, userAddress) { if (!data?.success || !data?.data?.swap?.to || !validAddress(quote?.inputToken) || isCentPair(quote.inputToken, quote.outputToken)) return data; const amountIn = parseQuoteBigInt(quote, 'inputAmount'); if (amountIn <= 0n) return data; const spender = data.data.swap.to; if (!validAddress(spender) || spender.toLowerCase() === ZERO_ADDRESS) return data; const buildApproval = () => ({ to: quote.inputToken, data: encodeFunctionData({ abi: ERC20_ABI, functionName: 'approve', args: [spender, amountIn] }), value: '0', chainId: ARC_CHAIN_ID }); try { const client = createArcClient(); const allowance = await client.readContract({ address: quote.inputToken, abi: ERC20_ABI, functionName: 'allowance', args: [userAddress, spender] }); if (allowance >= amountIn) return { ...data, data: { ...data.data, approval: null } }; return { ...data, data: { ...data.data, approval: buildApproval() } }; } catch { if (data.data.approval) return data; return { ...data, data: { ...data.data, approval: buildApproval() } }; } }
-async function buildCentSwap(quote, userAddress) { const inputToken = String(quote.inputToken || '').toLowerCase(); const outputToken = String(quote.outputToken || '').toLowerCase(); const amountIn = parseQuoteBigInt(quote, 'inputAmount'); const minOut = parseQuoteBigInt(quote, 'minOut'); if (!validAddress(userAddress) || !isCentPair(inputToken, outputToken)) throw new Error('Invalid CENT swap request.'); if (amountIn <= 0n || minOut <= 0n) throw new Error('Invalid CENT swap amount.'); const deadline = BigInt(Math.floor(Date.now() / 1000) + 300); if (inputToken === CENT.toLowerCase()) { const nativeMinOut = minOut / WUSDC_SCALE; if (nativeMinOut <= 0n) throw new Error('CENT quote is below one USDC base unit.'); const path = [CENT, WUSDC]; const commands = '0x080c'; const inputs = [encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'address[]' }, { type: 'bool' }], [ROUTER_MSG_SENDER, amountIn, minOut, path, true]), encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [ROUTER_MSG_SENDER, nativeMinOut])]; const approved = await getCentAllowance(userAddress, amountIn); return { approval: approved ? null : { to: CENT, data: encodeFunctionData({ abi: ERC20_ABI, functionName: 'approve', args: [UNITFLOW_UNIVERSAL_ROUTER, amountIn] }), value: '0' }, swap: { to: UNITFLOW_UNIVERSAL_ROUTER, data: encodeFunctionData({ abi: UNITFLOW_UNIVERSAL_ROUTER_ABI, functionName: 'execute', args: [commands, inputs, deadline] }), value: '0' }, chainId: ARC_CHAIN_ID, provider: 'UnitFlow v2.5', route: 'CENT → WUSDC → USDC' }; }
-const nativeAmount = amountIn * WUSDC_SCALE; const path = [WUSDC, CENT]; const commands = '0x0b08'; const inputs = [encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [ROUTER_MSG_SENDER, nativeAmount]), encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'address[]' }, { type: 'bool' }], [ROUTER_MSG_SENDER, nativeAmount, minOut, path, false])]; return { approval: null, swap: { to: UNITFLOW_UNIVERSAL_ROUTER, data: encodeFunctionData({ abi: UNITFLOW_UNIVERSAL_ROUTER_ABI, functionName: 'execute', args: [commands, inputs, deadline] }), value: nativeAmount.toString() }, chainId: ARC_CHAIN_ID, provider: 'UnitFlow v2.5', route: 'USDC → WUSDC → CENT' }; }
+async function buildCentSwap(quote, userAddress) {
+  const inputToken = String(quote.inputToken || '').toLowerCase();
+  const outputToken = String(quote.outputToken || '').toLowerCase();
+  const amountIn = parseQuoteBigInt(quote, 'inputAmount');
+  const minOut = parseQuoteBigInt(quote, 'minOut');
+  if (!validAddress(userAddress) || !isCentPair(inputToken, outputToken)) throw new Error('Invalid CENT swap request.');
+  if (amountIn <= 0n || minOut <= 0n) throw new Error('Invalid CENT swap amount.');
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
+
+  if (inputToken === CENT.toLowerCase()) {
+    const nativeMinOut = minOut / WUSDC_SCALE;
+    if (nativeMinOut <= 0n) throw new Error('CENT quote is below one USDC base unit.');
+    const path = [CENT, WUSDC];
+    const commands = '0x080c';
+    const inputs = [
+      encodeAbiParameters(
+        [{ type: 'address' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'address[]' }, { type: 'bool' }],
+        [UNITFLOW_UNIVERSAL_ROUTER, amountIn, minOut, path, true],
+      ),
+      encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [userAddress, nativeMinOut]),
+    ];
+    const approved = await getCentAllowance(userAddress, amountIn);
+    return {
+      approval: approved ? null : { to: CENT, data: encodeFunctionData({ abi: ERC20_ABI, functionName: 'approve', args: [UNITFLOW_UNIVERSAL_ROUTER, amountIn] }), value: '0' },
+      swap: { to: UNITFLOW_UNIVERSAL_ROUTER, data: encodeFunctionData({ abi: UNITFLOW_UNIVERSAL_ROUTER_ABI, functionName: 'execute', args: [commands, inputs, deadline] }), value: '0' },
+      chainId: ARC_CHAIN_ID,
+      provider: 'UnitFlow v2.5',
+      route: 'CENT → WUSDC → USDC',
+    };
+  }
+
+  const nativeAmount = amountIn * WUSDC_SCALE;
+  const path = [WUSDC, CENT];
+  const commands = '0x0b08';
+  const inputs = [
+    encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [UNITFLOW_UNIVERSAL_ROUTER, nativeAmount]),
+    encodeAbiParameters(
+      [{ type: 'address' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'address[]' }, { type: 'bool' }],
+      [userAddress, nativeAmount, minOut, path, false],
+    ),
+  ];
+  return {
+    approval: null,
+    swap: { to: UNITFLOW_UNIVERSAL_ROUTER, data: encodeFunctionData({ abi: UNITFLOW_UNIVERSAL_ROUTER_ABI, functionName: 'execute', args: [commands, inputs, deadline] }), value: nativeAmount.toString() },
+    chainId: ARC_CHAIN_ID,
+    provider: 'UnitFlow v2.5',
+    route: 'USDC → WUSDC → CENT',
+  };
+}
 
 export async function POST(request) {
   const limit = rateLimit(request, 'tower-build', { max: 20, windowMs: 60_000 });
