@@ -11,7 +11,7 @@ function usd(value) {
   return parsed.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-export function buildCentryPositionContext({ marketSymbol, walletBalance, supplied, borrowed, borrowLimit, healthFactor, marketLiquidity, marketBorrowed, utilization, accountPosition }) {
+export function buildCentryPositionContext({ marketSymbol, walletBalance, supplied, borrowed, borrowLimit, healthFactor, marketLiquidity, marketBorrowed, utilization, accountPosition, gatewayAvailableUsdc, gatewayPendingUsdc }) {
   const numericHealth = finiteNumber(healthFactor);
   const numericCapacity = finiteNumber(borrowLimit);
   const numericUtilization = finiteNumber(utilization);
@@ -29,6 +29,10 @@ export function buildCentryPositionContext({ marketSymbol, walletBalance, suppli
     marketLiquidity: String(marketLiquidity ?? '0'),
     marketBorrowed: String(marketBorrowed ?? '0'),
     utilizationPercent: numericUtilization == null ? 0 : numericUtilization,
+    gateway: {
+      finalizedUsdc: String(gatewayAvailableUsdc ?? '0'),
+      pendingUsdc: String(gatewayPendingUsdc ?? '0'),
+    },
     accountPosition: account ? {
       ready: Boolean(account.ready),
       totalCollateralValueUsd: finiteNumber(account.totalCollateralValueUsd),
@@ -48,6 +52,7 @@ export function buildCentryPositionContext({ marketSymbol, walletBalance, suppli
       borrowCapacity: numericCapacity != null,
       utilization: numericUtilization != null,
       accountPosition: Boolean(account?.ready),
+      gateway: gatewayAvailableUsdc != null,
     },
   };
 }
@@ -84,7 +89,16 @@ export function fallbackPositionAnswer(context, question) {
     return `Health factor: ${context.healthFactor}. The position is not currently below Centry's 1.00 liquidation threshold.`;
   }
 
-  if (lower.includes('liquidity') || lower.includes('utilization')) return `${market} liquidity: ${context.marketLiquidity}. Borrowed: ${context.marketBorrowed}. Utilization: ${utilization.toFixed(2)}%.`;
+  if (lower.includes('liquidity') || lower.includes('utilization')) {
+    if (market === 'USDC' && context.gateway) {
+      const wallet = finiteNumber(context.walletBalance) ?? 0;
+      const gateway = finiteNumber(context.gateway.finalizedUsdc) ?? 0;
+      const pending = finiteNumber(context.gateway.pendingUsdc) ?? 0;
+      return `USDC liquidity: ${context.marketLiquidity} in the lending market. Your Arc wallet has ${wallet} USDC, Gateway has ${gateway} finalized USDC, and ${pending} USDC is still pending there.`;
+    }
+    return `${market} liquidity: ${context.marketLiquidity}. Borrowed: ${context.marketBorrowed}. Utilization: ${utilization.toFixed(2)}%.`;
+  }
+
   if (lower.includes('position') || lower.includes('balance') || lower.includes('debt')) {
     if (account?.ready) return `Collateral value: $${usd(account.totalCollateralValueUsd)}. Debt: $${usd(account.totalDebtValueUsd)}. Remaining borrow capacity: $${usd(account.remainingBorrowCapacityUsd)}. Current ${market} debt: ${borrowed}.`;
     return `${market}: wallet ${context.walletBalance}, supplied ${context.supplied}, borrowed ${borrowed}, remaining capacity ${context.remainingBorrowCapacity}, health factor ${context.healthFactor}.`;
@@ -102,4 +116,5 @@ Rules:
 - Never invent balances, prices, health factors, limits, transactions, calldata, tokenIds, reward proofs, or hashes.
 - Never claim a transaction happened until the application reports a confirmed receipt.
 - Self-repay is background infrastructure unless explicitly requested.
+- Treat Gateway pending balances as unavailable until finalized.
 - Be concise and specific.`;
