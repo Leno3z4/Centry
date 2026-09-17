@@ -86,10 +86,9 @@ contract CentryOracle is Ownable2Step, Pausable {
     constructor(address initialOwner, address selfKisserAddress)
         Ownable(initialOwner)
     {
-        if (selfKisserAddress == address(0)) {
-            revert InvalidFeed();
-        }
-
+        // A zero self-kisser is valid for deployments that use only
+        // Chainlink-style aggregator feeds. Chronicle configuration is
+        // explicitly guarded in setChronicleFeed().
         selfKisser = ISelfKisser(selfKisserAddress);
     }
 
@@ -101,6 +100,10 @@ contract CentryOracle is Ownable2Step, Pausable {
     ) external onlyOwner {
         if (asset == address(0) || chronicle == address(0)) {
             revert InvalidFeed();
+        }
+
+        if (address(selfKisser) == address(0)) {
+            revert UnauthorizedSelfKisser();
         }
 
         if (maxStaleness == 0 || maxStaleness > 30 days) {
