@@ -1,79 +1,216 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-/// @notice Lightweight assertion harness for CI/static execution of LendingPool invariants.
-/// @dev This is intentionally dependency-free; a runner can deploy the protocol mocks and
-/// call these pure boundary checks without changing production contracts.
+import "../core/CentryLendingPool.sol";
+import "../core/CentryInterestRateStrategy.sol";
+import "../mocks/CentryMockERC20.sol";
+import "../mocks/CentryMockOracle.sol";
+
+interface Vm {
+    function warp(uint256 newTimestamp) external;
+    function prank(address sender) external;
+    function expectRevert(bytes calldata) external;
+}
+
+/// @title Centry Lending Pool Tests
+/// @notice Foundry-compatible protocol tests with no forge-std dependency.
 contract CentryLendingPoolTest {
+    Vm internal constant vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
+
     uint256 internal constant WAD = 1e18;
-    uint256 internal constant RAY = 1e27;
-    uint256 internal constant BPS = 10_000;
-    uint256 internal constant CLOSE_FACTOR_BPS = 5_000;
+    uint256 internal constant YEAR = 365 days;
 
-    function testScaledUpNeverUndercollateralizes() external pure returns (bool) {
-        uint256[] memory amounts = new uint256[](6);
-        amounts[0] = 1;
-        amounts[1] = 2;
-        amounts[2] = 17;
-        amounts[3] = 1e6;
-        amounts[4] = 1e18;
-        amounts[5] = type(uint128).max;
+    CentryLendingPool internal pool;
+    CentryInterestRateStrategy internal strategy;
+    CentryMockOracle internal oracle;
+    CentryMockERC20 internal collateral;
+    CentryMockERC20 internal debt;
 
-        uint256[] memory indexes = new uint256[](4);
-        indexes[0] = RAY;
-        indexes[1] = RAY + 1;
-        indexes[2] = RAY + 123456789;
-        indexes[3] = 2 * RAY;
+    address internal borrower = address(0xB0B);
+    address internal liquidator = address(0x1E6);
 
-        for (uint256 i; i < amounts.length; ++i) {
-            for (uint256 j; j < indexes.length; ++j) {
-                uint256 scaled = _scaledUp(amounts[i], indexes[j]);
-                uint256 represented = scaled * indexes[j] / RAY;
-                if (represented < amounts[i]) revert AssertionFailed();
-            }
-        }
-        return true;
+    function setUp() public {
+        oracle = new CentryMockOracle(address(this));
+        strategy = new CentryInterestRateStrategy(
+            0,
+            0.10e18,
+            0.90e18,
+            0.80e18,
+            1e18
+        );
+        collateral = new CentryMockERC20("Collateral", "COL", 18, address(this));
+        debt = new CentryMockERC20("Debt", "DEBT", 18, address(this));
+
+        pool = new CentryLendingPool(
+            address(this),
+            address(oracle),
+            address(strategy),
+            address(this)
+        );
+
+        pool.addReserve(address(collateral), 7500, 8000, 10500, 1000, 1_000_000e18, 500_000e18);
+        pool.addReserve(address(debt), 7500, 8000, 10500, 1000, 1_000_000e18, 500_000e18);
+
+        oracle.setPrice(address(collateral), WAD);
+        oracle.setPrice(address(debt), WAD);
+
+        collateral.mint(address(this), 2_000e18);
+        collateral.mint(borrower, 2_000e18);
+        debt.mint(address(this), 2_000e18);
+        debt.mint(liquidator, 2_000e18);
     }
 
-    function testCloseFactorNeverExceedsHalfDebt() external pure returns (bool) {
-        uint256[] memory debts = new uint256[](6);
-        debts[0] = 1;
-        debts[1] = 2;
-        debts[2] = 999;
-        debts[3] = 1e6;
-        debts[4] = 1e18;
-        debts[5] = type(uint128).max;
+    function testSupplyAndWithdraw() external {
+        pool.supply(address(collateral), 1_000e18);
+        _assertEq(pool.supplyBalance(address(this), address(collateral)), 1_000e18);
 
-        for (uint256 i; i < debts.length; ++i) {
-            uint256 maxRepay = debts[i] * CLOSE_FACTOR_BPS / BPS;
-            if (maxRepay > debts[i] / 2) revert AssertionFailed();
-        }
-        return true;
+        uint256 withdrawn = pool.withdraw(address(collateral), 250e18);
+        _assertEq(withdrawn, 250e18);
+        _assertEq(pool.supplyBalance(address(this), address(collateral)), 750e18);
     }
 
-    function testHealthyBoundary() external pure returns (bool) {
-        if (WAD - 1 >= WAD) revert AssertionFailed();
-        if (WAD >= WAD) return true;
-        revert AssertionFailed();
+    function testBorrowRespectsLtvAndRepayMax() external {
+        pool.supply(address(collateral), 1_000e18);
+        pool.supply(address(debt), 1_000e18);
+
+        vm.prank(borrower);
+        collateral.approve(address(pool), 1_000e18);
+        vm.prank(borrower);
+        pool.supply(address(collateral), 1_000e18);
+
+        vm.prank(borrower);
+        pool.borrow(address(debt), 700e18);
+        _assertEq(pool.borrowBalance(borrower, address(debt)), 700e18);
+
+        vm.prank(borrower);
+        debt.approve(address(pool), type(uint256).max);
+        vm.prank(borrower);
+        uint256 repaid = pool.repay(address(debt), type(uint256).max);
+        _assertEq(repaid, 700e18);
+        _assertEq(pool.borrowBalance(borrower, address(debt)), 0);
     }
 
-    function testCapBoundary() external pure returns (bool) {
-        uint256 cap = 1_000_000;
-        if (cap > cap) revert AssertionFailed();
-        if (cap + 1 <= cap) revert AssertionFailed();
-        return true;
+    function testBorrowAboveLtvReverts() external {
+        pool.supply(address(collateral), 1_000e18);
+        pool.supply(address(debt), 1_000e18);
+
+        vm.prank(borrower);
+        collateral.approve(address(pool), 1_000e18);
+        vm.prank(borrower);
+        pool.supply(address(collateral), 1_000e18);
+
+        vm.prank(borrower);
+        (bool ok,) = address(pool).call(
+            abi.encodeCall(pool.borrow, (address(debt), 751e18))
+        );
+        _assertFalse(ok);
     }
 
-    function testExactBalanceRepayBoundary() external pure returns (bool) {
-        uint256 debt = 123456789;
-        uint256 requested = type(uint256).max;
-        uint256 repayAmount = requested < debt ? requested : debt;
-        if (repayAmount != debt) revert AssertionFailed();
-        return true;
+    function testLiquidationRespectsCloseFactorAndTransfersCollateral() external {
+        pool.supply(address(debt), 1_000e18);
+
+        vm.prank(borrower);
+        collateral.approve(address(pool), 1_000e18);
+        vm.prank(borrower);
+        pool.supply(address(collateral), 1_000e18);
+        vm.prank(borrower);
+        pool.borrow(address(debt), 700e18);
+
+        oracle.setPrice(address(collateral), 0.60e18);
+        _assertLt(pool.healthFactor(borrower), WAD);
+
+        uint256 liquidatorCollateralBefore = collateral.balanceOf(liquidator);
+        vm.prank(liquidator);
+        debt.approve(address(pool), 400e18);
+        vm.prank(liquidator);
+        pool.liquidate(address(collateral), address(debt), borrower, 400e18);
+
+        _assertEq(pool.borrowBalance(borrower, address(debt)), 350e18);
+        _assertGt(collateral.balanceOf(liquidator), liquidatorCollateralBefore);
     }
 
-    function _scaledUp(uint256 amount, uint256 index) internal pure returns (uint256) {
-        return (amount * RAY + index - 1) / index;
+    function testLiquidationHealthyPositionReverts() external {
+        pool.supply(address(debt), 1_000e18);
+
+        vm.prank(borrower);
+        collateral.approve(address(pool), 1_000e18);
+        vm.prank(borrower);
+        pool.supply(address(collateral), 1_000e18);
+        vm.prank(borrower);
+        pool.borrow(address(debt), 700e18);
+
+        vm.prank(liquidator);
+        debt.approve(address(pool), 100e18);
+        vm.prank(liquidator);
+        (bool ok,) = address(pool).call(
+            abi.encodeCall(
+                pool.liquidate,
+                (address(collateral), address(debt), borrower, 100e18)
+            )
+        );
+        _assertFalse(ok);
+    }
+
+    function testCapsAndPause() external {
+        pool.supply(address(collateral), 1_000_000e18);
+        (bool ok,) = address(pool).call(
+            abi.encodeCall(pool.supply, (address(collateral), 1))
+        );
+        _assertFalse(ok);
+
+        pool.pause();
+        (ok,) = address(pool).call(
+            abi.encodeCall(pool.supply, (address(collateral), 1e18))
+        );
+        _assertFalse(ok);
+        pool.unpause();
+
+        pool.supply(address(debt), 1_000e18);
+        _assertGt(pool.utilization(address(debt)), 0);
+    }
+
+    function testAccrualUpdatesIndexes() external {
+        pool.supply(address(collateral), 1_000e18);
+        pool.supply(address(debt), 1_000e18);
+
+        vm.prank(borrower);
+        collateral.approve(address(pool), 1_000e18);
+        vm.prank(borrower);
+        pool.supply(address(collateral), 1_000e18);
+        vm.prank(borrower);
+        pool.borrow(address(debt), 500e18);
+
+        (uint256 oldLiquidityIndex, uint256 oldBorrowIndex,,,) = pool.getReserveState(address(debt));
+        vm.warp(block.timestamp + YEAR);
+        pool.supply(address(debt), 1e18);
+        (uint256 newLiquidityIndex, uint256 newBorrowIndex,,,) = pool.getReserveState(address(debt));
+
+        _assertGt(newBorrowIndex, oldBorrowIndex);
+        _assertGt(newLiquidityIndex, oldLiquidityIndex);
+    }
+
+    function testSweepCannotConsumeSupplierCoverage() external {
+        pool.supply(address(debt), 1_000e18);
+        (bool ok,) = address(pool).call(
+            abi.encodeCall(pool.sweepProtocolFees, (address(debt), 1))
+        );
+        _assertFalse(ok);
+    }
+
+    function _assertEq(uint256 a, uint256 b) internal pure {
+        if (a != b) revert AssertionFailed();
+    }
+
+    function _assertGt(uint256 a, uint256 b) internal pure {
+        if (a <= b) revert AssertionFailed();
+    }
+
+    function _assertLt(uint256 a, uint256 b) internal pure {
+        if (a >= b) revert AssertionFailed();
+    }
+
+    function _assertFalse(bool value) internal pure {
+        if (value) revert AssertionFailed();
     }
 
     error AssertionFailed();
