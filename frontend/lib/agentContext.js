@@ -1,4 +1,4 @@
-const LIQUIDATION_THRESHOLD = 1;
+import { getCentrionRisk } from './centrionRisk';
 
 function finiteNumber(value) {
   const parsed = Number(value);
@@ -16,6 +16,8 @@ export function buildCentryPositionContext({ marketSymbol, walletBalance, suppli
   const numericCapacity = finiteNumber(borrowLimit);
   const numericUtilization = finiteNumber(utilization);
   const account = accountPosition && typeof accountPosition === 'object' ? accountPosition : null;
+  const risk = getCentrionRisk(healthFactor);
+
   return {
     market: marketSymbol || 'USDC',
     walletBalance: String(walletBalance ?? '0'),
@@ -23,7 +25,7 @@ export function buildCentryPositionContext({ marketSymbol, walletBalance, suppli
     borrowed: String(borrowed ?? '0'),
     remainingBorrowCapacity: String(borrowLimit ?? '0'),
     healthFactor: String(healthFactor ?? '—'),
-    liquidationRisk: numericHealth != null && numericHealth < LIQUIDATION_THRESHOLD,
+    liquidationRisk: risk.atRisk,
     marketLiquidity: String(marketLiquidity ?? '0'),
     marketBorrowed: String(marketBorrowed ?? '0'),
     utilizationPercent: numericUtilization == null ? 0 : numericUtilization,
@@ -33,27 +35,38 @@ export function buildCentryPositionContext({ marketSymbol, walletBalance, suppli
       totalDebtValueUsd: finiteNumber(account.totalDebtValueUsd),
       totalBorrowPowerUsd: finiteNumber(account.totalBorrowPowerUsd),
       remainingBorrowCapacityUsd: finiteNumber(account.remainingBorrowCapacityUsd),
-      markets: Array.isArray(account.markets) ? account.markets.map((item) => ({ market: item?.symbol || item?.marketId || 'unknown', supplied: String(item?.supplied ?? '0'), borrowed: String(item?.borrowed ?? '0'), suppliedValueUsd: finiteNumber(item?.suppliedValueUsd), borrowedValueUsd: finiteNumber(item?.borrowedValueUsd) })) : [],
+      markets: Array.isArray(account.markets) ? account.markets.map((item) => ({
+        market: item?.symbol || item?.marketId || 'unknown',
+        supplied: String(item?.supplied ?? '0'),
+        borrowed: String(item?.borrowed ?? '0'),
+        suppliedValueUsd: finiteNumber(item?.suppliedValueUsd),
+        borrowedValueUsd: finiteNumber(item?.borrowedValueUsd),
+      })) : [],
     } : null,
-    dataQuality: { healthFactor: numericHealth != null, borrowCapacity: numericCapacity != null, utilization: numericUtilization != null, accountPosition: Boolean(account?.ready) },
+    dataQuality: {
+      healthFactor: numericHealth != null,
+      borrowCapacity: numericCapacity != null,
+      utilization: numericUtilization != null,
+      accountPosition: Boolean(account?.ready),
+    },
   };
 }
 
 export function getLiquidationRisk(healthFactor) {
-  const value = finiteNumber(healthFactor);
-  if (value == null) return { atRisk: false, threshold: LIQUIDATION_THRESHOLD };
-  return { atRisk: value < LIQUIDATION_THRESHOLD, threshold: LIQUIDATION_THRESHOLD };
+  const risk = getCentrionRisk(healthFactor);
+  return { atRisk: risk.atRisk, threshold: risk.threshold };
 }
 
 export function getPositionRisk(healthFactor) {
-  const value = finiteNumber(healthFactor);
-  if (value == null) return { level: 'unknown', label: 'No debt signal', threshold: null };
-  return value < LIQUIDATION_THRESHOLD ? { level: 'danger', label: 'Liquidation risk', threshold: LIQUIDATION_THRESHOLD } : { level: 'normal', label: 'Position healthy', threshold: LIQUIDATION_THRESHOLD };
+  const risk = getCentrionRisk(healthFactor);
+  if (risk.healthFactor == null) return { level: 'unknown', label: 'No debt signal', threshold: risk.threshold };
+  if (risk.atRisk) return { level: 'danger', label: 'Liquidation risk', threshold: risk.threshold };
+  return { level: 'normal', label: 'Position healthy', threshold: risk.threshold };
 }
 
 export function fallbackPositionAnswer(context, question) {
   const lower = String(question || '').toLowerCase();
-  const risk = getLiquidationRisk(context.healthFactor);
+  const risk = getCentrionRisk(context.healthFactor);
   const capacity = finiteNumber(context.remainingBorrowCapacity);
   const utilization = finiteNumber(context.utilizationPercent) ?? 0;
   const borrowed = context.borrowed;
