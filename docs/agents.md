@@ -79,6 +79,6 @@ The API must never treat a database row, Cloudflare Worker, or API key as suffic
 
 ## Cloudflare deployment
 
-The transport layer can run behind Cloudflare Workers/Agents. Cloudflare's agentic-payment tooling can later expose paid read/API/MCP capabilities with x402 or MPP, while ERC-8004 remains the agent identity/discovery layer. citeturn984529search0turn984529search1turn984529search7
+The transport layer can run behind Cloudflare Workers/Agents. Cloudflare's current Agents tooling supports agentic payments through x402 and MPP, which we can layer onto paid read/API/MCP capabilities later. ERC-8004 remains the identity and discovery layer.
 
 For privileged user actions, keep authentication and policy state in a durable, replay-resistant store and submit only authorized calls to the onchain account.
