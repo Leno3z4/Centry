@@ -1,11 +1,14 @@
-import { Contract, JsonRpcProvider, getAddress, verifyMessage } from "ethers";
+import { Contract, JsonRpcProvider, getAddress, isAddress, verifyMessage } from "ethers";
 import {
   issueAgentConnection,
   verifyAgentChallenge,
   verifyAgentConnection,
-} from "../../../../../lib/agentConnectionTokens";
+} from "../../../../lib/agentConnectionTokens";
 
-const ACCOUNT_ABI = ["function owner() view returns (address)"];
+const ACCOUNT_ABI = [
+  "function owner() view returns (address)",
+  "function agentOperators(address) view returns (bool)",
+];
 const ALLOWED_SCOPES = new Set([
   "read",
   "lend",
@@ -27,17 +30,18 @@ function connectionOrigin(request) {
   return (process.env.CENTRY_AGENT_BASE_URL || new URL(request.url).origin).replace(/\/$/, "");
 }
 
-function buildChallengeMessage({ origin, account, owner, nonce, exp }) {
+function buildChallengeMessage({ origin, account, owner, nonce, exp, scopes }) {
   return [
     "Centry agent connection",
     "",
     `Origin: ${origin}`,
     `Account: ${account}`,
     `Owner: ${owner}`,
+    `Scopes: ${scopes.join(", ")}`,
     `Nonce: ${nonce}`,
     `Expires: ${exp}`,
     "",
-    "I authorize Centry to create an external-agent connection for this account.",
+    "I authorize Centry to create an external-agent connection for this account with exactly the scopes listed above.",
   ].join("\n");
 }
 
@@ -46,7 +50,7 @@ function normalizeScopes(scopes) {
   const unique = [...new Set(scopes.filter((scope) => typeof scope === "string"))];
   if (unique.length === 0) return ["read"];
   if (unique.some((scope) => !ALLOWED_SCOPES.has(scope))) return null;
-  return unique;
+  return unique.sort();
 }
 
 export async function POST(request) {
@@ -59,9 +63,12 @@ export async function POST(request) {
 
   const challengeToken = typeof body?.challengeToken === "string" ? body.challengeToken : "";
   const signature = typeof body?.signature === "string" ? body.signature : "";
+  const operator = typeof body?.operator === "string" && isAddress(body.operator)
+    ? getAddress(body.operator)
+    : null;
   const scopes = normalizeScopes(body?.scopes);
 
-  if (!challengeToken || !signature || !scopes) {
+  if (!challengeToken || !signature || !operator || !scopes) {
     return noStore({ error: "invalid_connection_request" }, 400);
   }
 
@@ -73,12 +80,18 @@ export async function POST(request) {
     return noStore({ error: "challenge_origin_mismatch" }, 403);
   }
 
+  const challengeScopes = normalizeScopes(challenge.scopes);
+  if (!challengeScopes || challengeScopes.length !== scopes.length || challengeScopes.some((scope, index) => scope !== scopes[index])) {
+    return noStore({ error: "challenge_scope_mismatch" }, 403);
+  }
+
   const message = buildChallengeMessage({
     origin: challenge.origin,
     account: challenge.account,
     owner: challenge.owner,
     nonce: challenge.nonce,
     exp: challenge.exp,
+    scopes: challengeScopes,
   });
 
   let signer;
@@ -99,22 +112,28 @@ export async function POST(request) {
     const provider = new JsonRpcProvider(rpcUrl);
     const account = getAddress(challenge.account);
     const contract = new Contract(account, ACCOUNT_ABI, provider);
-    const onchainOwner = getAddress(await contract.owner());
+    const [onchainOwner, operatorAuthorized] = await Promise.all([
+      contract.owner(),
+      contract.agentOperators(operator),
+    ]);
 
-    if (onchainOwner.toLowerCase() !== signer.toLowerCase()) {
+    if (getAddress(onchainOwner).toLowerCase() !== signer.toLowerCase()) {
       return noStore({ error: "account_owner_mismatch" }, 403);
+    }
+
+    if (!operatorAuthorized) {
+      return noStore({ error: "operator_not_authorized" }, 403);
     }
   } catch {
     return noStore({ error: "account_owner_verification_failed" }, 503);
   }
 
   try {
-    const operator = process.env.CENTRY_AGENT_OPERATOR || null;
     const connectionToken = await issueAgentConnection({
       owner: challenge.owner,
       account: challenge.account,
       operator,
-      scopes,
+      scopes: challengeScopes,
     });
     const issuedConnection = await verifyAgentConnection(connectionToken);
 
@@ -126,6 +145,8 @@ export async function POST(request) {
       "Read the Centry skill at the following URL and follow its instructions to establish the connection.",
       connectionUrl,
       "",
+      `Your authorized operator address is ${operator}. When fetching the connection URL, include this exact address as the operator query parameter.`,
+      "",
       "After connecting, use only the capabilities returned by Centry for this connection.",
     ].join("\n");
 
@@ -134,7 +155,8 @@ export async function POST(request) {
       connectionId: issuedConnection?.connectionId || null,
       account: challenge.account,
       owner: challenge.owner,
-      scopes,
+      operator,
+      scopes: challengeScopes,
       connectionUrl,
       prompt,
       expiresIn: 600,
