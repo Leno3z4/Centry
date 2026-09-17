@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ACTIVE_MARKETS } from '../constants/markets';
 import { useMultiMarketLending } from '../hooks/useMultiMarketLending';
+import { useGatewayFunding } from '../hooks/useGatewayFunding';
 import CentryIntelligence from './CentryIntelligence';
 import styles from './CentryAssistantBubble.module.css';
 
@@ -12,6 +13,7 @@ export default function CentryAssistantBubble() {
   const panelRef = useRef(null);
   const market = ACTIVE_MARKETS[0];
   const lending = useMultiMarketLending(market?.address, market?.decimals);
+  const gateway = useGatewayFunding();
 
   useEffect(() => {
     if (!open) return undefined;
@@ -36,7 +38,7 @@ export default function CentryAssistantBubble() {
           <button type="button" onClick={() => setOpen(false)} className={styles.close} aria-label="Close Centrion">×</button>
         </div>
         <div className={styles.aiNotice}>Review transaction details before signing.</div>
-        <div className={styles.panelBody}><CentryIntelligence market={market} lending={lending} compact /></div>
+        <div className={styles.panelBody}><CentryIntelligence market={market} lending={lending} gateway={gateway} compact /></div>
       </aside>
     </>
   );
