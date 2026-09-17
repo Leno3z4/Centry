@@ -9,7 +9,6 @@ import "../mocks/CentryMockOracle.sol";
 interface Vm {
     function warp(uint256 newTimestamp) external;
     function prank(address sender) external;
-    function expectRevert(bytes calldata) external;
 }
 
 /// @title Centry Lending Pool Tests
@@ -31,25 +30,14 @@ contract CentryLendingPoolTest {
 
     function setUp() public {
         oracle = new CentryMockOracle(address(this));
-        strategy = new CentryInterestRateStrategy(
-            0,
-            0.10e18,
-            0.90e18,
-            0.80e18,
-            1e18
-        );
+        strategy = new CentryInterestRateStrategy(0, 0.10e18, 0.90e18, 0.80e18, 1e18);
         collateral = new CentryMockERC20("Collateral", "COL", 18, address(this));
         debt = new CentryMockERC20("Debt", "DEBT", 18, address(this));
 
-        pool = new CentryLendingPool(
-            address(this),
-            address(oracle),
-            address(strategy),
-            address(this)
-        );
+        pool = new CentryLendingPool(address(this), address(oracle), address(strategy), address(this));
 
-        pool.addReserve(address(collateral), 7500, 8000, 10500, 1000, 1_000_000e18, 500_000e18);
-        pool.addReserve(address(debt), 7500, 8000, 10500, 1000, 1_000_000e18, 500_000e18);
+        pool.addReserve(address(collateral), 7500, 8000, 10500, 1000, 1_500e18, 1_000e18);
+        pool.addReserve(address(debt), 7500, 8000, 10500, 1000, 1_500e18, 1_000e18);
 
         oracle.setPrice(address(collateral), WAD);
         oracle.setPrice(address(debt), WAD);
@@ -100,9 +88,7 @@ contract CentryLendingPoolTest {
         pool.supply(address(collateral), 1_000e18);
 
         vm.prank(borrower);
-        (bool ok,) = address(pool).call(
-            abi.encodeCall(pool.borrow, (address(debt), 751e18))
-        );
+        (bool ok,) = address(pool).call(abi.encodeCall(pool.borrow, (address(debt), 751e18)));
         _assertFalse(ok);
     }
 
@@ -143,25 +129,18 @@ contract CentryLendingPoolTest {
         debt.approve(address(pool), 100e18);
         vm.prank(liquidator);
         (bool ok,) = address(pool).call(
-            abi.encodeCall(
-                pool.liquidate,
-                (address(collateral), address(debt), borrower, 100e18)
-            )
+            abi.encodeCall(pool.liquidate, (address(collateral), address(debt), borrower, 100e18))
         );
         _assertFalse(ok);
     }
 
     function testCapsAndPause() external {
-        pool.supply(address(collateral), 1_000_000e18);
-        (bool ok,) = address(pool).call(
-            abi.encodeCall(pool.supply, (address(collateral), 1))
-        );
+        pool.supply(address(collateral), 1_500e18);
+        (bool ok,) = address(pool).call(abi.encodeCall(pool.supply, (address(collateral), 1)));
         _assertFalse(ok);
 
         pool.pause();
-        (ok,) = address(pool).call(
-            abi.encodeCall(pool.supply, (address(collateral), 1e18))
-        );
+        (ok,) = address(pool).call(abi.encodeCall(pool.supply, (address(collateral), 1e18)));
         _assertFalse(ok);
         pool.unpause();
 
@@ -191,9 +170,7 @@ contract CentryLendingPoolTest {
 
     function testSweepCannotConsumeSupplierCoverage() external {
         pool.supply(address(debt), 1_000e18);
-        (bool ok,) = address(pool).call(
-            abi.encodeCall(pool.sweepProtocolFees, (address(debt), 1))
-        );
+        (bool ok,) = address(pool).call(abi.encodeCall(pool.sweepProtocolFees, (address(debt), 1)));
         _assertFalse(ok);
     }
 
