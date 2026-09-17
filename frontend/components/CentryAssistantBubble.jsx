@@ -28,9 +28,9 @@ export default function CentryAssistantBubble() {
 
   return (
     <>
-      <button ref={buttonRef} type="button" className={`${styles.bubble} ${open ? styles.bubbleOpen : ''}`} onClick={() => setOpen((value) => !value)} aria-label={open ? 'Close Centrion' : 'Ask Centrion'} aria-expanded={open} aria-controls="centrion-panel">
+      {!open ? <button ref={buttonRef} type="button" className={styles.bubble} onClick={() => setOpen(true)} aria-label="Ask Centrion" aria-expanded={false} aria-controls="centrion-panel">
         <span className={styles.bubbleMark} aria-hidden="true">C</span><span className={styles.bubbleLabel}>Ask</span>
-      </button>
+      </button> : null}
 
       <aside id="centrion-panel" ref={panelRef} className={`${styles.panel} ${open ? styles.panelOpen : ''}`} aria-hidden={!open} aria-label="Centrion assistant">
         <div className={styles.panelHeader}>
