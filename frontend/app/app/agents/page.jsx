@@ -181,7 +181,7 @@ function AgentPageContent() {
       const challengeResponse = await fetch(`${API_BASE}/api/v1/agent-connections/challenge`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ owner: address, account: activeAccount }),
+        body: JSON.stringify({ owner: address, account: activeAccount, scopes }),
       });
       const challenge = await challengeResponse.json();
       if (!challengeResponse.ok) throw new Error(challenge.error || 'Could not create connection challenge.');
