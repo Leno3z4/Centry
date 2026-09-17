@@ -1,9 +1,7 @@
 import { Contract, JsonRpcProvider, getAddress, isAddress } from "ethers";
 import { issueAgentSession, verifyAgentConnection } from "../../../../../lib/agentConnectionTokens";
 
-const ACCOUNT_ABI = [
-  "function agentOperators(address) view returns (bool)",
-];
+const ACCOUNT_ABI = ["function agentOperators(address) view returns (bool)"];
 
 function markdownResponse(body, status = 200) {
   return new Response(body, {
@@ -50,7 +48,7 @@ export async function GET(request, { params }) {
   if (!connection) {
     return markdownResponse(
       "# Centry connection failed\n\nThe connection URL is invalid or expired. Ask the user to generate a new Centry connection prompt.",
-      401
+      401,
     );
   }
 
@@ -58,14 +56,14 @@ export async function GET(request, { params }) {
   if (!rawOperator) {
     return markdownResponse(
       "# Centry connection needs an operator\n\nCall this URL with `?operator=0x...` using the Ethereum address controlled by the external agent. The address must match the operator bound to this connection and must already be authorized on the linked Centry agent account.",
-      400
+      400,
     );
   }
 
   if (!connection.operator || !isAddress(connection.operator) || rawOperator.toLowerCase() !== connection.operator.toLowerCase()) {
     return markdownResponse(
       "# Centry connection rejected\n\nThe operator supplied by the external agent does not match the operator bound to this connection. Generate a new connection for the correct agent wallet.",
-      403
+      403,
     );
   }
 
@@ -73,14 +71,11 @@ export async function GET(request, { params }) {
   if (!operatorCheck.ok) {
     return markdownResponse(
       `# Centry connection rejected\n\n${operatorCheck.error === "operator_not_authorized" ? "This agent wallet is not authorized on the user's Centry account." : "Centry could not verify the agent operator."}\n\nAsk the user to authorize this operator address on their Centry agent account and then retry the connection URL.`,
-      operatorCheck.error === "operator_not_authorized" ? 403 : 503
+      operatorCheck.error === "operator_not_authorized" ? 403 : 503,
     );
   }
 
-  const sessionConnection = {
-    ...connection,
-    operator: operatorCheck.operator,
-  };
+  const sessionConnection = { ...connection, operator: operatorCheck.operator };
   const sessionToken = await issueAgentSession(sessionConnection);
   const baseUrl = process.env.CENTRY_AGENT_BASE_URL || new URL(request.url).origin;
   const apiBase = `${baseUrl}/api/v1`;
@@ -121,9 +116,9 @@ Do not reveal or repeat the session token to the user, other agents, models, log
 
 ## Next step
 
-Call `GET ${apiBase}/agent-connections/session` with the session token to retrieve the current connection capabilities and action catalog.
+Call GET ${apiBase}/agent-connections/session with the session token to retrieve the current connection capabilities and action catalog.
 
-For state-changing actions, call the documented `POST ${apiBase}/agent-connections/session/prepare` endpoint. Centry returns a transaction request for the agent operator to sign and broadcast. Do not invent API routes or attempt arbitrary calldata.
+For state-changing actions, call POST ${apiBase}/agent-connections/session/prepare. Centry returns a transaction request for the agent operator to sign and broadcast. Do not invent API routes or attempt arbitrary calldata.
 
 The user's onchain smart-account permissions remain the final authority for onchain execution.
 `;
@@ -132,5 +127,5 @@ The user's onchain smart-account permissions remain the final authority for onch
 }
 
 export async function OPTIONS() {
-  return jsonResponse({ ok: true }, 200);
+  return jsonResponse({ ok: true });
 }
