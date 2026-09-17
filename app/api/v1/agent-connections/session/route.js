@@ -1,4 +1,4 @@
-import { verifyAgentSession } from "../../../../../../lib/agentConnectionTokens";
+import { verifyAgentSession } from "../../../../../lib/agentConnectionTokens";
 
 function unauthorized() {
   return Response.json(
