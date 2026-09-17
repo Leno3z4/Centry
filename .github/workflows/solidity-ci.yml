@@ -1,0 +1,31 @@
+name: Solidity CI
+
+on:
+  push:
+    paths:
+      - "contracts/**"
+      - "foundry.toml"
+      - ".github/workflows/solidity-ci.yml"
+  pull_request:
+    paths:
+      - "contracts/**"
+      - "foundry.toml"
+      - ".github/workflows/solidity-ci.yml"
+
+jobs:
+  foundry:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Check formatting
+        run: forge fmt --check
+
+      - name: Run Solidity tests
+        run: forge test -vv
