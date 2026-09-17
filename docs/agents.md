@@ -33,8 +33,8 @@ CENTRY_AGENT_NAME=Centry Agent
 CENTRY_AGENT_DESCRIPTION=...
 CENTRY_AGENT_IMAGE_URL=https://api.centry.example/icon.png
 CENTRY_AGENT_WEB_URL=https://app.centry.example/agents
-CENTRY_MCP_URL=https://api.centry.example/mcp
-CENTRY_MCP_VERSION=2025-06-18
+CENTRY_MCP_URL=https://mcp.centry.example/mcp
+CENTRY_MCP_VERSION=2026-07-28
 CENTRY_A2A_URL=https://api.centry.example/.well-known/agent-card.json
 CENTRY_A2A_VERSION=0.3.0
 CENTRY_AGENT_X402_SUPPORT=false
@@ -62,6 +62,17 @@ Example request:
 
 A `200` response means the current onchain permission policy allows the call. A `403` means the permission policy denies it. The endpoint is deliberately read-only so the HTTP/API layer cannot become an alternative custody authority.
 
+## Cloudflare MCP gateway
+
+`agent-gateway/` contains the first Cloudflare transport layer. It uses the current stateless `createMcpHandler` path and exposes only read-only tools for the first cut:
+
+- `get_agent` — resolves an ERC-8004 agent registration;
+- `check_agent_call_permission` — checks the live onchain permission policy.
+
+The Worker forwards those requests to the Centry HTTP API configured with `CENTRY_API_ORIGIN`. It does not hold a user private key and it does not execute arbitrary transactions.
+
+The MCP endpoint is intended to be published as the `MCP` service in the ERC-8004 registration file once the Worker is deployed. Authentication will be added at the gateway layer before any privileged mutation tools are introduced.
+
 ## Request authorization model
 
 The next transport layer will use the ERC-8004 agent ID as the discovery handle and the Centry account as the authorization anchor:
@@ -79,6 +90,6 @@ The API must never treat a database row, Cloudflare Worker, or API key as suffic
 
 ## Cloudflare deployment
 
-The transport layer can run behind Cloudflare Workers/Agents. Cloudflare's current Agents tooling supports agentic payments through x402 and MPP, which we can layer onto paid read/API/MCP capabilities later. ERC-8004 remains the identity and discovery layer.
+The transport layer can run behind Cloudflare Workers/Agents. Current Cloudflare tooling uses stateless Streamable HTTP for new remote MCP servers, and supports OAuth authorization plus x402/MPP agentic payments. We will add OAuth before exposing mutation tools and can add paid API/MCP reads later.
 
 For privileged user actions, keep authentication and policy state in a durable, replay-resistant store and submit only authorized calls to the onchain account.
