@@ -4,15 +4,15 @@ on:
   push:
     paths:
       - "contracts/agents/**"
-      - "contracts/test/CentryOnchainAgentAccountTest.sol"
-      - "foundry.toml"
+      - "contracts/agents/test/**"
+      - "agent-foundry.toml"
       - ".gitmodules"
       - ".github/workflows/solidity-ci.yml"
   pull_request:
     paths:
       - "contracts/agents/**"
-      - "contracts/test/CentryOnchainAgentAccountTest.sol"
-      - "foundry.toml"
+      - "contracts/agents/test/**"
+      - "agent-foundry.toml"
       - ".gitmodules"
       - ".github/workflows/solidity-ci.yml"
 
@@ -31,4 +31,4 @@ jobs:
           version: stable
 
       - name: Test onchain agent foundation
-        run: forge test --match-path contracts/test/CentryOnchainAgentAccountTest.sol -vv
+        run: forge test --config-path agent-foundry.toml -vv
