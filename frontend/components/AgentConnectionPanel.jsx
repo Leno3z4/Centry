@@ -1,0 +1,303 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import {
+  useAccount,
+  usePublicClient,
+  useReadContract,
+  useSignMessage,
+  useWriteContract,
+} from 'wagmi';
+import { keccak256, toHex } from 'viem';
+import { arcTestnet } from '../config/multiWagmi';
+import styles from './AgentConnectionPanel.module.css';
+
+const FACTORY_ABI = [
+  {
+    type: 'function',
+    name: 'getAgentAccounts',
+    stateMutability: 'view',
+    inputs: [{ name: 'owner', type: 'address' }],
+    outputs: [{ name: 'accounts', type: 'address[]' }],
+  },
+  {
+    type: 'function',
+    name: 'createAgentAccount',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'templateId', type: 'bytes32' },
+      { name: 'configHash', type: 'bytes32' },
+      { name: 'metadataURI', type: 'string' },
+      { name: 'initialOperator', type: 'address' },
+    ],
+    outputs: [{ name: 'agentAccount', type: 'address' }],
+  },
+];
+
+const DEFAULT_SCOPES = ['read', 'lend', 'borrow', 'repay', 'swap'];
+const SCOPE_OPTIONS = [
+  ['read', 'Read balances, positions, markets, rates and connection state'],
+  ['lend', 'Supply, withdraw and manage lending positions'],
+  ['borrow', 'Manage permitted borrowing actions'],
+  ['repay', 'Repay debt and manage repayment actions'],
+  ['swap', 'Use Centry-supported swap routes'],
+  ['governance', 'Participate in supported governance actions'],
+  ['agent-management', 'Manage Centry agent/account settings'],
+];
+
+function apiBase() {
+  return (process.env.NEXT_PUBLIC_CENTRY_AGENT_API_URL || '').replace(/\/$/, '');
+}
+
+function explorerAddress(address) {
+  if (!address) return '#';
+  return `${arcTestnet.blockExplorers.default.url}/address/${address}`;
+}
+
+function short(address) {
+  return address ? `${address.slice(0, 6)}…${address.slice(-4)}` : '';
+}
+
+function buildTemplateId() {
+  return keccak256(toHex('centry-external-agent'));
+}
+
+function buildConfigHash(scopes) {
+  return keccak256(toHex(JSON.stringify({ scopes, version: 1 })));
+}
+
+export default function AgentConnectionPanel() {
+  const { address, isConnected, chainId } = useAccount();
+  const publicClient = usePublicClient({ chainId: arcTestnet.id });
+  const { signMessageAsync } = useSignMessage();
+  const { writeContractAsync, isPending: isCreating } = useWriteContract();
+  const [selectedScopes, setSelectedScopes] = useState(DEFAULT_SCOPES);
+  const [selectedAccount, setSelectedAccount] = useState('');
+  const [customAccount, setCustomAccount] = useState('');
+  const [prompt, setPrompt] = useState('');
+  const [connectionUrl, setConnectionUrl] = useState('');
+  const [status, setStatus] = useState('');
+  const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [isConnectingAgent, setIsConnectingAgent] = useState(false);
+
+  const factoryAddress = process.env.NEXT_PUBLIC_CENTRY_AGENT_FACTORY;
+  const configuredApi = apiBase();
+
+  const accountsQuery = useReadContract({
+    address: factoryAddress,
+    abi: FACTORY_ABI,
+    functionName: 'getAgentAccounts',
+    args: address ? [address] : undefined,
+    chainId: arcTestnet.id,
+    query: { enabled: Boolean(factoryAddress && address && isConnected && chainId === arcTestnet.id) },
+  });
+
+  const accounts = useMemo(() => accountsQuery.data || [], [accountsQuery.data]);
+  const activeAccount = selectedAccount || customAccount || accounts[0] || '';
+  const wrongNetwork = isConnected && chainId !== arcTestnet.id;
+
+  useEffect(() => {
+    if (!selectedAccount && accounts[0]) setSelectedAccount(accounts[0]);
+  }, [accounts, selectedAccount]);
+
+  function toggleScope(scope) {
+    setSelectedScopes((current) => {
+      if (current.includes(scope)) {
+        return current.filter((item) => item !== scope);
+      }
+      return [...current, scope];
+    });
+  }
+
+  async function createAgentAccount() {
+    if (!address || !publicClient || !factoryAddress) return;
+
+    setError('');
+    setStatus('Creating your Centry agent account…');
+    try {
+      const hash = await writeContractAsync({
+        address: factoryAddress,
+        abi: FACTORY_ABI,
+        functionName: 'createAgentAccount',
+        args: [
+          buildTemplateId(),
+          buildConfigHash(selectedScopes),
+          `${window.location.origin}/agents/registration.json`,
+          '0x0000000000000000000000000000000000000000',
+        ],
+        chainId: arcTestnet.id,
+      });
+      setStatus('Waiting for the agent account transaction…');
+      await publicClient.waitForTransactionReceipt({ hash });
+      await accountsQuery.refetch();
+      setStatus('Agent account created.');
+    } catch (caught) {
+      setError(caught?.shortMessage || caught?.message || 'Could not create the agent account.');
+      setStatus('');
+    }
+  }
+
+  async function connectAgent() {
+    if (!address || !activeAccount || !configuredApi) return;
+
+    setError('');
+    setPrompt('');
+    setConnectionUrl('');
+    setCopied(false);
+    setIsConnectingAgent(true);
+    setStatus('Preparing wallet verification…');
+
+    try {
+      const challengeResponse = await fetch(`${configuredApi}/api/v1/agent-connections/challenge`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        cache: 'no-store',
+        body: JSON.stringify({ owner: address, account: activeAccount }),
+      });
+      const challenge = await challengeResponse.json();
+      if (!challengeResponse.ok) throw new Error(challenge.error || 'Could not create the connection challenge.');
+
+      setStatus('Confirm the Centry connection in your wallet…');
+      const signature = await signMessageAsync({ message: challenge.message });
+
+      setStatus('Establishing the agent connection…');
+      const connectResponse = await fetch(`${configuredApi}/api/v1/agent-connections`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        cache: 'no-store',
+        body: JSON.stringify({
+          challengeToken: challenge.challengeToken,
+          signature,
+          scopes: selectedScopes,
+        }),
+      });
+      const connection = await connectResponse.json();
+      if (!connectResponse.ok) throw new Error(connection.error || 'Could not establish the connection.');
+
+      setConnectionUrl(connection.connectionUrl || '');
+      setPrompt(connection.prompt || '');
+      setStatus('Connection ready. Copy the prompt into your external agent.');
+    } catch (caught) {
+      setError(caught?.shortMessage || caught?.message || 'Agent connection failed.');
+      setStatus('');
+    } finally {
+      setIsConnectingAgent(false);
+    }
+  }
+
+  async function copyPrompt() {
+    if (!prompt) return;
+    await navigator.clipboard.writeText(prompt);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
+  }
+
+  if (!isConnected) {
+    return (
+      <section className={styles.panel}>
+        <div className={styles.kicker}>EXTERNAL AGENTS</div>
+        <h1>Connect an agent to Centry</h1>
+        <p className={styles.lede}>Connect an external AI agent to a Centry account without giving the agent your wallet key.</p>
+        <div className={styles.notice}>Connect your wallet first. Your wallet remains the owner and approval authority.</div>
+      </section>
+    );
+  }
+
+  return (
+    <section className={styles.stack}>
+      <div className={styles.panel}>
+        <div className={styles.headerRow}>
+          <div>
+            <div className={styles.kicker}>EXTERNAL AGENTS</div>
+            <h1>Connect an agent to your Centry account</h1>
+            <p className={styles.lede}>Pick what the external agent may access, sign one wallet message, then copy a connection prompt into the agent.</p>
+          </div>
+          <div className={styles.walletBadge}>{short(address)}</div>
+        </div>
+
+        {wrongNetwork ? <div className={styles.error}>Switch to Arc Testnet before creating or connecting an agent.</div> : null}
+
+        {!factoryAddress ? (
+          <div className={styles.notice}>Agent factory is not configured in this deployment yet. Set <code>NEXT_PUBLIC_CENTRY_AGENT_FACTORY</code> to enable account creation.</div>
+        ) : null}
+
+        <div className={styles.section}>
+          <div className={styles.sectionTitle}>Agent account</div>
+          {accounts.length ? (
+            <div className={styles.accountList}>
+              {accounts.map((account) => (
+                <button
+                  key={account}
+                  type="button"
+                  className={`${styles.accountOption} ${activeAccount.toLowerCase() === account.toLowerCase() ? styles.selected : ''}`}
+                  onClick={() => { setSelectedAccount(account); setCustomAccount(''); }}
+                >
+                  <span><strong>{short(account)}</strong><small>Cent​ry smart account</small></span>
+                  <span>{activeAccount.toLowerCase() === account.toLowerCase() ? 'Selected' : 'Use'}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          <div className={styles.customRow}>
+            <input
+              value={customAccount}
+              onChange={(event) => { setCustomAccount(event.target.value.trim()); setSelectedAccount(''); }}
+              placeholder="Or paste an existing Centry agent account"
+              spellCheck="false"
+            />
+            {factoryAddress ? (
+              <button type="button" className={styles.secondaryButton} onClick={createAgentAccount} disabled={isCreating || wrongNetwork}>
+                {isCreating ? 'Creating…' : 'Create agent account'}
+              </button>
+            ) : null}
+          </div>
+          {activeAccount ? <a className={styles.addressLink} href={explorerAddress(activeAccount)} target="_blank" rel="noreferrer">{activeAccount}</a> : <div className={styles.muted}>Create or select an agent account to continue.</div>}
+        </div>
+
+        <div className={styles.section}>
+          <div className={styles.sectionTitle}>Connection scope</div>
+          <div className={styles.scopeGrid}>
+            {SCOPE_OPTIONS.map(([scope, description]) => (
+              <button
+                key={scope}
+                type="button"
+                className={`${styles.scope} ${selectedScopes.includes(scope) ? styles.scopeSelected : ''}`}
+                onClick={() => toggleScope(scope)}
+              >
+                <span className={styles.checkbox}>{selectedScopes.includes(scope) ? '✓' : ''}</span>
+                <span><strong>{scope}</strong><small>{description}</small></span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className={styles.actionRow}>
+          <button type="button" className={styles.primaryButton} onClick={connectAgent} disabled={!activeAccount || !configuredApi || isConnectingAgent || wrongNetwork || selectedScopes.length === 0}>
+            {isConnectingAgent ? 'Connecting…' : 'Generate agent connection'}
+          </button>
+          {status ? <span className={styles.status}>{status}</span> : null}
+        </div>
+
+        {error ? <div className={styles.error}>{error}</div> : null}
+      </div>
+
+      {prompt ? (
+        <div className={styles.resultPanel}>
+          <div className={styles.headerRow}>
+            <div>
+              <div className={styles.kicker}>CONNECTION READY</div>
+              <h2>Copy this into your external agent</h2>
+              <p className={styles.lede}>The prompt points the agent at your user-specific Centry Skill URL. The URL expires and is not a wallet key.</p>
+            </div>
+            <button type="button" className={styles.secondaryButton} onClick={copyPrompt}>{copied ? 'Copied' : 'Copy prompt'}</button>
+          </div>
+
+          <pre className={styles.prompt}><code>{prompt}</code></pre>
+          {connectionUrl ? <div className={styles.connectionMeta}><span>Connection URL</span><code>{connectionUrl}</code></div> : null}
+        </div>
+      ) : null}
+    </section>
+  );
+}
