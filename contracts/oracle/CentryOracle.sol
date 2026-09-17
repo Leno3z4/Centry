@@ -5,10 +5,7 @@ import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5
 import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/utils/Pausable.sol";
 
 interface IAggregatorV3 {
-    function decimals()
-        external
-        view
-        returns (uint8);
+    function decimals() external view returns (uint8);
 
     function latestRoundData()
         external
@@ -23,10 +20,7 @@ interface IAggregatorV3 {
 }
 
 interface IChronicle {
-    function read()
-        external
-        view
-        returns (uint256 value);
+    function read() external view returns (uint256 value);
 
     function readWithAge()
         external
@@ -36,18 +30,11 @@ interface IChronicle {
     function tryReadWithAge()
         external
         view
-        returns (
-            bool ok,
-            uint256 value,
-            uint256 age
-        );
+        returns (bool ok, uint256 value, uint256 age);
 }
 
 interface ISelfKisser {
-    function selfKiss(
-        address oracle
-    )
-        external;
+    function selfKiss(address oracle) external;
 }
 
 /// @title Centry Oracle
@@ -89,19 +76,16 @@ contract CentryOracle is Ownable2Step, Pausable {
         bool enabled
     );
 
-    event FeedDisabled(
-        address indexed asset
-    );
+    event FeedDisabled(address indexed asset);
 
     event ChronicleFeedWhitelisted(
         address indexed oracle,
         address indexed selfKisser
     );
 
-    constructor(
-        address initialOwner,
-        address selfKisserAddress
-    ) Ownable(initialOwner) {
+    constructor(address initialOwner, address selfKisserAddress)
+        Ownable(initialOwner)
+    {
         if (selfKisserAddress == address(0)) {
             revert InvalidFeed();
         }
@@ -115,17 +99,11 @@ contract CentryOracle is Ownable2Step, Pausable {
         uint32 maxStaleness,
         bool enabled
     ) external onlyOwner {
-        if (
-            asset == address(0) ||
-            chronicle == address(0)
-        ) {
+        if (asset == address(0) || chronicle == address(0)) {
             revert InvalidFeed();
         }
 
-        if (
-            maxStaleness == 0 ||
-            maxStaleness > 30 days
-        ) {
+        if (maxStaleness == 0 || maxStaleness > 30 days) {
             revert InvalidStaleness();
         }
 
@@ -134,18 +112,15 @@ contract CentryOracle is Ownable2Step, Pausable {
         // so CentryOracle becomes the whitelisted reader.
         selfKisser.selfKiss(chronicle);
 
-        (
-            bool ok,
-            uint256 value,
-            uint256 age
-        ) = IChronicle(chronicle).tryReadWithAge();
+        (bool ok, uint256 value, uint256 age) =
+            IChronicle(chronicle).tryReadWithAge();
 
-        if (
-            !ok ||
-            value == 0 ||
-            age == 0
-        ) {
+        if (!ok || value == 0 || age == 0 || age > block.timestamp) {
             revert InvalidPrice();
+        }
+
+        if (block.timestamp - age > maxStaleness) {
+            revert StalePrice();
         }
 
         feeds[asset] = FeedConfig({
@@ -165,10 +140,7 @@ contract CentryOracle is Ownable2Step, Pausable {
             enabled
         );
 
-        emit ChronicleFeedWhitelisted(
-            chronicle,
-            address(selfKisser)
-        );
+        emit ChronicleFeedWhitelisted(chronicle, address(selfKisser));
     }
 
     function setFeed(
@@ -177,17 +149,11 @@ contract CentryOracle is Ownable2Step, Pausable {
         uint32 maxStaleness,
         bool enabled
     ) external onlyOwner {
-        if (
-            asset == address(0) ||
-            feed == address(0)
-        ) {
+        if (asset == address(0) || feed == address(0)) {
             revert InvalidFeed();
         }
 
-        if (
-            maxStaleness == 0 ||
-            maxStaleness > 30 days
-        ) {
+        if (maxStaleness == 0 || maxStaleness > 30 days) {
             revert InvalidStaleness();
         }
 
@@ -215,9 +181,7 @@ contract CentryOracle is Ownable2Step, Pausable {
         );
     }
 
-    function disableFeed(
-        address asset
-    ) external onlyOwner {
+    function disableFeed(address asset) external onlyOwner {
         feeds[asset].enabled = false;
         emit FeedDisabled(asset);
     }
@@ -230,12 +194,12 @@ contract CentryOracle is Ownable2Step, Pausable {
         _unpause();
     }
 
-    function getPrice(
-        address asset
-    ) external view returns (
-        uint256 priceE18,
-        uint256 updatedAt
-    ) {
+    function getPrice(address asset)
+        external
+        view
+        whenNotPaused
+        returns (uint256 priceE18, uint256 updatedAt)
+    {
         FeedConfig memory config = feeds[asset];
 
         if (
@@ -257,25 +221,18 @@ contract CentryOracle is Ownable2Step, Pausable {
         revert AssetNotConfigured();
     }
 
-    function _getChroniclePrice(
-        FeedConfig memory config
-    ) internal view returns (
-        uint256 priceE18,
-        uint256 updatedAt
-    ) {
-        (
-            uint256 value,
-            uint256 age
-        ) = IChronicle(config.feed).readWithAge();
+    function _getChroniclePrice(FeedConfig memory config)
+        internal
+        view
+        returns (uint256 priceE18, uint256 updatedAt)
+    {
+        (uint256 value, uint256 age) = IChronicle(config.feed).readWithAge();
 
-        if (value == 0 || age == 0) {
+        if (value == 0 || age == 0 || age > block.timestamp) {
             revert InvalidPrice();
         }
 
-        if (
-            age > block.timestamp ||
-            block.timestamp - age > config.maxStaleness
-        ) {
+        if (block.timestamp - age > config.maxStaleness) {
             revert StalePrice();
         }
 
@@ -283,37 +240,45 @@ contract CentryOracle is Ownable2Step, Pausable {
         updatedAt = age;
     }
 
-    function _getAggregatorPrice(
-        FeedConfig memory config
-    ) internal view returns (
-        uint256 priceE18,
-        uint256 updatedAt
-    ) {
+    function _getAggregatorPrice(FeedConfig memory config)
+        internal
+        view
+        returns (uint256 priceE18, uint256 updatedAt)
+    {
         (
-            ,
+            uint80 roundId,
             int256 answer,
-            ,
+            uint256 startedAt,
             uint256 timestamp,
             uint80 answeredInRound
         ) = IAggregatorV3(config.feed).latestRoundData();
 
+        // Reject empty/invalid rounds and incomplete rounds. This prevents
+        // accepting a stale answer whose round metadata is not coherent.
         if (
+            roundId == 0 ||
             answer <= 0 ||
+            startedAt == 0 ||
             timestamp == 0 ||
-            answeredInRound == 0
+            answeredInRound == 0 ||
+            answeredInRound < roundId
         ) {
             revert InvalidPrice();
         }
 
         if (
+            startedAt > block.timestamp ||
             timestamp > block.timestamp ||
-            block.timestamp - timestamp > config.maxStaleness
+            startedAt > timestamp
         ) {
+            revert InvalidPrice();
+        }
+
+        if (block.timestamp - timestamp > config.maxStaleness) {
             revert StalePrice();
         }
 
-        priceE18 = uint256(answer) *
-            (10 ** (18 - config.feedDecimals));
+        priceE18 = uint256(answer) * (10 ** (18 - config.feedDecimals));
 
         if (priceE18 == 0) {
             revert InvalidPrice();

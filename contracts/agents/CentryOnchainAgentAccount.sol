@@ -1,0 +1,308 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
+import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "./interfaces/ICentryERC8004IdentityRegistry.sol";
+
+/// @title Centry Onchain Agent Account
+/// @notice A user-owned smart account that can delegate narrowly-scoped execution to onchain agents.
+/// @dev This is the first account layer for Centry's onchain-agent system. It deliberately keeps
+///      protocol-specific policy out of the account so the same account can interact with Centry,
+///      Arc-native applications, or other approved EVM contracts.
+contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGuard {
+    uint256 public constant MAX_BATCH_CALLS = 32;
+
+    struct Permission {
+        bool allowed;
+        uint64 expiresAt;
+        uint128 maxNativeValue;
+    }
+
+    address public owner;
+    address public pendingOwner;
+    address public immutable factory;
+    bool public initialized;
+
+    bytes32 public templateId;
+    bytes32 public configHash;
+    string public metadataURI;
+
+    address public erc8004IdentityRegistry;
+    uint256 public erc8004AgentId;
+
+    mapping(address => bool) public agentOperators;
+    mapping(address => mapping(address => mapping(bytes4 => Permission))) public permissions;
+
+    error AlreadyInitialized();
+    error InvalidOwner();
+    error NotOwner();
+    error NotPendingOwner();
+    error NotFactory();
+    error NotAgent();
+    error AgentNotPermitted();
+    error PermissionExpired();
+    error NativeValueTooHigh();
+    error BatchTooLarge();
+    error CallFailed();
+    error InvalidIdentityRegistry();
+    error IdentityAlreadyRegistered();
+    error IdentityNotRegistered();
+
+    event Initialized(
+        address indexed owner,
+        address indexed factory,
+        address indexed initialOperator,
+        bytes32 templateId,
+        bytes32 configHash
+    );
+    event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event AgentOperatorSet(address indexed operator, bool active);
+    event PermissionSet(
+        address indexed operator,
+        address indexed target,
+        bytes4 indexed selector,
+        bool allowed,
+        uint64 expiresAt,
+        uint128 maxNativeValue
+    );
+    event AgentExecuted(
+        address indexed operator,
+        address indexed target,
+        uint256 value,
+        bytes4 indexed selector,
+        bytes32 dataHash
+    );
+    event AgentBatchExecuted(address indexed operator, uint256 callCount);
+    event AgentMetadataUpdated(bytes32 indexed configHash, string metadataURI);
+    event ERC8004IdentityRegistered(
+        address indexed identityRegistry,
+        uint256 indexed agentId,
+        string agentURI
+    );
+    event ERC8004IdentityURIUpdated(uint256 indexed agentId, string agentURI);
+
+    constructor() {
+        factory = msg.sender;
+        initialized = true;
+    }
+
+    modifier onlyOwner() {
+        if (msg.sender != owner) revert NotOwner();
+        _;
+    }
+
+    function initialize(
+        address owner_,
+        bytes32 templateId_,
+        bytes32 configHash_,
+        string calldata metadataURI_,
+        address initialOperator
+    ) external {
+        if (msg.sender != factory) revert NotFactory();
+        if (initialized) revert AlreadyInitialized();
+        if (owner_ == address(0)) revert InvalidOwner();
+
+        initialized = true;
+        owner = owner_;
+        templateId = templateId_;
+        configHash = configHash_;
+        metadataURI = metadataURI_;
+
+        if (initialOperator != address(0)) {
+            agentOperators[initialOperator] = true;
+            emit AgentOperatorSet(initialOperator, true);
+        }
+
+        emit Initialized(owner_, msg.sender, initialOperator, templateId_, configHash_);
+    }
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        if (newOwner == address(0)) revert InvalidOwner();
+        pendingOwner = newOwner;
+        emit OwnershipTransferStarted(owner, newOwner);
+    }
+
+    function acceptOwnership() external {
+        if (msg.sender != pendingOwner) revert NotPendingOwner();
+        address previousOwner = owner;
+        owner = pendingOwner;
+        pendingOwner = address(0);
+        emit OwnershipTransferred(previousOwner, owner);
+    }
+
+    function setAgentOperator(address operator, bool active) external onlyOwner {
+        if (operator == address(0)) revert InvalidOwner();
+        agentOperators[operator] = active;
+        emit AgentOperatorSet(operator, active);
+    }
+
+    function setPermission(
+        address operator,
+        address target,
+        bytes4 selector,
+        bool allowed,
+        uint64 expiresAt,
+        uint128 maxNativeValue
+    ) external onlyOwner {
+        if (operator == address(0) || target == address(0)) revert InvalidOwner();
+        if (expiresAt != 0 && expiresAt <= block.timestamp) revert PermissionExpired();
+
+        permissions[operator][target][selector] = Permission({
+            allowed: allowed,
+            expiresAt: expiresAt,
+            maxNativeValue: maxNativeValue
+        });
+
+        emit PermissionSet(operator, target, selector, allowed, expiresAt, maxNativeValue);
+    }
+
+    function setAgentMetadata(bytes32 configHash_, string calldata metadataURI_) external onlyOwner {
+        configHash = configHash_;
+        metadataURI = metadataURI_;
+        emit AgentMetadataUpdated(configHash_, metadataURI_);
+    }
+
+    /// @notice Register this smart account as an ERC-8004 agent.
+    /// @dev The identity NFT is minted to this account because the registry sees this account
+    ///      as msg.sender. That keeps the agent identity attached to the same programmable account
+    ///      the user controls through this contract's owner or delegated agent permissions.
+    function registerERC8004Identity(
+        address identityRegistry,
+        string calldata agentURI
+    ) external onlyOwner returns (uint256 agentId) {
+        if (identityRegistry == address(0)) revert InvalidIdentityRegistry();
+        if (erc8004IdentityRegistry != address(0)) revert IdentityAlreadyRegistered();
+
+        agentId = ICentryERC8004IdentityRegistry(identityRegistry).register(agentURI);
+        erc8004IdentityRegistry = identityRegistry;
+        erc8004AgentId = agentId;
+
+        emit ERC8004IdentityRegistered(identityRegistry, agentId, agentURI);
+    }
+
+    /// @notice Update the ERC-8004 registration file URI for the linked agent.
+    function updateERC8004IdentityURI(string calldata agentURI_) external onlyOwner {
+        address identityRegistry = erc8004IdentityRegistry;
+        if (identityRegistry == address(0)) revert IdentityNotRegistered();
+
+        ICentryERC8004IdentityRegistry(identityRegistry).setAgentURI(
+            erc8004AgentId,
+            agentURI_
+        );
+
+        emit ERC8004IdentityURIUpdated(erc8004AgentId, agentURI_);
+    }
+
+    function canExecute(
+        address operator,
+        address target,
+        bytes4 selector,
+        uint256 value
+    ) public view returns (bool) {
+        if (!agentOperators[operator] || target == address(0)) return false;
+        Permission memory permission = permissions[operator][target][selector];
+        if (!permission.allowed) return false;
+        if (permission.expiresAt != 0 && block.timestamp > permission.expiresAt) return false;
+        if (value > permission.maxNativeValue) return false;
+        return true;
+    }
+
+    function execute(address target, uint256 value, bytes calldata data)
+        external
+        nonReentrant
+        returns (bytes memory result)
+    {
+        if (!agentOperators[msg.sender]) revert NotAgent();
+        bytes4 selector = _selector(data);
+        _checkPermission(msg.sender, target, selector, value);
+
+        (bool success, bytes memory returnData) = target.call{value: value}(data);
+        if (!success) _revertWithData(returnData);
+
+        emit AgentExecuted(msg.sender, target, value, selector, keccak256(data));
+        return returnData;
+    }
+
+    function executeBatch(
+        address[] calldata targets,
+        uint256[] calldata values,
+        bytes[] calldata data
+    ) external nonReentrant returns (bytes[] memory results) {
+        if (!agentOperators[msg.sender]) revert NotAgent();
+        uint256 length = targets.length;
+        if (length == 0 || length > MAX_BATCH_CALLS || values.length != length || data.length != length) {
+            revert BatchTooLarge();
+        }
+
+        results = new bytes[](length);
+        for (uint256 i = 0; i < length; i++) {
+            bytes4 selector = _selector(data[i]);
+            _checkPermission(msg.sender, targets[i], selector, values[i]);
+
+            (bool success, bytes memory returnData) = targets[i].call{value: values[i]}(data[i]);
+            if (!success) _revertWithData(returnData);
+
+            results[i] = returnData;
+            emit AgentExecuted(msg.sender, targets[i], values[i], selector, keccak256(data[i]));
+        }
+
+        emit AgentBatchExecuted(msg.sender, length);
+    }
+
+    function executeAsOwner(address target, uint256 value, bytes calldata data)
+        external
+        onlyOwner
+        nonReentrant
+        returns (bytes memory result)
+    {
+        (bool success, bytes memory returnData) = target.call{value: value}(data);
+        if (!success) _revertWithData(returnData);
+        return returnData;
+    }
+
+    function executeBatchAsOwner(
+        address[] calldata targets,
+        uint256[] calldata values,
+        bytes[] calldata data
+    ) external onlyOwner nonReentrant returns (bytes[] memory results) {
+        uint256 length = targets.length;
+        if (length == 0 || length > MAX_BATCH_CALLS || values.length != length || data.length != length) {
+            revert BatchTooLarge();
+        }
+
+        results = new bytes[](length);
+        for (uint256 i = 0; i < length; i++) {
+            (bool success, bytes memory returnData) = targets[i].call{value: values[i]}(data[i]);
+            if (!success) _revertWithData(returnData);
+            results[i] = returnData;
+        }
+    }
+
+    function _checkPermission(address operator, address target, bytes4 selector, uint256 value) internal view {
+        if (!canExecute(operator, target, selector, value)) {
+            Permission memory permission = permissions[operator][target][selector];
+            if (!permission.allowed) revert AgentNotPermitted();
+            if (permission.expiresAt != 0 && block.timestamp > permission.expiresAt) revert PermissionExpired();
+            revert NativeValueTooHigh();
+        }
+    }
+
+    function _selector(bytes calldata data) internal pure returns (bytes4 selector) {
+        if (data.length < 4) return bytes4(0);
+        assembly {
+            selector := calldataload(data.offset)
+        }
+    }
+
+    function _revertWithData(bytes memory returnData) internal pure {
+        if (returnData.length == 0) revert CallFailed();
+        assembly {
+            revert(add(returnData, 32), mload(returnData))
+        }
+    }
+
+    receive() external payable {}
+}
