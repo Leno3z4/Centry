@@ -30,17 +30,18 @@ function connectionOrigin(request) {
   return (process.env.CENTRY_AGENT_BASE_URL || new URL(request.url).origin).replace(/\/$/, "");
 }
 
-function buildChallengeMessage({ origin, account, owner, nonce, exp }) {
+function buildChallengeMessage({ origin, account, owner, nonce, exp, scopes }) {
   return [
     "Centry agent connection",
     "",
     `Origin: ${origin}`,
     `Account: ${account}`,
     `Owner: ${owner}`,
+    `Scopes: ${scopes.join(", ")}`,
     `Nonce: ${nonce}`,
     `Expires: ${exp}`,
     "",
-    "I authorize Centry to create an external-agent connection for this account.",
+    "I authorize Centry to create an external-agent connection for this account with exactly the scopes listed above.",
   ].join("\n");
 }
 
@@ -49,7 +50,7 @@ function normalizeScopes(scopes) {
   const unique = [...new Set(scopes.filter((scope) => typeof scope === "string"))];
   if (unique.length === 0) return ["read"];
   if (unique.some((scope) => !ALLOWED_SCOPES.has(scope))) return null;
-  return unique;
+  return unique.sort();
 }
 
 export async function POST(request) {
@@ -79,12 +80,18 @@ export async function POST(request) {
     return noStore({ error: "challenge_origin_mismatch" }, 403);
   }
 
+  const challengeScopes = normalizeScopes(challenge.scopes);
+  if (!challengeScopes || challengeScopes.length !== scopes.length || challengeScopes.some((scope, index) => scope !== scopes[index])) {
+    return noStore({ error: "challenge_scope_mismatch" }, 403);
+  }
+
   const message = buildChallengeMessage({
     origin: challenge.origin,
     account: challenge.account,
     owner: challenge.owner,
     nonce: challenge.nonce,
     exp: challenge.exp,
+    scopes: challengeScopes,
   });
 
   let signer;
@@ -126,7 +133,7 @@ export async function POST(request) {
       owner: challenge.owner,
       account: challenge.account,
       operator,
-      scopes,
+      scopes: challengeScopes,
     });
     const issuedConnection = await verifyAgentConnection(connectionToken);
 
@@ -149,7 +156,7 @@ export async function POST(request) {
       account: challenge.account,
       owner: challenge.owner,
       operator,
-      scopes,
+      scopes: challengeScopes,
       connectionUrl,
       prompt,
       expiresIn: 600,
