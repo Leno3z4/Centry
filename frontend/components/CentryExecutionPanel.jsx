@@ -96,7 +96,7 @@ export default function CentryExecutionPanel({ plan, onDone }) {
             const buildResponse = await fetch('/api/tower/swap/build', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quote: quote.data, userAddress: address }) });
             const build = await buildResponse.json();
             if (!buildResponse.ok || !build.success) throw new Error(build.error || 'Unable to prepare the swap preview.');
-            swaps[index] = build.data;
+            swaps[index] = { quote: quote.data, build: build.data };
             if (build.data?.approval?.to) approvals.push({ index, label: approvalLabel(action), action, swapApproval: build.data.approval });
           }
         }
@@ -126,9 +126,25 @@ export default function CentryExecutionPanel({ plan, onDone }) {
     return request(CONTRACT_ADDRESSES.veCentryRewards, encodeFunctionData({ abi: REWARDS_ABI, functionName: 'claim', args: [BigInt(manifest.epoch), BigInt(position.tokenId), BigInt(position.amount), position.proof || []] }));
   };
   const swap = async (action, index) => {
-    await switchChain(BRIDGE_CHAINS.arc); const prepared = preparedSwaps[index]; if (!prepared?.swap?.to) throw new Error('Swap transaction was not prepared.');
-    if (prepared.approval?.to) { const hash = await request(prepared.approval.to, prepared.approval.data, BigInt(prepared.approval.value || 0)); setCompleted((c) => [...c, { action: { type: AGENT_ACTIONS.APPROVE_ASSET, amount: String(action.amount), assetSymbol: action.inputSymbol }, hash }]); await waitReceipt(hash); }
-    return request(prepared.swap.to, prepared.swap.data, BigInt(prepared.swap.value || 0));
+    await switchChain(BRIDGE_CHAINS.arc);
+    const prepared = preparedSwaps[index];
+    if (!prepared?.build?.swap?.to || !prepared?.quote) throw new Error('Swap transaction was not prepared.');
+    let built = prepared.build;
+    if (built.approval?.to) {
+      const approvalHash = await request(built.approval.to, built.approval.data, BigInt(built.approval.value || 0));
+      setCompleted((c) => [...c, { action: { type: AGENT_ACTIONS.APPROVE_ASSET, amount: String(action.amount), assetSymbol: action.inputSymbol }, hash: approvalHash }]);
+      await waitReceipt(approvalHash);
+      const rebuildResponse = await fetch('/api/tower/swap/build', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quote: prepared.quote, userAddress: address }) });
+      const rebuild = await rebuildResponse.json().catch(() => ({}));
+      if (!rebuildResponse.ok || !rebuild.success || !rebuild.data?.swap?.to) throw new Error(rebuild.error || 'The approval confirmed, but the swap could not be rebuilt.');
+      built = rebuild.data;
+      if (built.approval?.to) throw new Error('The swap still reports insufficient allowance after approval confirmation.');
+    }
+    try {
+      return await request(built.swap.to, built.swap.data, BigInt(built.swap.value || 0));
+    } catch (e) {
+      throw new Error(e?.shortMessage || e?.message || 'The swap transaction was rejected by the wallet provider.');
+    }
   };
   const bridge = async (action) => {
     const from = BRIDGE_CHAINS[String(action.fromChain).toLowerCase()]; const to = BRIDGE_CHAINS[String(action.toChain).toLowerCase()];
