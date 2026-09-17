@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "./interfaces/ICentryERC8004IdentityRegistry.sol";
 
 /// @title Centry Onchain Agent Account
 /// @notice A user-owned smart account that can delegate narrowly-scoped execution to onchain agents.
@@ -28,6 +29,9 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
     bytes32 public configHash;
     string public metadataURI;
 
+    address public erc8004IdentityRegistry;
+    uint256 public erc8004AgentId;
+
     mapping(address => bool) public agentOperators;
     mapping(address => mapping(address => mapping(bytes4 => Permission))) public permissions;
 
@@ -42,6 +46,9 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
     error NativeValueTooHigh();
     error BatchTooLarge();
     error CallFailed();
+    error InvalidIdentityRegistry();
+    error IdentityAlreadyRegistered();
+    error IdentityNotRegistered();
 
     event Initialized(
         address indexed owner,
@@ -70,6 +77,12 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
     );
     event AgentBatchExecuted(address indexed operator, uint256 callCount);
     event AgentMetadataUpdated(bytes32 indexed configHash, string metadataURI);
+    event ERC8004IdentityRegistered(
+        address indexed identityRegistry,
+        uint256 indexed agentId,
+        string agentURI
+    );
+    event ERC8004IdentityURIUpdated(uint256 indexed agentId, string agentURI);
 
     constructor() {
         factory = msg.sender;
@@ -150,6 +163,37 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
         configHash = configHash_;
         metadataURI = metadataURI_;
         emit AgentMetadataUpdated(configHash_, metadataURI_);
+    }
+
+    /// @notice Register this smart account as an ERC-8004 agent.
+    /// @dev The identity NFT is minted to this account because the registry sees this account
+    ///      as msg.sender. That keeps the agent identity attached to the same programmable account
+    ///      the user controls through this contract's owner or delegated agent permissions.
+    function registerERC8004Identity(
+        address identityRegistry,
+        string calldata agentURI
+    ) external onlyOwner returns (uint256 agentId) {
+        if (identityRegistry == address(0)) revert InvalidIdentityRegistry();
+        if (erc8004IdentityRegistry != address(0)) revert IdentityAlreadyRegistered();
+
+        agentId = ICentryERC8004IdentityRegistry(identityRegistry).register(agentURI);
+        erc8004IdentityRegistry = identityRegistry;
+        erc8004AgentId = agentId;
+
+        emit ERC8004IdentityRegistered(identityRegistry, agentId, agentURI);
+    }
+
+    /// @notice Update the ERC-8004 registration file URI for the linked agent.
+    function updateERC8004IdentityURI(string calldata agentURI_) external onlyOwner {
+        address identityRegistry = erc8004IdentityRegistry;
+        if (identityRegistry == address(0)) revert IdentityNotRegistered();
+
+        ICentryERC8004IdentityRegistry(identityRegistry).setAgentURI(
+            erc8004AgentId,
+            agentURI_
+        );
+
+        emit ERC8004IdentityURIUpdated(erc8004AgentId, agentURI_);
     }
 
     function canExecute(
