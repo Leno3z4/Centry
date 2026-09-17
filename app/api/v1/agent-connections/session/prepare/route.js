@@ -3,7 +3,7 @@ import {
   ACCOUNT_INTERFACE,
   actionCatalog,
   buildAction,
-  createAccountContract,
+  checkActionPermissions,
   ARC_TESTNET_CHAIN_ID,
 } from "../../../../../../lib/agentExecutionRuntime";
 
@@ -20,6 +20,21 @@ function sessionFromRequest(request) {
   return match?.[1] || null;
 }
 
+function parseActionBody(body) {
+  if (!body || typeof body !== "object") throw new Error("invalid_action_body");
+  const action = typeof body.action === "string" ? body.action : "";
+  if (!action) throw new Error("missing_action");
+  return {
+    action,
+    asset: body.asset,
+    amount: body.amount,
+    toAsset: body.toAsset,
+    minOut: body.minOut,
+    proposalId: body.proposalId,
+    support: body.support,
+  };
+}
+
 export async function POST(request) {
   const token = sessionFromRequest(request);
   if (!token) return json({ error: "invalid_session" }, 401);
@@ -34,17 +49,19 @@ export async function POST(request) {
     return json({ error: "invalid_json" }, 400);
   }
 
-  const action = typeof body?.action === "string" ? body.action : "";
-  const asset = body?.asset;
-  const amount = body?.amount;
-
-  if (!action || asset === undefined || amount === undefined) {
-    return json({ error: "missing_action_asset_or_amount", actions: actionCatalog() }, 400);
+  let requestAction;
+  try {
+    requestAction = parseActionBody(body);
+  } catch (error) {
+    return json({ error: error instanceof Error ? error.message : "invalid_action", actions: actionCatalog() }, 400);
   }
+
+  const rpcUrl = process.env.CENTRY_AGENT_RPC_URL || process.env.CENTRY_ERC8004_RPC_URL;
+  if (!rpcUrl) return json({ error: "agent_rpc_not_configured" }, 503);
 
   let prepared;
   try {
-    prepared = buildAction({ action, asset, amount });
+    prepared = buildAction({ account: session.account, ...requestAction });
   } catch (error) {
     return json(
       {
@@ -60,63 +77,58 @@ export async function POST(request) {
     return json({ error: "scope_denied", requiredScope: prepared.scope }, 403);
   }
 
-  const rpcUrl = process.env.CENTRY_AGENT_RPC_URL || process.env.CENTRY_ERC8004_RPC_URL;
-  if (!rpcUrl) return json({ error: "agent_rpc_not_configured" }, 503);
-
-  const accountContract = createAccountContract(rpcUrl, session.account);
-
   try {
-    const operatorAuthorized = await accountContract.agentOperators(session.operator);
-    if (!operatorAuthorized) {
-      return json({ error: "operator_not_authorized" }, 403);
-    }
+    const policy = await checkActionPermissions({
+      rpcUrl,
+      account: session.account,
+      operator: session.operator,
+      calls: prepared.calls,
+    });
 
-    const permitted = await accountContract.canExecute(
-      session.operator,
-      prepared.target,
-      prepared.selector,
-      prepared.value,
-    );
-
-    if (!permitted) {
+    if (!policy.permitted) {
       return json(
         {
           error: "onchain_permission_denied",
           operator: session.operator,
-          target: prepared.target,
-          selector: prepared.selector,
+          target: policy.denied.target,
+          selector: policy.denied.selector,
         },
         403,
       );
     }
 
-    const accountCallData = ACCOUNT_INTERFACE.encodeFunctionData("execute", [
-      prepared.target,
-      prepared.value,
-      prepared.data,
-    ]);
+    const targets = prepared.calls.map((current) => current.target);
+    const values = prepared.calls.map((current) => current.value);
+    const data = prepared.calls.map((current) => current.data);
+    const batched = prepared.calls.length > 1;
+    const accountCallData = batched
+      ? ACCOUNT_INTERFACE.encodeFunctionData("executeBatch", [targets, values, data])
+      : ACCOUNT_INTERFACE.encodeFunctionData("execute", [targets[0], values[0], data[0]]);
 
     return json({
       ready: true,
-      action,
+      action: requestAction.action,
       description: prepared.description,
       chainId: ARC_TESTNET_CHAIN_ID,
       from: session.operator,
       account: session.account,
       transaction: {
         to: session.account,
-        value: prepared.value.toString(),
+        value: "0",
         data: accountCallData,
       },
-      underlyingCall: {
-        target: prepared.target,
-        selector: prepared.selector,
-        value: prepared.value.toString(),
-        data: prepared.data,
-      },
+      underlyingCalls: prepared.calls.map((current) => ({
+        target: current.target,
+        selector: current.selector,
+        value: current.value.toString(),
+        data: current.data,
+      })),
       execution: "Sign and broadcast the returned transaction from the authorized operator wallet.",
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === "operator_not_authorized") {
+      return json({ error: "operator_not_authorized" }, 403);
+    }
     return json({ error: "agent_policy_check_failed" }, 503);
   }
 }
@@ -126,13 +138,28 @@ export async function GET(request) {
   if (!token) return json({ error: "invalid_session" }, 401);
 
   const session = await verifyAgentSession(token);
-  if (!session) return json({ error: "invalid_session" }, 401);
+  if (!session || !session.operator) return json({ error: "invalid_session" }, 401);
 
-  return json({
-    chainId: ARC_TESTNET_CHAIN_ID,
-    account: session.account,
-    operator: session.operator,
-    scopes: session.scopes || [],
-    actions: actionCatalog(),
-  });
+  const rpcUrl = process.env.CENTRY_AGENT_RPC_URL || process.env.CENTRY_ERC8004_RPC_URL;
+  if (!rpcUrl) return json({ error: "agent_rpc_not_configured" }, 503);
+
+  try {
+    const policy = await checkActionPermissions({
+      rpcUrl,
+      account: session.account,
+      operator: session.operator,
+      calls: [{ target: session.account, selector: "0x00000000", value: 0n, data: "0x" }],
+    });
+    return json({
+      chainId: ARC_TESTNET_CHAIN_ID,
+      account: session.account,
+      operator: session.operator,
+      scopes: session.scopes || [],
+      actions: actionCatalog().filter((action) => (session.scopes || []).includes(action.scope)),
+      operatorAuthorized: policy.permitted,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "operator_not_authorized") return json({ error: "operator_not_authorized" }, 403);
+    return json({ error: "agent_policy_check_failed" }, 503);
+  }
 }
