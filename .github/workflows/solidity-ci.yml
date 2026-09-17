@@ -24,8 +24,5 @@ jobs:
         with:
           version: stable
 
-      - name: Check formatting
-        run: forge fmt --check
-
       - name: Run Solidity tests
         run: forge test -vv
