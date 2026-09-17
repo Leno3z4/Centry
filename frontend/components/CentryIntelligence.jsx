@@ -11,13 +11,26 @@ const SUGGESTED = ['What can I do with my position?', 'Show my borrow capacity',
 function compact(value) { const n = Number(value); return Number.isFinite(n) ? n : 0; }
 function money(value) { const n = Number(value); return Number.isFinite(n) ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'; }
 
-export default function CentryIntelligence({ market, lending, compact: compactMode = false }) {
+export default function CentryIntelligence({ market, lending, gateway, compact: compactMode = false }) {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(false);
   const inputRef = useRef(null);
-  const context = useMemo(() => buildCentryPositionContext({ marketSymbol: market?.symbol, walletBalance: lending?.walletBalance, supplied: lending?.supplyBalance, borrowed: lending?.borrowBalance, borrowLimit: lending?.borrowLimit, healthFactor: lending?.healthFactor, marketLiquidity: lending?.reserveData?.totalLiquidity, marketBorrowed: lending?.reserveData?.totalBorrows, utilization: lending?.reserveData?.utilization, accountPosition: lending?.accountPosition }), [lending, market]);
+  const context = useMemo(() => buildCentryPositionContext({
+    marketSymbol: market?.symbol,
+    walletBalance: lending?.walletBalance,
+    supplied: lending?.supplyBalance,
+    borrowed: lending?.borrowBalance,
+    borrowLimit: lending?.borrowLimit,
+    healthFactor: lending?.healthFactor,
+    marketLiquidity: lending?.reserveData?.totalLiquidity,
+    marketBorrowed: lending?.reserveData?.totalBorrows,
+    utilization: lending?.reserveData?.utilization,
+    accountPosition: lending?.accountPosition,
+    gatewayAvailableUsdc: gateway?.total,
+    gatewayPendingUsdc: gateway?.pendingTotal,
+  }), [gateway?.pendingTotal, gateway?.total, lending, market]);
   const liquidation = getLiquidationRisk(lending?.healthFactor);
   const account = lending?.accountPosition;
   const markets = Array.isArray(account?.markets) ? account.markets : [];
@@ -41,6 +54,7 @@ export default function CentryIntelligence({ market, lending, compact: compactMo
     setPlan(null);
     setLoading(true);
     try {
+      await gateway?.refresh?.();
       const response = await fetch('/api/assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -78,8 +92,8 @@ export default function CentryIntelligence({ market, lending, compact: compactMo
       <textarea ref={inputRef} value={question} onChange={(event) => { setQuestion(event.target.value); resizeInput(); }} onKeyDown={onComposerKeyDown} placeholder="Ask Centrion or tell it what to do…" aria-label="Ask Centrion" maxLength={500} disabled={loading} rows={1} />
       <button type="submit" disabled={loading || !question.trim()} aria-label="Send">{loading ? '…' : '➤'}</button>
     </form>
-    {plan ? <CentryTransactionPreview plan={plan} context={context} /> : null}
     {answer ? <div className={styles.answer} aria-live="polite"><span>Centrion</span><p>{answer}</p></div> : null}
+    {plan ? <CentryTransactionPreview plan={plan} context={context} /> : null}
     {plan ? <CentryExecutionPanel plan={plan} onDone={() => setPlan(null)} /> : null}
   </section>;
 }
