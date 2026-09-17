@@ -3,7 +3,7 @@ import {
   issueAgentConnection,
   verifyAgentChallenge,
   verifyAgentConnection,
-} from "../../../../../lib/agentConnectionTokens";
+} from "../../../../lib/agentConnectionTokens";
 
 const ACCOUNT_ABI = [
   "function owner() view returns (address)",
