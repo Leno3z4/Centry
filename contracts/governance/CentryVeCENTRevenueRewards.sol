@@ -50,6 +50,10 @@ contract CentryVeCENTRevenueRewards is Ownable2Step, ReentrancyGuard, ICentryVeC
     mapping(uint256 => address) public selfRepayOwner;
     mapping(uint256 => address) public withdrawnPositionOwner;
 
+    /// @notice Reward tokens reserved by pending and active epochs that have not
+    ///         yet been claimed. New epochs cannot overcommit this balance.
+    uint256 public totalReservedRewardBudget;
+
     uint256 public latestEpoch;
 
     error AmountZero();
@@ -156,9 +160,11 @@ contract CentryVeCENTRevenueRewards is Ownable2Step, ReentrancyGuard, ICentryVeC
             revert EpochAlreadyQueued();
         }
 
+        uint256 balance = rewardToken.balanceOf(address(this));
+
         if (
-            rewardToken.balanceOf(address(this)) <
-            rewardBudget
+            balance < totalReservedRewardBudget ||
+            rewardBudget > balance - totalReservedRewardBudget
         ) {
             revert InsufficientRewards();
         }
@@ -172,6 +178,8 @@ contract CentryVeCENTRevenueRewards is Ownable2Step, ReentrancyGuard, ICentryVeC
             rewardBudget: rewardBudget,
             readyAt: readyAt
         });
+
+        totalReservedRewardBudget += rewardBudget;
 
         emit EpochQueued(
             epoch,
@@ -397,6 +405,7 @@ contract CentryVeCENTRevenueRewards is Ownable2Step, ReentrancyGuard, ICentryVeC
 
         claimed[epoch][tokenId] = true;
         epochClaimed[epoch] = newClaimed;
+        totalReservedRewardBudget -= amount;
 
         rewardToken.safeTransfer(
             recipient,
