@@ -134,6 +134,10 @@ function AgentPageContent() {
     if (!selectedAccount && accounts[0]) setSelectedAccount(accounts[0]);
   }, [accounts, selectedAccount]);
 
+  useEffect(() => {
+    setPermissionsReady(false);
+  }, [address]);
+
   const operatorQuery = useReadContract({
     address: activeAccount || undefined,
     abi: ACCOUNT_ABI,
@@ -222,7 +226,10 @@ function AgentPageContent() {
       push(CONTRACT_ADDRESSES.lendingPool, SELECTORS.withdraw, 0n);
     }
     if (scopes.includes('borrow')) push(CONTRACT_ADDRESSES.lendingPool, SELECTORS.borrow, 0n);
-    if (scopes.includes('repay')) push(CONTRACT_ADDRESSES.lendingPool, SELECTORS.repay, 0n);
+    if (scopes.includes('repay')) {
+      for (const asset of SUPPORTED_PERMISSION_ASSETS) push(asset, SELECTORS.approve, 0n);
+      push(CONTRACT_ADDRESSES.lendingPool, SELECTORS.repay, 0n);
+    }
 
     if (scopes.includes('swap')) {
       if (!swapLimit) throw new Error('Set a maximum native value per swap before enabling swap permissions.');
@@ -263,7 +270,7 @@ function AgentPageContent() {
           address: activeAccount,
           abi: ACCOUNT_ABI,
           functionName: 'setPermission',
-          args: [operator, permission.target, permission.selector, true, 0, permission.maxNativeValue],
+          args: [operator, permission.target, permission.selector, true, 0n, permission.maxNativeValue],
         });
         await publicClient.waitForTransactionReceipt({ hash });
       }
@@ -286,7 +293,7 @@ function AgentPageContent() {
     if (!isAddress(operator)) return setError('Enter the operator address controlled by the external agent.');
     if (!operatorAuthorized) return setError('Authorize this operator on the agent account first.');
     if (!scopes.length) return setError('Select at least one capability.');
-    if (scopes.some((scope) => scope !== 'read') && !permissionsReady) return setError('Apply the selected onchain permissions before generating the connection.');
+    if (scopes.some((scope) => !['read', 'agent-management'].includes(scope)) && !permissionsReady) return setError('Apply the selected onchain permissions before generating the connection.');
     if (!API_BASE) return setError('Agent API URL is not configured.');
 
     try {
@@ -331,7 +338,7 @@ function AgentPageContent() {
     setStatus('Connection prompt copied.');
   }
 
-  const hasStateChangingScope = scopes.some((scope) => scope !== 'read');
+  const hasStateChangingScope = scopes.some((scope) => !['read', 'agent-management'].includes(scope));
 
   return (
     <div className={styles.page}>
