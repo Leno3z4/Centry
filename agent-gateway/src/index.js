@@ -89,10 +89,8 @@ function createServer(env) {
   return server;
 }
 
-const handler = createMcpHandler((_, env) => createServer(env));
-
 export default {
   fetch(request, env, ctx) {
-    return handler(request, env, ctx);
+    return createMcpHandler(() => createServer(env))(request, env, ctx);
   },
 };
