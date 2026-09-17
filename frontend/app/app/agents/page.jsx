@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useAccount, usePublicClient, useReadContract, useSignMessage, useWriteContract } from 'wagmi';
-import { keccak256, parseUnits, toBytes, isAddress } from 'viem';
+import { keccak256, toBytes, isAddress } from 'viem';
 import { Providers } from '../../../components/Providers';
 import { AppShell } from '../../../components/AppShell';
 import { CONTRACT_ADDRESSES } from '../../../constants/contracts';
@@ -30,7 +30,7 @@ const OPTIONAL_SCOPES = [
   ['lend', 'Supply and withdraw'],
   ['borrow', 'Borrow assets'],
   ['repay', 'Repay debt'],
-  ['swap', 'Swap through Centry-approved routes'],
+  ['swap', 'Swap CENT into native USDC through the validated UnitFlow route'],
   ['governance', 'Governance actions'],
   ['agent-management', 'Read agent configuration'],
 ];
@@ -58,21 +58,27 @@ function AgentPageContent() {
   const [selectedAccount, setSelectedAccount] = useState('');
   const [operator, setOperatorAddress] = useState('');
   const [scopes, setScopes] = useState(DEFAULT_SCOPES);
-  const [swapLimit, setSwapLimit] = useState('');
   const [permissionsReady, setPermissionsReady] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [connectionUrl, setConnectionUrl] = useState('');
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
 
-  const accountsQuery = useReadContract({ address: FACTORY_ADDRESS, abi: FACTORY_ABI, functionName: 'getAgentAccounts', args: address ? [address] : undefined, query: { enabled: Boolean(FACTORY_ADDRESS && address) } });
+  const accountsQuery = useReadContract({
+    address: FACTORY_ADDRESS, abi: FACTORY_ABI, functionName: 'getAgentAccounts',
+    args: address ? [address] : undefined, query: { enabled: Boolean(FACTORY_ADDRESS && address) },
+  });
   const accounts = useMemo(() => accountsQuery.data || [], [accountsQuery.data]);
   const activeAccount = selectedAccount || accounts[0] || '';
 
   useEffect(() => { if (!selectedAccount && accounts[0]) setSelectedAccount(accounts[0]); }, [accounts, selectedAccount]);
   useEffect(() => { setPermissionsReady(false); }, [address]);
 
-  const operatorQuery = useReadContract({ address: activeAccount || undefined, abi: ACCOUNT_ABI, functionName: 'agentOperators', args: operator && isAddress(operator) ? [operator] : undefined, query: { enabled: Boolean(activeAccount && isAddress(operator)) } });
+  const operatorQuery = useReadContract({
+    address: activeAccount || undefined, abi: ACCOUNT_ABI, functionName: 'agentOperators',
+    args: operator && isAddress(operator) ? [operator] : undefined,
+    query: { enabled: Boolean(activeAccount && isAddress(operator)) },
+  });
   const operatorAuthorized = operatorQuery.data === true;
 
   function toggleScope(scope) {
@@ -88,7 +94,10 @@ function AgentPageContent() {
     if (!publicClient) return setError('Wallet RPC is not ready yet.');
     try {
       setStatus('Creating your Centry agent account…');
-      const txHash = await writeContractAsync({ address: FACTORY_ADDRESS, abi: FACTORY_ABI, functionName: 'createAgentAccount', args: [keccak256(toBytes('centry-external-agent')), keccak256(toBytes('centry-agent-config-v1')), process.env.NEXT_PUBLIC_CENTRY_AGENT_METADATA_URI || '', operator] });
+      const txHash = await writeContractAsync({
+        address: FACTORY_ADDRESS, abi: FACTORY_ABI, functionName: 'createAgentAccount',
+        args: [keccak256(toBytes('centry-external-agent')), keccak256(toBytes('centry-agent-config-v1')), process.env.NEXT_PUBLIC_CENTRY_AGENT_METADATA_URI || '', operator],
+      });
       await publicClient.waitForTransactionReceipt({ hash: txHash });
       setStatus(`Agent account confirmed: ${txHash}`);
       await accountsQuery.refetch();
@@ -137,12 +146,8 @@ function AgentPageContent() {
       push(CONTRACT_ADDRESSES.lendingPool, SELECTORS.repay, 0n);
     }
     if (scopes.includes('swap')) {
-      if (!swapLimit) throw new Error('Set a maximum native value per swap before enabling swap permissions.');
-      let maxNativeValue;
-      try { maxNativeValue = parseUnits(swapLimit, 18); } catch { throw new Error('Swap native-value limit must be a valid USDC amount.'); }
-      if (maxNativeValue <= 0n || maxNativeValue > ((1n << 128n) - 1n)) throw new Error('Swap native-value limit is outside the allowed range.');
       push(CONTRACT_ADDRESSES.centryToken, SELECTORS.approve, 0n);
-      push(UNIVERSAL_ROUTER, SELECTORS.execute, maxNativeValue);
+      push(UNIVERSAL_ROUTER, SELECTORS.execute, 0n);
     }
     if (scopes.includes('governance')) {
       if (!GOVERNOR_ADDRESS || !isAddress(GOVERNOR_ADDRESS)) throw new Error('Governor address is not configured for agent governance.');
@@ -232,7 +237,6 @@ function AgentPageContent() {
           <section className={styles.card}>
             <div className={styles.cardTop}><div><h2>2 · Connection scope</h2><p>Choose what this connection is allowed to request from Centry.</p></div></div>
             <div className={styles.scopeList}>{OPTIONAL_SCOPES.map(([scope, description]) => <label key={scope} className={styles.scopeRow}><input type="checkbox" checked={scopes.includes(scope)} onChange={() => toggleScope(scope)} /><span><strong>{scope}</strong><small>{description}</small></span></label>)}</div>
-            {scopes.includes('swap') ? <><label className={styles.label}>Max native value per swap</label><input className={styles.input} value={swapLimit} onChange={(event) => { setSwapLimit(event.target.value); setPermissionsReady(false); }} placeholder="e.g. 100" inputMode="decimal" /><p className={styles.hint}>USDC amount per swap, converted to Arc's native 18-decimal value limit.</p></> : null}
             {hasStateChangingScope ? <button type="button" className={styles.secondaryButton} disabled={isWritePending || !operatorAuthorized} onClick={configurePermissions}>{permissionsReady ? 'Permissions configured' : 'Apply onchain permissions'}</button> : null}
             <button type="button" className={styles.primaryButton} disabled={isWritePending || !operatorAuthorized || (hasStateChangingScope && !permissionsReady)} onClick={createConnection}>Generate connection prompt</button>
           </section>
