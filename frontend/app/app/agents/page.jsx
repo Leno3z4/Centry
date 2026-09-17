@@ -80,7 +80,7 @@ function AgentPageContent() {
   const { signMessageAsync } = useSignMessage();
   const { writeContractAsync, isPending: isWritePending } = useWriteContract();
   const [selectedAccount, setSelectedAccount] = useState('');
-  const [operator, setOperator] = useState('');
+  const [operator, setOperatorAddress] = useState('');
   const [scopes, setScopes] = useState(DEFAULT_SCOPES);
   const [swapLimit, setSwapLimit] = useState('');
   const [permissionsReady, setPermissionsReady] = useState(false);
@@ -134,7 +134,7 @@ function AgentPageContent() {
     }
   }
 
-  async function setOperator(active) {
+  async function toggleOperator(active) {
     setError(''); setStatus('');
     if (!activeAccount) return setError('Create or select an agent account first.');
     if (!isAddress(operator)) return setError('Enter a valid operator address.');
@@ -263,7 +263,7 @@ function AgentPageContent() {
           <section className={styles.card}>
             <div className={styles.cardTop}><div><h2>1 · Agent operator</h2><p>The operator address is the wallet the external agent will use to sign transactions.</p></div></div>
             <label className={styles.label}>Operator wallet address</label>
-            <input className={styles.input} value={operator} onChange={(event) => { setOperator(normalizeAddress(event.target.value)); setPermissionsReady(false); }} placeholder="0x…" spellCheck="false" />
+            <input className={styles.input} value={operator} onChange={(event) => { setOperatorAddress(normalizeAddress(event.target.value)); setPermissionsReady(false); }} placeholder="0x…" spellCheck="false" />
             <p className={styles.hint}>Never enter the operator's private key here.</p>
             {accounts.length ? (
               <>
@@ -273,7 +273,7 @@ function AgentPageContent() {
                 </select>
                 <div className={`${styles.authState} ${operatorAuthorized ? styles.authorized : ''}`}>
                   <span>{operatorAuthorized ? 'Operator authorized' : 'Operator not yet authorized'}</span>
-                  {operatorAuthorized ? <button type="button" className={styles.secondaryButton} disabled={isWritePending} onClick={() => setOperator(false)}>Revoke</button> : <button type="button" className={styles.secondaryButton} disabled={isWritePending} onClick={() => setOperator(true)}>Authorize</button>}
+                  {operatorAuthorized ? <button type="button" className={styles.secondaryButton} disabled={isWritePending} onClick={() => toggleOperator(false)}>Revoke</button> : <button type="button" className={styles.secondaryButton} disabled={isWritePending} onClick={() => toggleOperator(true)}>Authorize</button>}
                 </div>
               </>
             ) : <button type="button" className={styles.primaryButton} disabled={isWritePending} onClick={createAccount}>Create agent account</button>}
