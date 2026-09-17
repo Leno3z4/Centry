@@ -5,14 +5,14 @@ on:
     paths:
       - "contracts/agents/**"
       - "contracts/agents/test/**"
-      - "contracts/agents/foundry.toml"
+      - "foundry.toml"
       - ".gitmodules"
       - ".github/workflows/solidity-ci.yml"
   pull_request:
     paths:
       - "contracts/agents/**"
       - "contracts/agents/test/**"
-      - "contracts/agents/foundry.toml"
+      - "foundry.toml"
       - ".gitmodules"
       - ".github/workflows/solidity-ci.yml"
 
@@ -31,4 +31,20 @@ jobs:
           version: stable
 
       - name: Test onchain agent foundation
-        run: cd contracts/agents && forge test -vv
+        run: |
+          cd contracts/agents
+          cat > foundry.toml <<'EOF'
+          [profile.default]
+          src = "."
+          test = "test"
+          out = "out"
+          cache_path = "cache"
+          solc_version = "0.8.24"
+          optimizer = true
+          optimizer_runs = 200
+          via_ir = false
+          remappings = [
+            "@openzeppelin/=../../lib/openzeppelin-contracts/"
+          ]
+          EOF
+          forge test -vv
