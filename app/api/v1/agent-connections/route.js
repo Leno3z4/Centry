@@ -1,7 +1,8 @@
-import { Contract, JsonRpcProvider, getAddress, isAddress, verifyMessage } from "ethers";
+import { Contract, JsonRpcProvider, getAddress, verifyMessage } from "ethers";
 import {
   issueAgentConnection,
   verifyAgentChallenge,
+  verifyAgentConnection,
 } from "../../../../../../lib/agentConnectionTokens";
 
 const ACCOUNT_ABI = ["function owner() view returns (address)"];
@@ -111,6 +112,7 @@ export async function POST(request) {
       operator,
       scopes,
     });
+    const issuedConnection = await verifyAgentConnection(connectionToken);
 
     const baseUrl = connectionOrigin(request);
     const connectionUrl = `${baseUrl}/api/v1/agent-connections/${encodeURIComponent(connectionToken)}`;
@@ -125,7 +127,7 @@ export async function POST(request) {
 
     return noStore({
       connected: true,
-      connectionId: connectionToken.split(".")[0],
+      connectionId: issuedConnection?.connectionId || null,
       account: challenge.account,
       owner: challenge.owner,
       scopes,
