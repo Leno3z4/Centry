@@ -5,14 +5,14 @@ on:
     paths:
       - "contracts/agents/**"
       - "contracts/agents/test/**"
-      - "agent-foundry.toml"
+      - "contracts/agents/foundry.toml"
       - ".gitmodules"
       - ".github/workflows/solidity-ci.yml"
   pull_request:
     paths:
       - "contracts/agents/**"
       - "contracts/agents/test/**"
-      - "agent-foundry.toml"
+      - "contracts/agents/foundry.toml"
       - ".gitmodules"
       - ".github/workflows/solidity-ci.yml"
 
@@ -31,4 +31,4 @@ jobs:
           version: stable
 
       - name: Test onchain agent foundation
-        run: forge test --config-path agent-foundry.toml -vv
+        run: cd contracts/agents && forge test -vv
