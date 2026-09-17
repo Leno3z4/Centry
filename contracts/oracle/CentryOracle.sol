@@ -19,32 +19,13 @@ interface IAggregatorV3 {
         );
 }
 
-interface IChronicle {
-    function read() external view returns (uint256 value);
-
-    function readWithAge()
-        external
-        view
-        returns (uint256 value, uint256 age);
-
-    function tryReadWithAge()
-        external
-        view
-        returns (bool ok, uint256 value, uint256 age);
-}
-
-interface ISelfKisser {
-    function selfKiss(address oracle) external;
-}
-
 /// @title Centry Oracle
-/// @notice Multi-asset oracle adapter with native Chronicle support.
-/// @dev Chronicle feeds use 18 decimals and readWithAge().
-///      Legacy Chainlink-style feeds remain supported for flexibility.
+/// @notice Multi-asset Chainlink Data Feed adapter for Centry.
+/// @dev Prices are normalized to 18 decimals and rejected when stale,
+///      incomplete, negative, zero, or otherwise invalid.
 contract CentryOracle is Ownable2Step, Pausable {
     enum FeedType {
         None,
-        Chronicle,
         Aggregator
     }
 
@@ -58,14 +39,11 @@ contract CentryOracle is Ownable2Step, Pausable {
 
     mapping(address => FeedConfig) public feeds;
 
-    ISelfKisser public immutable selfKisser;
-
     error AssetNotConfigured();
     error InvalidFeed();
     error InvalidPrice();
     error InvalidStaleness();
     error StalePrice();
-    error UnauthorizedSelfKisser();
 
     event FeedConfigured(
         address indexed asset,
@@ -78,73 +56,7 @@ contract CentryOracle is Ownable2Step, Pausable {
 
     event FeedDisabled(address indexed asset);
 
-    event ChronicleFeedWhitelisted(
-        address indexed oracle,
-        address indexed selfKisser
-    );
-
-    constructor(address initialOwner, address selfKisserAddress)
-        Ownable(initialOwner)
-    {
-        // A zero self-kisser is valid for deployments that use only
-        // Chainlink-style aggregator feeds. Chronicle configuration is
-        // explicitly guarded in setChronicleFeed().
-        selfKisser = ISelfKisser(selfKisserAddress);
-    }
-
-    function setChronicleFeed(
-        address asset,
-        address chronicle,
-        uint32 maxStaleness,
-        bool enabled
-    ) external onlyOwner {
-        if (asset == address(0) || chronicle == address(0)) {
-            revert InvalidFeed();
-        }
-
-        if (address(selfKisser) == address(0)) {
-            revert UnauthorizedSelfKisser();
-        }
-
-        if (maxStaleness == 0 || maxStaleness > 30 days) {
-            revert InvalidStaleness();
-        }
-
-        // Chronicle testnet uses SelfKisser to whitelist the calling
-        // contract. This external call originates from CentryOracle,
-        // so CentryOracle becomes the whitelisted reader.
-        selfKisser.selfKiss(chronicle);
-
-        (bool ok, uint256 value, uint256 age) =
-            IChronicle(chronicle).tryReadWithAge();
-
-        if (!ok || value == 0 || age == 0 || age > block.timestamp) {
-            revert InvalidPrice();
-        }
-
-        if (block.timestamp - age > maxStaleness) {
-            revert StalePrice();
-        }
-
-        feeds[asset] = FeedConfig({
-            feed: chronicle,
-            feedDecimals: 18,
-            maxStaleness: maxStaleness,
-            feedType: FeedType.Chronicle,
-            enabled: enabled
-        });
-
-        emit FeedConfigured(
-            asset,
-            chronicle,
-            FeedType.Chronicle,
-            18,
-            maxStaleness,
-            enabled
-        );
-
-        emit ChronicleFeedWhitelisted(chronicle, address(selfKisser));
-    }
+    constructor(address initialOwner) Ownable(initialOwner) {}
 
     function setFeed(
         address asset,
@@ -208,39 +120,12 @@ contract CentryOracle is Ownable2Step, Pausable {
         if (
             !config.enabled ||
             config.feed == address(0) ||
-            config.feedType == FeedType.None
+            config.feedType != FeedType.Aggregator
         ) {
             revert AssetNotConfigured();
         }
 
-        if (config.feedType == FeedType.Chronicle) {
-            return _getChroniclePrice(config);
-        }
-
-        if (config.feedType == FeedType.Aggregator) {
-            return _getAggregatorPrice(config);
-        }
-
-        revert AssetNotConfigured();
-    }
-
-    function _getChroniclePrice(FeedConfig memory config)
-        internal
-        view
-        returns (uint256 priceE18, uint256 updatedAt)
-    {
-        (uint256 value, uint256 age) = IChronicle(config.feed).readWithAge();
-
-        if (value == 0 || age == 0 || age > block.timestamp) {
-            revert InvalidPrice();
-        }
-
-        if (block.timestamp - age > config.maxStaleness) {
-            revert StalePrice();
-        }
-
-        priceE18 = value;
-        updatedAt = age;
+        return _getAggregatorPrice(config);
     }
 
     function _getAggregatorPrice(FeedConfig memory config)
@@ -256,8 +141,7 @@ contract CentryOracle is Ownable2Step, Pausable {
             uint80 answeredInRound
         ) = IAggregatorV3(config.feed).latestRoundData();
 
-        // Reject empty/invalid rounds and incomplete rounds. This prevents
-        // accepting a stale answer whose round metadata is not coherent.
+        // Reject empty/invalid rounds and incomplete rounds.
         if (
             roundId == 0 ||
             answer <= 0 ||
