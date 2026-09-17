@@ -1,5 +1,5 @@
 import { getAddress, isAddress } from "ethers";
-import { issueAgentChallenge } from "../../../../../../lib/agentConnectionTokens";
+import { issueAgentChallenge } from "../../../../../lib/agentConnectionTokens";
 
 function noStore(body, status = 200) {
   return Response.json(body, {
