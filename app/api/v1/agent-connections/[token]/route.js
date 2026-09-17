@@ -57,8 +57,15 @@ export async function GET(request, { params }) {
   const rawOperator = new URL(request.url).searchParams.get("operator") || "";
   if (!rawOperator) {
     return markdownResponse(
-      "# Centry connection needs an operator\n\nCall this URL with `?operator=0x...` using the Ethereum address controlled by the external agent. The address must already be authorized as an operator on the linked Centry agent account.",
+      "# Centry connection needs an operator\n\nCall this URL with `?operator=0x...` using the Ethereum address controlled by the external agent. The address must match the operator bound to this connection and must already be authorized on the linked Centry agent account.",
       400
+    );
+  }
+
+  if (!connection.operator || !isAddress(connection.operator) || rawOperator.toLowerCase() !== connection.operator.toLowerCase()) {
+    return markdownResponse(
+      "# Centry connection rejected\n\nThe operator supplied by the external agent does not match the operator bound to this connection. Generate a new connection for the correct agent wallet.",
+      403
     );
   }
 
