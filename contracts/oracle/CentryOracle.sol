@@ -19,10 +19,23 @@ interface IAggregatorV3 {
         );
 }
 
+/// @notice Generic Centry oracle adapter interface for non-Chainlink providers.
+/// @dev Adapters MUST return a positive price normalized to 18 decimals and
+///      the timestamp for the observation. CentryOracle enforces the common
+///      validity and staleness checks around the adapter response.
+interface ICentryOracleAdapter {
+    function getPrice(address asset)
+        external
+        view
+        returns (uint256 priceE18, uint256 updatedAt);
+}
+
 /// @title Centry Oracle
-/// @notice Multi-asset Chainlink Data Feed adapter for Centry.
-/// @dev Prices are normalized to 18 decimals and rejected when stale,
-///      incomplete, negative, zero, or otherwise invalid.
+/// @notice Multi-asset oracle router with Chainlink AggregatorV3 as the native
+///      provider and an adapter path for additional oracle providers.
+/// @dev Existing Chainlink behavior is preserved through setFeed(). Alternate
+///      providers can be added as adapters. An adapter can be marked primary,
+///      or kept as a fallback behind Chainlink.
 contract CentryOracle is Ownable2Step, Pausable {
     enum FeedType {
         None,
@@ -37,10 +50,24 @@ contract CentryOracle is Ownable2Step, Pausable {
         bool enabled;
     }
 
+    struct AdapterConfig {
+        address adapter;
+        uint32 maxStaleness;
+        bool enabled;
+        bool primary;
+    }
+
+    // Kept unchanged so the existing Chainlink configuration ABI/storage
+    // shape remains compatible with the previous contract implementation.
     mapping(address => FeedConfig) public feeds;
+
+    // One alternate adapter may be configured per asset. The adapter itself
+    // can wrap any supported oracle provider and return the common interface.
+    mapping(address => AdapterConfig) public adapters;
 
     error AssetNotConfigured();
     error InvalidFeed();
+    error InvalidAdapter();
     error InvalidPrice();
     error InvalidStaleness();
     error StalePrice();
@@ -56,8 +83,25 @@ contract CentryOracle is Ownable2Step, Pausable {
 
     event FeedDisabled(address indexed asset);
 
+    event AdapterConfigured(
+        address indexed asset,
+        address indexed adapter,
+        uint32 maxStaleness,
+        bool enabled,
+        bool primary
+    );
+
+    event AdapterDisabled(address indexed asset);
+
+    event AdapterPrimaryUpdated(
+        address indexed asset,
+        bool primary
+    );
+
     constructor(address initialOwner) Ownable(initialOwner) {}
 
+    /// @notice Configure a Chainlink AggregatorV3-compatible feed.
+    /// @dev Existing Chainlink setup behavior is preserved.
     function setFeed(
         address asset,
         address feed,
@@ -101,6 +145,66 @@ contract CentryOracle is Ownable2Step, Pausable {
         emit FeedDisabled(asset);
     }
 
+    /// @notice Configure an alternate oracle adapter for an asset.
+    /// @param primary If true, the adapter is attempted before Chainlink.
+    ///        If false, Chainlink is attempted first and this adapter is
+    ///        used only when Chainlink cannot provide a valid fresh price.
+    function setAdapter(
+        address asset,
+        address adapter,
+        uint32 maxStaleness,
+        bool enabled,
+        bool primary
+    ) external onlyOwner {
+        if (
+            asset == address(0) ||
+            adapter == address(0) ||
+            adapter.code.length == 0
+        ) {
+            revert InvalidAdapter();
+        }
+
+        if (maxStaleness == 0 || maxStaleness > 30 days) {
+            revert InvalidStaleness();
+        }
+
+        if (primary && !enabled) {
+            revert InvalidAdapter();
+        }
+
+        adapters[asset] = AdapterConfig({
+            adapter: adapter,
+            maxStaleness: maxStaleness,
+            enabled: enabled,
+            primary: primary
+        });
+
+        emit AdapterConfigured(
+            asset,
+            adapter,
+            maxStaleness,
+            enabled,
+            primary
+        );
+    }
+
+    function disableAdapter(address asset) external onlyOwner {
+        adapters[asset].enabled = false;
+        adapters[asset].primary = false;
+        emit AdapterDisabled(asset);
+    }
+
+    function setAdapterPrimary(address asset, bool primary) external onlyOwner {
+        AdapterConfig storage config = adapters[asset];
+
+        if (config.adapter == address(0) || !config.enabled) {
+            revert InvalidAdapter();
+        }
+
+        config.primary = primary;
+        emit AdapterPrimaryUpdated(asset, primary);
+    }
+
     function pause() external onlyOwner {
         _pause();
     }
@@ -115,17 +219,68 @@ contract CentryOracle is Ownable2Step, Pausable {
         whenNotPaused
         returns (uint256 priceE18, uint256 updatedAt)
     {
-        FeedConfig memory config = feeds[asset];
+        AdapterConfig memory adapterConfig = adapters[asset];
+        FeedConfig memory feedConfig = feeds[asset];
 
+        // An explicitly-primary alternate provider gets first refusal.
         if (
-            !config.enabled ||
-            config.feed == address(0) ||
-            config.feedType != FeedType.Aggregator
+            adapterConfig.enabled &&
+            adapterConfig.primary &&
+            adapterConfig.adapter != address(0)
         ) {
-            revert AssetNotConfigured();
+            (
+                bool adapterValid,
+                uint256 adapterPrice,
+                uint256 adapterUpdatedAt
+            ) = _tryGetAdapterPrice(asset, adapterConfig);
+
+            if (adapterValid) {
+                return (adapterPrice, adapterUpdatedAt);
+            }
         }
 
-        return _getAggregatorPrice(config);
+        // Preserve the original Chainlink path as the default source.
+        if (
+            feedConfig.enabled &&
+            feedConfig.feed != address(0) &&
+            feedConfig.feedType == FeedType.Aggregator
+        ) {
+            (
+                bool aggregatorValid,
+                bool aggregatorStale,
+                uint256 aggregatorPrice,
+                uint256 aggregatorUpdatedAt
+            ) = _tryGetAggregatorPrice(feedConfig);
+
+            if (aggregatorValid) {
+                return (aggregatorPrice, aggregatorUpdatedAt);
+            }
+
+            // A non-primary adapter is an explicit fallback for Chainlink.
+            if (
+                adapterConfig.enabled &&
+                !adapterConfig.primary &&
+                adapterConfig.adapter != address(0)
+            ) {
+                return _getAdapterPrice(asset, adapterConfig);
+            }
+
+            if (aggregatorStale) {
+                revert StalePrice();
+            }
+
+            revert InvalidPrice();
+        }
+
+        // No usable Chainlink feed: use any configured adapter.
+        if (
+            adapterConfig.enabled &&
+            adapterConfig.adapter != address(0)
+        ) {
+            return _getAdapterPrice(asset, adapterConfig);
+        }
+
+        revert AssetNotConfigured();
     }
 
     function _getAggregatorPrice(FeedConfig memory config)
@@ -172,5 +327,125 @@ contract CentryOracle is Ownable2Step, Pausable {
         }
 
         updatedAt = timestamp;
+    }
+
+    function _tryGetAggregatorPrice(FeedConfig memory config)
+        internal
+        view
+        returns (
+            bool valid,
+            bool stale,
+            uint256 priceE18,
+            uint256 updatedAt
+        )
+    {
+        try IAggregatorV3(config.feed).latestRoundData() returns (
+            uint80 roundId,
+            int256 answer,
+            uint256 startedAt,
+            uint256 timestamp,
+            uint80 answeredInRound
+        ) {
+            if (
+                roundId == 0 ||
+                answer <= 0 ||
+                startedAt == 0 ||
+                timestamp == 0 ||
+                answeredInRound == 0 ||
+                answeredInRound < roundId
+            ) {
+                return (false, false, 0, 0);
+            }
+
+            if (
+                startedAt > block.timestamp ||
+                timestamp > block.timestamp ||
+                startedAt > timestamp
+            ) {
+                return (false, false, 0, 0);
+            }
+
+            if (block.timestamp - timestamp > config.maxStaleness) {
+                return (false, true, 0, timestamp);
+            }
+
+            uint256 normalizedPrice =
+                uint256(answer) * (10 ** (18 - config.feedDecimals));
+
+            if (normalizedPrice == 0) {
+                return (false, false, 0, 0);
+            }
+
+            return (true, false, normalizedPrice, timestamp);
+        } catch {
+            return (false, false, 0, 0);
+        }
+    }
+
+    function _getAdapterPrice(
+        address asset,
+        AdapterConfig memory config
+    ) internal view returns (uint256 priceE18, uint256 updatedAt) {
+        if (!config.enabled || config.adapter == address(0)) {
+            revert AssetNotConfigured();
+        }
+
+        try ICentryOracleAdapter(config.adapter).getPrice(asset) returns (
+            uint256 adapterPriceE18,
+            uint256 timestamp
+        ) {
+            if (
+                adapterPriceE18 == 0 ||
+                timestamp == 0 ||
+                timestamp > block.timestamp
+            ) {
+                revert InvalidPrice();
+            }
+
+            if (block.timestamp - timestamp > config.maxStaleness) {
+                revert StalePrice();
+            }
+
+            return (adapterPriceE18, timestamp);
+        } catch (bytes memory reason) {
+            if (reason.length == 0) {
+                revert InvalidPrice();
+            }
+
+            assembly {
+                revert(add(reason, 32), mload(reason))
+            }
+        }
+    }
+
+    function _tryGetAdapterPrice(
+        address asset,
+        AdapterConfig memory config
+    )
+        internal
+        view
+        returns (
+            bool valid,
+            uint256 priceE18,
+            uint256 updatedAt
+        )
+    {
+        try ICentryOracleAdapter(config.adapter).getPrice(asset) returns (
+            uint256 adapterPriceE18,
+            uint256 timestamp
+        ) {
+            if (
+                adapterPriceE18 == 0 ||
+                timestamp == 0 ||
+                timestamp > block.timestamp ||
+                block.timestamp - timestamp > config.maxStaleness
+            ) {
+                return (false, 0, timestamp);
+            }
+
+            return (true, adapterPriceE18, timestamp);
+        } catch {
+            return (false, 0, 0);
+        }
     }
 }
