@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useAccount, usePublicClient, useReadContract, useSignMessage, useWriteContract } from 'wagmi';
-import { keccak256, toBytes, isAddress } from 'viem';
+import { keccak256, parseUnits, toBytes, isAddress } from 'viem';
 import { Providers } from '../../../components/Providers';
 import { AppShell } from '../../../components/AppShell';
 import { CONTRACT_ADDRESSES } from '../../../constants/contracts';
@@ -30,7 +30,7 @@ const OPTIONAL_SCOPES = [
   ['lend', 'Supply and withdraw'],
   ['borrow', 'Borrow assets'],
   ['repay', 'Repay debt'],
-  ['swap', 'Swap CENT into native USDC through the validated UnitFlow route'],
+  ['swap', 'Swap CENT and native USDC through the validated UnitFlow route'],
   ['governance', 'Governance actions'],
   ['agent-management', 'Read agent configuration'],
 ];
@@ -58,6 +58,7 @@ function AgentPageContent() {
   const [selectedAccount, setSelectedAccount] = useState('');
   const [operator, setOperatorAddress] = useState('');
   const [scopes, setScopes] = useState(DEFAULT_SCOPES);
+  const [swapLimit, setSwapLimit] = useState('');
   const [permissionsReady, setPermissionsReady] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [connectionUrl, setConnectionUrl] = useState('');
@@ -146,8 +147,12 @@ function AgentPageContent() {
       push(CONTRACT_ADDRESSES.lendingPool, SELECTORS.repay, 0n);
     }
     if (scopes.includes('swap')) {
+      if (!swapLimit) throw new Error('Set a maximum native value per swap before enabling swap permissions.');
+      let maxNativeValue;
+      try { maxNativeValue = parseUnits(swapLimit, 18); } catch { throw new Error('Swap native-value limit must be a valid USDC amount.'); }
+      if (maxNativeValue <= 0n || maxNativeValue > ((1n << 128n) - 1n)) throw new Error('Swap native-value limit is outside the allowed range.');
       push(CONTRACT_ADDRESSES.centryToken, SELECTORS.approve, 0n);
-      push(UNIVERSAL_ROUTER, SELECTORS.execute, 0n);
+      push(UNIVERSAL_ROUTER, SELECTORS.execute, maxNativeValue);
     }
     if (scopes.includes('governance')) {
       if (!GOVERNOR_ADDRESS || !isAddress(GOVERNOR_ADDRESS)) throw new Error('Governor address is not configured for agent governance.');
@@ -237,8 +242,9 @@ function AgentPageContent() {
           <section className={styles.card}>
             <div className={styles.cardTop}><div><h2>2 · Connection scope</h2><p>Choose what this connection is allowed to request from Centry.</p></div></div>
             <div className={styles.scopeList}>{OPTIONAL_SCOPES.map(([scope, description]) => <label key={scope} className={styles.scopeRow}><input type="checkbox" checked={scopes.includes(scope)} onChange={() => toggleScope(scope)} /><span><strong>{scope}</strong><small>{description}</small></span></label>)}</div>
+            {scopes.includes('swap') ? <><label className={styles.label}>Maximum native USDC value per swap</label><input className={styles.input} inputMode="decimal" value={swapLimit} onChange={(event) => { setSwapLimit(event.target.value); setPermissionsReady(false); }} placeholder="e.g. 1000" /><p className={styles.hint}>Sets the smart-account native-value cap for the external agent's swap permission.</p></> : null}
             {hasStateChangingScope ? <button type="button" className={styles.secondaryButton} disabled={isWritePending || !operatorAuthorized} onClick={configurePermissions}>{permissionsReady ? 'Permissions configured' : 'Apply onchain permissions'}</button> : null}
-            <button type="button" className={styles.primaryButton} disabled={isWritePending || !operatorAuthorized || (hasStateChangingScope && !permissionsReady)} onClick={createConnection}>Generate connection prompt</button>
+            <button type="button'" className={styles.primaryButton} disabled={isWritePending || !operatorAuthorized || (hasStateChangingScope && !permissionsReady)} onClick={createConnection}>Generate connection prompt</button>
           </section>
         </div>
       )}
