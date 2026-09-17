@@ -22,6 +22,25 @@ contract CentryAgentCallTarget {
     }
 }
 
+contract MockERC8004IdentityRegistry {
+    uint256 public nextAgentId = 1;
+    mapping(uint256 => address) public ownerOf;
+    mapping(uint256 => string) public agentURI;
+
+    function register(string calldata agentURI_) external returns (uint256 agentId) {
+        agentId = nextAgentId++;
+        ownerOf[agentId] = msg.sender;
+        agentURI[agentId] = agentURI_;
+    }
+
+    function setAgentURI(uint256 agentId, string calldata newURI) external {
+        if (ownerOf[agentId] != msg.sender) revert NotIdentityOwner();
+        agentURI[agentId] = newURI;
+    }
+
+    error NotIdentityOwner();
+}
+
 /// @title Centry Onchain Agent Account Tests
 /// @notice Small Foundry-compatible tests with no forge-std dependency.
 contract CentryOnchainAgentAccountTest {
@@ -30,6 +49,7 @@ contract CentryOnchainAgentAccountTest {
     CentryOnchainAgentFactory internal factory;
     CentryOnchainAgentAccount internal account;
     CentryAgentCallTarget internal target;
+    MockERC8004IdentityRegistry internal identityRegistry;
 
     address internal user = address(0xA11CE);
     address internal agent = address(0xA61E7);
@@ -37,6 +57,7 @@ contract CentryOnchainAgentAccountTest {
     function setUp() public {
         factory = new CentryOnchainAgentFactory();
         target = new CentryAgentCallTarget();
+        identityRegistry = new MockERC8004IdentityRegistry();
 
         vm.prank(user);
         address accountAddress = factory.createAgentAccount(
@@ -134,12 +155,42 @@ contract CentryOnchainAgentAccountTest {
         _assertEqAddress(account.owner(), newOwner);
     }
 
+    function testERC8004RegistrationBindsIdentityToAgentAccount() external {
+        vm.prank(user);
+        uint256 agentId = account.registerERC8004Identity(
+            address(identityRegistry),
+            "https://api.centry.test/agents/1.json"
+        );
+
+        _assertEqAddress(identityRegistry.ownerOf(agentId), address(account));
+        _assertEqAddress(account.erc8004IdentityRegistry(), address(identityRegistry));
+        _assertEq(account.erc8004AgentId(), agentId);
+        _assertEqString(identityRegistry.agentURI(agentId), "https://api.centry.test/agents/1.json");
+    }
+
+    function testERC8004RegistrationURICanBeUpdatedByAccountOwner() external {
+        vm.prank(user);
+        uint256 agentId = account.registerERC8004Identity(
+            address(identityRegistry),
+            "https://api.centry.test/agents/1.json"
+        );
+
+        vm.prank(user);
+        account.updateERC8004IdentityURI("https://api.centry.test/agents/1-v2.json");
+
+        _assertEqString(identityRegistry.agentURI(agentId), "https://api.centry.test/agents/1-v2.json");
+    }
+
     function _assertEq(uint256 a, uint256 b) internal pure {
         if (a != b) revert AssertionFailed();
     }
 
     function _assertEqAddress(address a, address b) internal pure {
         if (a != b) revert AssertionFailed();
+    }
+
+    function _assertEqString(string memory a, string memory b) internal pure {
+        if (keccak256(bytes(a)) != keccak256(bytes(b))) revert AssertionFailed();
     }
 
     function _assertFalse(bool value_) internal pure {
