@@ -4,6 +4,7 @@ import {
   actionCatalog,
   buildAction,
   checkActionPermissions,
+  assertLiveOperator,
   ARC_TESTNET_CHAIN_ID,
 } from "../../../../../../lib/agentExecutionRuntime";
 
@@ -144,19 +145,14 @@ export async function GET(request) {
   if (!rpcUrl) return json({ error: "agent_rpc_not_configured" }, 503);
 
   try {
-    const policy = await checkActionPermissions({
-      rpcUrl,
-      account: session.account,
-      operator: session.operator,
-      calls: [{ target: session.account, selector: "0x00000000", value: 0n, data: "0x" }],
-    });
+    await assertLiveOperator({ rpcUrl, account: session.account, operator: session.operator });
     return json({
       chainId: ARC_TESTNET_CHAIN_ID,
       account: session.account,
       operator: session.operator,
       scopes: session.scopes || [],
       actions: actionCatalog().filter((action) => (session.scopes || []).includes(action.scope)),
-      operatorAuthorized: policy.permitted,
+      operatorAuthorized: true,
     });
   } catch (error) {
     if (error instanceof Error && error.message === "operator_not_authorized") return json({ error: "operator_not_authorized" }, 403);
