@@ -9,13 +9,7 @@ import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5
 import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/governance/TimelockController.sol";
 import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/governance/utils/IVotes.sol";
 
-contract CentryGovernor is
-    Governor,
-    GovernorCountingSimple,
-    GovernorVotes,
-    GovernorVotesQuorumFraction,
-    GovernorTimelockControl
-{
+contract CentryGovernor is Governor, GovernorCountingSimple, GovernorVotes, GovernorVotesQuorumFraction, GovernorTimelockControl {
     constructor(IVotes votes_, TimelockController timelock_)
         Governor("Centry Governor")
         GovernorVotes(votes_)
@@ -23,35 +17,30 @@ contract CentryGovernor is
         GovernorTimelockControl(timelock_)
     {}
 
-    function votingDelay() public pure override returns (uint256) {
-        return 1 days;
-    }
+    function votingDelay() public pure override returns (uint256) { return 1 days; }
+    function votingPeriod() public pure override returns (uint256) { return 3 days; }
+    function proposalThreshold() public pure override returns (uint256) { return 0; }
 
-    function votingPeriod() public pure override returns (uint256) {
-        return 3 days;
-    }
-
-    function proposalThreshold() public pure override returns (uint256) {
-        return 0;
+    function quorum(uint256 timepoint)
+        public view override(Governor, GovernorVotesQuorumFraction) returns (uint256)
+    {
+        return super.quorum(timepoint);
     }
 
     function state(uint256 proposalId)
-        public
-        view
-        override(Governor, GovernorTimelockControl)
-        returns (ProposalState)
+        public view override(Governor, GovernorTimelockControl) returns (ProposalState)
     {
         return super.state(proposalId);
     }
 
-    function _execute(
+    function _executeOperations(
         uint256 proposalId,
         address[] memory targets,
         uint256[] memory values,
         bytes[] memory calldatas,
         bytes32 descriptionHash
     ) internal override(Governor, GovernorTimelockControl) {
-        super._execute(proposalId, targets, values, calldatas, descriptionHash);
+        super._executeOperations(proposalId, targets, values, calldatas, descriptionHash);
     }
 
     function _cancel(
@@ -63,20 +52,12 @@ contract CentryGovernor is
         return super._cancel(targets, values, calldatas, descriptionHash);
     }
 
-    function _executor()
-        internal
-        view
-        override(Governor, GovernorTimelockControl)
-        returns (address)
-    {
+    function _executor() internal view override(Governor, GovernorTimelockControl) returns (address) {
         return super._executor();
     }
 
     function supportsInterface(bytes4 interfaceId)
-        public
-        view
-        override(Governor, GovernorTimelockControl)
-        returns (bool)
+        public view override(Governor, GovernorTimelockControl) returns (bool)
     {
         return super.supportsInterface(interfaceId);
     }
