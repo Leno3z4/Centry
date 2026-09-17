@@ -33,6 +33,22 @@ contract CentryGovernor is Governor, GovernorCountingSimple, GovernorVotes, Gove
         return super.state(proposalId);
     }
 
+    function proposalNeedsQueuing(uint256 proposalId)
+        public view override(Governor, GovernorTimelockControl) returns (bool)
+    {
+        return super.proposalNeedsQueuing(proposalId);
+    }
+
+    function _queueOperations(
+        uint256 proposalId,
+        address[] memory targets,
+        uint256[] memory values,
+        bytes[] memory calldatas,
+        bytes32 descriptionHash
+    ) internal override(Governor, GovernorTimelockControl) returns (uint48) {
+        return super._queueOperations(proposalId, targets, values, calldatas, descriptionHash);
+    }
+
     function _executeOperations(
         uint256 proposalId,
         address[] memory targets,
@@ -57,7 +73,7 @@ contract CentryGovernor is Governor, GovernorCountingSimple, GovernorVotes, Gove
     }
 
     function supportsInterface(bytes4 interfaceId)
-        public view override(Governor, GovernorTimelockControl) returns (bool)
+        public view override(Governor) returns (bool)
     {
         return super.supportsInterface(interfaceId);
     }
