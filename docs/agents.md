@@ -42,11 +42,12 @@ Request:
 ```json
 {
   "owner": "0x...",
-  "account": "0x..."
+  "account": "0x...",
+  "scopes": ["read", "borrow", "repay"]
 }
 ```
 
-The response contains a short-lived challenge token plus the exact human-readable message to sign.
+The response contains a short-lived challenge token plus the exact human-readable message to sign. The selected scopes are part of the signed message, so they cannot be broadened after signing.
 
 `POST /api/v1/agent-connections`
 
@@ -65,6 +66,7 @@ Centry checks:
 
 - the challenge is valid, unexpired, and origin-bound;
 - the wallet signature resolves to the challenge owner;
+- the requested scopes exactly match the signed challenge scopes;
 - the configured RPC can read the supplied smart account;
 - `CentryOnchainAgentAccount.owner()` matches the signer;
 - `CentryOnchainAgentAccount.agentOperators(operator)` is true;
@@ -91,7 +93,7 @@ The reusable external-agent skill lives at:
 
 `skills/centry-connect/SKILL.md`
 
-## Session discovery
+## Session and revocation
 
 `GET /api/v1/agent-connections/session`
 
@@ -101,15 +103,41 @@ Use:
 Authorization: Bearer <session-token>
 ```
 
-The response exposes the current user/account/operator binding, capability flags, chain ID, and the currently supported action catalog.
+Every authenticated agent request re-checks `agentOperators(operator)` onchain. Therefore disabling the operator on the Centry agent account immediately prevents further authenticated use of the session without waiting for the bearer token to expire.
+
+## Read API
+
+All read endpoints require the `read` scope and the same bearer session:
+
+```text
+GET /api/v1/agent-connections/session/portfolio
+GET /api/v1/agent-connections/session/positions
+GET /api/v1/agent-connections/session/markets
+```
+
+`portfolio` returns token balances, lending positions, health factor, and borrow power for the connected Centry agent account.
+
+`positions` returns bounded reserve-by-reserve supply/borrow positions plus reserve risk parameters and oracle timestamps.
+
+`markets` returns active reserves, caps, utilization, current supply/borrow, and oracle prices. Reserve discovery is bounded by the lending pool's configured reserve limit rather than unbounded user iteration.
+
+For the agent account itself:
+
+```text
+GET /api/v1/agent-connections/session/agent
+```
+
+This requires `agent-management` and returns the account metadata, ERC-8004 binding, and current operator authorization state. User-owned administrative writes remain on the Centry UI; the external agent does not receive owner authority.
 
 ## Agent execution
 
-The first mutation surface is deliberately **transaction preparation**, not arbitrary server-side execution:
+The mutation surface is deliberately **transaction preparation**, not arbitrary server-side execution:
 
 `POST /api/v1/agent-connections/session/prepare`
 
-Example:
+Every prepared action is resolved through a fixed catalog, checked against the connection scope, then checked against the live `agentOperators()` and `canExecute()` policy for every underlying call. The response is a transaction for the authorized operator wallet to sign and broadcast.
+
+### Lending
 
 ```json
 {
@@ -119,15 +147,66 @@ Example:
 }
 ```
 
-Centry resolves the action through its bounded catalog, checks the connection scope, checks the live `agentOperators()` and `canExecute()` policy on the smart account, and returns a transaction for the authorized operator wallet to sign and broadcast.
-
-The first supported actions are:
+Supported lending actions:
 
 - `approve`
 - `supply`
 - `withdraw`
 - `borrow`
 - `repay`
+
+### Swap
+
+The agent swap path is intentionally bounded to Centry's configured CENT/USDC UnitFlow route:
+
+```text
+POST /api/v1/agent-connections/session/swap/quote
+```
+
+Example request:
+
+```json
+{
+  "inputToken": "CENT",
+  "outputToken": "USDC",
+  "inputAmount": "1000000000000000000",
+  "slippageBps": 50
+}
+```
+
+The returned `minOut` is expressed in the output token's base units and can be supplied to `prepare`:
+
+```json
+{
+  "action": "swap",
+  "asset": "CENT",
+  "toAsset": "USDC",
+  "amount": "1000000000000000000",
+  "minOut": "990000"
+}
+```
+
+CENT -> USDC may produce a bounded two-call smart-account batch (`approve` + `swap`). USDC -> CENT uses the configured native-USDC UnitFlow route and its native-value permission is checked by the smart account.
+
+### Governance
+
+```text
+GET /api/v1/agent-connections/session/governance/proposal?proposalId=<id>
+```
+
+The endpoint returns proposal state, snapshot/deadline, quorum, proposal vote totals, and the connected account's historical voting power at the snapshot.
+
+To vote:
+
+```json
+{
+  "action": "castVote",
+  "proposalId": "123",
+  "support": "1"
+}
+```
+
+`support` follows the Governor convention: `0 = Against`, `1 = For`, `2 = Abstain`. Proposal creation and arbitrary governance calldata are intentionally not exposed to external agents.
 
 The API does **not** expose arbitrary calldata execution. Every mutation must map to a known Centry action and pass the current onchain policy.
 
@@ -165,6 +244,16 @@ The API runtime needs these server-side values:
 CENTRY_AGENT_CONNECTION_SECRET=<long-random-secret>
 CENTRY_AGENT_RPC_URL=https://...
 CENTRY_AGENT_BASE_URL=https://api.centry.example
+CENTRY_LENDING_POOL=0x...
+CENTRY_ORACLE=0x...
+CENTRY_USDC=0x...
+CENTRY_EURC=0x...
+CENTRY_CIRBTC=0x...
+CENTRY_TOKEN=0x...
+CENTRY_WUSDC=0x...
+CENTRY_UNITFLOW_V25_SWAP_ROUTER=0x...
+CENTRY_UNITFLOW_UNIVERSAL_ROUTER=0x...
+CENTRY_GOVERNOR=0x...
 CENTRY_ERC8004_RPC_URL=https://...
 CENTRY_ERC8004_CHAIN_ID=...
 CENTRY_ERC8004_IDENTITY_REGISTRY=0x...
@@ -183,12 +272,24 @@ CENTRY_AGENT_ACTIVE=true
 
 There is intentionally no global `CENTRY_AGENT_OPERATOR`: operator identity belongs to each user connection and must be authorized on that user's smart account.
 
-## Cloudflare transport
+## Cloudflare transport and always-on agents
 
 `agent-gateway/` is an optional Cloudflare transport layer. It can consume the same HTTPS session model rather than introducing a second user identity system.
 
-The Worker must not hold a user's private key and must not become an alternative custody authority. It may authenticate, rate-limit, queue, schedule, or proxy requests, while the user's onchain account remains the execution boundary.
+An external agent can run 24/7 independently of Centry's web UI:
 
-## Production security follow-up
+```text
+external agent runtime
+  -> stores its own operator private key securely
+  -> keeps the short-lived Centry session token private
+  -> reads portfolio/markets/positions
+  -> requests bounded transactions
+  -> signs with the operator wallet
+  -> broadcasts to Arc
+```
 
-The onchain account foundation is now the execution boundary, but production launch still requires independent contract audit and broader protocol tests. The HTTP connection layer is intentionally stateless and short-lived; before production, add durable replay protection/rate limiting for challenge consumption and connection issuance, preferably at the deployment layer (for example a Cloudflare Durable Object/KV-backed connection store).
+Centry never receives the operator private key. The Worker/API can authenticate, rate-limit, queue, schedule, or proxy requests, while the user's onchain account remains the execution boundary.
+
+## Production security
+
+The smart account is the hard execution boundary and operator revocation is enforced live onchain. The HTTP connection/session credentials are still deliberately short-lived and sensitive. For production, deploy rate limiting and durable bootstrap/challenge replay tracking at the edge (for example with Cloudflare Durable Objects/KV) before exposing the service broadly.
