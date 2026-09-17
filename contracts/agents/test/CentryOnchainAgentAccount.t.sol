@@ -95,7 +95,7 @@ contract CentryOnchainAgentAccountTest {
         bytes4 selector = CentryAgentCallTarget.setValue.selector;
 
         vm.prank(user);
-        account.setPermission(agent, address(target), selector, true, block.timestamp + 1 hours, 0);
+        account.setPermission(agent, address(target), selector, true, uint64(block.timestamp + 1 hours), 0);
 
         vm.warp(block.timestamp + 2 hours);
         vm.prank(agent);
