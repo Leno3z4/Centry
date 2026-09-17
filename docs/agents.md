@@ -10,38 +10,28 @@ The transport layer is not the authority. The smart account remains the final ex
 
 ## User connection flow
 
-The intended product flow is:
-
 ```text
 user opens Centry agent connection surface
-  -> selects an external agent
-  -> Centry requests a wallet signature for the selected account
+  -> selects/creates a Centry agent account
+  -> enters the external agent's operator wallet address
+  -> authorizes that operator on the smart account
+  -> selects scopes
   -> POST /api/v1/agent-connections/challenge
   -> wallet signs the returned human-readable challenge
   -> POST /api/v1/agent-connections
-  -> Centry verifies the signature and the smart-account owner onchain
+  -> Centry verifies the signature, smart-account owner, and onchain operator authorization
   -> Centry returns a unique short-lived connection URL + copyable prompt
 
 external agent
-  -> fetches the connection URL
+  -> reads its own operator address
+  -> fetches the connection URL with ?operator=<operator-address>
   -> receives personalized SKILL.md-style connection instructions
-  -> exchanges bootstrap authorization for a short-lived session
+  -> receives a short-lived session bound to the same operator
   -> GET /api/v1/agent-connections/session
-  -> uses only the capabilities returned for that connection
+  -> uses only the capabilities/actions returned for that connection
 ```
 
-The copyable prompt is intentionally simple:
-
-```text
-Connect my Centry account to this agent.
-
-Read the Centry skill at the following URL and follow its instructions to establish the connection.
-https://api.centry.example/api/v1/agent-connections/<short-lived-token>
-
-After connecting, use only the capabilities returned by Centry for this connection.
-```
-
-The connection URL itself is the bootstrap credential. It is short-lived and should be treated as sensitive. It should never be pasted into logs, analytics, chat transcripts, or third-party services.
+The connection URL is bound to the operator that the user authorized. Another operator address cannot reuse the same bootstrap token.
 
 ## Wallet authorization
 
@@ -56,7 +46,7 @@ Request:
 }
 ```
 
-The response contains a signed challenge token plus the exact human-readable message to sign.
+The response contains a short-lived challenge token plus the exact human-readable message to sign.
 
 `POST /api/v1/agent-connections`
 
@@ -66,37 +56,40 @@ Request:
 {
   "challengeToken": "<signed-centry-challenge>",
   "signature": "0x...",
-  "scopes": ["read", "borrow", "repay", "swap"]
+  "operator": "0x...",
+  "scopes": ["read", "borrow", "repay"]
 }
 ```
 
 Centry checks:
 
-- the challenge is valid and unexpired;
+- the challenge is valid, unexpired, and origin-bound;
 - the wallet signature resolves to the challenge owner;
 - the configured RPC can read the supplied smart account;
 - `CentryOnchainAgentAccount.owner()` matches the signer;
+- `CentryOnchainAgentAccount.agentOperators(operator)` is true;
 - requested scopes are from Centry's explicit capability set.
 
 The server never accepts the account owner or operator as authority merely because they appear in JSON.
 
 ## Skill bootstrap
 
-`GET /api/v1/agent-connections/:token`
+`GET /api/v1/agent-connections/:token?operator=0x...`
 
-This returns Markdown containing:
+The external agent must use the same operator address that was bound when the connection was issued. The route re-checks the operator against the live onchain account before issuing the session.
+
+The returned Markdown contains:
 
 - the authenticated Centry API base;
 - a short-lived session bearer token;
-- the connected account and owner;
+- the connected account and operator;
 - the selected scopes;
-- instructions to call the capability/session endpoint.
+- instructions to call the capability/session endpoint;
+- instructions for the bounded transaction-preparation endpoint.
 
 The reusable external-agent skill lives at:
 
 `skills/centry-connect/SKILL.md`
-
-That skill tells an external agent to fetch the user-specific connection URL, keep the credential private, establish the session, and follow only the capabilities returned by Centry.
 
 ## Session discovery
 
@@ -108,7 +101,35 @@ Use:
 Authorization: Bearer <session-token>
 ```
 
-The response exposes the current user/account binding and capability flags. A capability being present does not bypass the user's current onchain smart-account permissions.
+The response exposes the current user/account/operator binding, capability flags, chain ID, and the currently supported action catalog.
+
+## Agent execution
+
+The first mutation surface is deliberately **transaction preparation**, not arbitrary server-side execution:
+
+`POST /api/v1/agent-connections/session/prepare`
+
+Example:
+
+```json
+{
+  "action": "borrow",
+  "asset": "USDC",
+  "amount": "5000000"
+}
+```
+
+Centry resolves the action through its bounded catalog, checks the connection scope, checks the live `agentOperators()` and `canExecute()` policy on the smart account, and returns a transaction for the authorized operator wallet to sign and broadcast.
+
+The first supported actions are:
+
+- `approve`
+- `supply`
+- `withdraw`
+- `borrow`
+- `repay`
+
+The API does **not** expose arbitrary calldata execution. Every mutation must map to a known Centry action and pass the current onchain policy.
 
 ## Scopes
 
@@ -122,7 +143,7 @@ The current connection scope vocabulary is:
 - `governance`
 - `agent-management`
 
-Mutation endpoints should require both the session scope and a matching onchain account permission. Do not add arbitrary-calldata endpoints to the HTTP layer.
+Scopes are an API-level capability boundary; they never replace the smart-account policy.
 
 ## ERC-8004 registration endpoint
 
@@ -144,7 +165,6 @@ The API runtime needs these server-side values:
 CENTRY_AGENT_CONNECTION_SECRET=<long-random-secret>
 CENTRY_AGENT_RPC_URL=https://...
 CENTRY_AGENT_BASE_URL=https://api.centry.example
-CENTRY_AGENT_OPERATOR=0x...
 CENTRY_ERC8004_RPC_URL=https://...
 CENTRY_ERC8004_CHAIN_ID=...
 CENTRY_ERC8004_IDENTITY_REGISTRY=0x...
@@ -161,14 +181,14 @@ CENTRY_AGENT_X402_SUPPORT=false
 CENTRY_AGENT_ACTIVE=true
 ```
 
-`CENTRY_AGENT_CONNECTION_SECRET`, `CENTRY_AGENT_RPC_URL`, and `CENTRY_AGENT_OPERATOR` must never be exposed through `NEXT_PUBLIC_*` variables.
+There is intentionally no global `CENTRY_AGENT_OPERATOR`: operator identity belongs to each user connection and must be authorized on that user's smart account.
 
 ## Cloudflare transport
 
-`agent-gateway/` is an optional Cloudflare transport layer. It uses the current stateless MCP handler and exposes read-only discovery/permission tools. It can consume the same HTTPS session model rather than introducing a second user identity system.
+`agent-gateway/` is an optional Cloudflare transport layer. It can consume the same HTTPS session model rather than introducing a second user identity system.
 
 The Worker must not hold a user's private key and must not become an alternative custody authority. It may authenticate, rate-limit, queue, schedule, or proxy requests, while the user's onchain account remains the execution boundary.
 
-## Security follow-up
+## Production security follow-up
 
-The current connection bootstrap is stateless and short-lived. Before production, add durable replay protection/rate limiting for challenge consumption and connection issuance, preferably at the deployment layer (for example a Cloudflare Durable Object/KV-backed connection store). The connection URL should also remain short-lived because it carries bootstrap authority.
+The onchain account foundation is now the execution boundary, but production launch still requires independent contract audit and broader protocol tests. The HTTP connection layer is intentionally stateless and short-lived; before production, add durable replay protection/rate limiting for challenge consumption and connection issuance, preferably at the deployment layer (for example a Cloudflare Durable Object/KV-backed connection store).
