@@ -138,7 +138,7 @@ export async function POST(request) {
       "Read the Centry skill at the following URL and follow its instructions to establish the connection.",
       connectionUrl,
       "",
-      `Your authorized operator address is ${operator}. Include it as the \\`operator\\` query parameter when fetching the connection URL.`,
+      `Your authorized operator address is ${operator}. When fetching the connection URL, include this exact address as the operator query parameter.`,
       "",
       "After connecting, use only the capabilities returned by Centry for this connection.",
     ].join("\n");
