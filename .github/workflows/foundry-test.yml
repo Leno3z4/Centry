@@ -39,14 +39,4 @@ jobs:
           version: stable
 
       - name: Run liquidation test
-        run: |
-          set -o pipefail
-          forge test --match-contract CentryLendingPoolLiquidationTest -vvv 2>&1 | tee forge-test.log
-
-      - name: Upload Forge log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: forge-test-log
-          path: forge-test.log
-          if-no-files-found: warn
+        run: forge test --match-contract CentryLendingPoolLiquidationTest -vv
