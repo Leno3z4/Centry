@@ -40,3 +40,6 @@ jobs:
 
       - name: Run liquidation test
         run: forge test --match-contract CentryLendingPoolLiquidationTest -vv
+
+      - name: Run UnitFlow V3 adapter tests
+        run: forge test --match-contract CentryUnitFlowAdapterTest -vv
