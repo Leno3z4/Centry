@@ -245,14 +245,74 @@ contract CentryRevenueToCENTUnitFlowAdapter is
 
     function _decodeSwapData(
         bytes calldata data
-    ) internal pure returns (uint256 deadline, bytes memory path) {
+    ) internal view returns (uint256 deadline, bytes memory path) {
         if (data.length == 64) {
-            (deadline, uint24 fee) = abi.decode(data, (uint256, uint24));
-            path = abi.encodePacked(ARC_NATIVE_USDC, fee, centToken);
+            uint24 fee;
+
+            try this._decodeDirect(data) returns (
+                uint256 decodedDeadline,
+                uint24 decodedFee
+            ) {
+                deadline = decodedDeadline;
+                fee = decodedFee;
+            } catch {
+                revert InvalidSwapData();
+            }
+
+            path = abi.encodePacked(
+                ARC_NATIVE_USDC,
+                fee,
+                centToken
+            );
+
             return (deadline, path);
         }
 
-        (deadline, path) = abi.decode(data, (uint256, bytes));
+        try this._decodePath(data) returns (
+            uint256 decodedDeadline,
+            bytes memory decodedPath
+        ) {
+            deadline = decodedDeadline;
+            path = decodedPath;
+        } catch {
+            revert InvalidSwapData();
+        }
+    }
+
+    function _decodeDirect(
+        bytes calldata data
+    ) external
+    view
+    returns (
+        uint256 deadline,
+        uint24 fee
+    ) {
+        if (msg.sender != address(this)) {
+            revert InvalidCaller();
+        }
+
+        (deadline, fee) = abi.decode(
+            data,
+            (uint256, uint24)
+        );
+    }
+
+    function _decodePath(
+        bytes calldata data
+    ) external
+    view
+    returns (
+        uint256 deadline,
+        bytes memory path
+    ) {
+        if (msg.sender != address(this)) {
+            revert InvalidCaller();
+        }
+
+        (deadline, path) = abi.decode(
+            data,
+            (uint256, bytes)
+        );
     }
 
     function _validatePath(bytes memory path) internal view {
