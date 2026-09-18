@@ -12,24 +12,27 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository with submodules
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: recursive
           fetch-depth: 0
+
+      - name: Populate OpenZeppelin v5.4.0 dependency
+        run: |
+          rm -rf lib/openzeppelin-contracts
+          git clone --depth 1 --branch v5.4.0 https://github.com/OpenZeppelin/openzeppelin-contracts.git lib/openzeppelin-contracts
 
       - name: Verify OpenZeppelin dependency
         run: |
           test -f lib/openzeppelin-contracts/contracts/access/Ownable.sol
+          test -f lib/openzeppelin-contracts/contracts/access/Ownable2Step.sol
           test -f lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol
+          test -f lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: stable
-
-      - name: Install dependencies
-        run: forge install --no-commit
 
       - name: Run liquidation test
         run: forge test --match-contract CentryLendingPoolLiquidationTest -vv
