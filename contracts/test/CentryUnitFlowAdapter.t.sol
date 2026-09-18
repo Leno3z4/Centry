@@ -69,16 +69,14 @@ contract MockUnitFlowV3Router {
 
         address tokenIn;
         address tokenOut;
+        bytes calldata path = params.path;
 
         assembly {
-            tokenIn := shr(96, calldataload(params.path.offset))
+            tokenIn := shr(96, calldataload(path.offset))
             tokenOut := shr(
                 96,
                 calldataload(
-                    add(
-                        params.path.offset,
-                        sub(params.path.length, 20)
-                    )
+                    add(path.offset, sub(path.length, 20))
                 )
             )
         }
