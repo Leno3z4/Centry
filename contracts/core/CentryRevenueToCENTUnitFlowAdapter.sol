@@ -137,11 +137,35 @@ contract CentryRevenueToCENTUnitFlowAdapter is
 
         _validatePath(path);
 
-        IERC20 inputToken = IERC20(ARC_NATIVE_USDC);
-        IERC20 outputToken = IERC20(centToken);
+        uint256 outputBefore = _pullInput(amountIn);
 
+        amountOut = _executeSwap(
+            amountIn,
+            minAmountOut,
+            path,
+            deadline,
+            outputBefore
+        );
+
+        IERC20(centToken).safeTransfer(
+            recipient,
+            amountOut
+        );
+
+        emit UnitFlowRevenueSwapExecuted(
+            tokenIn,
+            tokenOut,
+            amountIn,
+            amountOut,
+            recipient
+        );
+    }
+
+    function _pullInput(
+        uint256 amountIn
+    ) internal returns (uint256 outputBefore) {
+        IERC20 inputToken = IERC20(ARC_NATIVE_USDC);
         uint256 inputBefore = inputToken.balanceOf(address(this));
-        uint256 outputBefore = outputToken.balanceOf(address(this));
 
         inputToken.safeTransferFrom(
             msg.sender,
@@ -158,10 +182,18 @@ contract CentryRevenueToCENTUnitFlowAdapter is
             revert InputTransferMismatch();
         }
 
-        inputToken.forceApprove(
-            unitFlowRouter,
-            amountIn
-        );
+        outputBefore = IERC20(centToken).balanceOf(address(this));
+    }
+
+    function _executeSwap(
+        uint256 amountIn,
+        uint256 minAmountOut,
+        bytes memory path,
+        uint256 deadline,
+        uint256 outputBefore
+    ) internal returns (uint256 amountOut) {
+        IERC20 inputToken = IERC20(ARC_NATIVE_USDC);
+        inputToken.forceApprove(unitFlowRouter, amountIn);
 
         try IUnitFlowV3Router(unitFlowRouter).exactInput(
             IUnitFlowV3Router.ExactInputParams({
@@ -172,12 +204,9 @@ contract CentryRevenueToCENTUnitFlowAdapter is
                 amountOutMinimum: minAmountOut
             })
         ) returns (uint256 reportedAmountOut) {
-            inputToken.forceApprove(
-                unitFlowRouter,
-                0
-            );
+            inputToken.forceApprove(unitFlowRouter, 0);
 
-            uint256 outputAfter = outputToken.balanceOf(address(this));
+            uint256 outputAfter = IERC20(centToken).balanceOf(address(this));
 
             if (outputAfter < outputBefore) {
                 revert MinOutputNotMet();
@@ -192,25 +221,9 @@ contract CentryRevenueToCENTUnitFlowAdapter is
                 revert MinOutputNotMet();
             }
         } catch {
-            inputToken.forceApprove(
-                unitFlowRouter,
-                0
-            );
+            inputToken.forceApprove(unitFlowRouter, 0);
             revert SwapFailed();
         }
-
-        outputToken.safeTransfer(
-            recipient,
-            amountOut
-        );
-
-        emit UnitFlowRevenueSwapExecuted(
-            tokenIn,
-            tokenOut,
-            amountIn,
-            amountOut,
-            recipient
-        );
     }
 
     function _validateRequest(
