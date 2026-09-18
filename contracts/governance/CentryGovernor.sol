@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/governance/Governor.sol";
-import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/governance/extensions/GovernorCountingSimple.sol";
-import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/governance/extensions/GovernorVotes.sol";
-import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/governance/extensions/GovernorVotesQuorumFraction.sol";
-import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/governance/extensions/GovernorTimelockControl.sol";
-import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/governance/TimelockController.sol";
-import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/governance/utils/IVotes.sol";
+import "@openzeppelin/governance/Governor.sol";
+import "@openzeppelin/governance/extensions/GovernorCountingSimple.sol";
+import "@openzeppelin/governance/extensions/GovernorVotes.sol";
+import "@openzeppelin/governance/extensions/GovernorVotesQuorumFraction.sol";
+import "@openzeppelin/governance/extensions/GovernorTimelockControl.sol";
+import "@openzeppelin/governance/TimelockController.sol";
+import "@openzeppelin/governance/utils/IVotes.sol";
 
 contract CentryGovernor is Governor, GovernorCountingSimple, GovernorVotes, GovernorVotesQuorumFraction, GovernorTimelockControl {
     constructor(IVotes votes_, TimelockController timelock_)
