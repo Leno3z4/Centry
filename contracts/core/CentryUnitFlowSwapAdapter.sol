@@ -162,20 +162,49 @@ contract CentryUnitFlowSwapAdapter is
 
         _validatePath(path);
 
-        IERC20 inputToken = IERC20(centToken);
-        IERC20 outputToken = IERC20(ARC_NATIVE_USDC);
+        uint256 outputBefore = _outputBalance();
 
+        amountOut = _executeSwap(
+            amountIn,
+            minAmountOut,
+            path,
+            deadline,
+            outputBefore
+        );
+
+        IERC20(ARC_NATIVE_USDC).safeTransfer(
+            recipient,
+            amountOut
+        );
+
+        emit UnitFlowSwapExecuted(
+            tokenIn,
+            tokenOut,
+            amountIn,
+            amountOut,
+            recipient
+        );
+    }
+
+    function _outputBalance() internal view returns (uint256) {
+        return IERC20(ARC_NATIVE_USDC).balanceOf(address(this));
+    }
+
+    function _executeSwap(
+        uint256 amountIn,
+        uint256 minAmountOut,
+        bytes memory path,
+        uint256 deadline,
+        uint256 outputBefore
+    ) internal returns (uint256 amountOut) {
+        IERC20 inputToken = IERC20(centToken);
         uint256 inputBefore = inputToken.balanceOf(address(this));
-        uint256 outputBefore = outputToken.balanceOf(address(this));
 
         if (inputBefore < amountIn) {
             revert InvalidAmount();
         }
 
-        inputToken.forceApprove(
-            unitFlowRouter,
-            amountIn
-        );
+        inputToken.forceApprove(unitFlowRouter, amountIn);
 
         try IUnitFlowV3Router(unitFlowRouter).exactInput(
             IUnitFlowV3Router.ExactInputParams({
@@ -186,10 +215,7 @@ contract CentryUnitFlowSwapAdapter is
                 amountOutMinimum: minAmountOut
             })
         ) returns (uint256 reportedAmountOut) {
-            inputToken.forceApprove(
-                unitFlowRouter,
-                0
-            );
+            inputToken.forceApprove(unitFlowRouter, 0);
 
             uint256 inputAfter = inputToken.balanceOf(address(this));
 
@@ -197,7 +223,7 @@ contract CentryUnitFlowSwapAdapter is
                 revert RouterDidNotConsumeInput();
             }
 
-            uint256 outputAfter = outputToken.balanceOf(address(this));
+            uint256 outputAfter = IERC20(ARC_NATIVE_USDC).balanceOf(address(this));
 
             if (outputAfter < outputBefore) {
                 revert MinOutputNotMet();
@@ -212,25 +238,9 @@ contract CentryUnitFlowSwapAdapter is
                 revert MinOutputNotMet();
             }
         } catch {
-            inputToken.forceApprove(
-                unitFlowRouter,
-                0
-            );
+            inputToken.forceApprove(unitFlowRouter, 0);
             revert SwapFailed();
         }
-
-        outputToken.safeTransfer(
-            recipient,
-            amountOut
-        );
-
-        emit UnitFlowSwapExecuted(
-            tokenIn,
-            tokenOut,
-            amountIn,
-            amountOut,
-            recipient
-        );
     }
 
     function _validateSwapRequest(
