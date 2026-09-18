@@ -22,6 +22,10 @@ jobs:
           rm -rf lib/openzeppelin-contracts
           git clone --depth 1 --branch v5.4.0 https://github.com/OpenZeppelin/openzeppelin-contracts.git lib/openzeppelin-contracts
 
+      - name: Normalize OpenZeppelin imports for Foundry
+        run: |
+          find contracts -type f -name '*.sol' -print0 | xargs -0 sed -i 's#https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/#@openzeppelin/#g'
+
       - name: Verify OpenZeppelin dependency
         run: |
           test -f lib/openzeppelin-contracts/contracts/access/Ownable.sol
