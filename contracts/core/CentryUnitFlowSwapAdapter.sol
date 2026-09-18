@@ -8,7 +8,7 @@ import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5
 
 import "../interfaces/ICentrySwapAdapter.sol";
 
-interface IUnitFlowV3Router {
+interface ICentryUnitFlowV3Router {
     struct ExactInputParams {
         bytes path;
         address recipient;
@@ -206,8 +206,8 @@ contract CentryUnitFlowSwapAdapter is
 
         inputToken.forceApprove(unitFlowRouter, amountIn);
 
-        try IUnitFlowV3Router(unitFlowRouter).exactInput(
-            IUnitFlowV3Router.ExactInputParams({
+        try ICentryUnitFlowV3Router(unitFlowRouter).exactInput(
+            ICentryUnitFlowV3Router.ExactInputParams({
                 path: path,
                 recipient: address(this),
                 deadline: deadline,
