@@ -71,6 +71,7 @@ contract CentryRevenueToCENTUnitFlowAdapter is
         address indexed tokenOut,
         uint256 amountIn,
         uint256 amountOut,
+        uint256 deadline,
         address indexed recipient
     );
 
@@ -94,10 +95,7 @@ contract CentryRevenueToCENTUnitFlowAdapter is
     /// @notice Sets the RevenueEngine as the sole caller.
     /// @dev Intentionally one-time.
     function setAuthorizedCaller(address caller) external onlyOwner {
-        if (
-            authorizedCaller != address(0) ||
-            caller == address(0)
-        ) {
+        if (authorizedCaller != address(0) || caller == address(0)) {
             revert InvalidCaller();
         }
 
@@ -119,19 +117,11 @@ contract CentryRevenueToCENTUnitFlowAdapter is
         nonReentrant
         returns (uint256 amountOut)
     {
-        _validateRequest(
-            tokenIn,
-            tokenOut,
-            amountIn,
-            recipient
-        );
+        _validateRequest(tokenIn, tokenOut, amountIn, recipient);
 
-        (
-            uint256 deadline,
-            bytes memory path
-        ) = _decodeSwapData(data);
+        (uint256 deadline, bytes memory path) = _decodeSwapData(data);
 
-        if (deadline < block.timestamp) {
+        if (deadline <= block.timestamp) {
             revert InvalidDeadline();
         }
 
@@ -147,18 +137,32 @@ contract CentryRevenueToCENTUnitFlowAdapter is
             outputBefore
         );
 
-        IERC20(centToken).safeTransfer(
-            recipient,
-            amountOut
-        );
+        IERC20(centToken).safeTransfer(recipient, amountOut);
 
         emit UnitFlowRevenueSwapExecuted(
             tokenIn,
             tokenOut,
             amountIn,
             amountOut,
+            deadline,
             recipient
         );
+    }
+
+    function rescueERC20(
+        address token,
+        address to,
+        uint256 amount
+    ) external onlyOwner {
+        if (token == address(0) || to == address(0)) {
+            revert InvalidAddress();
+        }
+
+        if (token == centToken) {
+            revert InvalidTokenPath();
+        }
+
+        IERC20(token).safeTransfer(to, amount);
     }
 
     function _pullInput(
@@ -167,18 +171,11 @@ contract CentryRevenueToCENTUnitFlowAdapter is
         IERC20 inputToken = IERC20(ARC_NATIVE_USDC);
         uint256 inputBefore = inputToken.balanceOf(address(this));
 
-        inputToken.safeTransferFrom(
-            msg.sender,
-            address(this),
-            amountIn
-        );
+        inputToken.safeTransferFrom(msg.sender, address(this), amountIn);
 
         uint256 inputAfter = inputToken.balanceOf(address(this));
 
-        if (
-            inputAfter < inputBefore ||
-            inputAfter - inputBefore != amountIn
-        ) {
+        if (inputAfter < inputBefore || inputAfter - inputBefore != amountIn) {
             revert InputTransferMismatch();
         }
 
@@ -214,10 +211,7 @@ contract CentryRevenueToCENTUnitFlowAdapter is
 
             amountOut = outputAfter - outputBefore;
 
-            if (
-                amountOut < minAmountOut ||
-                reportedAmountOut < minAmountOut
-            ) {
+            if (amountOut < minAmountOut || reportedAmountOut < minAmountOut) {
                 revert MinOutputNotMet();
             }
         } catch {
@@ -232,19 +226,11 @@ contract CentryRevenueToCENTUnitFlowAdapter is
         uint256 amountIn,
         address recipient
     ) internal view {
-        if (msg.sender != authorizedCaller) {
+        if (msg.sender != authorizedCaller || authorizedCaller == address(0)) {
             revert InvalidCaller();
         }
 
-        if (authorizedCaller == address(0)) {
-            revert InvalidCaller();
-        }
-
-        if (tokenIn != ARC_NATIVE_USDC) {
-            revert InvalidTokenPath();
-        }
-
-        if (tokenOut != centToken) {
+        if (tokenIn != ARC_NATIVE_USDC || tokenOut != centToken) {
             revert InvalidTokenPath();
         }
 
@@ -259,122 +245,44 @@ contract CentryRevenueToCENTUnitFlowAdapter is
 
     function _decodeSwapData(
         bytes calldata data
-    )
-        internal
-        view
-        returns (
-            uint256 deadline,
-            bytes memory path
-        )
-    {
+    ) internal pure returns (uint256 deadline, bytes memory path) {
         if (data.length == 64) {
-            uint24 fee;
-
-            try this._decodeDirect(data) returns (
-                uint256 decodedDeadline,
-                uint24 decodedFee
-            ) {
-                deadline = decodedDeadline;
-                fee = decodedFee;
-            } catch {
-                revert InvalidSwapData();
-            }
-
-            path = abi.encodePacked(
-                ARC_NATIVE_USDC,
-                fee,
-                centToken
-            );
-
+            (deadline, uint24 fee) = abi.decode(data, (uint256, uint24));
+            path = abi.encodePacked(ARC_NATIVE_USDC, fee, centToken);
             return (deadline, path);
         }
 
-        try this._decodePath(data) returns (
-            uint256 decodedDeadline,
-            bytes memory decodedPath
-        ) {
-            deadline = decodedDeadline;
-            path = decodedPath;
-        } catch {
-            revert InvalidSwapData();
-        }
-    }
-
-    function _decodeDirect(
-        bytes calldata data
-    ) external
-    view
-    returns (
-        uint256 deadline,
-        uint24 fee
-    ) {
-        if (msg.sender != address(this)) {
-            revert InvalidCaller();
-        }
-
-        (deadline, fee) = abi.decode(
-            data,
-            (uint256, uint24)
-        );
-    }
-
-    function _decodePath(
-        bytes calldata data
-    ) external
-    view
-    returns (
-        uint256 deadline,
-        bytes memory path
-    ) {
-        if (msg.sender != address(this)) {
-            revert InvalidCaller();
-        }
-
-        (deadline, path) = abi.decode(
-            data,
-            (uint256, bytes)
-        );
+        (deadline, path) = abi.decode(data, (uint256, bytes));
     }
 
     function _validatePath(bytes memory path) internal view {
         uint256 length = path.length;
 
-        if (
-            length != 43 &&
-            length != 66 &&
-            length != 89
-        ) {
+        if (length < 43 || (length - 43) % 23 != 0) {
             revert InvalidTokenPath();
         }
 
         address firstToken;
         address lastToken;
+        address tokenAtOffset;
 
         assembly {
-            firstToken := shr(
-                96,
-                mload(add(path, 32))
-            )
-
-            lastToken := shr(
-                96,
-                mload(
-                    add(
-                        path,
-                        add(
-                            32,
-                            sub(length, 20)
-                        )
-                    )
-                )
-            )
+            firstToken := shr(96, mload(add(path, 32)))
+            lastToken := shr(96, mload(add(add(path, 32), sub(length, 20))))
         }
 
-        if (
-            firstToken != ARC_NATIVE_USDC ||
-            lastToken != centToken
-        ) {
+        if (firstToken != ARC_NATIVE_USDC || lastToken != centToken) {
             revert InvalidTokenPath();
+        }
+
+        for (uint256 offset = 0; offset < length; offset += 23) {
+            assembly {
+                tokenAtOffset := shr(96, mload(add(add(path, 32), offset)))
+            }
+
+            if (tokenAtOffset == address(0)) {
+                revert InvalidTokenPath();
+            }
         }
     }
 }
