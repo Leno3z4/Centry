@@ -8,24 +8,32 @@ import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5
 
 import "../interfaces/ICentrySwapAdapter.sol";
 
-interface IUnitFlowUniversalRouter {
-    function execute(
-        bytes calldata commands,
-        bytes[] calldata inputs,
-        uint256 deadline
-    ) external;
+interface IUnitFlowV3Router {
+    struct ExactInputParams {
+        bytes path;
+        address recipient;
+        uint256 deadline;
+        uint256 amountIn;
+        uint256 amountOutMinimum;
+    }
+
+    function exactInput(
+        ExactInputParams calldata params
+    ) external payable returns (uint256 amountOut);
 }
 
 /// @title Centry UnitFlow Swap Adapter
-/// @notice Restricted UnitFlow adapter for CENT reward -> debt-asset swaps.
-/// @dev Uses the live UnitFlow UniversalRouter command flow validated by the
-///      Centry CENT -> WUSDC -> native USDC transaction:
-///      0x08 = V2 exact-input swap
-///      0x0c = WUSDC unwrap
+/// @notice Restricted UnitFlow V3 adapter for CENT -> Arc native USDC.
+/// @dev Uses the UnitFlow V3 router's exact-input interface directly.
+///      No WUSDC wrapping/unwrapping is required for V3 because the router
+///      accepts the ERC-20 token address for Arc native USDC directly.
 ///
-///      The adapter deliberately builds the command payload itself. Callers
-///      cannot provide arbitrary UniversalRouter calldata, targets, commands,
-///      or token paths.
+///      swapData:
+///        abi.encode(uint256 deadline, uint24 fee) for a direct pool, or
+///        abi.encode(uint256 deadline, bytes v3Path) for a multi-hop V3 path.
+///
+///      The adapter validates the path endpoints and never accepts arbitrary
+///      router calldata.
 contract CentryUnitFlowSwapAdapter is
     Ownable2Step,
     ReentrancyGuard,
@@ -33,15 +41,11 @@ contract CentryUnitFlowSwapAdapter is
 {
     using SafeERC20 for IERC20;
 
-    bytes1 private constant CMD_V2_SWAP_EXACT_IN = 0x08;
-    bytes1 private constant CMD_UNWRAP_WUSDC = 0x0c;
-
-    address private constant ARC_NATIVE_USDC =
+    address public constant ARC_NATIVE_USDC =
         0x3600000000000000000000000000000000000000;
 
-    address public immutable unitFlowUniversalRouter;
+    address public immutable unitFlowRouter;
     address public immutable centToken;
-    address public immutable wusdcToken;
 
     mapping(address => bool) public supportedOutput;
 
@@ -53,6 +57,7 @@ contract CentryUnitFlowSwapAdapter is
     error InvalidTokenPath();
     error InvalidRecipient();
     error InvalidDeadline();
+    error InvalidSwapData();
     error MinOutputNotMet();
     error SwapFailed();
     error UnsupportedOutput();
@@ -75,23 +80,20 @@ contract CentryUnitFlowSwapAdapter is
     );
 
     constructor(
-        address unitFlowUniversalRouter_,
+        address unitFlowRouter_,
         address centToken_,
-        address wusdcToken_,
         address initialOwner
     ) Ownable(initialOwner) {
         if (
-            unitFlowUniversalRouter_ == address(0) ||
+            unitFlowRouter_ == address(0) ||
             centToken_ == address(0) ||
-            wusdcToken_ == address(0) ||
             initialOwner == address(0)
         ) {
             revert InvalidAddress();
         }
 
-        unitFlowUniversalRouter = unitFlowUniversalRouter_;
+        unitFlowRouter = unitFlowRouter_;
         centToken = centToken_;
-        wusdcToken = wusdcToken_;
     }
 
     function setAuthorizedCaller(
@@ -133,7 +135,7 @@ contract CentryUnitFlowSwapAdapter is
         uint256 minAmountOut,
         address recipient,
         bytes calldata data
-    ) external nonReentrant returns (uint256 amountOut) {
+    ) external override nonReentrant returns (uint256 amountOut) {
         _validateSwapRequest(
             tokenIn,
             tokenOut,
@@ -145,39 +147,79 @@ contract CentryUnitFlowSwapAdapter is
             revert UnsupportedOutput();
         }
 
+        if (tokenOut != ARC_NATIVE_USDC) {
+            revert UnexpectedOutputToken();
+        }
+
         (
             uint256 deadline,
-            address[] memory path
+            bytes memory path
         ) = _decodeSwapData(data);
 
         if (deadline < block.timestamp) {
             revert InvalidDeadline();
         }
 
-        if (
-            path.length != 2 ||
-            path[0] != centToken ||
-            path[1] != wusdcToken
-        ) {
-            revert InvalidTokenPath();
+        _validatePath(path);
+
+        IERC20 inputToken = IERC20(centToken);
+        IERC20 outputToken = IERC20(ARC_NATIVE_USDC);
+
+        uint256 inputBefore = inputToken.balanceOf(address(this));
+        uint256 outputBefore = outputToken.balanceOf(address(this));
+
+        if (inputBefore < amountIn) {
+            revert InvalidAmount();
         }
 
-        if (tokenOut != ARC_NATIVE_USDC) {
-            revert UnexpectedOutputToken();
-        }
-
-        amountOut = _executeUnitFlowSwap(
-            amountIn,
-            minAmountOut,
-            path,
-            deadline
+        inputToken.forceApprove(
+            unitFlowRouter,
+            amountIn
         );
 
-        if (amountOut < minAmountOut) {
-            revert MinOutputNotMet();
+        try IUnitFlowV3Router(unitFlowRouter).exactInput(
+            IUnitFlowV3Router.ExactInputParams({
+                path: path,
+                recipient: address(this),
+                deadline: deadline,
+                amountIn: amountIn,
+                amountOutMinimum: minAmountOut
+            })
+        ) returns (uint256 reportedAmountOut) {
+            inputToken.forceApprove(
+                unitFlowRouter,
+                0
+            );
+
+            uint256 inputAfter = inputToken.balanceOf(address(this));
+
+            if (inputAfter > inputBefore) {
+                revert RouterDidNotConsumeInput();
+            }
+
+            uint256 outputAfter = outputToken.balanceOf(address(this));
+
+            if (outputAfter < outputBefore) {
+                revert MinOutputNotMet();
+            }
+
+            amountOut = outputAfter - outputBefore;
+
+            if (
+                amountOut < minAmountOut ||
+                reportedAmountOut < minAmountOut
+            ) {
+                revert MinOutputNotMet();
+            }
+        } catch {
+            inputToken.forceApprove(
+                unitFlowRouter,
+                0
+            );
+            revert SwapFailed();
         }
 
-        IERC20(tokenOut).safeTransfer(
+        outputToken.safeTransfer(
             recipient,
             amountOut
         );
@@ -197,9 +239,7 @@ contract CentryUnitFlowSwapAdapter is
         uint256 amountIn,
         address recipient
     ) internal view {
-        if (
-            msg.sender != authorizedCaller
-        ) {
+        if (msg.sender != authorizedCaller) {
             revert InvalidCaller();
         }
 
@@ -225,99 +265,122 @@ contract CentryUnitFlowSwapAdapter is
 
     function _decodeSwapData(
         bytes calldata data
-    ) internal view returns (
-        uint256 deadline,
-        address[] memory path
-    ) {
-        if (data.length == 0) {
-            deadline = block.timestamp + 5 minutes;
-            path = new address[](2);
-            path[0] = centToken;
-            path[1] = wusdcToken;
+    )
+        internal
+        view
+        returns (
+            uint256 deadline,
+            bytes memory path
+        )
+    {
+        if (data.length == 64) {
+            uint24 fee;
+
+            try this._decodeDirect(data) returns (
+                uint256 decodedDeadline,
+                uint24 decodedFee
+            ) {
+                deadline = decodedDeadline;
+                fee = decodedFee;
+            } catch {
+                revert InvalidSwapData();
+            }
+
+            path = abi.encodePacked(
+                centToken,
+                fee,
+                ARC_NATIVE_USDC
+            );
+
             return (deadline, path);
         }
 
-        return abi.decode(
+        try this._decodePath(data) returns (
+            uint256 decodedDeadline,
+            bytes memory decodedPath
+        ) {
+            deadline = decodedDeadline;
+            path = decodedPath;
+        } catch {
+            revert InvalidSwapData();
+        }
+    }
+
+    function _decodeDirect(
+        bytes calldata data
+    ) external
+    view
+    returns (
+        uint256 deadline,
+        uint24 fee
+    ) {
+        if (msg.sender != address(this)) {
+            revert InvalidCaller();
+        }
+
+        (deadline, fee) = abi.decode(
             data,
-            (uint256, address[])
+            (uint256, uint24)
         );
     }
 
-    function _executeUnitFlowSwap(
-        uint256 amountIn,
-        uint256 minAmountOut,
-        address[] memory path,
-        uint256 deadline
-    ) internal returns (uint256 amountOut) {
-        IERC20 input = IERC20(centToken);
-        IERC20 output = IERC20(ARC_NATIVE_USDC);
-
-        uint256 inputBefore = input.balanceOf(address(this));
-        uint256 outputBefore = output.balanceOf(address(this));
-
-        if (inputBefore < amountIn) {
-            revert InvalidAmount();
+    function _decodePath(
+        bytes calldata data
+    ) external
+    view
+    returns (
+        uint256 deadline,
+        bytes memory path
+    ) {
+        if (msg.sender != address(this)) {
+            revert InvalidCaller();
         }
 
-        input.forceApprove(
-            unitFlowUniversalRouter,
-            amountIn
+        (deadline, path) = abi.decode(
+            data,
+            (uint256, bytes)
         );
+    }
 
-        bytes memory commands = abi.encodePacked(
-            CMD_V2_SWAP_EXACT_IN,
-            CMD_UNWRAP_WUSDC
-        );
+    function _validatePath(bytes memory path) internal view {
+        uint256 length = path.length;
 
-        bytes[] memory inputs = new bytes[](2);
-
-        inputs[0] = abi.encode(
-            address(2),
-            amountIn,
-            minAmountOut,
-            path,
-            true
-        );
-
-        inputs[1] = abi.encode(
-            address(this),
-            minAmountOut
-        );
-
-        try IUnitFlowUniversalRouter(
-            unitFlowUniversalRouter
-        ).execute(
-            commands,
-            inputs,
-            deadline
+        if (
+            length != 43 &&
+            length != 66 &&
+            length != 89
         ) {
-            // Expected successful return.
-        } catch {
-            input.forceApprove(
-                unitFlowUniversalRouter,
-                0
-            );
-
-            revert SwapFailed();
+            revert InvalidTokenPath();
         }
 
-        input.forceApprove(
-            unitFlowUniversalRouter,
-            0
-        );
+        address firstToken;
+        address lastToken;
 
-        uint256 inputAfter = input.balanceOf(address(this));
+        assembly {
+            firstToken := shr(
+                96,
+                mload(add(path, 32))
+            )
 
-        if (inputAfter > inputBefore) {
-            revert RouterDidNotConsumeInput();
+            lastToken := shr(
+                96,
+                mload(
+                    add(
+                        path,
+                        add(
+                            32,
+                            sub(length, 20)
+                        )
+                    )
+                )
+            )
         }
 
-        uint256 outputAfter = output.balanceOf(address(this));
-
-        if (outputAfter < outputBefore) {
-            revert MinOutputNotMet();
+        if (
+            firstToken != centToken ||
+            lastToken != ARC_NATIVE_USDC
+        ) {
+            revert InvalidTokenPath();
         }
-
-        amountOut = outputAfter - outputBefore;
     }
 }
