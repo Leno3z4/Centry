@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/token/ERC20/ERC20.sol";
-import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/v5.4.0/contracts/access/Ownable2Step.sol";
+import "@openzeppelin/token/ERC20/ERC20.sol";
+import "@openzeppelin/access/Ownable2Step.sol";
 
 /// @title Centry Mock ERC20
 /// @notice Test-only token. Never use as a real reserve.
