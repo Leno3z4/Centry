@@ -8,7 +8,7 @@ export const arcMainnet = defineChain({
   nativeCurrency: {
     name: 'USD Coin',
     symbol: 'USDC',
-    decimals: 6,
+    decimals: 18,
   },
   rpcUrls: {
     default: {
@@ -28,7 +28,7 @@ const ARC_CHAIN_HEX = `0x${arcMainnet.id.toString(16)}`;
 const ARC_ADD_CHAIN_PARAMS = {
   chainId: ARC_CHAIN_HEX,
   chainName: 'Arc Mainnet',
-  nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 6 },
+  nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 18 },
   rpcUrls: ['https://rpc.mainnet.arc.io'],
   blockExplorerUrls: ['https://explorer.arc.io'],
 };
