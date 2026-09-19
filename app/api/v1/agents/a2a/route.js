@@ -1,4 +1,4 @@
-import { getAgentById } from "../../../../lib/agentStore";
+import { getAgentById } from "../../../../../lib/agentStore";
 
 export async function GET(request) {
   const agentId = new URL(request.url).searchParams.get("agentId");
