@@ -384,7 +384,12 @@ function AgentPageContent() {
   async function loadActivity() {
     if (!selectedAgent) return;
     try {
-      const result = await apiJson(`${API_BASE}/api/v1/agents/${selectedAgent.id}/activity`);
+      const auth = await ownerAuth(selectedAgent.account, 'agent-analytics');
+      const result = await apiJson(`${API_BASE}/api/v1/agents/${selectedAgent.id}/activity`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(auth),
+      });
       setActivity(result.activity || []);
     } catch (e) {
       setError(e.message);
