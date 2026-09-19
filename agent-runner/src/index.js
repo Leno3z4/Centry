@@ -127,8 +127,9 @@ function fromHex(hex) {
 }
 
 function fromBase64Url(value) {
-  const padded = String(value).replace(/-/g, "+").replace(/_/g, "/") + "===".slice((String(value).length + 3) % 4);
-  const raw = atob(padded);
+  const normalized = String(value).replace(/-/g, "+").replace(/_/g, "/");
+  const padding = "=".repeat((4 - (normalized.length % 4)) % 4);
+  const raw = atob(normalized + padding);
   const bytes = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i += 1) bytes[i] = raw.charCodeAt(i);
   return bytes;
@@ -466,11 +467,6 @@ async function assertPermissions(publicClient, account, runnerAddress, calls) {
   }
 }
 
-async function submitCalls(publicClient, walletClient, account, calls) {
-  const locked = await tryLock(walletClient._internal?.db || publicClient._internal?.db, "__centry_tx_mutex__", 300_000).catch(() => false);
-  return { locked };
-}
-
 function jsonStringify(value) {
   return JSON.stringify(value, (_key, current) => typeof current === "bigint" ? current.toString() : current);
 }
@@ -484,8 +480,8 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
   const startedAt = new Date().toISOString();
   await db.prepare(
     `INSERT INTO centry_agent_runs
-      (id, agent_id, cycle_key, status, task_count, action_count, tx_hash, reason, error, started_at)
-     VALUES (?, ?, 'running', 0, 0, NULL, '', '', ?)`
+      (id, agent_id, cycle_key, status, task_count, action_count, tx_hash, reason, error, started_at, finished_at)
+     VALUES (?, ?, ?, 'running', 0, 0, NULL, '', '', ?, NULL)`
   ).bind(runId, agent.id, cycleKey, startedAt).run().catch(() => {});
 
   let runStatus = "idle";
