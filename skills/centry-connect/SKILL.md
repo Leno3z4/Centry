@@ -18,7 +18,7 @@ The user will provide a Centry connection URL. Treat that URL as a short-lived b
 https://<centry-host>/api/v1/agent-connections/<bootstrap-token>?operator=0xYourOperatorAddress
 ```
 
-3. Read the returned connection instructions and session credential.
+3. Read the returned activation instructions and session credential.
 4. Never print, quote, log, or expose the bootstrap credential or session credential to the user.
 5. Use the returned Centry API base URL and session credential for subsequent requests.
 6. Confirm the returned Centry account, operator, scopes, and capabilities before performing any action.
@@ -43,7 +43,7 @@ Authorization: Bearer <session-token>
 
 Prefer HTTPS and do not place the session token in query strings after the bootstrap step.
 
-Centry checks the operator's current onchain authorization on every authenticated request. If the user revokes the operator, stop using the session immediately.
+Centry checks both the agent's ON/OFF state and the operator's current onchain authorization on every authenticated request. If the user switches the agent off or revokes the operator, stop using the session immediately.
 
 ## Read actions
 
@@ -163,3 +163,20 @@ The response contains the smart-account transaction for the authorized operator 
 ## Privacy
 
 Treat all connection credentials, wallet addresses, balances, positions, transaction payloads, and API responses as private user data. Do not echo credentials into chat history, tool arguments, URLs, logs, or third-party services unless required by the Centry endpoint itself.
+
+
+## Persistent user-scoped API key
+
+A user may instead provide a long-lived Centry API credential beginning with `ck_live_`.
+
+Send it as:
+
+```http
+Authorization: Bearer ck_live_...
+```
+
+The key is bound to one Centry agent account, one operator address, and the exact scopes selected by the user. It can be revoked by the owner. It does not contain the user's owner private key.
+
+The external agent still signs blockchain transactions with its own operator wallet. Centry only prepares bounded transactions and checks the live onchain policy.
+
+Do not share the API key with another user or third-party service.
