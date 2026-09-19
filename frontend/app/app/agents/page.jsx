@@ -9,6 +9,7 @@ import { CONTRACT_ADDRESSES } from '../../../constants/contracts';
 import styles from './agents.module.css';
 
 const FACTORY_ADDRESS = process.env.NEXT_PUBLIC_CENTRY_AGENT_FACTORY || '';
+const RUNNER_ADDRESS = process.env.NEXT_PUBLIC_CENTRY_AGENT_RUNNER_ADDRESS || '';
 const API_BASE = (process.env.NEXT_PUBLIC_CENTRY_AGENT_API_URL || '').replace(/\/$/, '');
 const AGENT_PRICE_RAW = 2500000n;
 
@@ -28,6 +29,8 @@ const ACCOUNT_ABI = [
   { type: 'function', name: 'setAgentOperator', stateMutability: 'nonpayable', inputs: [{ name: 'operator', type: 'address' }, { name: 'active', type: 'bool' }], outputs: [] },
   { type: 'function', name: 'withdrawNative', stateMutability: 'nonpayable', inputs: [{ name: 'amount', type: 'uint256' }], outputs: [] },
   { type: 'function', name: 'withdrawToken', stateMutability: 'nonpayable', inputs: [{ name: 'token', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [] },
+  { type: 'function', name: 'transferToAgent', stateMutability: 'nonpayable', inputs: [{ name: 'token', type: 'address' }, { name: 'recipient', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [] },
+  { type: 'function', name: 'setPermission', stateMutability: 'nonpayable', inputs: [{ name: 'operator', type: 'address' }, { name: 'target', type: 'address' }, { name: 'selector', type: 'bytes4' }, { name: 'allowed', type: 'bool' }, { name: 'expiresAt', type: 'uint64' }, { name: 'maxNativeValue', type: 'uint256' }], outputs: [] },
 ];
 
 const DEFAULT_SCOPES = ['read', 'lend', 'borrow', 'repay', 'swap'];
@@ -123,6 +126,13 @@ function AgentPageContent() {
   const [chatProvider, setChatProvider] = useState('gemini');
   const [withdrawAsset, setWithdrawAsset] = useState('native');
   const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [autonomyEnabled, setAutonomyEnabled] = useState(true);
+  const [autonomyInstructions, setAutonomyInstructions] = useState('');
+  const [autonomyMaxActions, setAutonomyMaxActions] = useState('4');
+  const [autonomySlippage, setAutonomySlippage] = useState('50');
+  const [internalTarget, setInternalTarget] = useState('');
+  const [internalAsset, setInternalAsset] = useState('USDC');
+  const [internalAmount, setInternalAmount] = useState('');
 
   const factoryAccounts = useReadContract({
     address: FACTORY_ADDRESS || undefined,
@@ -214,7 +224,7 @@ function AgentPageContent() {
   async function purchaseAgent() {
     if (!FACTORY_ADDRESS) return setError('Agent factory is not deployed/configured yet.');
     if (!publicClient) return setError('Wallet RPC is not ready.');
-    if (!isAddress(apiKeyOperator)) return setError('Enter the external agent operator address first.');
+    if (!isAddress(RUNNER_ADDRESS)) return setError('Centry hosted agent runner is not configured yet.');
     setError('');
     setStatus('Approve 2.50 USDC for the agent factory…');
     try {
@@ -241,7 +251,7 @@ function AgentPageContent() {
         address: FACTORY_ADDRESS,
         abi: FACTORY_ABI,
         functionName: 'purchaseAndCreateAgentAccount',
-        args: [templateHash, configHash, '', apiKeyOperator],
+        args: [templateHash, configHash, '', RUNNER_ADDRESS],
       });
       await publicClient.waitForTransactionReceipt({ hash: purchaseTx });
 
@@ -279,7 +289,7 @@ function AgentPageContent() {
           type: 'purchased',
           name: 'Centry Agent',
           description: 'Configurable Centry onchain agent.',
-          operator: apiKeyOperator,
+          operator: RUNNER_ADDRESS,
           priceUsdCents: 250,
         }),
       });
@@ -324,6 +334,47 @@ function AgentPageContent() {
       setError(e?.shortMessage || e?.message || 'Agent withdrawal failed.');
       setStatus('');
     }
+  }
+
+  async function saveAutonomy() {
+    if (!selectedAgent) return;
+    try {
+      const auth = await ownerAuth(selectedAgent.account, 'configure-agent');
+      await apiJson(`${API_BASE}/api/v1/agents/${selectedAgent.id}/config`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...auth, owner: address, autonomy: { enabled: autonomyEnabled, provider, instructions: autonomyInstructions, maxActions: Number(autonomyMaxActions), slippageBps: Number(autonomySlippage) } }),
+      });
+      setStatus('Agent automation settings saved.');
+    } catch (e) { setError(e.message); }
+  }
+
+  async function allowAgentAutomation() {
+    if (!selectedAgent || !isAddress(RUNNER_ADDRESS)) return setError('Hosted runner address is not configured.');
+    const transferSelector = '0x' + keccak256(toBytes('transferToAgent(address,address,uint256)')).slice(2, 10);
+    try {
+      setStatus('Authorizing the hosted runner for agent-to-agent transfers…');
+      const hash = await writeContractAsync({ address: selectedAgent.account, abi: ACCOUNT_ABI, functionName: 'setAgentOperator', args: [RUNNER_ADDRESS, true] });
+      await publicClient.waitForTransactionReceipt({ hash });
+      const permissionHash = await writeContractAsync({ address: selectedAgent.account, abi: ACCOUNT_ABI, functionName: 'setPermission', args: [RUNNER_ADDRESS, selectedAgent.account, transferSelector, true, 0, 0n] });
+      await publicClient.waitForTransactionReceipt({ hash: permissionHash });
+      setStatus('Hosted automation and internal agent transfers are authorized.');
+    } catch (e) { setError(e?.shortMessage || e?.message || 'Automation authorization failed.'); }
+  }
+
+  async function sendToInternalAgent() {
+    if (!selectedAgent || !internalTarget) return setError('Select another agent.');
+    const target = managed.find((item) => item.id === internalTarget);
+    if (!target || target.account === selectedAgent.account || String(target.owner).toLowerCase() !== String(address).toLowerCase()) return setError('That agent is not another agent owned by this wallet.');
+    const asset = WITHDRAWABLE_ASSETS.find((item) => item.key === internalAsset.toLowerCase());
+    if (!asset || !internalAmount || Number(internalAmount) <= 0) return setError('Enter a valid asset and amount.');
+    try {
+      const amount = parseUnits(internalAmount, asset.decimals);
+      const hash = await writeContractAsync({ address: selectedAgent.account, abi: ACCOUNT_ABI, functionName: 'transferToAgent', args: [asset.address || CONTRACT_ADDRESSES.USDC, target.account, amount] });
+      await publicClient.waitForTransactionReceipt({ hash });
+      setInternalAmount('');
+      setStatus('Transfer completed to ' + target.name + '.');
+    } catch (e) { setError(e?.shortMessage || e?.message || 'Internal agent transfer failed.'); }
   }
   async function configureProvider() {
     if (!selectedAgent) return;
@@ -413,7 +464,7 @@ function AgentPageContent() {
     }
   }
 
-  const availableTabs = useMemo(() => ['agents', 'providers', 'external', 'analytics', 'chat'], []);
+  const availableTabs = useMemo(() => ['agents', 'providers', 'automation', 'internal', 'external', 'analytics', 'chat'], []);
 
   return (
     <div className={styles.page}>
@@ -430,7 +481,7 @@ function AgentPageContent() {
       </header>
 
       <nav className={styles.tabs}>
-        {availableTabs.map((item) => <button key={item} type="button" className={tab === item ? styles.tabActive : styles.tab} onClick={() => setTab(item)}>{item === 'agents' ? 'My agents' : item === 'providers' ? 'AI provider' : item === 'external' ? 'External agent' : item === 'analytics' ? 'Analytics' : 'Agent chat'}</button>)}
+        {availableTabs.map((item) => <button key={item} type="button" className={tab === item ? styles.tabActive : styles.tab} onClick={() => setTab(item)}>{item === 'agents' ? 'My agents' : item === 'providers' ? 'AI provider' : item === 'automation' ? 'Automation' : item === 'internal' ? 'Agent network' : item === 'external' ? 'External agent' : item === 'analytics' ? 'Analytics' : 'Agent chat'}</button>)}
       </nav>
 
       {status ? <div className={styles.notice}>{status}</div> : null}
@@ -473,9 +524,8 @@ function AgentPageContent() {
               </div>
               <div className={styles.price}>$2.50</div>
             </div>
-            <label className={styles.label}>Operator wallet for the purchased agent</label>
-            <input className={styles.input} value={apiKeyOperator} onChange={(e) => setApiKeyOperator(e.target.value)} placeholder="0x… external agent operator" />
-            <button type="button" className={styles.primaryButton} disabled={isPending || !isConnected} onClick={purchaseAgent}>Purchase and create</button>
+            <div className={styles.hint}>Your purchased agent gets its own smart-account wallet, owned by your connected wallet. Centry’s hosted runner is authorized as its execution operator; you never give Centry your owner private key.</div>
+            <button type="button" className={styles.primaryButton} disabled={isPending || !isConnected || !isAddress(RUNNER_ADDRESS)} onClick={purchaseAgent}>Purchase and create</button>
           </Section>
         </>
       ) : null}
@@ -497,6 +547,35 @@ function AgentPageContent() {
         </Section>
       ) : null}
 
+
+      {tab === 'automation' ? (
+        <Section title="24/7 automation" description="The hosted runner wakes active agents, reads their strategy and executes only calls allowed by the agent’s onchain permissions.">
+          {!selectedAgent ? <div className={styles.empty}>Select an agent first.</div> : (
+            <>
+              <label className={styles.scope}><input type="checkbox" checked={autonomyEnabled} onChange={(e) => setAutonomyEnabled(e.target.checked)} /><span><strong>Allow autonomous runs</strong><small>Turning this off stops AI-driven actions while keeping the agent wallet and owner controls intact.</small></span></label>
+              <label className={styles.label}>Strategy instructions</label>
+              <textarea className={styles.input} rows={7} value={autonomyInstructions} onChange={(e) => setAutonomyInstructions(e.target.value)} placeholder="Example: keep enough USDC for gas, supply idle USDC, never borrow, and only swap CENT when the configured condition is met." />
+              <div className={styles.formGrid}><div><label className={styles.label}>Provider</label><select className={styles.input} value={provider} onChange={(e) => setProvider(e.target.value)}>{providerOptions.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></div><div><label className={styles.label}>Max actions/run</label><input className={styles.input} inputMode="numeric" value={autonomyMaxActions} onChange={(e) => setAutonomyMaxActions(e.target.value)} /></div><div><label className={styles.label}>Swap slippage (bps)</label><input className={styles.input} inputMode="numeric" value={autonomySlippage} onChange={(e) => setAutonomySlippage(e.target.value)} /></div></div>
+              <button type="button" className={styles.primaryButton} onClick={saveAutonomy}>Save automation settings</button>
+              <button type="button" className={styles.secondaryButton} onClick={allowAgentAutomation}>Authorize hosted runner + internal transfers</button>
+              <p className={styles.hint}>The runner signs transactions with Centry’s dedicated execution key. Your owner key stays in your wallet. The provider API key is separate and is only used for the agent’s AI reasoning.</p>
+            </>
+          )}
+        </Section>
+      ) : null}
+
+      {tab === 'internal' ? (
+        <Section title="Agent network" description="Agents belonging to this same wallet can communicate and move supported tokens between their own agent wallets. External agent addresses are rejected by the onchain agent contract.">
+          {!selectedAgent ? <div className={styles.empty}>Select an agent first.</div> : (
+            <>
+              <div className={styles.formGrid}><div><label className={styles.label}>Send from</label><div className={styles.input}>{selectedAgent.name}</div></div><div><label className={styles.label}>Send to</label><select className={styles.input} value={internalTarget} onChange={(e) => setInternalTarget(e.target.value)}><option value="">Select another agent</option>{managed.filter((item) => item.account !== selectedAgent.account && String(item.owner).toLowerCase() === String(address).toLowerCase()).map((item) => <option key={item.id} value={item.id}>{item.name} · {item.account.slice(0, 8)}…</option>)}</select></div></div>
+              <div className={styles.formGrid}><div><label className={styles.label}>Asset</label><select className={styles.input} value={internalAsset} onChange={(e) => setInternalAsset(e.target.value)}><option value="USDC">USDC</option><option value="CENT">CENT</option><option value="EURC">EURC</option><option value="CIRBTC">cirBTC</option></select></div><div><label className={styles.label}>Amount</label><input className={styles.input} inputMode="decimal" value={internalAmount} onChange={(e) => setInternalAmount(e.target.value)} placeholder="0.00" /></div></div>
+              <button type="button" className={styles.primaryButton} disabled={isPending} onClick={sendToInternalAgent}>Send to agent</button>
+              <p className={styles.hint}>This is an owner-signed transfer for now. Autonomous transfers use the same onchain recipient restriction and can only target another agent owned by this wallet.</p>
+            </>
+          )}
+        </Section>
+      ) : null}
       {tab === 'external' ? (
         <Section title="External agent connection" description="Give an outside AI agent a user-scoped API or a short-lived activation prompt. The agent never receives your Centry owner key.">
           {!selectedAgent ? <div className={styles.empty}>Select an agent first.</div> : (
