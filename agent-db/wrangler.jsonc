@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "centry-agent-db",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-19",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "centry-agents",
+      "database_id": "YOUR_CLOUDFLARE_D1_DATABASE_ID",
+      "migrations_dir": "migrations"
+    }
+  ]
+}
