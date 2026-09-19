@@ -9,24 +9,7 @@ function noStore(body, status = 200) {
 }
 
 export async function GET(request) {
-  const params = new URL(request.url).searchParams;
-  const taskId = params.get("taskId");
-  const agentId = params.get("agentId");
-  if (taskId) {
-    if (!agentId) return noStore({ error: "agentId_required" }, 400);
-    const target = await getAgentById(agentId).catch(() => null);
-    if (!target) return noStore({ error: "agent_not_found" }, 404);
-
-    const base = process.env.CENTRY_AGENT_DB_URL || "";
-    if (!base) return noStore({ error: "agent_store_not_configured" }, 503);
-
-    return noStore({
-      error: "task_status_requires_authenticated_agent_session",
-      taskId,
-      note: "Use the authenticated agent session API to retrieve private task results.",
-    }, 401);
-  }
-
+  const agentId = new URL(request.url).searchParams.get("agentId");
   if (!agentId) return noStore({ error: "agentId_required" }, 400);
   const agent = await getAgentById(agentId).catch(() => null);
   if (!agent) return noStore({ error: "agent_not_found" }, 404);
@@ -43,6 +26,7 @@ export async function GET(request) {
       skill: `${origin}/api/v1/skills/centry-connect`,
       activity: `${origin}/api/v1/agents/${encodeURIComponent(agent.id)}/activity`,
       message: `${origin}/api/v1/agents/a2a`,
+      taskStatus: `${origin}/api/v1/agent-connections/session/a2a/task?taskId={taskId}`,
     },
     onchainExecution: "user-owned-agent-account",
   });
