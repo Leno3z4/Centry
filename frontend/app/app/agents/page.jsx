@@ -14,7 +14,6 @@ const AGENT_PRICE_RAW = 2500000n;
 
 const FACTORY_ABI = [
   { type: 'function', name: 'getAgentAccounts', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }], outputs: [{ name: 'accounts', type: 'address[]' }] },
-  { type: 'function', name: 'createAgentAccount', stateMutability: 'nonpayable', inputs: [{ name: 'templateId', type: 'bytes32' }, { name: 'configHash', type: 'bytes32' }, { name: 'metadataURI', type: 'string' }, { name: 'initialOperator', type: 'address' }], outputs: [{ name: 'agentAccount', type: 'address' }] },
   { type: 'function', name: 'purchaseAndCreateAgentAccount', stateMutability: 'nonpayable', inputs: [{ name: 'templateId', type: 'bytes32' }, { name: 'configHash', type: 'bytes32' }, { name: 'metadataURI', type: 'string' }, { name: 'initialOperator', type: 'address' }], outputs: [{ name: 'agentAccount', type: 'address' }] },
 ];
 
@@ -77,7 +76,7 @@ function AgentCard({ agent, onSelect, selected }) {
       <div className={styles.agentCardTop}>
         <div>
           <strong>{agent.name}</strong>
-          <span>{agent.type === 'custom' ? 'Bring-your-own agent' : 'Centry agent'}</span>
+          <span>{agent.type === 'unregistered' ? 'Unregistered agent account' : 'Centry agent'}</span>
         </div>
         <span className={agent.active ? styles.statusOn : styles.statusOff}>{agent.active ? 'ON' : 'OFF'}</span>
       </div>
@@ -99,11 +98,6 @@ function AgentPageContent() {
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
 
-  const [customName, setCustomName] = useState('');
-  const [customDescription, setCustomDescription] = useState('');
-  const [customOperator, setCustomOperator] = useState('');
-  const [customMetadata, setCustomMetadata] = useState('');
-  const [customConfig, setCustomConfig] = useState('{}');
 
   const [provider, setProvider] = useState('gemini');
   const [model, setModel] = useState('');
@@ -156,7 +150,7 @@ function AgentPageContent() {
           owner: address,
           name: 'Unregistered agent',
           description: 'Agent account created onchain; finish registration to configure it.',
-          type: 'custom',
+          type: 'unregistered',
           active: false,
         });
       }
@@ -203,66 +197,6 @@ function AgentPageContent() {
       setStatus('Operator authorized.');
     } catch (e) {
       setError(e?.shortMessage || e?.message || 'Operator authorization failed.');
-    }
-  }
-
-  async function createCustomAgent() {
-    setError('');
-    setStatus('');
-    if (!FACTORY_ADDRESS) return setError('Agent factory is not deployed/configured yet.');
-    if (!isAddress(customOperator)) return setError('Enter the operator address controlled by your custom agent.');
-    let parsedConfig;
-    try { parsedConfig = JSON.parse(customConfig); } catch { return setError('Custom configuration must be valid JSON.'); }
-
-    try {
-      setStatus('Creating custom agent account… Approve the wallet transaction.');
-      const agentId = randomAgentId();
-      const templateId = keccak256(toBytes(`centry-custom-agent:${customName || agentId}`));
-      const configHash = keccak256(toBytes(JSON.stringify(parsedConfig)));
-      const txHash = await writeContractAsync({
-        address: FACTORY_ADDRESS,
-        abi: FACTORY_ABI,
-        functionName: 'createAgentAccount',
-        args: [templateId, configHash, customMetadata, customOperator],
-      });
-      await publicClient.waitForTransactionReceipt({ hash: txHash });
-      const updated = await publicClient.readContract({
-        address: FACTORY_ADDRESS,
-        abi: FACTORY_ABI,
-        functionName: 'getAgentAccounts',
-        args: [address],
-      });
-      const account = updated.map(String).at(-1);
-      if (!account) throw new Error('Agent account was created but could not be resolved yet.');
-
-      const auth = await ownerAuth(account, 'register-agent');
-      await apiJson(`${API_BASE}/api/v1/agents/register`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          ...auth,
-          owner: address,
-          account,
-          agentId,
-          type: 'custom',
-          name: customName || 'Custom Agent',
-          description: customDescription,
-          operator: customOperator,
-          metadataURI: customMetadata,
-          config: parsedConfig,
-        }),
-      });
-
-      setStatus('Custom agent created. It is OFF until you explicitly activate it.');
-      setCustomName('');
-      setCustomDescription('');
-      setCustomOperator('');
-      setCustomMetadata('');
-      setCustomConfig('{}');
-      await refreshAgents();
-    } catch (e) {
-      setError(e?.shortMessage || e?.message || 'Custom agent creation failed.');
-      setStatus('');
     }
   }
 
@@ -435,7 +369,7 @@ function AgentPageContent() {
     }
   }
 
-  const availableTabs = useMemo(() => ['agents', 'custom', 'providers', 'external', 'analytics', 'chat'], []);
+  const availableTabs = useMemo(() => ['agents', 'providers', 'external', 'analytics', 'chat'], []);
 
   return (
     <div className={styles.page}>
@@ -452,7 +386,7 @@ function AgentPageContent() {
       </header>
 
       <nav className={styles.tabs}>
-        {availableTabs.map((item) => <button key={item} type="button" className={tab === item ? styles.tabActive : styles.tab} onClick={() => setTab(item)}>{item === 'agents' ? 'My agents' : item === 'custom' ? 'Bring your own' : item === 'providers' ? 'AI provider' : item === 'external' ? 'External agent' : item === 'analytics' ? 'Analytics' : 'Agent chat'}</button>)}
+        {availableTabs.map((item) => <button key={item} type="button" className={tab === item ? styles.tabActive : styles.tab} onClick={() => setTab(item)}>{item === 'agents' ? 'My agents' : item === 'providers' ? 'AI provider' : item === 'external' ? 'External agent' : item === 'analytics' ? 'Analytics' : 'Agent chat'}</button>)}
       </nav>
 
       {status ? <div className={styles.notice}>{status}</div> : null}
@@ -460,7 +394,7 @@ function AgentPageContent() {
 
       {tab === 'agents' ? (
         <>
-          <Section title="Your agents" description="Purchased and custom agents are tied to your Centry account. Every new agent starts OFF and requires a wallet transaction to activate.">
+          <Section title="Your agents" description="Purchased Centry agents are tied to your Centry account. Every new agent starts OFF and requires a wallet transaction to activate.">
             {!FACTORY_ADDRESS ? <div className={styles.warning}>Agent factory is not configured yet. Deploy <code>CentryOnchainAgentFactory</code> first, then set <code>NEXT_PUBLIC_CENTRY_AGENT_FACTORY</code>.</div> : null}
             <div className={styles.agentGrid}>
               {managed.length ? managed.map((agent) => <AgentCard key={agent.account} agent={agent} onSelect={setSelectedAgent} selected={selectedAgent?.account === agent.account} />) : <div className={styles.empty}>No agent accounts yet.</div>}
@@ -480,22 +414,6 @@ function AgentPageContent() {
             <button type="button" className={styles.primaryButton} disabled={isPending || !isConnected} onClick={purchaseAgent}>Purchase and create</button>
           </Section>
         </>
-      ) : null}
-
-      {tab === 'custom' ? (
-        <Section title="Bring your own onchain agent" description="Use your own operator wallet, metadata and strategy configuration. The Centry smart account remains owned by you and is the execution boundary.">
-          <div className={styles.formGrid}>
-            <div><label className={styles.label}>Agent name</label><input className={styles.input} value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder="My liquidation agent" /></div>
-            <div><label className={styles.label}>Operator address</label><input className={styles.input} value={customOperator} onChange={(e) => setCustomOperator(e.target.value)} placeholder="0x…" /></div>
-          </div>
-          <label className={styles.label}>Description</label>
-          <textarea className={styles.textarea} value={customDescription} onChange={(e) => setCustomDescription(e.target.value)} placeholder="What this agent does" />
-          <label className={styles.label}>Metadata URL</label>
-          <input className={styles.input} value={customMetadata} onChange={(e) => setCustomMetadata(e.target.value)} placeholder="https://…" />
-          <label className={styles.label}>Agent configuration JSON</label>
-          <textarea className={styles.textareaCode} value={customConfig} onChange={(e) => setCustomConfig(e.target.value)} />
-          <button type="button" className={styles.primaryButton} disabled={isPending || !isConnected} onClick={createCustomAgent}>Create custom agent</button>
-        </Section>
       ) : null}
 
       {tab === 'providers' ? (
