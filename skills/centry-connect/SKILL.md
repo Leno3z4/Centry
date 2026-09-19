@@ -9,7 +9,7 @@ You are connecting an external agent to a specific user's Centry account.
 
 ## Connection
 
-The user will provide a Centry connection URL. Treat that URL as a short-lived bootstrap credential.
+The user will provide a Centry connection URL or a persistent `ck_live_...` credential. Treat the connection URL as a short-lived bootstrap credential.
 
 1. Determine the Ethereum address of the wallet the agent will use as its Centry operator.
 2. Fetch the connection URL exactly once with that address as the `operator` query parameter:
@@ -180,3 +180,23 @@ The key is bound to one Centry agent account, one operator address, and the exac
 The external agent still signs blockchain transactions with its own operator wallet. Centry only prepares bounded transactions and checks the live onchain policy.
 
 Do not share the API key with another user or third-party service.
+
+
+## Skill endpoint
+
+The canonical backend-served Skill is available at:
+
+`GET /api/v1/skills/centry-connect`
+
+The Skill is the external-agent integration surface. It points the agent at the Centry HTTPS API and the user's personalized activation endpoint. MCP is not required for the Centry connection flow.
+
+## Always-on operation
+
+Centry supports always-on external agent runtimes. The agent runtime may keep running continuously, evaluate its own strategy, and request bounded transactions whenever its conditions are met. The user's Centry smart account remains the final authority.
+
+For a 24/7 runtime:
+
+- keep the operator signing credential in the runtime that actually signs transactions;
+- use the Centry connection/session or persistent API credential for Centry API access;
+- re-check the current active state and onchain operator authorization before every action;
+- stop immediately when the agent is switched OFF or the operator is revoked.
