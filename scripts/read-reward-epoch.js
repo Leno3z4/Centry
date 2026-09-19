@@ -8,10 +8,10 @@ const RPC_URL =
 
 const REWARDS_ADDRESS =
   process.env.CENTRY_REVENUE_REWARDS ||
-  "0xFE791C5141ef417100Ce56624bc975DA1fBE9815";
+  "0x0cBb0050cDCCC5D9CE8Ee2C407c8608B042D30D5";
 
 const EXPECTED_CHAIN_ID =
-  5042002n;
+  5042n;
 
 const REWARDS_ABI = [
   "function latestEpoch() view returns (uint256)",
