@@ -250,9 +250,8 @@ CENTRY_USDC=0x...
 CENTRY_EURC=0x...
 CENTRY_CIRBTC=0x...
 CENTRY_TOKEN=0x...
-CENTRY_WUSDC=0x...
-CENTRY_UNITFLOW_V25_SWAP_ROUTER=0x...
-CENTRY_UNITFLOW_UNIVERSAL_ROUTER=0x...
+CENTRY_UNITFLOW_V3_ROUTER=0x...
+CENTRY_UNITFLOW_V3_QUOTER=0x...
 CENTRY_GOVERNOR=0x...
 CENTRY_ERC8004_RPC_URL=https://...
 CENTRY_ERC8004_CHAIN_ID=...
@@ -309,7 +308,29 @@ The standard Centry agent is $2.50 USDC on Arc Mainnet. The purchase flow is ato
 
 Users may generate `ck_live_...` credentials per agent. Each key is bound to the user's agent account, one operator address and explicit scopes. The raw key is returned once. The database stores only its hash and revocation state. Switching the onchain agent OFF or revoking its operator immediately blocks API-key use.
 
-Turso is used for persistent agent metadata, purchases, provider configuration, API-key metadata and agent chat history. Provider API keys are encrypted server-side with AES-256-GCM.
+Cloudflare D1 stores persistent agent metadata, purchases, provider configuration, API-key metadata and agent chat history. The Next.js/API runtime talks to a dedicated authenticated Cloudflare Worker (`agent-db/`), and that Worker is the only component with the D1 binding. Provider API keys are encrypted server-side with AES-256-GCM.
+
+## Cloudflare D1 persistence
+
+The persistent agent store is intentionally separated from the Next.js runtime:
+
+```text
+Centry Next.js API
+  -> POST /internal/store with a private shared secret
+  -> Cloudflare Worker: agent-db/
+  -> D1 binding: env.DB
+```
+
+The Worker exposes only a fixed allowlist of agent-storage operations; it does not expose arbitrary SQL. The D1 schema is versioned in `agent-db/migrations/`.
+
+The Next.js runtime needs:
+
+```text
+CENTRY_AGENT_DB_URL=https://<your-agent-db-worker>/internal/store
+CENTRY_AGENT_DB_SECRET=<long-random-secret>
+```
+
+The Cloudflare Worker needs the same `CENTRY_AGENT_DB_SECRET` as a Worker secret, plus a D1 database bound as `DB`.
 
 ## AI provider configuration
 
