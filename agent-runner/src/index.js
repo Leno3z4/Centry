@@ -355,7 +355,7 @@ async function quoteCentToUsdc(publicClient, amountIn, slippageBps = 50, fromAdd
   return { fee: best.fee, amountOut: best.amountOut, minOut };
 }
 
-async function buildCalls(publicClient, agent, actions, autonomy) {
+async function buildCalls(publicClient, agent, actions, autonomy, db) {
   if (!Array.isArray(actions) || actions.length === 0) return [];
   const maxActions = clampInt(autonomy.maxActions, 1, 4, 4);
   if (actions.length > maxActions) throw new Error("agent_action_limit_exceeded");
@@ -426,6 +426,19 @@ async function buildCalls(publicClient, agent, actions, autonomy) {
         });
         calls.push(makeCall(input, approval));
         calls.push(makeCall(UNITFLOW_ROUTER, swap));
+        break;
+      }
+
+      case "transfer": {
+        const targetId = String(action.toAgentId || "").trim();
+        if (!targetId) throw new Error("transfer_target_agent_required");
+        const target = await db.prepare("SELECT id, owner, account FROM centry_agents WHERE id = ? LIMIT 1").bind(targetId).first();
+        if (!target) throw new Error("transfer_target_agent_not_found");
+        if (String(target.owner).toLowerCase() !== String(agent.owner).toLowerCase()) throw new Error("external_agent_transfer_prohibited");
+        const asset = assetAddress(action.asset);
+        const amount = positiveUint(action.amount, "amount");
+        const data = encodeFunctionData({ abi: ERC20_ABI, functionName: "transfer", args: [getAddress(target.account), amount] });
+        calls.push(makeCall(asset, data));
         break;
       }
 
@@ -575,7 +588,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
     const messages = Array.isArray(plan?.messages) ? plan.messages : [];
     actionCount = plannedActions.length;
 
-    const calls = await buildCalls(publicClient, agent, plannedActions, autonomy);
+    const calls = await buildCalls(publicClient, agent, plannedActions, autonomy, db);
     if (calls.length > 0) {
       await assertPermissions(publicClient, account, runnerAddress, calls);
 
