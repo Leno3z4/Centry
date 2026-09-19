@@ -22,6 +22,7 @@ const OPERATIONS = new Set([
   "enqueue_agent_task",
   "list_pending_agent_tasks",
   "complete_agent_task",
+  "get_agent_task",
 ]);
 
 function unauthorized() {
@@ -327,6 +328,14 @@ async function runOperation(db, operation, args) {
       ).bind(status, result, now, now, id).run();
       return { id, status };
     }
+
+    case "get_agent_task":
+      return await db.prepare(
+        `SELECT id, from_agent_id, to_agent_id, task, status, result, created_at, updated_at, completed_at
+         FROM centry_agent_tasks
+         WHERE id = ?
+         LIMIT 1`
+      ).bind(requireString(args.id, "id")).first();
 
     default:
       throw new Error("unsupported_operation");
