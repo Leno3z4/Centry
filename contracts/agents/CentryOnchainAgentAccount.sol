@@ -6,6 +6,10 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+
+interface ICentryAgentFactoryRegistry {
+    function isCentryAgentAccount(address account) external view returns (bool);
+}
 import "./interfaces/ICentryERC8004IdentityRegistry.sol";
 
 /// @title Centry Onchain Agent Account
@@ -55,6 +59,7 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
     error IdentityNotRegistered();
     error InvalidWithdrawalToken();
     error WithdrawalFailed();
+    error InvalidAgentRecipient();
 
     event Initialized(
         address indexed owner,
@@ -91,6 +96,7 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
     );
     event ERC8004IdentityURIUpdated(uint256 indexed agentId, string agentURI);
     event AgentWithdrawal(address indexed asset, address indexed recipient, uint256 amount);
+    event AgentToAgentTransfer(address indexed asset, address indexed recipient, uint256 amount);
 
     constructor() {
         factory = msg.sender;
@@ -183,6 +189,15 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
     /// @dev The identity NFT is minted to this account because the registry sees this account
     ///      as msg.sender. That keeps the agent identity attached to the same programmable account
     ///      the user controls through this contract's owner or delegated agent permissions.
+    /// @notice Transfer a supported ERC20 token to another agent owned by the same owner.
+    /// @dev The factory registry makes the recipient restriction enforceable onchain; external addresses cannot be used.
+    function transferToAgent(address token, address recipient, uint256 amount) external nonReentrant {
+        if (!ICentryAgentFactoryRegistry(factory).isCentryAgentAccount(recipient)) revert InvalidAgentRecipient();
+        if (CentryOnchainAgentAccount(payable(recipient)).owner() != owner) revert InvalidAgentRecipient();
+        IERC20(token).safeTransfer(recipient, amount);
+        emit AgentToAgentTransfer(token, recipient, amount);
+    }
+
     /// @notice Withdraw native funds from the agent account back to the owner.
     /// @dev This remains available even when the agent is inactive, so the owner can recover funds
     ///      without reactivating the agent or granting the runner any permission.
