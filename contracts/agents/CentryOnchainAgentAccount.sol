@@ -24,6 +24,7 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
     address public pendingOwner;
     address public immutable factory;
     bool public initialized;
+    bool public active;
 
     bytes32 public templateId;
     bytes32 public configHash;
@@ -60,6 +61,7 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
     event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
     event AgentOperatorSet(address indexed operator, bool active);
+    event AgentActivationSet(bool active);
     event PermissionSet(
         address indexed operator,
         address indexed target,
@@ -107,6 +109,7 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
 
         initialized = true;
         owner = owner_;
+        active = false;
         templateId = templateId_;
         configHash = configHash_;
         metadataURI = metadataURI_;
@@ -131,6 +134,11 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
         owner = pendingOwner;
         pendingOwner = address(0);
         emit OwnershipTransferred(previousOwner, owner);
+    }
+
+    function setActive(bool active_) external onlyOwner {
+        active = active_;
+        emit AgentActivationSet(active_);
     }
 
     function setAgentOperator(address operator, bool active) external onlyOwner {
@@ -215,6 +223,7 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
         nonReentrant
         returns (bytes memory result)
     {
+        if (!active) revert NotAgent();
         if (!agentOperators[msg.sender]) revert NotAgent();
         bytes4 selector = _selector(data);
         _checkPermission(msg.sender, target, selector, value);
@@ -231,6 +240,7 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
         uint256[] calldata values,
         bytes[] calldata data
     ) external nonReentrant returns (bytes[] memory results) {
+        if (!active) revert NotAgent();
         if (!agentOperators[msg.sender]) revert NotAgent();
         uint256 length = targets.length;
         if (length == 0 || length > MAX_BATCH_CALLS || values.length != length || data.length != length) {
