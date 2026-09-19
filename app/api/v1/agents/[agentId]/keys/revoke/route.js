@@ -1,6 +1,6 @@
 import { getAddress } from "ethers";
-import { verifyOwnerAuthorization } from "../../../../../../lib/agentOwnerAuth";
-import { getAgentById, revokeAgentKey } from "../../../../../../lib/agentStore";
+import { verifyOwnerAuthorization } from "../../../../../../../lib/agentOwnerAuth";
+import { getAgentById, revokeAgentKey } from "../../../../../../../lib/agentStore";
 
 export async function POST(request, { params }) {
   const { agentId } = await params;
