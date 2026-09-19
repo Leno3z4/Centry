@@ -23,6 +23,7 @@ const OPERATIONS = new Set([
   "list_pending_agent_tasks",
   "complete_agent_task",
   "get_agent_task",
+  "update_agent_config",
 ]);
 
 function unauthorized() {
@@ -327,6 +328,14 @@ async function runOperation(db, operation, args) {
          WHERE id = ? AND status = 'pending'`
       ).bind(status, result, now, now, id).run();
       return { id, status };
+    }
+
+    case "update_agent_config": {
+      const id = requireString(args.id, "id");
+      const config = args.config && typeof args.config === "object" ? args.config : {};
+      const now = new Date().toISOString();
+      await db.prepare("UPDATE centry_agents SET config_json = ?, updated_at = ? WHERE id = ?").bind(JSON.stringify(config), now, id).run();
+      return { id, config };
     }
 
     case "get_agent_task":
