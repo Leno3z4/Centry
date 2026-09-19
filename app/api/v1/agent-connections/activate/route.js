@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { Contract, JsonRpcProvider, getAddress, isAddress, verifyMessage } from "ethers";
-import { issueAgentSession, verifyAgentChallenge } from "../../../../lib/agentConnectionTokens";
+import { issueAgentSession, verifyAgentChallenge } from "../../../../../lib/agentConnectionTokens";
 
 const ACCOUNT_ABI = [
   "function owner() view returns (address)",
