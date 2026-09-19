@@ -29,6 +29,7 @@ export async function POST(request) {
   const templateId = String(body?.templateId || "");
   const agentId = String(body?.agentId || "");
   const account = body?.account;
+  const onchainTemplateId = String(body?.onchainTemplateId || "").toLowerCase();
   const purchaseTxHash = String(body?.purchaseTxHash || "");
   const template = getAgentTemplate(templateId);
 
@@ -57,7 +58,7 @@ export async function POST(request) {
           parsed?.name === "AgentAccountPurchased" &&
           getAddress(parsed.args.owner) === getAddress(owner) &&
           getAddress(parsed.args.agentAccount) === getAddress(account) &&
-          parsed.args.templateId.toLowerCase() === template.templateId.toLowerCase() &&
+          parsed.args.templateId.toLowerCase() === onchainTemplateId &&
           BigInt(parsed.args.priceUsdc) === PRICE_RAW
         ) {
           purchased = true;
