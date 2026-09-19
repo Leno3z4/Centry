@@ -4,7 +4,7 @@ Centry's agent layer is split into three pieces:
 
 1. **Onchain account** — `CentryOnchainAgentAccount` is owned by the user and can delegate narrowly scoped calls to agent operators. Permissions are bound to operator, target, function selector, expiry, and native-value limits.
 2. **Skill connection** — the user authorizes a short-lived external-agent connection and Centry returns a unique HTTPS URL. The URL resolves to a personalized `SKILL.md`-style bootstrap response containing the user's connection/session instructions.
-3. **Agent transport** — ordinary HTTPS is the primary off-platform transport. MCP and later A2A can be exposed as additional transports after the same identity/session layer is in place.
+3. **Agent transport** — ordinary HTTPS is the primary off-platform transport. MCP and A2A use the same user-scoped identity boundary.
 
 The transport layer is not the authority. The smart account remains the final execution boundary.
 
@@ -293,3 +293,32 @@ Centry never receives the operator private key. The Worker/API can authenticate,
 ## Production security
 
 The smart account is the hard execution boundary and operator revocation is enforced live onchain. The HTTP connection/session credentials are still deliberately short-lived and sensitive. For production, deploy rate limiting and durable bootstrap/challenge replay tracking at the edge (for example with Cloudflare Durable Objects/KV) before exposing the service broadly.
+
+
+## Agent lifecycle
+
+Every user-owned onchain agent starts **OFF**. The owner must sign an onchain activation transaction with `setActive(true)`. The owner can switch it off at any time with `setActive(false)`; all external sessions and API-key requests then fail the live policy check.
+
+Custom/BYO agents are first-class. A user can supply their own operator wallet, metadata URI and configuration fingerprint. The operator never receives the user's owner authority.
+
+## Agent purchase
+
+The standard Centry agent is $2.50 USDC on Arc Mainnet. The purchase flow is atomic inside `CentryOnchainAgentFactory.purchaseAndCreateAgentAccount()`: the factory transfers exactly 2.5 USDC to the Centry treasury and creates the user-owned agent account in the same transaction.
+
+## Persistent external API keys
+
+Users may generate `ck_live_...` credentials per agent. Each key is bound to the user's agent account, one operator address and explicit scopes. The raw key is returned once. The database stores only its hash and revocation state. Switching the onchain agent OFF or revoking its operator immediately blocks API-key use.
+
+Turso is used for persistent agent metadata, purchases, provider configuration, API-key metadata and agent chat history. Provider API keys are encrypted server-side with AES-256-GCM.
+
+## AI provider configuration
+
+AI providers are configured per agent, not globally. Supported provider adapters are Gemini, OpenAI and Anthropic; the model identifier is user-selected. Provider credentials are never returned to the browser after they are stored.
+
+## Agent analytics and chat
+
+Onchain agent analytics are reconstructed from `AgentExecuted`, `AgentBatchExecuted`, operator/permission and activation events emitted by the agent account. Each agent also has a chat surface that is grounded in its verified activity.
+
+## Agent-to-agent
+
+Centry exposes a lightweight A2A message endpoint and an agent card. Agent-to-agent communication is message-level only. Receiving a message does not grant execution authority; any action still passes through the recipient agent's owner-defined operator and permission policy.
