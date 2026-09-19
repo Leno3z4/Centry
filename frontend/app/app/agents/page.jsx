@@ -223,13 +223,14 @@ function AgentPageContent() {
         functionName: 'createAgentAccount',
         args: [templateId, configHash, customMetadata, customOperator],
       });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      const created = receipt.logs?.find?.(() => false);
-      void created;
-      await refreshAgents();
-
-      const candidate = (factoryAccounts.data || []).map(String).find((item) => !accounts.includes(item));
-      const account = candidate || (factoryAccounts.data || []).map(String).at(-1);
+      await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const updated = await publicClient.readContract({
+        address: FACTORY_ADDRESS,
+        abi: FACTORY_ABI,
+        functionName: 'getAgentAccounts',
+        args: [address],
+      });
+      const account = updated.map(String).at(-1);
       if (!account) throw new Error('Agent account was created but could not be resolved yet.');
 
       const auth = await ownerAuth(account, 'register-agent');
