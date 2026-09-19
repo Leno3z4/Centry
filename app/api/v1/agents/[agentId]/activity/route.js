@@ -1,7 +1,7 @@
 import { getAddress } from "ethers";
-import { verifyOwnerAuthorization } from "../../../../../lib/agentOwnerAuth";
-import { getAgentById } from "../../../../../lib/agentStore";
-import { getAgentActivity } from "../../../../../lib/agentActivity";
+import { verifyOwnerAuthorization } from "../../../../../../lib/agentOwnerAuth";
+import { getAgentById } from "../../../../../../lib/agentStore";
+import { getAgentActivity } from "../../../../../../lib/agentActivity";
 
 export async function POST(request, { params }) {
   const { agentId } = await params;
