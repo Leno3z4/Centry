@@ -140,7 +140,9 @@ function AgentPageContent() {
 
   async function refreshAgents() {
     if (!address) return;
-    const rawAccounts = Array.isArray(factoryAccounts.data) ? factoryAccounts.data.map(String) : [];
+    const rawAccounts = FACTORY_ADDRESS && publicClient
+      ? (await publicClient.readContract({ address: FACTORY_ADDRESS, abi: FACTORY_ABI, functionName: 'getAgentAccounts', args: [address] })).map(String)
+      : [];
     setAccounts(rawAccounts);
     const hydrated = [];
     for (const account of rawAccounts) {
@@ -160,7 +162,7 @@ function AgentPageContent() {
       }
     }
     setManaged(hydrated);
-    setSelectedAgent((current) => current || hydrated[0] || null);
+    setSelectedAgent((current) => hydrated.find((item) => item.account === current?.account) || hydrated[0] || null);
   }
 
   useEffect(() => { refreshAgents().catch((e) => setError(e.message)); }, [factoryAccounts.data, address]);
