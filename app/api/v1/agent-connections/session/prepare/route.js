@@ -5,7 +5,7 @@ import {
   buildAction,
   checkActionPermissions,
   assertLiveOperator,
-  ARC_TESTNET_CHAIN_ID,
+  ARC_MAINNET_CHAIN_ID,
 } from "../../../../../../lib/agentExecutionRuntime";
 
 function json(body, status = 200) {
@@ -156,7 +156,7 @@ export async function GET(request) {
       operatorAuthorized: true,
     });
   } catch (error) {
-    if (error instanceof Error && error.message === "operator_not_authorized") return json({ error: "operator_not_authorized" }, 403);
+    if (error instanceof Error && (error.message === "operator_not_authorized" || error.message === "agent_inactive")) return json({ error: error.message }, 403);
     return json({ error: "agent_policy_check_failed" }, 503);
   }
 }
