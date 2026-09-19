@@ -2,9 +2,9 @@ import { createConfig, createConnector, http } from 'wagmi';
 import { defineChain, fallback } from 'viem';
 import EthereumProvider from '@walletconnect/ethereum-provider';
 
-export const arcTestnet = defineChain({
-  id: 5042002,
-  name: 'Arc Testnet',
+export const arcMainnet = defineChain({
+  id: 5042,
+  name: 'Arc Mainnet',
   nativeCurrency: {
     name: 'USD Coin',
     symbol: 'USDC',
@@ -12,25 +12,25 @@ export const arcTestnet = defineChain({
   },
   rpcUrls: {
     default: {
-      http: ['https://rpc.testnet.arc.network'],
+      http: ['https://rpc.mainnet.arc.io'],
     },
   },
   blockExplorers: {
     default: {
       name: 'ArcScan',
-      url: 'https://testnet.arcscan.app',
+      url: 'https://explorer.arc.io',
     },
   },
 });
 
 const walletConnectProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
-const ARC_CHAIN_HEX = `0x${arcTestnet.id.toString(16)}`;
+const ARC_CHAIN_HEX = `0x${arcMainnet.id.toString(16)}`;
 const ARC_ADD_CHAIN_PARAMS = {
   chainId: ARC_CHAIN_HEX,
-  chainName: 'Arc Testnet',
+  chainName: 'Arc Mainnet',
   nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 6 },
-  rpcUrls: ['https://rpc.testnet.arc.network'],
-  blockExplorerUrls: ['https://testnet.arcscan.app'],
+  rpcUrls: ['https://rpc.mainnet.arc.io'],
+  blockExplorerUrls: ['https://explorer.arc.io'],
 };
 
 async function switchOrAddArc(provider) {
@@ -66,8 +66,8 @@ function centryWalletConnect() {
     if (!provider) {
       provider = await EthereumProvider.init({
         projectId: walletConnectProjectId,
-        chains: [arcTestnet.id],
-        optionalChains: [arcTestnet.id],
+        chains: [arcMainnet.id],
+        optionalChains: [arcMainnet.id],
         showQrModal: true,
         metadata: {
           name: 'Centry',
@@ -88,7 +88,7 @@ function centryWalletConnect() {
 
     async connect({ chainId } = {}) {
       const wcProvider = await createProvider();
-      const targetChainId = chainId ?? arcTestnet.id;
+      const targetChainId = chainId ?? arcMainnet.id;
 
       if (wcProvider.session) {
         try {
@@ -131,7 +131,7 @@ function centryWalletConnect() {
 
     async getChainId() {
       const wcProvider = await createProvider();
-      return Number(wcProvider.chainId || arcTestnet.id);
+      return Number(wcProvider.chainId || arcMainnet.id);
     },
 
     async getProvider() {
@@ -144,11 +144,11 @@ function centryWalletConnect() {
 
     async switchChain({ chainId }) {
       const wcProvider = await createProvider();
-      if (chainId !== arcTestnet.id) {
-        throw new Error('Centry only supports Arc Testnet.');
+      if (chainId !== arcMainnet.id) {
+        throw new Error('Centry only supports Arc Mainnet.');
       }
       await switchOrAddArc(wcProvider);
-      return config.chains.find((chain) => chain.id === chainId) || arcTestnet;
+      return config.chains.find((chain) => chain.id === chainId) || arcMainnet;
     },
 
     onAccountsChanged(accounts) {
@@ -170,17 +170,17 @@ if (walletConnectProjectId) connectors.push(centryWalletConnect());
 
 const arcRpcUrls = [
   process.env.NEXT_PUBLIC_ARC_RPC_URL,
-  'https://rpc.testnet.arc.network',
+  'https://rpc.mainnet.arc.io',
   'https://rpc.drpc.testnet.arc.network',
   'https://rpc.quicknode.testnet.arc.network',
   'https://rpc.blockdaemon.testnet.arc.network',
 ].filter(Boolean);
 
 export const config = createConfig({
-  chains: [arcTestnet],
+  chains: [arcMainnet],
   connectors,
   transports: {
-    [arcTestnet.id]: fallback(
+    [arcMainnet.id]: fallback(
       arcRpcUrls.map((url) => http(url)),
       { rank: true },
     ),
