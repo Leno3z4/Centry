@@ -31,6 +31,7 @@ function parseActionBody(body) {
     amount: body.amount,
     toAsset: body.toAsset,
     minOut: body.minOut,
+    fee: body.fee,
     proposalId: body.proposalId,
     support: body.support,
   };
@@ -110,7 +111,7 @@ export async function POST(request) {
       ready: true,
       action: requestAction.action,
       description: prepared.description,
-      chainId: ARC_TESTNET_CHAIN_ID,
+      chainId: 5042,
       from: session.operator,
       account: session.account,
       transaction: {
@@ -127,8 +128,8 @@ export async function POST(request) {
       execution: "Sign and broadcast the returned transaction from the authorized operator wallet.",
     });
   } catch (error) {
-    if (error instanceof Error && error.message === "operator_not_authorized") {
-      return json({ error: "operator_not_authorized" }, 403);
+    if (error instanceof Error && (error.message === "operator_not_authorized" || error.message === "agent_inactive")) {
+      return json({ error: error.message, message: error.message === "agent_inactive" ? "This agent is switched off by its owner." : "This operator is not authorized." }, 403);
     }
     return json({ error: "agent_policy_check_failed" }, 503);
   }
