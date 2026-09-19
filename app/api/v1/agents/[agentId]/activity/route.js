@@ -1,6 +1,6 @@
 import { getAddress } from "ethers";
-import { getAgentById } from "../../../../lib/agentStore";
-import { getAgentActivity } from "../../../../lib/agentActivity";
+import { getAgentById } from "../../../../../lib/agentStore";
+import { getAgentActivity } from "../../../../../lib/agentActivity";
 
 export async function GET(_request, { params }) {
   const { agentId } = await params;
