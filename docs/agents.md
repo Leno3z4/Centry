@@ -186,7 +186,7 @@ The returned `minOut` is expressed in the output token's base units and can be s
 }
 ```
 
-CENT -> USDC may produce a bounded two-call smart-account batch (`approve` + `swap`). USDC -> CENT uses the configured native-USDC UnitFlow route and its native-value permission is checked by the smart account.
+CENT -> native USDC uses the configured UnitFlow V3 route. The execution builder produces bounded calldata for the agent account, and the live onchain permission policy remains the final check.
 
 ### Governance
 
