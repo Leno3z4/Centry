@@ -67,6 +67,9 @@ contract CentryOnchainAgentAccountTest {
             agent
         );
         account = CentryOnchainAgentAccount(payable(accountAddress));
+
+        vm.prank(user);
+        account.setActive(true);
     }
 
     function testAgentCanExecutePermittedCall() external {
