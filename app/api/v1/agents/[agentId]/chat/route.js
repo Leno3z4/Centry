@@ -1,9 +1,9 @@
 import crypto from "node:crypto";
 import { getAddress } from "ethers";
-import { verifyOwnerAuthorization } from "../../../../../lib/agentOwnerAuth";
-import { getAgentById, getProviderConfig, listAgentChatMessages, addAgentChatMessage } from "../../../../../lib/agentStore";
-import { decryptSecret } from "../../../../../lib/agentSecrets";
-import { getAgentActivity } from "../../../../../lib/agentActivity";
+import { verifyOwnerAuthorization } from "../../../../../../lib/agentOwnerAuth";
+import { getAgentById, getProviderConfig, listAgentChatMessages, addAgentChatMessage } from "../../../../../../lib/agentStore";
+import { decryptSecret } from "../../../../../../lib/agentSecrets";
+import { getAgentActivity } from "../../../../../../lib/agentActivity";
 
 async function callProvider(provider, model, apiKey, messages, agentContext) {
   if (provider === "openai") {
