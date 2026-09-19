@@ -1,8 +1,8 @@
 import crypto from "node:crypto";
 import { getAddress, isAddress } from "ethers";
-import { verifyOwnerAuthorization } from "../../../../../lib/agentOwnerAuth";
-import { createAgentKey, listAgentKeys, getAgentById } from "../../../../../lib/agentStore";
-import { generateApiKey, hashApiKey } from "../../../../../lib/agentSecrets";
+import { verifyOwnerAuthorization } from "../../../../../../lib/agentOwnerAuth";
+import { createAgentKey, listAgentKeys, getAgentById } from "../../../../../../lib/agentStore";
+import { generateApiKey, hashApiKey } from "../../../../../../lib/agentSecrets";
 
 export async function POST(request, { params }) {
   const { agentId } = await params;
