@@ -1,5 +1,5 @@
 import { getAddress, isAddress } from "ethers";
-import { getAgentByAccount } from "../../../../../lib/agentStore";
+import { getAgentByAccount } from "../../../../../../lib/agentStore";
 
 export async function GET(_request, { params }) {
   const { account } = await params;
