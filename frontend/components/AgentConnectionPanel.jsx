@@ -6,9 +6,7 @@ import {
   usePublicClient,
   useReadContract,
   useSignMessage,
-  useWriteContract,
 } from 'wagmi';
-import { keccak256, toHex } from 'viem';
 import { arcTestnet } from '../config/multiWagmi';
 import styles from './AgentConnectionPanel.module.css';
 
@@ -19,18 +17,6 @@ const FACTORY_ABI = [
     stateMutability: 'view',
     inputs: [{ name: 'owner', type: 'address' }],
     outputs: [{ name: 'accounts', type: 'address[]' }],
-  },
-  {
-    type: 'function',
-    name: 'createAgentAccount',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'templateId', type: 'bytes32' },
-      { name: 'configHash', type: 'bytes32' },
-      { name: 'metadataURI', type: 'string' },
-      { name: 'initialOperator', type: 'address' },
-    ],
-    outputs: [{ name: 'agentAccount', type: 'address' }],
   },
 ];
 
@@ -58,19 +44,10 @@ function short(address) {
   return address ? `${address.slice(0, 6)}…${address.slice(-4)}` : '';
 }
 
-function buildTemplateId() {
-  return keccak256(toHex('centry-external-agent'));
-}
-
-function buildConfigHash(scopes) {
-  return keccak256(toHex(JSON.stringify({ scopes, version: 1 })));
-}
-
 export default function AgentConnectionPanel() {
   const { address, isConnected, chainId } = useAccount();
   const publicClient = usePublicClient({ chainId: arcTestnet.id });
   const { signMessageAsync } = useSignMessage();
-  const { writeContractAsync, isPending: isCreating } = useWriteContract();
   const [selectedScopes, setSelectedScopes] = useState(DEFAULT_SCOPES);
   const [selectedAccount, setSelectedAccount] = useState('');
   const [customAccount, setCustomAccount] = useState('');
@@ -108,34 +85,6 @@ export default function AgentConnectionPanel() {
       }
       return [...current, scope];
     });
-  }
-
-  async function createAgentAccount() {
-    if (!address || !publicClient || !factoryAddress) return;
-
-    setError('');
-    setStatus('Creating your Centry agent account…');
-    try {
-      const hash = await writeContractAsync({
-        address: factoryAddress,
-        abi: FACTORY_ABI,
-        functionName: 'createAgentAccount',
-        args: [
-          buildTemplateId(),
-          buildConfigHash(selectedScopes),
-          `${window.location.origin}/agents/registration.json`,
-          '0x0000000000000000000000000000000000000000',
-        ],
-        chainId: arcTestnet.id,
-      });
-      setStatus('Waiting for the agent account transaction…');
-      await publicClient.waitForTransactionReceipt({ hash });
-      await accountsQuery.refetch();
-      setStatus('Agent account created.');
-    } catch (caught) {
-      setError(caught?.shortMessage || caught?.message || 'Could not create the agent account.');
-      setStatus('');
-    }
   }
 
   async function connectAgent() {
@@ -219,7 +168,7 @@ export default function AgentConnectionPanel() {
         {wrongNetwork ? <div className={styles.error}>Switch to Arc Testnet before creating or connecting an agent.</div> : null}
 
         {!factoryAddress ? (
-          <div className={styles.notice}>Agent factory is not configured in this deployment yet. Set <code>NEXT_PUBLIC_CENTRY_AGENT_FACTORY</code> to enable account creation.</div>
+          <div className={styles.notice}>Select an agent created in your Centry Agents page before connecting an external agent.</div>
         ) : null}
 
         <div className={styles.section}>
@@ -244,16 +193,11 @@ export default function AgentConnectionPanel() {
             <input
               value={customAccount}
               onChange={(event) => { setCustomAccount(event.target.value.trim()); setSelectedAccount(''); }}
-              placeholder="Or paste an existing Centry agent account"
+              placeholder="Paste an existing Centry agent account"
               spellCheck="false"
             />
-            {factoryAddress ? (
-              <button type="button" className={styles.secondaryButton} onClick={createAgentAccount} disabled={isCreating || wrongNetwork}>
-                {isCreating ? 'Creating…' : 'Create agent account'}
-              </button>
-            ) : null}
           </div>
-          {activeAccount ? <a className={styles.addressLink} href={explorerAddress(activeAccount)} target="_blank" rel="noreferrer">{activeAccount}</a> : <div className={styles.muted}>Create or select an agent account to continue.</div>}
+          {activeAccount ? <a className={styles.addressLink} href={explorerAddress(activeAccount)} target="_blank" rel="noreferrer">{activeAccount}</a> : <div className={styles.muted}>Select an existing Centry agent account to continue.</div>}
         </div>
 
         <div className={styles.section}>
