@@ -21,7 +21,6 @@ Self-repay and keeper functionality is treated as background protocol infrastruc
 contracts/     Solidity protocol, governance, agent, oracle and adapter contracts
 aapp/          Application routes/components
 frontend/      Frontend configuration and UI
-agent-gateway/ Agent-facing API/gateway implementation
 keeper/        Keeper/background execution services
 skills/        External-agent skills, including Centry Connect
 docs/          Product, architecture and deployment documentation
@@ -130,7 +129,7 @@ Centry prepares bounded transactions
 Authorized operator signs + broadcasts
 ```
 
-The connection skill is [`skills/centry-connect/SKILL.md`](skills/centry-connect/SKILL.md).
+The connection Skill is [`skills/centry-connect/SKILL.md`](skills/centry-connect/SKILL.md) and is also served by the backend at `/api/v1/skills/centry-connect`.
 
 The API does not expose arbitrary calldata. State-changing requests are limited to known Centry actions, and the smart-account permission policy remains the final authority. The backend also checks the operator's current onchain authorization during authenticated requests.
 
