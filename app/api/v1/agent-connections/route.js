@@ -142,12 +142,12 @@ export async function POST(request) {
     const prompt = [
       "Connect my Centry account to this agent.",
       "",
-      "Read the Centry skill at the following URL and follow its instructions to establish the connection.",
+      "Call the Centry activation/skill endpoint at the following URL and follow its instructions to establish the user-scoped connection.",
       connectionUrl,
       "",
       `Your authorized operator address is ${operator}. When fetching the connection URL, include this exact address as the operator query parameter.`,
       "",
-      "After connecting, use only the capabilities returned by Centry for this connection.",
+      "After activation, use only the capabilities returned by Centry for this connection. Never request broader scopes.",
     ].join("\n");
 
     return noStore({
