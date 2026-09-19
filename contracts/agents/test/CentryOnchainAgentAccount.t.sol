@@ -41,6 +41,25 @@ contract MockERC8004IdentityRegistry {
     error NotIdentityOwner();
 }
 
+
+contract MockAgentToken {
+    mapping(address => uint256) public balanceOf;
+
+    function mint(address to, uint256 amount) external {
+        balanceOf[to] += amount;
+    }
+
+    function transfer(address to, uint256 amount) external returns (bool) {
+        uint256 balance = balanceOf[msg.sender];
+        if (balance < amount) revert InsufficientBalance();
+        balanceOf[msg.sender] = balance - amount;
+        balanceOf[to] += amount;
+        return true;
+    }
+
+    error InsufficientBalance();
+}
+
 /// @title Centry Onchain Agent Account Tests
 /// @notice Small Foundry-compatible tests with no forge-std dependency.
 contract CentryOnchainAgentAccountTest {
@@ -156,6 +175,36 @@ contract CentryOnchainAgentAccountTest {
         account.acceptOwnership();
 
         _assertEqAddress(account.owner(), newOwner);
+    }
+
+
+    function testOwnerCanWithdrawNativeFundsWhileAgentIsInactive() external {
+        (bool funded,) = address(account).call{value: 1 ether}("");
+        _assertTrue(funded);
+
+        vm.prank(user);
+        account.setActive(false);
+
+        uint256 beforeBalance = user.balance;
+        vm.prank(user);
+        account.withdrawNative(0.4 ether);
+
+        _assertEq(user.balance, beforeBalance + 0.4 ether);
+        _assertEq(address(account).balance, 0.6 ether);
+    }
+
+    function testOwnerCanWithdrawERC20FundsWhileAgentIsInactive() external {
+        MockAgentToken token = new MockAgentToken();
+        token.mint(address(account), 1000);
+
+        vm.prank(user);
+        account.setActive(false);
+
+        vm.prank(user);
+        account.withdrawToken(address(token), 400);
+
+        _assertEq(token.balanceOf(user), 400);
+        _assertEq(token.balanceOf(address(account)), 600);
     }
 
     function testERC8004RegistrationBindsIdentityToAgentAccount() external {
