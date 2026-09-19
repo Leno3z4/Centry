@@ -10,12 +10,12 @@ const PRIVATE_KEY =
 
 const REWARDS_ADDRESS =
   process.env.CENTRY_REVENUE_REWARDS ||
-  "0xFE791C5141ef417100Ce56624bc975DA1fBE9815";
+  "0x0cBb0050cDCCC5D9CE8Ee2C407c8608B042D30D5";
 
 const MANIFEST_PATH =
   "keeper/reward-manifest.json";
 
-const EXPECTED_CHAIN_ID = 5042002n;
+const EXPECTED_CHAIN_ID = 5042n;
 
 function fail(message) {
   throw new Error(message);
