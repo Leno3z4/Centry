@@ -1,9 +1,0 @@
-{
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "centry-agent-gateway",
-  "main": "src/index.js",
-  "compatibility_date": "2026-09-17",
-  "vars": {
-    "CENTRY_API_ORIGIN": "https://api.centry.example"
-  }
-}
