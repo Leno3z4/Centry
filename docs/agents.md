@@ -358,3 +358,88 @@ Onchain agent analytics are reconstructed from `AgentExecuted`, `AgentBatchExecu
 ## Agent-to-agent
 
 Centry exposes a lightweight A2A message endpoint and an agent card. Agent-to-agent communication is message-level only. Receiving a message does not grant execution authority; any action still passes through the recipient agent's owner-defined operator and permission policy.
+
+## Global autonomous scheduler
+
+Centry's hosted onchain agents now use one global Cloudflare Worker Cron Trigger rather than one scheduler per agent.
+
+```text
+Cloudflare Cron: * * * * *
+  -> load every registered agent from D1
+  -> wake the agent runtimes concurrently
+  -> check the live Arc account:
+       active()
+       agentOperators(runner)
+  -> read pending A2A tasks + persistent autonomy instructions
+  -> call the configured Gemini/OpenAI/Anthropic provider when work exists
+  -> build only catalogued Centry actions
+  -> check canExecute() for every underlying call
+  -> simulate the complete smart-account batch
+  -> submit directly to Arc RPC
+  -> record the run and task result
+  -> repeat next minute
+```
+
+The scheduler is one Worker. It is not one cron per user. The runtime uses bounded concurrency so a large fleet does not exceed the Worker runtime's outbound-connection limits.
+
+The shared hosted runner wallet is only an **operator**, never the user's owner. Every user-owned smart account still enforces its own `active`, operator, permission, expiry and native-value policy.
+
+### A2A with the autonomous runner
+
+`POST /api/v1/agents/a2a` now persists a task in D1. The recipient agent sees pending tasks on its next wake and may respond or produce an onchain action.
+
+```text
+Agent A
+  -> POST /api/v1/agents/a2a
+  -> D1 pending task
+  -> global scheduler wakes Agent B
+  -> Agent B reads task + its own strategy
+  -> Agent B may execute only through its own smart-account permissions
+```
+
+Task results are available to the originating connected agent through:
+
+`GET /api/v1/agent-connections/session/a2a/task?taskId=<id>`
+
+with its authenticated Centry agent session. A2A communication never grants the sender execution authority over the recipient.
+
+### Runner deployment
+
+The scheduler Worker lives in `agent-runner/`.
+
+Required Worker secrets:
+
+```text
+CENTRY_AGENT_RUNNER_PRIVATE_KEY=<dedicated Arc operator key>
+CENTRY_AGENT_ENCRYPTION_KEY=<same 32-byte key used by the API>
+```
+
+The runner uses the same D1 database as `agent-db/`. It stores no private key in D1.
+
+The standard purchased-agent flow should authorize the hosted runner address as `initialOperator`. Existing agents must call `setAgentOperator(runnerAddress, true)` before the hosted scheduler can execute them.
+
+### Autonomy configuration
+
+An agent can store persistent runtime instructions under `config_json.autonomy`:
+
+```json
+{
+  "autonomy": {
+    "enabled": true,
+    "provider": "gemini",
+    "instructions": "Only manage the lending position according to the user's explicit risk rules.",
+    "maxActions": 4,
+    "slippageBps": 50
+  }
+}
+```
+
+With no instructions and no pending A2A work, the agent wakes and records an idle run without making a financial transaction.
+
+### Transaction safety
+
+The runner never submits arbitrary AI-generated calldata. AI output is converted into the fixed Centry action catalog, checked with the live `canExecute()` policy for every call, and simulated through `executeBatch` before signing.
+
+A D1 transaction mutex serializes broadcasts from the shared runner wallet so separate agent wakeups cannot race one EOA nonce.
+
+The owner can still stop an agent immediately with `setActive(false)`; the next cycle also refuses to execute when `active()` is false.
