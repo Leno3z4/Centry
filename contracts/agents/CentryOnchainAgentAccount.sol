@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -12,6 +14,7 @@ import "./interfaces/ICentryERC8004IdentityRegistry.sol";
 ///      protocol-specific policy out of the account so the same account can interact with Centry,
 ///      Arc-native applications, or other approved EVM contracts.
 contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGuard {
+    using SafeERC20 for IERC20;
     uint256 public constant MAX_BATCH_CALLS = 32;
 
     struct Permission {
@@ -50,6 +53,8 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
     error InvalidIdentityRegistry();
     error IdentityAlreadyRegistered();
     error IdentityNotRegistered();
+    error InvalidWithdrawalToken();
+    error WithdrawalFailed();
 
     event Initialized(
         address indexed owner,
@@ -85,6 +90,7 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
         string agentURI
     );
     event ERC8004IdentityURIUpdated(uint256 indexed agentId, string agentURI);
+    event AgentWithdrawal(address indexed asset, address indexed recipient, uint256 amount);
 
     constructor() {
         factory = msg.sender;
@@ -177,6 +183,24 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
     /// @dev The identity NFT is minted to this account because the registry sees this account
     ///      as msg.sender. That keeps the agent identity attached to the same programmable account
     ///      the user controls through this contract's owner or delegated agent permissions.
+    /// @notice Withdraw native funds from the agent account back to the owner.
+    /// @dev This remains available even when the agent is inactive, so the owner can recover funds
+    ///      without reactivating the agent or granting the runner any permission.
+    function withdrawNative(uint256 amount) external onlyOwner nonReentrant {
+        (bool success,) = payable(owner).call{value: amount}("");
+        if (!success) revert WithdrawalFailed();
+        emit AgentWithdrawal(address(0), owner, amount);
+    }
+
+    /// @notice Withdraw ERC20 funds from the agent account back to the owner.
+    /// @dev The destination is always the current owner; the owner cannot redirect this helper to
+    ///      an arbitrary address by mistake. Use owner-controlled execution for advanced routing.
+    function withdrawToken(address token, uint256 amount) external onlyOwner nonReentrant {
+        if (token == address(0)) revert InvalidWithdrawalToken();
+        IERC20(token).safeTransfer(owner, amount);
+        emit AgentWithdrawal(token, owner, amount);
+    }
+
     function registerERC8004Identity(
         address identityRegistry,
         string calldata agentURI
