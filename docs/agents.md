@@ -304,34 +304,6 @@ strategy / AI runtime
 
 The runtime may be self-hosted by the user or hosted by Centry. For a Centry-hosted runtime, the operator signing credential is stored separately from the owner credential and must never be the user's owner/EOA seed.
 
-## Custom agent credentials
-
-A user bringing a custom agent should provide only what is needed for the chosen runtime mode:
-
-### Self-hosted custom agent
-
-```text
-agent name / metadata
-operator wallet address
-Centry API credential (`ck_live_...`) or one-time connection URL
-custom agent endpoint / runtime configuration (when applicable)
-optional AI-provider credential if the custom runtime needs Centry to call a provider
-```
-
-The custom agent keeps its own operator private key. Centry never receives the user's owner private key.
-
-### Centry-hosted custom agent
-
-```text
-agent name / metadata
-operator wallet address or a newly generated Centry operator wallet
-agent endpoint / strategy configuration
-optional AI-provider credential
-operator signing credential for the hosted runner, if the user imports one
-```
-
-The hosted runner needs an operator signing capability to execute 24/7. This must be a dedicated operator wallet, never the user's owner wallet.
-
 ## Production security
 
 The smart account is the hard execution boundary and operator revocation is enforced live onchain. The HTTP connection/session credentials are still deliberately short-lived and sensitive. For production, deploy rate limiting and durable bootstrap/challenge replay tracking at the edge (for example with Cloudflare Durable Objects/KV) before exposing the service broadly.
@@ -341,7 +313,7 @@ The smart account is the hard execution boundary and operator revocation is enfo
 
 Every user-owned onchain agent starts **OFF**. The owner must sign an onchain activation transaction with `setActive(true)`. The owner can switch it off at any time with `setActive(false)`; all external sessions and API-key requests then fail the live policy check.
 
-Custom/BYO agents are first-class. A user can supply their own operator wallet, metadata URI and configuration fingerprint. The operator never receives the user's owner authority.
+The current product exposes the purchased Centry Agent as the standard user-facing onchain agent. A future developer-facing custom-agent integration can be added separately without changing the smart-account security boundary.
 
 ## Agent purchase
 
