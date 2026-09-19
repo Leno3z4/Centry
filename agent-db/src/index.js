@@ -2,6 +2,7 @@ const OPERATIONS = new Set([
   "get_agent_by_id",
   "get_agent_by_account",
   "list_agents",
+  "list_all_agents",
   "upsert_agent",
   "set_agent_active",
   "create_purchase",
@@ -14,6 +15,13 @@ const OPERATIONS = new Set([
   "get_provider_config",
   "add_agent_chat_message",
   "list_agent_chat_messages",
+  "try_lock_agent",
+  "unlock_agent",
+  "create_agent_run",
+  "finish_agent_run",
+  "enqueue_agent_task",
+  "list_pending_agent_tasks",
+  "complete_agent_task",
 ]);
 
 function unauthorized() {
@@ -35,6 +43,12 @@ function requireString(value, name) {
   return value;
 }
 
+function boundedText(value, name, maxLength) {
+  const text = requireString(value, name);
+  if (text.length > maxLength) throw new Error(`${name}_too_long`);
+  return text;
+}
+
 async function runOperation(db, operation, args) {
   switch (operation) {
     case "get_agent_by_id":
@@ -51,6 +65,11 @@ async function runOperation(db, operation, args) {
       return await db.prepare(
         "SELECT * FROM centry_agents WHERE lower(owner) = lower(?) ORDER BY created_at DESC"
       ).bind(requireString(args.owner, "owner")).all().then((r) => r.results);
+
+    case "list_all_agents":
+      return await db.prepare(
+        "SELECT * FROM centry_agents ORDER BY created_at DESC"
+      ).all().then((r) => r.results);
 
     case "upsert_agent": {
       const agent = args.agent || {};
@@ -200,6 +219,113 @@ async function runOperation(db, operation, args) {
       return await db.prepare(
         "SELECT role, content, created_at FROM centry_agent_chats WHERE agent_id = ? ORDER BY created_at DESC LIMIT ?"
       ).bind(requireString(args.agentId, "agentId"), limit).all().then((r) => [...r.results].reverse());
+    }
+
+    case "try_lock_agent": {
+      const agentId = requireString(args.agentId, "agentId");
+      const now = Date.now();
+      const ttlMs = Math.max(5_000, Math.min(300_000, Number(args.ttlMs) || 50_000));
+      const lockedUntil = now + ttlMs;
+      const result = await db.prepare(
+        `INSERT INTO centry_agent_locks (agent_id, locked_until, updated_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT(agent_id) DO UPDATE SET
+           locked_until=excluded.locked_until,
+           updated_at=excluded.updated_at
+         WHERE centry_agent_locks.locked_until < ?`
+      ).bind(agentId, lockedUntil, new Date().toISOString(), now).run();
+      return Number(result?.meta?.changes || 0) > 0;
+    }
+
+    case "unlock_agent": {
+      const agentId = requireString(args.agentId, "agentId");
+      await db.prepare(
+        "UPDATE centry_agent_locks SET locked_until = 0, updated_at = ? WHERE agent_id = ?"
+      ).bind(new Date().toISOString(), agentId).run();
+      return true;
+    }
+
+    case "create_agent_run": {
+      const run = args.run || {};
+      const now = new Date().toISOString();
+      await db.prepare(
+        `INSERT INTO centry_agent_runs
+          (id, agent_id, cycle_key, status, task_count, action_count, tx_hash, reason, error, started_at, finished_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        requireString(run.id, "id"),
+        requireString(run.agentId, "agentId"),
+        requireString(run.cycleKey, "cycleKey"),
+        requireString(run.status || "running", "status"),
+        Number(run.taskCount || 0),
+        Number(run.actionCount || 0),
+        run.txHash || null,
+        run.reason || "",
+        run.error || "",
+        run.startedAt || now,
+        run.finishedAt || null,
+      ).run();
+      return { id: run.id };
+    }
+
+    case "finish_agent_run": {
+      const run = args.run || {};
+      const now = new Date().toISOString();
+      await db.prepare(
+        `UPDATE centry_agent_runs
+         SET status = ?, task_count = ?, action_count = ?, tx_hash = ?, reason = ?, error = ?, finished_at = ?
+         WHERE id = ?`
+      ).bind(
+        requireString(run.status, "status"),
+        Number(run.taskCount || 0),
+        Number(run.actionCount || 0),
+        run.txHash || null,
+        run.reason || "",
+        run.error || "",
+        run.finishedAt || now,
+        requireString(run.id, "id"),
+      ).run();
+      return { id: run.id };
+    }
+
+    case "enqueue_agent_task": {
+      const task = args.task || {};
+      const id = requireString(task.id, "id");
+      const fromAgentId = task.fromAgentId ? String(task.fromAgentId) : null;
+      const toAgentId = requireString(task.toAgentId, "toAgentId");
+      const body = boundedText(task.task, "task", 4000);
+      const createdAt = new Date().toISOString();
+      await db.prepare(
+        `INSERT INTO centry_agent_tasks
+          (id, from_agent_id, to_agent_id, task, status, result, created_at, updated_at, completed_at)
+         VALUES (?, ?, ?, ?, 'pending', '', ?, ?, NULL)`
+      ).bind(id, fromAgentId, toAgentId, body, createdAt, createdAt).run();
+      return { id, status: "pending", createdAt };
+    }
+
+    case "list_pending_agent_tasks": {
+      const limit = Math.max(1, Math.min(50, Number(args.limit) || 20));
+      return await db.prepare(
+        `SELECT id, from_agent_id, to_agent_id, task, status, result, created_at, updated_at, completed_at
+         FROM centry_agent_tasks
+         WHERE to_agent_id = ? AND status = 'pending'
+         ORDER BY created_at ASC
+         LIMIT ?`
+      ).bind(requireString(args.agentId, "agentId"), limit).all().then((r) => r.results);
+    }
+
+    case "complete_agent_task": {
+      const id = requireString(args.id, "id");
+      const status = requireString(args.status, "status");
+      if (!["completed", "failed"].includes(status)) throw new Error("invalid_task_status");
+      const result = typeof args.result === "string" ? args.result.slice(0, 8000) : JSON.stringify(args.result || "");
+      const now = new Date().toISOString();
+      await db.prepare(
+        `UPDATE centry_agent_tasks
+         SET status = ?, result = ?, updated_at = ?, completed_at = ?
+         WHERE id = ? AND status = 'pending'`
+      ).bind(status, result, now, now, id).run();
+      return { id, status };
     }
 
     default:
