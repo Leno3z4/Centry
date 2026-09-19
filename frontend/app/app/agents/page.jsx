@@ -26,9 +26,17 @@ const ACCOUNT_ABI = [
   { type: 'function', name: 'agentOperators', stateMutability: 'view', inputs: [{ name: 'operator', type: 'address' }], outputs: [{ type: 'bool' }] },
   { type: 'function', name: 'setActive', stateMutability: 'nonpayable', inputs: [{ name: 'active', type: 'bool' }], outputs: [] },
   { type: 'function', name: 'setAgentOperator', stateMutability: 'nonpayable', inputs: [{ name: 'operator', type: 'address' }, { name: 'active', type: 'bool' }], outputs: [] },
+  { type: 'function', name: 'withdrawNative', stateMutability: 'nonpayable', inputs: [{ name: 'amount', type: 'uint256' }], outputs: [] },
+  { type: 'function', name: 'withdrawToken', stateMutability: 'nonpayable', inputs: [{ name: 'token', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [] },
 ];
 
 const DEFAULT_SCOPES = ['read', 'lend', 'borrow', 'repay', 'swap'];
+const WITHDRAWABLE_ASSETS = [
+  { key: 'native', label: 'USDC (native)', decimals: 18, address: null },
+  { key: 'cent', label: 'CENT', decimals: 18, address: CONTRACT_ADDRESSES.centryToken },
+  { key: 'eurc', label: 'EURC', decimals: 6, address: CONTRACT_ADDRESSES.EURC },
+  { key: 'cirbtc', label: 'cirBTC', decimals: 8, address: CONTRACT_ADDRESSES.CIRBTC },
+];
 
 const scopeOptions = [
   ['read', 'Read balances, positions and markets'],
@@ -113,6 +121,8 @@ function AgentPageContent() {
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
   const [chatProvider, setChatProvider] = useState('gemini');
+  const [withdrawAsset, setWithdrawAsset] = useState('native');
+  const [withdrawAmount, setWithdrawAmount] = useState('');
 
   const factoryAccounts = useReadContract({
     address: FACTORY_ADDRESS || undefined,
@@ -282,6 +292,39 @@ function AgentPageContent() {
     }
   }
 
+
+  async function withdrawFromAgent() {
+    if (!selectedAgent) return;
+    const asset = WITHDRAWABLE_ASSETS.find((item) => item.key === withdrawAsset);
+    if (!asset) return setError('Unsupported withdrawal asset.');
+    if (!withdrawAmount || Number(withdrawAmount) <= 0) return setError('Enter a withdrawal amount.');
+
+    setError('');
+    setStatus('Preparing withdrawal… Approve the wallet transaction.');
+    try {
+      const rawAmount = parseUnits(withdrawAmount, asset.decimals);
+      const hash = asset.address
+        ? await writeContractAsync({
+            address: selectedAgent.account,
+            abi: ACCOUNT_ABI,
+            functionName: 'withdrawToken',
+            args: [asset.address, rawAmount],
+          })
+        : await writeContractAsync({
+            address: selectedAgent.account,
+            abi: ACCOUNT_ABI,
+            functionName: 'withdrawNative',
+            args: [rawAmount],
+          });
+
+      await publicClient.waitForTransactionReceipt({ hash });
+      setWithdrawAmount('');
+      setStatus(withdrawAmount + ' ' + asset.label + ' withdrawn to your wallet.');
+    } catch (e) {
+      setError(e?.shortMessage || e?.message || 'Agent withdrawal failed.');
+      setStatus('');
+    }
+  }
   async function configureProvider() {
     if (!selectedAgent) return;
     if (!model || !providerKey) return setError('Provider, model and API key are required.');
@@ -402,6 +445,26 @@ function AgentPageContent() {
             </div>
           </Section>
 
+
+          <Section title="Withdraw from agent" description="Withdraw funds from the selected agent back to the wallet that owns the agent. This works even while the agent is OFF.">
+            {!selectedAgent ? <div className={styles.empty}>Select an agent first.</div> : (
+              <>
+                <div className={styles.formGrid}>
+                  <div>
+                    <label className={styles.label}>Asset</label>
+                    <select className={styles.input} value={withdrawAsset} onChange={(e) => setWithdrawAsset(e.target.value)}>
+                      {WITHDRAWABLE_ASSETS.map((asset) => <option key={asset.key} value={asset.key}>{asset.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={styles.label}>Amount</label>
+                    <input className={styles.input} inputMode="decimal" value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} placeholder="0.00" />
+                  </div>
+                </div>
+                <button type="button" className={styles.secondaryButton} disabled={isPending} onClick={withdrawFromAgent}>Withdraw to my wallet</button>
+              </>
+            )}
+          </Section>
           <Section title="Agent store" description="Purchased agents cost 2.50 USDC on Arc Mainnet. Payment goes to the configured Centry treasury.">
             <div className={styles.storeCard}>
               <div>
