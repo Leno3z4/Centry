@@ -182,6 +182,16 @@ function AgentPageContent() {
 
   useEffect(() => { refreshAgents().catch((e) => setError(e.message)); }, [factoryAccounts.data, address]);
 
+  useEffect(() => {
+    const autonomy = selectedAgent?.config?.autonomy;
+    if (!autonomy) return;
+    setAutonomyEnabled(autonomy.enabled !== false);
+    setAutonomyInstructions(autonomy.instructions || '');
+    setAutonomyMaxActions(String(autonomy.maxActions || 4));
+    setAutonomySlippage(String(autonomy.slippageBps ?? 50));
+    if (autonomy.provider) setProvider(autonomy.provider);
+  }, [selectedAgent?.account, selectedAgent?.config]);
+
   async function toggleAgent() {
     if (!selectedAgent) return;
     setError('');
