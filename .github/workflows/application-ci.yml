@@ -19,6 +19,7 @@ on:
       - "package.json"
       - "frontend/**"
       - ".github/workflows/application-ci.yml"
+      - "agent-db/**"
 
 jobs:
   root-app:
