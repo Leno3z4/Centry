@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
-import { getAgentById, enqueueAgentTask } from "../../../../../lib/agentStore";
+import { authenticateAgent, jsonResponse, requireScope } from "../../../../../lib/agentApi";
+import { getAgentByAccount, getAgentById, enqueueAgentTask } from "../../../../../lib/agentStore";
 
 function noStore(body, status = 200) {
   return Response.json(body, {
@@ -33,6 +34,12 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  const auth = await authenticateAgent(request);
+  if (auth.error) return auth.error;
+  if (!requireScope(auth.session, "agent-to-agent")) {
+    return jsonResponse({ error: "scope_agent_to_agent_required" }, 403);
+  }
+
   let body;
   try {
     body = await request.json();
@@ -40,28 +47,27 @@ export async function POST(request) {
     return noStore({ error: "invalid_json" }, 400);
   }
 
+  const fromAgent = await getAgentByAccount(auth.session.account).catch(() => null);
+  if (!fromAgent) return noStore({ error: "source_agent_not_found" }, 404);
+
+  const claimedFromAgentId = String(body?.fromAgentId || fromAgent.id).trim();
   const toAgentId = String(body?.toAgentId || "").trim();
-  const fromAgentId = String(body?.fromAgentId || "").trim();
   const task = String(body?.task || "").trim().slice(0, 4000);
 
-  if (!toAgentId || !fromAgentId || !task) {
-    return noStore({ error: "fromAgentId_toAgentId_and_task_required" }, 400);
+  if (claimedFromAgentId !== fromAgent.id || !toAgentId || !task) {
+    return noStore({ error: "invalid_agent_task" }, 400);
   }
 
-  const [toAgent, fromAgent] = await Promise.all([
-    getAgentById(toAgentId).catch(() => null),
-    getAgentById(fromAgentId).catch(() => null),
-  ]);
-
+  const toAgent = await getAgentById(toAgentId).catch(() => null);
   if (!toAgent) return noStore({ error: "target_agent_not_found" }, 404);
-  if (!fromAgent) return noStore({ error: "source_agent_not_found" }, 404);
+  if (toAgent.id === fromAgent.id) return noStore({ error: "self_message_not_allowed" }, 400);
 
   const taskId = crypto.randomUUID();
   try {
     const queued = await enqueueAgentTask({
       id: taskId,
-      fromAgentId,
-      toAgentId,
+      fromAgentId: fromAgent.id,
+      toAgentId: toAgent.id,
       task,
     });
 
