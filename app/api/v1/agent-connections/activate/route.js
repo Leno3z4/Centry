@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { Contract, JsonRpcProvider, getAddress, isAddress, verifyMessage } from "ethers";
 import { issueAgentSession, verifyAgentChallenge } from "../../../../lib/agentConnectionTokens";
 
