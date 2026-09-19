@@ -15,13 +15,13 @@ Centry should expose:
 - per-agent permissions;
 - agent activity and analytics;
 - a Skill/instruction file describing the Centry API, served by the backend;
-- a marketplace for official agents plus a path for user-created agents.
+- a marketplace for the official Centry Agent.
 
 Third-party AI-provider API keys must not be stored as ordinary database fields. The production design should keep provider secrets in a dedicated secret-management system. Cloudflare Workers Secrets / Secrets Store are one compatible deployment option, but the core Centry data model should remain provider-independent.
 
 ## Onchain agents
 
-An onchain agent is a separate blockchain identity/account. Its smart account executes directly against Centry contracts and other EVM contracts. To operate 24/7, a continuously running agent runtime/runner drives the account through an authorized operator key; the smart account remains the final execution boundary.
+An onchain agent is a separate blockchain identity/account. Its smart account executes directly against Centry contracts and other EVM contracts. The standard Centry Agent is operated by an authorized operator and is designed to run continuously; the smart account remains the final execution boundary.
 
 The first account primitive in this repository is `CentryOnchainAgentAccount`:
 
