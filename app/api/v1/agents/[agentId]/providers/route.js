@@ -1,7 +1,7 @@
 import { getAddress } from "ethers";
-import { verifyOwnerAuthorization } from "../../../../../lib/agentOwnerAuth";
-import { getAgentById, listProviderConfigs, setProviderConfig } from "../../../../../lib/agentStore";
-import { encryptSecret } from "../../../../../lib/agentSecrets";
+import { verifyOwnerAuthorization } from "../../../../../../lib/agentOwnerAuth";
+import { getAgentById, listProviderConfigs, setProviderConfig } from "../../../../../../lib/agentStore";
+import { encryptSecret } from "../../../../../../lib/agentSecrets";
 
 const PROVIDERS = new Set(["gemini", "openai", "anthropic"]);
 
