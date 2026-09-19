@@ -1,6 +1,6 @@
 import { getAddress, isAddress } from "ethers";
-import { verifyOwnerAuthorization } from "../../../../../lib/agentOwnerAuth";
-import { listAgents } from "../../../../../lib/agentStore";
+import { verifyOwnerAuthorization } from "../../../../../../lib/agentOwnerAuth";
+import { listAgents } from "../../../../../../lib/agentStore";
 
 export async function POST(request) {
   let body;
