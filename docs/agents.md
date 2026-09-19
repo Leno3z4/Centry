@@ -4,9 +4,9 @@ Centry's agent layer is split into three pieces:
 
 1. **Onchain account** — `CentryOnchainAgentAccount` is owned by the user and can delegate narrowly scoped calls to agent operators. Permissions are bound to operator, target, function selector, expiry, and native-value limits.
 2. **Skill connection** — the user authorizes a short-lived external-agent connection and Centry returns a unique HTTPS URL. The URL resolves to a personalized `SKILL.md`-style bootstrap response containing the user's connection/session instructions.
-3. **Agent transport** — ordinary HTTPS is the primary off-platform transport. MCP and A2A use the same user-scoped identity boundary.
+3. **Skill + HTTPS** — the external agent reads the Centry Skill and then uses the HTTPS backend/API. The Skill is served by Centry so the instructions and API surface stay connected.
 
-The transport layer is not the authority. The smart account remains the final execution boundary.
+The Skill/API layer is not the authority. The smart account remains the final execution boundary.
 
 ## User connection flow
 
@@ -261,8 +261,6 @@ CENTRY_AGENT_NAME=Centry Agent
 CENTRY_AGENT_DESCRIPTION=...
 CENTRY_AGENT_IMAGE_URL=https://api.centry.example/icon.png
 CENTRY_AGENT_WEB_URL=https://app.centry.example/agents
-CENTRY_MCP_URL=https://mcp.centry.example/mcp
-CENTRY_MCP_VERSION=2026-07-28
 CENTRY_A2A_URL=https://api.centry.example/.well-known/agent-card.json
 CENTRY_A2A_VERSION=0.3.0
 CENTRY_AGENT_X402_SUPPORT=false
@@ -273,9 +271,9 @@ There is intentionally no global `CENTRY_AGENT_OPERATOR`: operator identity belo
 
 ## Cloudflare transport and always-on agents
 
-`agent-gateway/` is an optional Cloudflare transport layer. It can consume the same HTTPS session model rather than introducing a second user identity system.
+The external agent does not require an MCP gateway. It reads the Centry Skill and talks directly to the HTTPS backend.
 
-An external agent can run 24/7 independently of Centry's web UI:
+An external agent runtime can run 24/7 independently of Centry's web UI:
 
 ```text
 external agent runtime
@@ -283,11 +281,56 @@ external agent runtime
   -> keeps the short-lived Centry session token private
   -> reads portfolio/markets/positions
   -> requests bounded transactions
-  -> signs with the operator wallet
-  -> broadcasts to Arc
+  -> signs with its operator wallet
+  -> broadcasts to Arc continuously according to its strategy
 ```
 
 Centry never receives the operator private key. The Worker/API can authenticate, rate-limit, queue, schedule, or proxy requests, while the user's onchain account remains the execution boundary.
+
+## 24/7 onchain agents
+
+The onchain smart account can remain active continuously, but blockchain execution still requires an offchain runtime to decide when to act and an authorized operator signer to submit transactions. Centry therefore supports an always-on runner model:
+
+```text
+strategy / AI runtime
+  -> reads current state
+  -> decides whether to act
+  -> calls Centry API / preparation layer
+  -> Centry checks active + operator + permissions onchain
+  -> operator signer signs
+  -> Arc transaction is broadcast
+  -> repeat
+```
+
+The runtime may be self-hosted by the user or hosted by Centry. For a Centry-hosted runtime, the operator signing credential is stored separately from the owner credential and must never be the user's owner/EOA seed.
+
+## Custom agent credentials
+
+A user bringing a custom agent should provide only what is needed for the chosen runtime mode:
+
+### Self-hosted custom agent
+
+```text
+agent name / metadata
+operator wallet address
+Centry API credential (`ck_live_...`) or one-time connection URL
+custom agent endpoint / runtime configuration (when applicable)
+optional AI-provider credential if the custom runtime needs Centry to call a provider
+```
+
+The custom agent keeps its own operator private key. Centry never receives the user's owner private key.
+
+### Centry-hosted custom agent
+
+```text
+agent name / metadata
+operator wallet address or a newly generated Centry operator wallet
+agent endpoint / strategy configuration
+optional AI-provider credential
+operator signing credential for the hosted runner, if the user imports one
+```
+
+The hosted runner needs an operator signing capability to execute 24/7. This must be a dedicated operator wallet, never the user's owner wallet.
 
 ## Production security
 
