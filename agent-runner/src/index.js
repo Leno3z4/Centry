@@ -652,9 +652,10 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
 
     for (const message of outboundMessages) {
       const target = await db.prepare(
-        "SELECT id FROM centry_agents WHERE id = ? LIMIT 1"
+        "SELECT id, owner FROM centry_agents WHERE id = ? LIMIT 1"
       ).bind(message.toAgentId).first();
       if (!target || target.id === agent.id) continue;
+      if (String(target.owner).toLowerCase() !== String(agent.owner).toLowerCase()) continue;
 
       const messageTaskId = crypto.randomUUID();
       const createdAt = new Date().toISOString();
