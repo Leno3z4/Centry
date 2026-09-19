@@ -37,6 +37,7 @@ const scopeOptions = [
   ['repay', 'Repay debt'],
   ['swap', 'Swap CENT and Arc-native USDC'],
   ['governance', 'Governance actions'],
+  ['agent-to-agent', 'Send tasks/messages to other Centry agents'],
 ];
 
 const providerOptions = [
