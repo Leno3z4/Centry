@@ -1,5 +1,5 @@
 import { authenticateAgent, jsonResponse } from "../../../../../lib/agentApi";
-import { actionCatalog, ARC_TESTNET_CHAIN_ID } from "../../../../../lib/agentExecutionRuntime";
+import { actionCatalog, ARC_MAINNET_CHAIN_ID } from "../../../../../lib/agentExecutionRuntime";
 
 export async function GET(request) {
   const auth = await authenticateAgent(request);
@@ -14,7 +14,7 @@ export async function GET(request) {
     owner: session.owner,
     account: session.account,
     operator: session.operator,
-    chainId: ARC_TESTNET_CHAIN_ID,
+    chainId: ARC_MAINNET_CHAIN_ID,
     scopes,
     capabilities: {
       read: scopes.includes("read"),
