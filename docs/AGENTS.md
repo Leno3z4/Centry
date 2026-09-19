@@ -14,14 +14,14 @@ Centry should expose:
 - API credential creation, rotation and revocation;
 - per-agent permissions;
 - agent activity and analytics;
-- a skill/instruction file describing the Centry API;
+- a Skill/instruction file describing the Centry API, served by the backend;
 - a marketplace for official agents plus a path for user-created agents.
 
 Third-party AI-provider API keys must not be stored as ordinary database fields. The production design should keep provider secrets in a dedicated secret-management system. Cloudflare Workers Secrets / Secrets Store are one compatible deployment option, but the core Centry data model should remain provider-independent.
 
 ## Onchain agents
 
-An onchain agent is a separate blockchain identity/account. It does not use the Centry REST API to execute blockchain actions. It interacts directly with Centry contracts and other EVM contracts.
+An onchain agent is a separate blockchain identity/account. Its smart account executes directly against Centry contracts and other EVM contracts. To operate 24/7, a continuously running agent runtime/runner drives the account through an authorized operator key; the smart account remains the final execution boundary.
 
 The first account primitive in this repository is `CentryOnchainAgentAccount`:
 
@@ -40,7 +40,7 @@ This first layer is intentionally generic. It does not hard-code lending, swap o
 
 ## Why the two systems stay separate
 
-An offchain agent uses the Centry API and its API credential. An onchain agent has a blockchain identity and executes directly against contracts. They may coexist on the same user's Centry account, but neither depends on the other.
+An offchain agent uses the backend-served Skill plus the Centry HTTPS API and its user-scoped credential. An onchain agent has a blockchain identity and executes directly against contracts. They may coexist on the same user's Centry account, but neither depends on MCP or on the other.
 
 Onchain agents can call other onchain agents when their configured permissions allow it.
 
