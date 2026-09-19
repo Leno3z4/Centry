@@ -11,6 +11,7 @@ on:
       - "frontend/**"
       - ".github/workflows/application-ci.yml"
       - "agent-db/**"
+      - "agent-runner/**"
   pull_request:
     paths:
       - "app/**"
@@ -20,6 +21,7 @@ on:
       - "frontend/**"
       - ".github/workflows/application-ci.yml"
       - "agent-db/**"
+      - "agent-runner/**"
 
 jobs:
   root-app:
@@ -83,3 +85,25 @@ jobs:
 
       - name: Validate worker syntax
         run: node --check src/index.js
+
+  agent-runner:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent-runner
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: agent-runner/package.json
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Validate runner syntax
+        run: npm run check
