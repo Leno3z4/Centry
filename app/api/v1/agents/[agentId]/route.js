@@ -1,6 +1,6 @@
 import { getAddress } from "ethers";
 import { Contract, JsonRpcProvider } from "ethers";
-import { getAgentById } from "../../../../../lib/agentStore";
+import { getAgentById } from "../../../../../../lib/agentStore";
 
 const ACCOUNT_ABI = [
   "function owner() view returns (address)",
