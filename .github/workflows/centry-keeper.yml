@@ -1,4 +1,4 @@
-name: Centry V2 Self-Repay Keeper
+name: Centry Mainnet Self-Repay Keeper
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: centry-v2-self-repay-keeper
+  group: centry-mainnet-self-repay-keeper
   cancel-in-progress: false
 
 jobs:
@@ -28,527 +28,209 @@ jobs:
           node-version: 20
 
       - name: Install ethers
-        run: |
-          npm install --no-save ethers@6
+        run: npm install --no-save ethers@6
 
       - name: Validate reward manifest structure
         env:
           ARC_RPC_URL_SECRET: ""
           ARC_RPC_URL_VARIABLE: ""
-          CENTRY_REVENUE_REWARDS: "0xFE791C5141ef417100Ce56624bc975DA1fBE9815"
-        run: |
-          node scripts/validate-reward-manifest.js
+          CENTRY_REVENUE_REWARDS: "0x0cBb0050cDCCC5D9CE8Ee2C407c8608B042D30D5"
+        run: node scripts/validate-reward-manifest.js
 
-      - name: Run Centry V2 keeper
+      - name: Run Centry Mainnet keeper
         env:
           ARC_RPC_URL_SECRET: ${{ secrets.ARC_RPC_URL }}
           ARC_RPC_URL_VARIABLE: ${{ vars.ARC_RPC_URL }}
-
           KEEPER_PRIVATE_KEY: ${{ secrets.KEEPER_PRIVATE_KEY }}
-
-          CENTRY_VECENT: "0xdcb00Ea10FBeaaB66b88C208Ad09b58E38D6f04e"
-
-          CENTRY_REVENUE_REWARDS: "0xFE791C5141ef417100Ce56624bc975DA1fBE9815"
-
-          CENTRY_SELF_REPAY_EXECUTOR: "0x1672667EdB27fDF687A0Fe485EeE1240650dF4a9"
-
-          CENTRY_LENDING_POOL: "0x90C935687D91b3352b2C55cd79389C92950D94BD"
-
+          CENTRY_VECENT: "0x3c1771B971329f3eCf9A1bB8B3adC8756e13d334"
+          CENTRY_REVENUE_REWARDS: "0x0cBb0050cDCCC5D9CE8Ee2C407c8608B042D30D5"
+          CENTRY_SELF_REPAY_EXECUTOR: "0x6D87e89C015509F84B4e01b8a193d1A2CcE7De37"
+          CENTRY_LENDING_POOL: "0x0ee649E5A95eB9127cB7146b26349a92B68c17A4"
+          CENTRY_UNITFLOW_ADAPTER: "0x9212cb2eD06256D8D690d631A7938D55a9E3200D"
+          CENTRY_UNITFLOW_QUOTER: "0x5AF6E89F0960Ff375AF84d9911D8153ef6240E34"
+          CENTRY_CENT_TOKEN: "0x75E1C49f3fAebEc149c4c997f209A8e639c2253F"
+          CENTRY_USDC: "0x3600000000000000000000000000000000000000"
           CENTRY_MAX_TOKEN_SCAN: ${{ vars.CENTRY_MAX_TOKEN_SCAN || '1000' }}
-
           CENTRY_MIN_NATIVE_BALANCE: ${{ vars.CENTRY_MIN_NATIVE_BALANCE || '0.001' }}
-
+          CENTRY_SWAP_SLIPPAGE_BPS: ${{ vars.CENTRY_SWAP_SLIPPAGE_BPS || '100' }}
+          CENTRY_SWAP_DEADLINE_SECONDS: ${{ vars.CENTRY_SWAP_DEADLINE_SECONDS || '300' }}
         run: |
           node --input-type=commonjs <<'NODE'
           (async () => {
-          const fs = require("fs");
-          const { ethers } = require("ethers");
+            const fs = require("fs");
+            const { ethers } = require("ethers");
 
-          const RPC_URL =
-            process.env.ARC_RPC_URL_SECRET ||
-            process.env.ARC_RPC_URL_VARIABLE;
+            const RPC_URL = process.env.ARC_RPC_URL_SECRET || process.env.ARC_RPC_URL_VARIABLE;
+            const PRIVATE_KEY = process.env.KEEPER_PRIVATE_KEY;
+            const VECENT = process.env.CENTRY_VECENT;
+            const REWARDS = process.env.CENTRY_REVENUE_REWARDS;
+            const EXECUTOR = process.env.CENTRY_SELF_REPAY_EXECUTOR;
+            const LENDING_POOL = process.env.CENTRY_LENDING_POOL;
+            const ADAPTER = process.env.CENTRY_UNITFLOW_ADAPTER;
+            const QUOTER = process.env.CENTRY_UNITFLOW_QUOTER;
+            const CENT = process.env.CENTRY_CENT_TOKEN;
+            const USDC = process.env.CENTRY_USDC;
+            const MANIFEST_PATH = "keeper/reward-manifest.json";
+            const MAX_TOKEN_SCAN = BigInt(process.env.CENTRY_MAX_TOKEN_SCAN || "1000");
+            const MIN_NATIVE_BALANCE = ethers.parseEther(process.env.CENTRY_MIN_NATIVE_BALANCE || "0.001");
+            const SLIPPAGE_BPS = BigInt(process.env.CENTRY_SWAP_SLIPPAGE_BPS || "100");
+            const DEADLINE_SECONDS = BigInt(process.env.CENTRY_SWAP_DEADLINE_SECONDS || "300");
+            const UNITFLOW_FEES = [500, 3000, 10000];
+            const EXPECTED_CHAIN_ID = 5042n;
 
-          const PRIVATE_KEY =
-            process.env.KEEPER_PRIVATE_KEY;
+            if (!RPC_URL) throw new Error("Missing ARC_RPC_URL");
+            if (!PRIVATE_KEY) throw new Error("Missing KEEPER_PRIVATE_KEY");
+            if (SLIPPAGE_BPS < 0n || SLIPPAGE_BPS >= 10000n) throw new Error("Invalid swap slippage");
+            if (DEADLINE_SECONDS <= 0n) throw new Error("Invalid swap deadline");
 
-          const VECENT =
-            process.env.CENTRY_VECENT;
+            if (!fs.existsSync(MANIFEST_PATH)) throw new Error("Missing keeper/reward-manifest.json");
+            const manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8"));
 
-          const REWARDS =
-            process.env.CENTRY_REVENUE_REWARDS;
+            const provider = new ethers.JsonRpcProvider(RPC_URL);
+            const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
+            const network = await provider.getNetwork();
 
-          const EXECUTOR =
-            process.env.CENTRY_SELF_REPAY_EXECUTOR;
-
-          const LENDING_POOL =
-            process.env.CENTRY_LENDING_POOL;
-
-          const MANIFEST_PATH =
-            "keeper/reward-manifest.json";
-
-          const MAX_TOKEN_SCAN =
-            BigInt(
-              process.env.CENTRY_MAX_TOKEN_SCAN ||
-              "1000"
-            );
-
-          const MIN_NATIVE_BALANCE =
-            ethers.parseEther(
-              process.env.CENTRY_MIN_NATIVE_BALANCE ||
-              "0.001"
-            );
-
-          const EXPECTED_CHAIN_ID =
-            5042002n;
-
-          if (!RPC_URL) {
-            throw new Error(
-              "Missing ARC_RPC_URL"
-            );
-          }
-
-          if (!PRIVATE_KEY) {
-            throw new Error(
-              "Missing KEEPER_PRIVATE_KEY"
-            );
-          }
-
-          const addresses = [
-            [
-              "CENTRY_VECENT",
-              VECENT
-            ],
-            [
-              "CENTRY_REVENUE_REWARDS",
-              REWARDS
-            ],
-            [
-              "CENTRY_SELF_REPAY_EXECUTOR",
-              EXECUTOR
-            ],
-            [
-              "CENTRY_LENDING_POOL",
-              LENDING_POOL
-            ]
-          ];
-
-          for (const [name, address] of addresses) {
-            if (!ethers.isAddress(address)) {
-              throw new Error(
-                `${name} is not a valid address`
-              );
-            }
-          }
-
-          if (!fs.existsSync(MANIFEST_PATH)) {
-            throw new Error(
-              `${MANIFEST_PATH} does not exist`
-            );
-          }
-
-          const manifest = JSON.parse(
-            fs.readFileSync(
-              MANIFEST_PATH,
-              "utf8"
-            )
-          );
-
-          const provider =
-            new ethers.JsonRpcProvider(RPC_URL);
-
-          const wallet =
-            new ethers.Wallet(
-              PRIVATE_KEY,
-              provider
-            );
-
-          const veCENT =
-            new ethers.Contract(
-              VECENT,
-              [
-                "function nextTokenId() view returns (uint256)",
-                "function ownerOf(uint256 tokenId) view returns (address)"
-              ],
-              provider
-            );
-
-          const rewards =
-            new ethers.Contract(
-              REWARDS,
-              [
-                "function rewardToken() view returns (address)",
-                "function veCENT() view returns (address)",
-                "function epochRoots(uint256 epoch) view returns (bytes32)",
-                "function latestEpoch() view returns (uint256)",
-                "function selfRepayRecipient(uint256 tokenId) view returns (address)",
-                "function selfRepayOwner(uint256 tokenId) view returns (address)",
-                "function claimed(uint256 epoch, uint256 tokenId) view returns (bool)"
-              ],
-              provider
-            );
-
-          const lendingPool =
-            new ethers.Contract(
-              LENDING_POOL,
-              [
-                "function borrowBalance(address borrower, address asset) view returns (uint256)"
-              ],
-              provider
-            );
-
-          const executor =
-            new ethers.Contract(
-              EXECUTOR,
-              [
-                "function isKeeper(address keeper) view returns (bool)",
-                "function swapAdapter() view returns (address)",
-                "function supportedDebtAsset(address asset) view returns (bool)",
-                "function executeSelfRepay(uint256 epoch,uint256 tokenId,uint256 rewardAmount,bytes32[] rewardProof,tuple(address debtAsset,uint256 rewardAmountIn,uint256 minDebtAssetOut,bytes swapData)[] instructions)"
-              ],
-              wallet
-            );
-
-          const network = await provider.getNetwork();
-
-          console.log(
-            `Connected chain ID: ${network.chainId.toString()}`
-          );
-
-          if (network.chainId !== EXPECTED_CHAIN_ID) {
-            throw new Error(
-              `Wrong network. Expected Arc Testnet ${EXPECTED_CHAIN_ID}, got ${network.chainId}`
-            );
-          }
-
-          console.log(`Keeper wallet: ${wallet.address}`);
-
-          const nativeBalance = await provider.getBalance(
-            wallet.address
-          );
-
-          console.log(
-            `Keeper gas balance: ${ethers.formatEther(nativeBalance)}`
-          );
-
-          if (nativeBalance < MIN_NATIVE_BALANCE) {
-            throw new Error(
-              "Keeper native balance is below configured minimum"
-            );
-          }
-
-          const keeperAuthorized = await executor.isKeeper(
-            wallet.address
-          );
-
-          if (!keeperAuthorized) {
-            throw new Error(
-              "Keeper wallet is not authorized on SelfRepayExecutorV2"
-            );
-          }
-
-          const adapter = await executor.swapAdapter();
-
-          if (adapter === ethers.ZeroAddress) {
-            throw new Error(
-              "SelfRepayExecutorV2 has no swap adapter configured"
-            );
-          }
-
-          console.log(`Swap adapter: ${adapter}`);
-
-          const rewardsVeCENT = await rewards.veCENT();
-
-          if (
-            ethers.getAddress(rewardsVeCENT) !==
-            ethers.getAddress(VECENT)
-          ) {
-            throw new Error(
-              "RevenueRewards.veCENT() does not match configured veCENT"
-            );
-          }
-
-          const manifestEpoch = BigInt(manifest.epoch);
-          const latestEpoch = await rewards.latestEpoch();
-
-          console.log(
-            `Manifest epoch: ${manifestEpoch.toString()}`
-          );
-
-          console.log(
-            `Latest active epoch: ${latestEpoch.toString()}`
-          );
-
-          if (manifestEpoch > latestEpoch) {
-            console.log(
-              `Manifest epoch ${manifestEpoch.toString()} is not active yet; keeper is idle.`
-            );
-            process.exit(0);
-          }
-
-          const onChainRoot = await rewards.epochRoots(
-            manifestEpoch
-          );
-
-          if (onChainRoot === ethers.ZeroHash) {
-            console.log(
-              `Manifest epoch ${manifestEpoch.toString()} has no active Merkle root; keeper is idle.`
-            );
-            process.exit(0);
-          }
-
-          if (
-            manifest.root &&
-            manifest.root.toLowerCase() !==
-              onChainRoot.toLowerCase()
-          ) {
-            throw new Error(
-              "Manifest root does not match on-chain root"
-            );
-          }
-
-          const nextTokenId = await veCENT.nextTokenId();
-
-          const upperBound =
-            nextTokenId < MAX_TOKEN_SCAN + 1n
-              ? nextTokenId
-              : MAX_TOKEN_SCAN + 1n;
-
-          console.log(
-            `veCENT next token ID: ${nextTokenId.toString()}`
-          );
-
-          console.log(
-            `Keeper scan upper bound: ${upperBound.toString()}`
-          );
-
-          let executed = 0;
-          let skipped = 0;
-
-          for (const position of manifest.positions) {
-            const tokenId = BigInt(position.tokenId);
-
-            if (
-              tokenId <= 0n ||
-              tokenId >= upperBound
-            ) {
-              skipped++;
-              continue;
+            console.log("Connected chain ID: " + network.chainId.toString());
+            if (network.chainId !== EXPECTED_CHAIN_ID) {
+              throw new Error("Wrong network. Expected Arc Mainnet 5042, got " + network.chainId.toString());
             }
 
-            let owner;
+            console.log("Keeper wallet: " + wallet.address);
+            const nativeBalance = await provider.getBalance(wallet.address);
+            console.log("Keeper native balance: " + ethers.formatEther(nativeBalance));
+            if (nativeBalance < MIN_NATIVE_BALANCE) throw new Error("Keeper native balance is below configured minimum");
 
-            try {
-              owner = await veCENT.ownerOf(tokenId);
-            } catch {
-              console.log(
-                `tokenId ${tokenId}: NFT does not exist`
-              );
-              skipped++;
-              continue;
+            const veCENT = new ethers.Contract(VECENT, [
+              "function nextTokenId() view returns (uint256)",
+              "function ownerOf(uint256 tokenId) view returns (address)"
+            ], provider);
+
+            const rewards = new ethers.Contract(REWARDS, [
+              "function rewardToken() view returns (address)",
+              "function veCENT() view returns (address)",
+              "function epochRoots(uint256 epoch) view returns (bytes32)",
+              "function latestEpoch() view returns (uint256)",
+              "function selfRepayRecipient(uint256 tokenId) view returns (address)",
+              "function selfRepayOwner(uint256 tokenId) view returns (address)",
+              "function claimed(uint256 epoch,uint256 tokenId) view returns (bool)"
+            ], provider);
+
+            const lendingPool = new ethers.Contract(LENDING_POOL, [
+              "function borrowBalance(address borrower,address asset) view returns (uint256)"
+            ], provider);
+
+            const executor = new ethers.Contract(EXECUTOR, [
+              "function isKeeper(address keeper) view returns (bool)",
+              "function swapAdapter() view returns (address)",
+              "function supportedDebtAsset(address asset) view returns (bool)",
+              "function executeSelfRepay(uint256 epoch,uint256 tokenId,uint256 rewardAmount,bytes32[] rewardProof,tuple(address debtAsset,uint256 rewardAmountIn,uint256 minDebtAssetOut,bytes swapData)[] instructions)"
+            ], wallet);
+
+            const adapter = new ethers.Contract(ADAPTER, [
+              "function authorizedCaller() view returns (address)",
+              "function supportedOutput(address token) view returns (bool)"
+            ], provider);
+
+            const quoter = new ethers.Contract(QUOTER, [
+              "function quoteExactInput(bytes path,uint256 amountIn) returns (uint256 amountOut,uint160[] sqrtPriceX96AfterList,uint32[] initializedTicksCrossedList,uint256 gasEstimate)"
+            ], provider);
+
+            if (!(await executor.isKeeper(wallet.address))) throw new Error("Keeper wallet is not authorized on SelfRepayExecutorV2");
+
+            const configuredAdapter = await executor.swapAdapter();
+            if (ethers.getAddress(configuredAdapter) !== ethers.getAddress(ADAPTER)) {
+              throw new Error("Executor swapAdapter does not match configured Mainnet adapter");
             }
 
-            if (owner === ethers.ZeroAddress) {
-              skipped++;
-              continue;
+            if (ethers.getAddress(await adapter.authorizedCaller()) !== ethers.getAddress(EXECUTOR)) {
+              throw new Error("UnitFlow adapter authorizedCaller does not match executor");
             }
+            if (!(await adapter.supportedOutput(USDC))) throw new Error("UnitFlow adapter does not support Arc native USDC");
+            if (!(await executor.supportedDebtAsset(USDC))) throw new Error("USDC is not enabled as a supported debt asset");
 
-            const configuredRecipient =
-              await rewards.selfRepayRecipient(tokenId);
+            const rewardsVeCENT = await rewards.veCENT();
+            if (ethers.getAddress(rewardsVeCENT) !== ethers.getAddress(VECENT)) throw new Error("RevenueRewards.veCENT mismatch");
 
-            const configuredOwner =
-              await rewards.selfRepayOwner(tokenId);
+            const manifestEpoch = BigInt(manifest.epoch);
+            const latestEpoch = await rewards.latestEpoch();
+            console.log("Manifest epoch: " + manifestEpoch.toString());
+            console.log("Latest active epoch: " + latestEpoch.toString());
+            if (manifestEpoch > latestEpoch) { console.log("Manifest epoch is not active; keeper idle."); process.exit(0); }
 
-            if (
-              configuredRecipient ===
-              ethers.ZeroAddress
-            ) {
-              console.log(
-                `tokenId ${tokenId}: self-repay disabled`
-              );
-              skipped++;
-              continue;
-            }
+            const onChainRoot = await rewards.epochRoots(manifestEpoch);
+            if (onChainRoot === ethers.ZeroHash) { console.log("Manifest epoch has no active root; keeper idle."); process.exit(0); }
+            if (manifest.root && manifest.root.toLowerCase() !== onChainRoot.toLowerCase()) throw new Error("Manifest root does not match on-chain root");
 
-            if (
-              ethers.getAddress(configuredOwner) !==
-              ethers.getAddress(owner)
-            ) {
-              console.log(
-                `tokenId ${tokenId}: owner changed, self-repay configuration is stale`
-              );
-              skipped++;
-              continue;
-            }
+            const nextTokenId = await veCENT.nextTokenId();
+            const upperBound = nextTokenId < MAX_TOKEN_SCAN + 1n ? nextTokenId : MAX_TOKEN_SCAN + 1n;
+            let executed = 0;
+            let skipped = 0;
 
-            if (
-              ethers.getAddress(configuredRecipient) !==
-              ethers.getAddress(EXECUTOR)
-            ) {
-              console.log(
-                `tokenId ${tokenId}: self-repay recipient is not executor`
-              );
-              skipped++;
-              continue;
-            }
+            for (const position of manifest.positions) {
+              const tokenId = BigInt(position.tokenId);
+              if (tokenId <= 0n || tokenId >= upperBound) { skipped++; continue; }
 
-            const alreadyClaimed = await rewards.claimed(
-              manifestEpoch,
-              tokenId
-            );
+              let owner;
+              try { owner = await veCENT.ownerOf(tokenId); } catch { skipped++; continue; }
+              if (owner === ethers.ZeroAddress) { skipped++; continue; }
 
-            if (alreadyClaimed) {
-              console.log(
-                `tokenId ${tokenId}: reward already claimed`
-              );
-              skipped++;
-              continue;
-            }
+              const configuredRecipient = await rewards.selfRepayRecipient(tokenId);
+              const configuredOwner = await rewards.selfRepayOwner(tokenId);
+              if (configuredRecipient === ethers.ZeroAddress) { console.log("tokenId " + tokenId + ": self-repay disabled"); skipped++; continue; }
+              if (ethers.getAddress(configuredOwner) !== ethers.getAddress(owner)) { console.log("tokenId " + tokenId + ": stale self-repay owner"); skipped++; continue; }
+              if (ethers.getAddress(configuredRecipient) !== ethers.getAddress(EXECUTOR)) { console.log("tokenId " + tokenId + ": wrong self-repay recipient"); skipped++; continue; }
+              if (await rewards.claimed(manifestEpoch, tokenId)) { console.log("tokenId " + tokenId + ": reward already claimed"); skipped++; continue; }
 
-            const rewardAmount = BigInt(position.amount);
+              const rewardAmount = BigInt(position.amount);
+              if (rewardAmount <= 0n) { skipped++; continue; }
 
-            if (rewardAmount <= 0n) {
-              console.log(
-                `tokenId ${tokenId}: reward amount is zero`
-              );
-              skipped++;
-              continue;
-            }
+              const currentDebt = await lendingPool.borrowBalance(owner, USDC);
+              if (currentDebt === 0n) { console.log("tokenId " + tokenId + ": no USDC debt remains"); skipped++; continue; }
 
-            const instructions = [];
-
-            for (const rawInstruction of position.instructions) {
-              const debtAsset = ethers.getAddress(
-                rawInstruction.debtAsset
-              );
-
-              const supported =
-                await executor.supportedDebtAsset(debtAsset);
-
-              if (!supported) {
-                console.log(
-                  `tokenId ${tokenId}: ${debtAsset} is not a supported debt asset`
-                );
-                continue;
+              let bestQuote = null;
+              for (const fee of UNITFLOW_FEES) {
+                const path = ethers.solidityPacked(["address","uint24","address"], [CENT, fee, USDC]);
+                try {
+                  const result = await quoter.quoteExactInput.staticCall(path, rewardAmount);
+                  const amountOut = BigInt(result[0]);
+                  if (amountOut > 0n && (!bestQuote || amountOut > bestQuote.amountOut)) bestQuote = { fee, amountOut };
+                } catch {}
               }
 
-              const currentDebt =
-                await lendingPool.borrowBalance(
-                  owner,
-                  debtAsset
-                );
+              if (!bestQuote) { console.log("tokenId " + tokenId + ": no usable UnitFlow V3 quote"); skipped++; continue; }
 
-              if (currentDebt === 0n) {
-                continue;
-              }
+              const minDebtAssetOut = bestQuote.amountOut * (10000n - SLIPPAGE_BPS) / 10000n;
+              if (minDebtAssetOut <= 0n) { skipped++; continue; }
 
-              const rewardAmountIn = BigInt(
-                rawInstruction.rewardAmountIn
-              );
+              const deadline = BigInt(Math.floor(Date.now() / 1000)) + DEADLINE_SECONDS;
+              const swapData = ethers.AbiCoder.defaultAbiCoder().encode(["uint256","uint24"], [deadline, bestQuote.fee]);
 
-              const minDebtAssetOut = BigInt(
-                rawInstruction.minDebtAssetOut
-              );
-
-              if (rewardAmountIn <= 0n) {
-                continue;
-              }
-
-              if (minDebtAssetOut <= 0n) {
-                continue;
-              }
-
-              instructions.push({
-                debtAsset,
-                rewardAmountIn,
+              const instructions = [{
+                debtAsset: USDC,
+                rewardAmountIn: rewardAmount,
                 minDebtAssetOut,
-                swapData:
-                  rawInstruction.swapData || "0x"
-              });
+                swapData
+              }];
+
+              console.log("tokenId " + tokenId + ": fee=" + bestQuote.fee + " quote=" + bestQuote.amountOut.toString() + " minOut=" + minDebtAssetOut.toString());
+
+              const gasEstimate = await executor.executeSelfRepay.estimateGas(manifestEpoch, tokenId, rewardAmount, position.proof, instructions);
+              const feeData = await provider.getFeeData();
+              const overrides = { gasLimit: gasEstimate * 120n / 100n };
+              if (feeData.maxFeePerGas) {
+                overrides.maxFeePerGas = feeData.maxFeePerGas;
+                overrides.maxPriorityFeePerGas = feeData.maxPriorityFeePerGas ?? 0n;
+              } else if (feeData.gasPrice) {
+                overrides.gasPrice = feeData.gasPrice;
+              }
+
+              const tx = await executor.executeSelfRepay(manifestEpoch, tokenId, rewardAmount, position.proof, instructions, overrides);
+              console.log("tokenId " + tokenId + ": submitted " + tx.hash);
+              const receipt = await tx.wait();
+              console.log("tokenId " + tokenId + ": confirmed in block " + receipt.blockNumber);
+              executed++;
             }
 
-            if (instructions.length === 0) {
-              console.log(
-                `tokenId ${tokenId}: no executable debt remains`
-              );
-              skipped++;
-              continue;
-            }
-
-            const totalRewardInput = instructions.reduce(
-              (total, instruction) =>
-                total + instruction.rewardAmountIn,
-              0n
-            );
-
-            if (totalRewardInput > rewardAmount) {
-              console.log(
-                `tokenId ${tokenId}: instructions use more reward than allocation`
-              );
-              skipped++;
-              continue;
-            }
-
-            console.log(
-              `tokenId ${tokenId}: executing ${rewardAmount.toString()} reward across ${instructions.length} debt route(s)`
-            );
-
-            const gasEstimate =
-              await executor.executeSelfRepay.estimateGas(
-                manifestEpoch,
-                tokenId,
-                rewardAmount,
-                position.proof,
-                instructions
-              );
-
-            const feeData = await provider.getFeeData();
-
-            const overrides = {
-              gasLimit:
-                gasEstimate *
-                120n /
-                100n
-            };
-
-            if (feeData.maxFeePerGas) {
-              overrides.maxFeePerGas =
-                feeData.maxFeePerGas;
-
-              overrides.maxPriorityFeePerGas =
-                feeData.maxPriorityFeePerGas ??
-                0n;
-            } else if (feeData.gasPrice) {
-              overrides.gasPrice =
-                feeData.gasPrice;
-            }
-
-            const tx = await executor.executeSelfRepay(
-              manifestEpoch,
-              tokenId,
-              rewardAmount,
-              position.proof,
-              instructions,
-              overrides
-            );
-
-            console.log(
-              `tokenId ${tokenId}: submitted ${tx.hash}`
-            );
-
-            const receipt = await tx.wait();
-
-            console.log(
-              `tokenId ${tokenId}: confirmed in block ${receipt.blockNumber}`
-            );
-
-            executed++;
-          }
-
-          console.log(
-            `Centry V2 keeper complete: executed=${executed}, skipped=${skipped}`
-          );
-          })().catch((error) => {
-            console.error(error);
-            process.exit(1);
-          });
+            console.log("Centry Mainnet keeper complete: executed=" + executed + ", skipped=" + skipped);
+          })().catch((error) => { console.error(error); process.exit(1); });
           NODE
