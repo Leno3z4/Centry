@@ -192,6 +192,7 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
     /// @notice Transfer a supported ERC20 token to another agent owned by the same owner.
     /// @dev The factory registry makes the recipient restriction enforceable onchain; external addresses cannot be used.
     function transferToAgent(address token, address recipient, uint256 amount) external nonReentrant {
+        if (msg.sender != address(this)) revert InvalidAgentRecipient();
         if (!ICentryAgentFactoryRegistry(factory).isCentryAgentAccount(recipient)) revert InvalidAgentRecipient();
         if (CentryOnchainAgentAccount(payable(recipient)).owner() != owner) revert InvalidAgentRecipient();
         IERC20(token).safeTransfer(recipient, amount);
