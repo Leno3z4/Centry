@@ -2,260 +2,535 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useAccount, usePublicClient, useReadContract, useSignMessage, useWriteContract } from 'wagmi';
-import { keccak256, parseUnits, toBytes, isAddress } from 'viem';
+import { encodeFunctionData, isAddress, keccak256, parseUnits, toBytes } from 'viem';
 import { Providers } from '../../../components/Providers';
 import { AppShell } from '../../../components/AppShell';
 import { CONTRACT_ADDRESSES } from '../../../constants/contracts';
 import styles from './agents.module.css';
 
-const FACTORY_ADDRESS = process.env.NEXT_PUBLIC_CENTRY_AGENT_FACTORY;
+const FACTORY_ADDRESS = process.env.NEXT_PUBLIC_CENTRY_AGENT_FACTORY || '';
 const API_BASE = (process.env.NEXT_PUBLIC_CENTRY_AGENT_API_URL || '').replace(/\/$/, '');
-const UNIVERSAL_ROUTER = process.env.NEXT_PUBLIC_CENTRY_UNITFLOW_UNIVERSAL_ROUTER || '0xEaF3195bE51861632cd32850973C9515DA48e76F';
-const GOVERNOR_ADDRESS = process.env.NEXT_PUBLIC_CENTRY_GOVERNOR || '';
+const AGENT_PRICE_RAW = 2500000n;
 
 const FACTORY_ABI = [
   { type: 'function', name: 'getAgentAccounts', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }], outputs: [{ name: 'accounts', type: 'address[]' }] },
   { type: 'function', name: 'createAgentAccount', stateMutability: 'nonpayable', inputs: [{ name: 'templateId', type: 'bytes32' }, { name: 'configHash', type: 'bytes32' }, { name: 'metadataURI', type: 'string' }, { name: 'initialOperator', type: 'address' }], outputs: [{ name: 'agentAccount', type: 'address' }] },
 ];
 
-const ACCOUNT_ABI = [
-  { type: 'function', name: 'agentOperators', stateMutability: 'view', inputs: [{ name: 'operator', type: 'address' }], outputs: [{ type: 'bool' }] },
-  { type: 'function', name: 'setAgentOperator', stateMutability: 'nonpayable', inputs: [{ name: 'operator', type: 'address' }, { name: 'active', type: 'bool' }], outputs: [] },
-  { type: 'function', name: 'setPermission', stateMutability: 'nonpayable', inputs: [{ name: 'operator', type: 'address' }, { name: 'target', type: 'address' }, { name: 'selector', type: 'bytes4' }, { name: 'allowed', type: 'bool' }, { name: 'expiresAt', type: 'uint64' }, { name: 'maxNativeValue', type: 'uint128' }], outputs: [] },
+const ERC20_ABI = [
+  { type: 'function', name: 'transfer', stateMutability: 'nonpayable', inputs: [{ name: 'to', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }] },
 ];
 
-const DEFAULT_SCOPES = ['read', 'lend', 'borrow', 'repay'];
-const OPTIONAL_SCOPES = [
-  ['read', 'Read balances, positions and capabilities'],
+const ACCOUNT_ABI = [
+  { type: 'function', name: 'active', stateMutability: 'view', inputs: [], outputs: [{ type: 'bool' }] },
+  { type: 'function', name: 'agentOperators', stateMutability: 'view', inputs: [{ name: 'operator', type: 'address' }], outputs: [{ type: 'bool' }] },
+  { type: 'function', name: 'setActive', stateMutability: 'nonpayable', inputs: [{ name: 'active', type: 'bool' }], outputs: [] },
+  { type: 'function', name: 'setAgentOperator', stateMutability: 'nonpayable', inputs: [{ name: 'operator', type: 'address' }, { name: 'active', type: 'bool' }], outputs: [] },
+];
+
+const DEFAULT_SCOPES = ['read', 'lend', 'borrow', 'repay', 'swap'];
+
+const scopeOptions = [
+  ['read', 'Read balances, positions and markets'],
   ['lend', 'Supply and withdraw'],
   ['borrow', 'Borrow assets'],
   ['repay', 'Repay debt'],
-  ['swap', 'Swap CENT and native USDC through the validated UnitFlow route'],
+  ['swap', 'Swap CENT and Arc-native USDC'],
   ['governance', 'Governance actions'],
-  ['agent-management', 'Read agent configuration'],
 ];
 
-const SUPPORTED_PERMISSION_ASSETS = [CONTRACT_ADDRESSES.USDC, CONTRACT_ADDRESSES.EURC, CONTRACT_ADDRESSES.CIRBTC].filter(Boolean);
+const providerOptions = [
+  ['gemini', 'Gemini'],
+  ['openai', 'OpenAI'],
+  ['anthropic', 'Anthropic'],
+];
 
-function selector(signature) { return keccak256(toBytes(signature)).slice(0, 10); }
-function normalizeAddress(value) { return value?.trim() || ''; }
+function randomAgentId() {
+  return crypto.randomUUID();
+}
 
-const SELECTORS = Object.freeze({
-  approve: selector('approve(address,uint256)'),
-  supply: selector('supply(address,uint256)'),
-  withdraw: selector('withdraw(address,uint256)'),
-  borrow: selector('borrow(address,uint256)'),
-  repay: selector('repay(address,uint256)'),
-  execute: selector('execute(bytes,bytes[],uint256)'),
-  castVote: selector('castVote(uint256,uint8)'),
-});
+async function apiJson(url, init) {
+  const response = await fetch(url, init);
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body?.error || `Request failed (${response.status})`);
+  return body;
+}
+
+function Section({ title, description, children }) {
+  return (
+    <section className={styles.card}>
+      <div className={styles.sectionHead}>
+        <div>
+          <h2>{title}</h2>
+          {description ? <p>{description}</p> : null}
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function AgentCard({ agent, onSelect, selected }) {
+  return (
+    <button type="button" className={`${styles.agentCard} ${selected ? styles.agentCardSelected : ''}`} onClick={() => onSelect(agent)}>
+      <div className={styles.agentCardTop}>
+        <div>
+          <strong>{agent.name}</strong>
+          <span>{agent.type === 'custom' ? 'Bring-your-own agent' : 'Centry agent'}</span>
+        </div>
+        <span className={agent.active ? styles.statusOn : styles.statusOff}>{agent.active ? 'ON' : 'OFF'}</span>
+      </div>
+      <div className={styles.address}>{agent.account}</div>
+    </button>
+  );
+}
 
 function AgentPageContent() {
   const { address, isConnected } = useAccount();
   const publicClient = usePublicClient();
   const { signMessageAsync } = useSignMessage();
-  const { writeContractAsync, isPending: isWritePending } = useWriteContract();
-  const [selectedAccount, setSelectedAccount] = useState('');
-  const [operator, setOperatorAddress] = useState('');
-  const [scopes, setScopes] = useState(DEFAULT_SCOPES);
-  const [swapLimit, setSwapLimit] = useState('');
-  const [permissionsReady, setPermissionsReady] = useState(false);
-  const [prompt, setPrompt] = useState('');
-  const [connectionUrl, setConnectionUrl] = useState('');
+  const { writeContractAsync, isPending } = useWriteContract();
+
+  const [accounts, setAccounts] = useState([]);
+  const [managed, setManaged] = useState([]);
+  const [selectedAgent, setSelectedAgent] = useState(null);
+  const [tab, setTab] = useState('agents');
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
 
-  const accountsQuery = useReadContract({
-    address: FACTORY_ADDRESS, abi: FACTORY_ABI, functionName: 'getAgentAccounts',
-    args: address ? [address] : undefined, query: { enabled: Boolean(FACTORY_ADDRESS && address) },
+  const [customName, setCustomName] = useState('');
+  const [customDescription, setCustomDescription] = useState('');
+  const [customOperator, setCustomOperator] = useState('');
+  const [customMetadata, setCustomMetadata] = useState('');
+  const [customConfig, setCustomConfig] = useState('{}');
+
+  const [provider, setProvider] = useState('gemini');
+  const [model, setModel] = useState('');
+  const [providerKey, setProviderKey] = useState('');
+
+  const [apiKeyLabel, setApiKeyLabel] = useState('External AI');
+  const [apiKeyOperator, setApiKeyOperator] = useState('');
+  const [apiKeyScopes, setApiKeyScopes] = useState(DEFAULT_SCOPES);
+  const [newApiKey, setNewApiKey] = useState('');
+
+  const [activity, setActivity] = useState([]);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatProvider, setChatProvider] = useState('gemini');
+
+  const factoryAccounts = useReadContract({
+    address: FACTORY_ADDRESS || undefined,
+    abi: FACTORY_ABI,
+    functionName: 'getAgentAccounts',
+    args: address ? [address] : undefined,
+    query: { enabled: Boolean(address && FACTORY_ADDRESS) },
   });
-  const accounts = useMemo(() => accountsQuery.data || [], [accountsQuery.data]);
-  const activeAccount = selectedAccount || accounts[0] || '';
 
-  useEffect(() => { if (!selectedAccount && accounts[0]) setSelectedAccount(accounts[0]); }, [accounts, selectedAccount]);
-  useEffect(() => { setPermissionsReady(false); }, [address]);
-
-  const operatorQuery = useReadContract({
-    address: activeAccount || undefined, abi: ACCOUNT_ABI, functionName: 'agentOperators',
-    args: operator && isAddress(operator) ? [operator] : undefined,
-    query: { enabled: Boolean(activeAccount && isAddress(operator)) },
-  });
-  const operatorAuthorized = operatorQuery.data === true;
-
-  function toggleScope(scope) {
-    setPermissionsReady(false);
-    setScopes((current) => current.includes(scope) ? current.filter((item) => item !== scope) : [...current, scope]);
+  async function ownerAuth(account, action) {
+    if (!API_BASE) throw new Error('Agent API URL is not configured.');
+    const challenge = await apiJson(`${API_BASE}/api/v1/agent-admin/challenge`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ owner: address, account, action }),
+    });
+    const signature = await signMessageAsync({ message: challenge.message });
+    return { challengeToken: challenge.token, signature };
   }
 
-  async function createAccount() {
-    setError(''); setStatus('');
-    if (!address) return setError('Connect your wallet first.');
-    if (!FACTORY_ADDRESS) return setError('Agent factory is not configured.');
-    if (!isAddress(operator)) return setError('Enter the external agent operator address first.');
-    if (!publicClient) return setError('Wallet RPC is not ready yet.');
+  async function refreshAgents() {
+    if (!address) return;
+    const rawAccounts = Array.isArray(factoryAccounts.data) ? factoryAccounts.data.map(String) : [];
+    setAccounts(rawAccounts);
+    const hydrated = [];
+    for (const account of rawAccounts) {
+      try {
+        const body = await apiJson(`${API_BASE}/api/v1/agents/account/${account}`);
+        hydrated.push(body);
+      } catch {
+        hydrated.push({
+          id: account,
+          account,
+          owner: address,
+          name: 'Unregistered agent',
+          description: 'Agent account created onchain; finish registration to configure it.',
+          type: 'custom',
+          active: false,
+        });
+      }
+    }
+    setManaged(hydrated);
+    setSelectedAgent((current) => current || hydrated[0] || null);
+  }
+
+  useEffect(() => { refreshAgents().catch((e) => setError(e.message)); }, [factoryAccounts.data, address]);
+
+  async function toggleAgent() {
+    if (!selectedAgent) return;
+    setError('');
+    setStatus('');
     try {
-      setStatus('Creating your Centry agent account…');
+      setStatus(`${selectedAgent.active ? 'Turning off' : 'Activating'} agent… Approve the wallet transaction.`);
+      const hash = await writeContractAsync({
+        address: selectedAgent.account,
+        abi: ACCOUNT_ABI,
+        functionName: 'setActive',
+        args: [!selectedAgent.active],
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+      setStatus(selectedAgent.active ? 'Agent switched off.' : 'Agent activated.');
+      await refreshAgents();
+    } catch (e) {
+      setError(e?.shortMessage || e?.message || 'Agent activation failed.');
+      setStatus('');
+    }
+  }
+
+  async function authorizeOperator() {
+    if (!selectedAgent || !apiKeyOperator) return setError('Enter an operator address.');
+    if (!isAddress(apiKeyOperator)) return setError('Operator address is invalid.');
+    try {
+      setStatus('Authorizing operator… Approve the wallet transaction.');
+      const hash = await writeContractAsync({
+        address: selectedAgent.account,
+        abi: ACCOUNT_ABI,
+        functionName: 'setAgentOperator',
+        args: [apiKeyOperator, true],
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+      setStatus('Operator authorized.');
+    } catch (e) {
+      setError(e?.shortMessage || e?.message || 'Operator authorization failed.');
+    }
+  }
+
+  async function createCustomAgent() {
+    setError('');
+    setStatus('');
+    if (!FACTORY_ADDRESS) return setError('Agent factory is not deployed/configured yet.');
+    if (!isAddress(customOperator)) return setError('Enter the operator address controlled by your custom agent.');
+    let parsedConfig;
+    try { parsedConfig = JSON.parse(customConfig); } catch { return setError('Custom configuration must be valid JSON.'); }
+
+    try {
+      setStatus('Creating custom agent account… Approve the wallet transaction.');
+      const agentId = randomAgentId();
+      const templateId = keccak256(toBytes(`centry-custom-agent:${customName || agentId}`));
+      const configHash = keccak256(toBytes(JSON.stringify(parsedConfig)));
       const txHash = await writeContractAsync({
-        address: FACTORY_ADDRESS, abi: FACTORY_ABI, functionName: 'createAgentAccount',
-        args: [keccak256(toBytes('centry-external-agent')), keccak256(toBytes('centry-agent-config-v1')), process.env.NEXT_PUBLIC_CENTRY_AGENT_METADATA_URI || '', operator],
+        address: FACTORY_ADDRESS,
+        abi: FACTORY_ABI,
+        functionName: 'createAgentAccount',
+        args: [templateId, configHash, customMetadata, customOperator],
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const created = receipt.logs?.find?.(() => false);
+      void created;
+      await refreshAgents();
+
+      const candidate = (factoryAccounts.data || []).map(String).find((item) => !accounts.includes(item));
+      const account = candidate || (factoryAccounts.data || []).map(String).at(-1);
+      if (!account) throw new Error('Agent account was created but could not be resolved yet.');
+
+      const auth = await ownerAuth(account, 'register-agent');
+      await apiJson(`${API_BASE}/api/v1/agents/register`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          ...auth,
+          owner: address,
+          account,
+          agentId,
+          type: 'custom',
+          name: customName || 'Custom Agent',
+          description: customDescription,
+          operator: customOperator,
+          metadataURI: customMetadata,
+          config: parsedConfig,
+        }),
+      });
+
+      setStatus('Custom agent created. It is OFF until you explicitly activate it.');
+      setCustomName('');
+      setCustomDescription('');
+      setCustomOperator('');
+      setCustomMetadata('');
+      setCustomConfig('{}');
+      await refreshAgents();
+    } catch (e) {
+      setError(e?.shortMessage || e?.message || 'Custom agent creation failed.');
+      setStatus('');
+    }
+  }
+
+  async function purchaseAgent() {
+    if (!FACTORY_ADDRESS) return setError('Agent factory is not deployed/configured yet.');
+    if (!publicClient) return setError('Wallet RPC is not ready.');
+    if (!isAddress(apiKeyOperator)) return setError('Enter the external agent operator address first.');
+    setError('');
+    setStatus('Paying 2.50 USDC… Approve the payment transaction.');
+    try {
+      const agentId = randomAgentId();
+      const paymentHash = await writeContractAsync({
+        address: CONTRACT_ADDRESSES.USDC,
+        abi: ERC20_ABI,
+        functionName: 'transfer',
+        args: [CONTRACT_ADDRESSES.treasury, AGENT_PRICE_RAW],
+      });
+      await publicClient.waitForTransactionReceipt({ hash: paymentHash });
+
+      await apiJson(`${API_BASE}/api/v1/agents/marketplace`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          owner: address,
+          templateId: 'centry-general-agent',
+          agentId,
+          paymentTxHash: paymentHash,
+        }),
+      });
+
+      setStatus('Payment confirmed. Creating the purchased agent… Approve the wallet transaction.');
+      const txHash = await writeContractAsync({
+        address: FACTORY_ADDRESS,
+        abi: FACTORY_ABI,
+        functionName: 'createAgentAccount',
+        args: [
+          keccak256(toBytes('centry-general-agent')),
+          keccak256(toBytes('centry-general-agent-config-v1')),
+          '',
+          apiKeyOperator,
+        ],
       });
       await publicClient.waitForTransactionReceipt({ hash: txHash });
-      setStatus(`Agent account confirmed: ${txHash}`);
-      await accountsQuery.refetch();
-    } catch (err) {
-      setError(err?.shortMessage || err?.message || 'Failed to create the agent account.'); setStatus('');
+
+      const updated = await publicClient.readContract({ address: FACTORY_ADDRESS, abi: FACTORY_ABI, functionName: 'getAgentAccounts', args: [address] });
+      const account = updated.map(String).at(-1);
+      if (!account) throw new Error('Purchased agent account was not returned by the factory.');
+
+      const auth = await ownerAuth(account, 'register-agent');
+      await apiJson(`${API_BASE}/api/v1/agents/register`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...auth, owner: address, account, agentId, type: 'purchased', name: 'Centry Agent', description: 'Configurable Centry onchain agent.', operator: apiKeyOperator, priceUsdCents: 250 }),
+      });
+
+      setStatus('Purchased agent created. It is OFF until you activate it.');
+      await refreshAgents();
+    } catch (e) {
+      setError(e?.shortMessage || e?.message || 'Agent purchase failed.');
+      setStatus('');
     }
   }
 
-  async function toggleOperator(active) {
-    setError(''); setStatus('');
-    if (!activeAccount) return setError('Create or select an agent account first.');
-    if (!isAddress(operator)) return setError('Enter a valid operator address.');
-    if (!publicClient) return setError('Wallet RPC is not ready yet.');
+  async function configureProvider() {
+    if (!selectedAgent) return;
+    if (!model || !providerKey) return setError('Provider, model and API key are required.');
     try {
-      setStatus(active ? 'Waiting for wallet approval…' : 'Revoking operator…');
-      const txHash = await writeContractAsync({ address: activeAccount, abi: ACCOUNT_ABI, functionName: 'setAgentOperator', args: [operator, active] });
-      await publicClient.waitForTransactionReceipt({ hash: txHash });
-      setStatus(`${active ? 'Operator authorization' : 'Operator revocation'} confirmed: ${txHash}`);
-      await operatorQuery.refetch(); setPermissionsReady(false);
-      if (!active) { setPrompt(''); setConnectionUrl(''); }
-    } catch (err) {
-      setError(err?.shortMessage || err?.message || `Failed to ${active ? 'authorize' : 'revoke'} the operator.`); setStatus('');
+      const auth = await ownerAuth(selectedAgent.account, 'configure-ai-provider');
+      await apiJson(`${API_BASE}/api/v1/agents/${selectedAgent.id}/providers`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...auth, provider, model, apiKey: providerKey }),
+      });
+      setProviderKey('');
+      setStatus(`${provider} is configured for this agent.`);
+    } catch (e) {
+      setError(e.message);
     }
   }
 
-  function buildPermissionPlan() {
-    if (!isAddress(operator)) throw new Error('Enter a valid operator address.');
-    if (!activeAccount) throw new Error('Create or select an agent account first.');
-    const plan = [];
-    const seen = new Set();
-    const push = (target, selectorValue, maxNativeValue = 0n) => {
-      if (!target || !isAddress(target)) throw new Error('A required Centry permission target is not configured.');
-      const key = `${target.toLowerCase()}:${selectorValue}:${maxNativeValue.toString()}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      plan.push({ target, selector: selectorValue, maxNativeValue });
-    };
-    if (scopes.includes('lend')) {
-      for (const asset of SUPPORTED_PERMISSION_ASSETS) push(asset, SELECTORS.approve, 0n);
-      push(CONTRACT_ADDRESSES.lendingPool, SELECTORS.supply, 0n);
-      push(CONTRACT_ADDRESSES.lendingPool, SELECTORS.withdraw, 0n);
-    }
-    if (scopes.includes('borrow')) push(CONTRACT_ADDRESSES.lendingPool, SELECTORS.borrow, 0n);
-    if (scopes.includes('repay')) {
-      for (const asset of SUPPORTED_PERMISSION_ASSETS) push(asset, SELECTORS.approve, 0n);
-      push(CONTRACT_ADDRESSES.lendingPool, SELECTORS.repay, 0n);
-    }
-    if (scopes.includes('swap')) {
-      if (!swapLimit) throw new Error('Set a maximum native value per swap before enabling swap permissions.');
-      let maxNativeValue;
-      try { maxNativeValue = parseUnits(swapLimit, 18); } catch { throw new Error('Swap native-value limit must be a valid USDC amount.'); }
-      if (maxNativeValue <= 0n || maxNativeValue > ((1n << 128n) - 1n)) throw new Error('Swap native-value limit is outside the allowed range.');
-      push(CONTRACT_ADDRESSES.centryToken, SELECTORS.approve, 0n);
-      push(UNIVERSAL_ROUTER, SELECTORS.execute, maxNativeValue);
-    }
-    if (scopes.includes('governance')) {
-      if (!GOVERNOR_ADDRESS || !isAddress(GOVERNOR_ADDRESS)) throw new Error('Governor address is not configured for agent governance.');
-      push(GOVERNOR_ADDRESS, SELECTORS.castVote, 0n);
-    }
-    return plan;
-  }
-
-  async function configurePermissions() {
-    setError(''); setStatus('');
-    if (!operatorAuthorized) return setError('Authorize this operator on the agent account first.');
-    if (!publicClient) return setError('Wallet RPC is not ready yet.');
+  async function generateApiKey() {
+    if (!selectedAgent) return;
+    if (!isAddress(apiKeyOperator)) return setError('Enter the external agent operator address.');
     try {
-      const plan = buildPermissionPlan();
-      if (!plan.length) return setError('Select at least one state-changing capability first.');
-      setStatus(`Configuring ${plan.length} onchain permission${plan.length === 1 ? '' : 's'}…`);
-      for (let index = 0; index < plan.length; index += 1) {
-        const permission = plan[index];
-        setStatus(`Configuring permission ${index + 1} of ${plan.length}…`);
-        const hash = await writeContractAsync({ address: activeAccount, abi: ACCOUNT_ABI, functionName: 'setPermission', args: [operator, permission.target, permission.selector, true, 0n, permission.maxNativeValue] });
-        await publicClient.waitForTransactionReceipt({ hash });
-      }
-      setPermissionsReady(true); setStatus('Onchain permissions are configured for this operator.');
-    } catch (err) {
-      setPermissionsReady(false); setError(err?.shortMessage || err?.message || 'Failed to configure the onchain permissions.'); setStatus('');
+      const auth = await ownerAuth(selectedAgent.account, 'create-api-key');
+      const result = await apiJson(`${API_BASE}/api/v1/agents/${selectedAgent.id}/keys`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...auth, owner: address, operator: apiKeyOperator, label: apiKeyLabel, scopes: apiKeyScopes }),
+      });
+      setNewApiKey(result.key);
+      setStatus('API key created. Copy it now; it will not be displayed again.');
+    } catch (e) {
+      setError(e.message);
     }
   }
 
-  async function createConnection() {
-    setError(''); setStatus(''); setPrompt(''); setConnectionUrl('');
-    if (!address || !activeAccount) return setError('Connect your wallet and select an agent account.');
-    if (!isAddress(operator)) return setError('Enter the operator address controlled by the external agent.');
-    if (!operatorAuthorized) return setError('Authorize this operator on the agent account first.');
-    if (!scopes.length) return setError('Select at least one capability.');
-    if (scopes.some((scope) => !['read', 'agent-management'].includes(scope)) && !permissionsReady) return setError('Apply the selected onchain permissions before generating the connection.');
-    if (!API_BASE) return setError('Agent API URL is not configured.');
+  async function loadActivity() {
+    if (!selectedAgent) return;
     try {
-      setStatus('Requesting connection challenge…');
-      const challengeResponse = await fetch(`${API_BASE}/api/v1/agent-connections/challenge`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ owner: address, account: activeAccount, scopes }) });
-      const challenge = await challengeResponse.json();
-      if (!challengeResponse.ok) throw new Error(challenge.error || 'Could not create connection challenge.');
-      setStatus('Approve the wallet signature…');
+      const result = await apiJson(`${API_BASE}/api/v1/agents/${selectedAgent.id}/activity`);
+      setActivity(result.activity || []);
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  async function sendChat() {
+    if (!selectedAgent || !chatInput.trim()) return;
+    try {
+      const auth = await ownerAuth(selectedAgent.account, 'agent-chat');
+      const result = await apiJson(`${API_BASE}/api/v1/agents/${selectedAgent.id}/chat`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...auth, message: chatInput.trim(), provider: chatProvider }),
+      });
+      setChatMessages((current) => [...current, { role: 'user', content: chatInput.trim() }, { role: 'assistant', content: result.answer }]);
+      setChatInput('');
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  async function generateExternalPrompt() {
+    if (!selectedAgent) return;
+    if (!isAddress(apiKeyOperator)) return setError('Enter the external agent operator address.');
+    try {
+      const challenge = await apiJson(`${API_BASE}/api/v1/agent-connections/challenge`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ owner: address, account: selectedAgent.account, scopes: apiKeyScopes }),
+      });
       const signature = await signMessageAsync({ message: challenge.message });
-      setStatus('Creating secure agent connection…');
-      const connectionResponse = await fetch(`${API_BASE}/api/v1/agent-connections`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ challengeToken: challenge.challengeToken, signature, operator, scopes }) });
-      const connection = await connectionResponse.json();
-      if (!connectionResponse.ok) throw new Error(connection.error || 'Could not create the agent connection.');
-      setPrompt(connection.prompt || ''); setConnectionUrl(connection.connectionUrl || '');
-      setStatus('Connection ready. Copy the prompt into the external agent.');
-    } catch (err) {
-      setError(err?.shortMessage || err?.message || 'Failed to create the agent connection.'); setStatus('');
+      const result = await apiJson(`${API_BASE}/api/v1/agent-connections`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ challengeToken: challenge.challengeToken, signature, operator: apiKeyOperator, scopes: apiKeyScopes }),
+      });
+      const prompt = result.prompt || `Activate this Centry agent by calling ${result.connectionUrl} with ?operator=${apiKeyOperator}`;
+      await navigator.clipboard.writeText(prompt);
+      setStatus('External-agent activation prompt generated and copied.');
+    } catch (e) {
+      setError(e.message);
     }
   }
 
-  async function copyPrompt() {
-    if (!prompt) return;
-    await navigator.clipboard.writeText(prompt);
-    setStatus('Connection prompt copied.');
-  }
-
-  const hasStateChangingScope = scopes.some((scope) => !['read', 'agent-management'].includes(scope));
+  const availableTabs = useMemo(() => ['agents', 'custom', 'providers', 'external', 'analytics', 'chat'], []);
 
   return (
     <div className={styles.page}>
-      <div className={styles.header}><div><span className={styles.eyebrow}>EXTERNAL AGENTS</span><h1>Connect an agent</h1><p>Authorize an external AI agent to operate your Centry account through a user-specific Skill connection.</p></div></div>
-      {!isConnected ? (
-        <section className={styles.card}><h2>Wallet required</h2><p>Connect your wallet before creating or authorizing an agent account.</p></section>
-      ) : (
-        <div className={styles.grid}>
-          <section className={styles.card}>
-            <div className={styles.cardTop}><div><h2>1 · Agent operator</h2><p>The operator address is the wallet the external agent will use to sign transactions.</p></div></div>
-            <label className={styles.label}>Operator wallet address</label>
-            <input className={styles.input} value={operator} onChange={(event) => { setOperatorAddress(normalizeAddress(event.target.value)); setPermissionsReady(false); }} placeholder="0x…" spellCheck="false" />
-            <p className={styles.hint}>Never enter the operator's private key here.</p>
-            {accounts.length ? (
-              <>
-                <label className={styles.label}>Centry agent account</label>
-                <select className={styles.input} value={activeAccount} onChange={(event) => { setSelectedAccount(event.target.value); setPermissionsReady(false); }}>{accounts.map((account) => <option key={account} value={account}>{account}</option>)}</select>
-                <div className={`${styles.authState} ${operatorAuthorized ? styles.authorized : ''}`}>
-                  <span>{operatorAuthorized ? 'Operator authorized' : 'Operator not yet authorized'}</span>
-                  {operatorAuthorized ? <button type="button" className={styles.secondaryButton} disabled={isWritePending} onClick={() => toggleOperator(false)}>Revoke</button> : <button type="button" className={styles.secondaryButton} disabled={isWritePending} onClick={() => toggleOperator(true)}>Authorize</button>}
-                </div>
-              </>
-            ) : <button type="button" className={styles.primaryButton} disabled={isWritePending} onClick={createAccount}>Create agent account</button>}
-          </section>
-
-          <section className={styles.card}>
-            <div className={styles.cardTop}><div><h2>2 · Connection scope</h2><p>Choose what this connection is allowed to request from Centry.</p></div></div>
-            <div className={styles.scopeList}>{OPTIONAL_SCOPES.map(([scope, description]) => <label key={scope} className={styles.scopeRow}><input type="checkbox" checked={scopes.includes(scope)} onChange={() => toggleScope(scope)} /><span><strong>{scope}</strong><small>{description}</small></span></label>)}</div>
-            {scopes.includes('swap') ? <><label className={styles.label}>Maximum native USDC value per swap</label><input className={styles.input} inputMode="decimal" value={swapLimit} onChange={(event) => { setSwapLimit(event.target.value); setPermissionsReady(false); }} placeholder="e.g. 1000" /><p className={styles.hint}>Sets the smart-account native-value cap for the external agent's swap permission.</p></> : null}
-            {hasStateChangingScope ? <button type="button" className={styles.secondaryButton} disabled={isWritePending || !operatorAuthorized} onClick={configurePermissions}>{permissionsReady ? 'Permissions configured' : 'Apply onchain permissions'}</button> : null}
-            <button type="button" className={styles.primaryButton} disabled={isWritePending || !operatorAuthorized || (hasStateChangingScope && !permissionsReady)} onClick={createConnection}>Generate connection prompt</button>
-          </section>
+      <header className={styles.header}>
+        <div>
+          <h1>Agents</h1>
+          <p>Own, configure, activate, pause and connect onchain agents without giving them your owner key.</p>
         </div>
-      )}
+        {selectedAgent ? (
+          <button type="button" className={styles.toggleButton} disabled={isPending} onClick={toggleAgent}>
+            {selectedAgent.active ? 'Switch agent off' : 'Activate agent'}
+          </button>
+        ) : null}
+      </header>
+
+      <nav className={styles.tabs}>
+        {availableTabs.map((item) => <button key={item} type="button" className={tab === item ? styles.tabActive : styles.tab} onClick={() => setTab(item)}>{item === 'agents' ? 'My agents' : item === 'custom' ? 'Bring your own' : item === 'providers' ? 'AI provider' : item === 'external' ? 'External agent' : item === 'analytics' ? 'Analytics' : 'Agent chat'}</button>)}
+      </nav>
+
       {status ? <div className={styles.notice}>{status}</div> : null}
       {error ? <div className={styles.error}>{error}</div> : null}
-      {prompt ? <section className={styles.card}>
-        <div className={styles.cardTop}><div><h2>3 · Copy into your agent</h2><p>The external agent fetches the user-specific Skill URL, establishes a short-lived session, then uses only the returned capabilities.</p></div><button type="button" className={styles.secondaryButton} onClick={copyPrompt}>Copy prompt</button></div>
-        <div className={styles.promptBox}><pre>{prompt}</pre></div>
-        <div className={styles.connectionMeta}><span>Connection URL</span><code>{connectionUrl}</code></div>
-        <p className={styles.hint}>The connection expires quickly. Generate a new one when you need to connect another agent session.</p>
-      </section> : null}
+
+      {tab === 'agents' ? (
+        <>
+          <Section title="Your agents" description="Purchased and custom agents are tied to your Centry account. Every new agent starts OFF and requires a wallet transaction to activate.">
+            {!FACTORY_ADDRESS ? <div className={styles.warning}>Agent factory is not configured yet. Deploy <code>CentryOnchainAgentFactory</code> first, then set <code>NEXT_PUBLIC_CENTRY_AGENT_FACTORY</code>.</div> : null}
+            <div className={styles.agentGrid}>
+              {managed.length ? managed.map((agent) => <AgentCard key={agent.account} agent={agent} onSelect={setSelectedAgent} selected={selectedAgent?.account === agent.account} />) : <div className={styles.empty}>No agent accounts yet.</div>}
+            </div>
+          </Section>
+
+          <Section title="Agent store" description="Purchased agents cost 2.50 USDC on Arc Mainnet. Payment goes to the configured Centry treasury.">
+            <div className={styles.storeCard}>
+              <div>
+                <strong>Centry Agent</strong>
+                <p>Configurable onchain agent with lending, repayment, swap and external-agent connectivity.</p>
+              </div>
+              <div className={styles.price}>$2.50</div>
+            </div>
+            <label className={styles.label}>Operator wallet for the purchased agent</label>
+            <input className={styles.input} value={apiKeyOperator} onChange={(e) => setApiKeyOperator(e.target.value)} placeholder="0x… external agent operator" />
+            <button type="button" className={styles.primaryButton} disabled={isPending || !isConnected} onClick={purchaseAgent}>Purchase and create</button>
+          </Section>
+        </>
+      ) : null}
+
+      {tab === 'custom' ? (
+        <Section title="Bring your own onchain agent" description="Use your own operator wallet, metadata and strategy configuration. The Centry smart account remains owned by you and is the execution boundary.">
+          <div className={styles.formGrid}>
+            <div><label className={styles.label}>Agent name</label><input className={styles.input} value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder="My liquidation agent" /></div>
+            <div><label className={styles.label}>Operator address</label><input className={styles.input} value={customOperator} onChange={(e) => setCustomOperator(e.target.value)} placeholder="0x…" /></div>
+          </div>
+          <label className={styles.label}>Description</label>
+          <textarea className={styles.textarea} value={customDescription} onChange={(e) => setCustomDescription(e.target.value)} placeholder="What this agent does" />
+          <label className={styles.label}>Metadata URL</label>
+          <input className={styles.input} value={customMetadata} onChange={(e) => setCustomMetadata(e.target.value)} placeholder="https://…" />
+          <label className={styles.label}>Agent configuration JSON</label>
+          <textarea className={styles.textareaCode} value={customConfig} onChange={(e) => setCustomConfig(e.target.value)} />
+          <button type="button" className={styles.primaryButton} disabled={isPending || !isConnected} onClick={createCustomAgent}>Create custom agent</button>
+        </Section>
+      ) : null}
+
+      {tab === 'providers' ? (
+        <Section title="AI provider for this agent" description="Provider API keys are encrypted server-side and never exposed back to the browser after configuration.">
+          {!selectedAgent ? <div className={styles.empty}>Select an agent first.</div> : (
+            <>
+              <div className={styles.formGrid}>
+                <div><label className={styles.label}>Provider</label><select className={styles.input} value={provider} onChange={(e) => setProvider(e.target.value)}>{providerOptions.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></div>
+                <div><label className={styles.label}>Model</label><input className={styles.input} value={model} onChange={(e) => setModel(e.target.value)} placeholder="Enter provider model id" /></div>
+              </div>
+              <label className={styles.label}>API key</label>
+              <input className={styles.input} type="password" value={providerKey} onChange={(e) => setProviderKey(e.target.value)} placeholder="Provider API key" />
+              <button type="button" className={styles.primaryButton} onClick={configureProvider}>Save provider</button>
+              <p className={styles.hint}>Each agent can use a different provider/model. Centry stores the provider secret encrypted and only decrypts it server-side when the agent chat needs it.</p>
+            </>
+          )}
+        </Section>
+      ) : null}
+
+      {tab === 'external' ? (
+        <Section title="External agent connection" description="Give an outside AI agent a user-scoped API or a short-lived activation prompt. The agent never receives your Centry owner key.">
+          {!selectedAgent ? <div className={styles.empty}>Select an agent first.</div> : (
+            <>
+              <label className={styles.label}>External agent operator</label>
+              <input className={styles.input} value={apiKeyOperator} onChange={(e) => setApiKeyOperator(e.target.value)} placeholder="0x…" />
+              <button type="button" className={styles.secondaryButton} onClick={authorizeOperator}>Authorize this operator on the agent account</button>
+
+              <div className={styles.divider} />
+
+              <div className={styles.rowBetween}><div><strong>Persistent Centry API credential</strong><p>Bind this credential to the selected agent and operator. Revoke it whenever you want.</p></div><button type="button" className={styles.secondaryButton} onClick={generateApiKey}>Generate API key</button></div>
+              <label className={styles.label}>Key label</label>
+              <input className={styles.input} value={apiKeyLabel} onChange={(e) => setApiKeyLabel(e.target.value)} />
+              <div className={styles.scopeGrid}>{scopeOptions.map(([scope,description]) => <label key={scope} className={styles.scope}><input type="checkbox" checked={apiKeyScopes.includes(scope)} onChange={() => setApiKeyScopes((value) => value.includes(scope) ? value.filter((x) => x !== scope) : [...value, scope])}/><span><strong>{scope}</strong><small>{description}</small></span></label>)}</div>
+              {newApiKey ? <div className={styles.secretBox}><div>Copy once</div><code>{newApiKey}</code></div> : null}
+
+              <div className={styles.divider} />
+
+              <div className={styles.rowBetween}><div><strong>Activation prompt</strong><p>The prompt tells the external agent to call Centry's activation/skill endpoint for this user-scoped connection.</p></div><button type="button" className={styles.secondaryButton} onClick={generateExternalPrompt}>Generate prompt</button></div>
+            </>
+          )}
+        </Section>
+      ) : null}
+
+      {tab === 'analytics' ? (
+        <Section title="Agent analytics" description="Onchain activity is read from the agent account's events, so the history is independently verifiable.">
+          {!selectedAgent ? <div className={styles.empty}>Select an agent first.</div> : (
+            <>
+              <div className={styles.stats}><div><strong>{activity.length}</strong><span>recent events</span></div><div><strong>{selectedAgent.active ? 'ON' : 'OFF'}</strong><span>agent status</span></div><div><strong>{selectedAgent.account.slice(0, 8)}…</strong><span>agent account</span></div></div>
+              <button type="button" className={styles.secondaryButton} onClick={loadActivity}>Refresh activity</button>
+              <div className={styles.activityList}>{activity.length ? activity.map((item, index) => <div className={styles.activity} key={`${item.transactionHash}-${index}`}><div><strong>{item.type}</strong><span>Block {item.blockNumber}</span></div><code>{item.transactionHash}</code></div>) : <div className={styles.empty}>No onchain events yet.</div>}</div>
+            </>
+          )}
+        </Section>
+      ) : null}
+
+      {tab === 'chat' ? (
+        <Section title="Ask this agent" description="Ask the selected agent what it has done. Answers are grounded in its verified onchain activity.">
+          {!selectedAgent ? <div className={styles.empty}>Select an agent first.</div> : (
+            <>
+              <div className={styles.chat}><div className={styles.chatHistory}>{chatMessages.length ? chatMessages.map((message,index) => <div key={index} className={message.role === 'user' ? styles.chatUser : styles.chatAgent}><span>{message.role === 'user' ? 'You' : selectedAgent.name}</span><p>{message.content}</p></div>) : <div className={styles.empty}>Ask: “What have you done today?”</div>}</div></div>
+              <div className={styles.chatComposer}><select className={styles.input} value={chatProvider} onChange={(e) => setChatProvider(e.target.value)}>{providerOptions.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select><input className={styles.input} value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') sendChat(); }} placeholder="What have you done?" /><button type="button" className={styles.primaryButton} onClick={sendChat}>Send</button></div>
+            </>
+          )}
+        </Section>
+      ) : null}
     </div>
   );
 }
