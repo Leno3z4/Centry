@@ -24,6 +24,7 @@ export async function GET(request) {
       swap: scopes.includes("swap"),
       governance: scopes.includes("governance"),
       agentManagement: scopes.includes("agent-management"),
+      agentToAgent: scopes.includes("agent-to-agent"),
     },
     actions: actionCatalog().filter((action) => scopes.includes(action.scope)),
     authorization: {
