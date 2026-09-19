@@ -14,11 +14,13 @@ export async function POST(request, { params }) {
   const rpcUrl = process.env.CENTRY_AGENT_RPC_URL;
   try {
     await verifyOwnerAuthorization({ rpcUrl, challengeToken: body.challengeToken, signature: body.signature, owner: getAddress(agent.owner), account: getAddress(agent.account), action: "create-api-key" });
-    const raw = generateApiKey();
     const id = crypto.randomUUID();
+    const raw = generateApiKey(id);
     const scopes = Array.isArray(body.scopes) && body.scopes.length ? [...new Set(body.scopes)] : ["read","lend","borrow","repay","swap"];
-    await createAgentKey({ id, agentId, owner: agent.owner, label: body.label || "External agent", keyHash: hashApiKey(raw), scopes });
-    return Response.json({ key: raw, keyId: id, scopes, warning: "Copy this key now. Centry does not display the secret again." }, { headers: { "Cache-Control": "no-store" } });
+    const operator = body.operator && isAddress(body.operator) ? getAddress(body.operator) : null;
+    if (!operator) return Response.json({ error: "operator_required" }, { status: 400 });
+    await createAgentKey({ id, agentId, owner: agent.owner, operator, label: body.label || "External agent", keyHash: hashApiKey(raw), scopes });
+    return Response.json({ key: raw, keyId: id, operator, scopes, warning: "Copy this key now. Centry does not display the secret again." }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "api_key_creation_failed" }, { status: 403 });
   }
