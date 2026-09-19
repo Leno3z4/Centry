@@ -186,7 +186,7 @@ The returned `minOut` is expressed in the output token's base units and can be s
 }
 ```
 
-CENT -> native USDC uses the configured UnitFlow V3 route. The execution builder produces bounded calldata for the agent account, and the live onchain permission policy remains the final check.
+CENT -> native USDC uses the configured UnitFlow V3 route. The builder creates a bounded two-call batch (`approve` + UnitFlow V3 `exactInputSingle`), and the live onchain permission policy checks every call.
 
 ### Governance
 
