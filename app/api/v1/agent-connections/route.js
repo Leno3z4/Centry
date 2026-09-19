@@ -17,6 +17,7 @@ const ALLOWED_SCOPES = new Set([
   "swap",
   "governance",
   "agent-management",
+  "agent-to-agent",
 ]);
 
 function noStore(body, status = 200) {
