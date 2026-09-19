@@ -15,6 +15,6 @@ export async function GET(request, { params }) {
   const skillUrl = `${baseUrl}/api/v1/agent-connections/${encodeURIComponent(token)}`;
 
   return textResponse(
-    `Connect this agent to my Centry account.\n\nCall this Centry activation/skill endpoint first:\n${skillUrl}\n\nFetch that URL with your authorized operator address, follow the returned activation instructions exactly, establish the authenticated Centry session, and then use only the capabilities returned by Centry. Do not expose or repeat the connection credential or session token.\n`
+    `Connect this agent to my Centry account.\n\nRead the Centry Skill first, then use this activation endpoint:\n${baseUrl}/api/v1/skills/centry-connect\n\nActivation endpoint:\n${skillUrl}\n\nFetch that URL with your authorized operator address, follow the returned activation instructions exactly, establish the authenticated Centry session, and then use only the capabilities returned by Centry. Do not expose or repeat the connection credential or session token.\n`
   );
 }
