@@ -61,6 +61,7 @@ export async function POST(request) {
   const toAgent = await getAgentById(toAgentId).catch(() => null);
   if (!toAgent) return noStore({ error: "target_agent_not_found" }, 404);
   if (toAgent.id === fromAgent.id) return noStore({ error: "self_message_not_allowed" }, 400);
+  if (String(toAgent.owner).toLowerCase() !== String(fromAgent.owner).toLowerCase()) return noStore({ error: "external_agent_interaction_prohibited" }, 403);
 
   const taskId = crypto.randomUUID();
   try {
