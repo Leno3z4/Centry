@@ -1,26 +1,23 @@
-// Arc Testnet deployment configuration.
-// Keep deployed addresses centralized so the frontend targets the same live protocol contracts.
+// Arc Mainnet deployment configuration.
+// Keep deployed addresses centralized so the frontend targets the current protocol.
 export const CONTRACT_ADDRESSES = Object.freeze({
   USDC: '0x3600000000000000000000000000000000000000',
-  EURC: '0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a',
-  CIRBTC: '0xf0C4a4CE82A5746AbAAd9425360Ab04fbBA432BF',
+  EURC: '0xbEf5f6d51CB62b58e6A8f77868681825C6fe21c1',
+  CIRBTC: '0x171A4217b86A807A64eB94757Db6849fb4bDbAA0',
 
-  lendingPool: '0x90C935687D91b3352b2C55cd79389C92950D94BD',
-  interestRateModel: '0x0e33c05cc844914155B7300aA93085DBB32d4FBE',
-  oracle: '0xC82424D224dbfBF9D41a9cBe5cA2AdF762572fC6',
-  centryToken: '0x76e6d50D3151f0B4645ac0E53584F4204Fc6f0e3',
-  veCentry: '0xdcb00Ea10FBeaaB66b88C208Ad09b58E38D6f04e',
-  veCentryRewards: '0xFE791C5141ef417100Ce56624bc975DA1fBE9815',
-  selfRepayExecutor: '0x1672667EdB27fDF687A0Fe485EeE1240650dF4a9',
-  unitFlowSwapAdapter: '',
+  lendingPool: '0x0ee649E5A95eB9127cB7146b26349a92B68c17A4',
+  interestRateModel: '0x7d2d0096Dc5D77A68B821a2308f2A65179c04B76',
+  oracle: '0x00C6d554BD44859349c4aeEA0E8216AE94FC3f84',
+  centryToken: '0x75E1C49f3fAebEc149c4c997f209A8e639c2253F',
+  veCentry: '0x3c1771B971329f3eCf9A1bB8B3adC8756e13d334',
+  veCentryRewards: '0x0cBb0050cDCCC5D9CE8Ee2C407c8608B042D30D5',
+  selfRepayExecutor: '0x6D87e89C015509F84B4e01b8a193d1A2CcE7De37',
+  unitFlowSwapAdapter: '0x9212cb2eD06256D8D690d631A7938D55a9E3200D',
+  unitFlowRouter: '0x6fD8351b9596C1F0b2f2479BfA6A171cb3d0f410',
+  treasury: '0x475a93394F1EDef9255EA565Ee50eb8feaC7744C',
+  governor: '0x0F54683a09a73cB60575E0DF36E474D4F9e1157B',
 
-  collateralAssets: Object.freeze({
-    ETH: '0x54a4dd95bf4ABb6cF02014ca62C3FbbDeE040B6a',
-    BTC: '0x47CadF37d57C0e3381360F80dfC5df582871B11f',
-    SOL: '0xa44E356ba09A60626587E9d284B64a298Fbf8fde',
-    EUR: '0x9aA8218dCBf0Ca9B04ba44a1c9ed8Da4144d0aDC',
-  }),
-
+  collateralAssets: Object.freeze({}),
   positionCollateral: '',
 });
 
