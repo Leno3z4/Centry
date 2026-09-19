@@ -221,6 +221,7 @@ The current connection scope vocabulary is:
 - `swap`
 - `governance`
 - `agent-management`
+- `agent-to-agent`
 
 Scopes are an API-level capability boundary; they never replace the smart-account policy.
 
