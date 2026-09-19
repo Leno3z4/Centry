@@ -24,6 +24,7 @@ const ACCOUNT_ABI = parseAbi([
   "function canExecute(address operator,address target,bytes4 selector,uint256 value) view returns (bool)",
   "function execute(address target,uint256 value,bytes data) returns (bytes)",
   "function executeBatch(address[] targets,uint256[] values,bytes[] data) returns (bytes[])",
+  "function transferToAgent(address token,address recipient,uint256 amount)",
 ]);
 
 const ERC20_ABI = parseAbi([
@@ -437,8 +438,8 @@ async function buildCalls(publicClient, agent, actions, autonomy, db) {
         if (String(target.owner).toLowerCase() !== String(agent.owner).toLowerCase()) throw new Error("external_agent_transfer_prohibited");
         const asset = assetAddress(action.asset);
         const amount = positiveUint(action.amount, "amount");
-        const data = encodeFunctionData({ abi: ERC20_ABI, functionName: "transfer", args: [getAddress(target.account), amount] });
-        calls.push(makeCall(asset, data));
+        const data = encodeFunctionData({ abi: ACCOUNT_ABI, functionName: "transferToAgent", args: [asset, getAddress(target.account), amount] });
+        calls.push(makeCall(account, data));
         break;
       }
 
