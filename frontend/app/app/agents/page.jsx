@@ -15,6 +15,7 @@ const AGENT_PRICE_RAW = 2500000n;
 const FACTORY_ABI = [
   { type: 'function', name: 'getAgentAccounts', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }], outputs: [{ name: 'accounts', type: 'address[]' }] },
   { type: 'function', name: 'createAgentAccount', stateMutability: 'nonpayable', inputs: [{ name: 'templateId', type: 'bytes32' }, { name: 'configHash', type: 'bytes32' }, { name: 'metadataURI', type: 'string' }, { name: 'initialOperator', type: 'address' }], outputs: [{ name: 'agentAccount', type: 'address' }] },
+  { type: 'function', name: 'purchaseAndCreateAgentAccount', stateMutability: 'nonpayable', inputs: [{ name: 'templateId', type: 'bytes32' }, { name: 'configHash', type: 'bytes32' }, { name: 'metadataURI', type: 'string' }, { name: 'initialOperator', type: 'address' }], outputs: [{ name: 'agentAccount', type: 'address' }] },
 ];
 
 const ERC20_ABI = [
@@ -267,16 +268,43 @@ function AgentPageContent() {
     if (!publicClient) return setError('Wallet RPC is not ready.');
     if (!isAddress(apiKeyOperator)) return setError('Enter the external agent operator address first.');
     setError('');
-    setStatus('Paying 2.50 USDC… Approve the payment transaction.');
+    setStatus('Approve 2.50 USDC for the agent factory…');
     try {
-      const agentId = randomAgentId();
-      const paymentHash = await writeContractAsync({
+      const approvalHash = await writeContractAsync({
         address: CONTRACT_ADDRESSES.USDC,
-        abi: ERC20_ABI,
-        functionName: 'transfer',
-        args: [CONTRACT_ADDRESSES.treasury, AGENT_PRICE_RAW],
+        abi: [{
+          type: 'function',
+          name: 'approve',
+          stateMutability: 'nonpayable',
+          inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }],
+          outputs: [{ type: 'bool' }],
+        }],
+        functionName: 'approve',
+        args: [FACTORY_ADDRESS, AGENT_PRICE_RAW],
       });
-      await publicClient.waitForTransactionReceipt({ hash: paymentHash });
+      await publicClient.waitForTransactionReceipt({ hash: approvalHash });
+
+      const agentId = randomAgentId();
+      const templateHash = keccak256(toBytes('centry-general-agent'));
+      const configHash = keccak256(toBytes('centry-general-agent-config-v1'));
+
+      setStatus('Creating purchased agent… Approve the factory transaction.');
+      const purchaseTx = await writeContractAsync({
+        address: FACTORY_ADDRESS,
+        abi: FACTORY_ABI,
+        functionName: 'purchaseAndCreateAgentAccount',
+        args: [templateHash, configHash, '', apiKeyOperator],
+      });
+      await publicClient.waitForTransactionReceipt({ hash: purchaseTx });
+
+      const updated = await publicClient.readContract({
+        address: FACTORY_ADDRESS,
+        abi: FACTORY_ABI,
+        functionName: 'getAgentAccounts',
+        args: [address],
+      });
+      const account = updated.map(String).at(-1);
+      if (!account) throw new Error('Purchased agent account was not returned by the factory.');
 
       await apiJson(`${API_BASE}/api/v1/agents/marketplace`, {
         method: 'POST',
@@ -284,34 +312,28 @@ function AgentPageContent() {
         body: JSON.stringify({
           owner: address,
           templateId: 'centry-general-agent',
+          onchainTemplateId: templateHash,
           agentId,
-          paymentTxHash: paymentHash,
+          account,
+          purchaseTxHash: purchaseTx,
         }),
       });
-
-      setStatus('Payment confirmed. Creating the purchased agent… Approve the wallet transaction.');
-      const txHash = await writeContractAsync({
-        address: FACTORY_ADDRESS,
-        abi: FACTORY_ABI,
-        functionName: 'createAgentAccount',
-        args: [
-          keccak256(toBytes('centry-general-agent')),
-          keccak256(toBytes('centry-general-agent-config-v1')),
-          '',
-          apiKeyOperator,
-        ],
-      });
-      await publicClient.waitForTransactionReceipt({ hash: txHash });
-
-      const updated = await publicClient.readContract({ address: FACTORY_ADDRESS, abi: FACTORY_ABI, functionName: 'getAgentAccounts', args: [address] });
-      const account = updated.map(String).at(-1);
-      if (!account) throw new Error('Purchased agent account was not returned by the factory.');
 
       const auth = await ownerAuth(account, 'register-agent');
       await apiJson(`${API_BASE}/api/v1/agents/register`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ...auth, owner: address, account, agentId, type: 'purchased', name: 'Centry Agent', description: 'Configurable Centry onchain agent.', operator: apiKeyOperator, priceUsdCents: 250 }),
+        body: JSON.stringify({
+          ...auth,
+          owner: address,
+          account,
+          agentId,
+          type: 'purchased',
+          name: 'Centry Agent',
+          description: 'Configurable Centry onchain agent.',
+          operator: apiKeyOperator,
+          priceUsdCents: 250,
+        }),
       });
 
       setStatus('Purchased agent created. It is OFF until you activate it.');
