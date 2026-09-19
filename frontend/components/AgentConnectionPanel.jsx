@@ -50,7 +50,7 @@ export default function AgentConnectionPanel() {
   const { signMessageAsync } = useSignMessage();
   const [selectedScopes, setSelectedScopes] = useState(DEFAULT_SCOPES);
   const [selectedAccount, setSelectedAccount] = useState('');
-  const [customAccount, setCustomAccount] = useState('');
+  const [existingAccount, setCustomAccount] = useState('');
   const [prompt, setPrompt] = useState('');
   const [connectionUrl, setConnectionUrl] = useState('');
   const [status, setStatus] = useState('');
@@ -71,7 +71,7 @@ export default function AgentConnectionPanel() {
   });
 
   const accounts = useMemo(() => accountsQuery.data || [], [accountsQuery.data]);
-  const activeAccount = selectedAccount || customAccount || accounts[0] || '';
+  const activeAccount = selectedAccount || existingAccount || accounts[0] || '';
   const wrongNetwork = isConnected && chainId !== arcTestnet.id;
 
   useEffect(() => {
@@ -191,7 +191,7 @@ export default function AgentConnectionPanel() {
 
           <div className={styles.customRow}>
             <input
-              value={customAccount}
+              value={existingAccount}
               onChange={(event) => { setCustomAccount(event.target.value.trim()); setSelectedAccount(''); }}
               placeholder="Paste an existing Centry agent account"
               spellCheck="false"
