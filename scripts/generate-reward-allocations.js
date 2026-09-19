@@ -8,7 +8,7 @@ const RPC_URL =
   process.env.ARC_RPC_URL_VARIABLE;
 
 const DEFAULT_REWARDS_ADDRESS =
-  "0x06e627ce43F2ddd37e8f196824f7049416c3025b";
+  "0x0cBb0050cDCCC5D9CE8Ee2C407c8608B042D30D5";
 
 const REWARDS_ADDRESS =
   process.env.CENTRY_REVENUE_REWARDS ||
@@ -330,10 +330,10 @@ async function main() {
 
   if (
     network.chainId !==
-    5042002n
+    5042n
   ) {
     throw new Error(
-      `Wrong chain. Expected Arc Testnet 5042002, got ${network.chainId}`
+      `Wrong chain. Expected Arc Mainnet 5042, got ${network.chainId}`
     );
   }
 
