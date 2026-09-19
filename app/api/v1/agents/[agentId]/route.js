@@ -23,9 +23,7 @@ export async function GET(_request, { params }) {
       templateId: agent.template_id,
       name: agent.name,
       description: agent.description,
-      operator: agent.operator,
       metadataURI: agent.metadata_uri,
-      config: JSON.parse(agent.config_json || "{}"),
       active: Boolean(active),
       priceUsdCents: Number(agent.price_usd_cents || 0),
     }, { headers: { "Cache-Control": "no-store" } });
