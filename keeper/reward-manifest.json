@@ -10,20 +10,13 @@
       "tokenId": "2",
       "amount": "250000000000000000",
       "proof": [],
-      "instructions": [
-        {
-          "debtAsset": "0x3600000000000000000000000000000000000000",
-          "rewardAmountIn": "250000000000000000",
-          "minDebtAssetOut": "29223",
-          "swapData": "0x"
-        }
-      ]
+      "instructions": []
     }
   ],
   "selfRepay": {
     "debtAsset": "0x3600000000000000000000000000000000000000",
-    "quoteSource": "UnitFlow v2.5 swap router",
+    "quoteSource": "UnitFlow V3 Quoter",
     "slippageBps": "100",
-    "generatedAt": "2026-09-19T16:35:27.848Z"
+    "generatedAt": "2026-09-19T18:53:26.636Z"
   }
 }
