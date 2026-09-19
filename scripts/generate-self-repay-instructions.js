@@ -10,13 +10,13 @@ const MANIFEST_PATH =
 const ALLOCATIONS_PATH =
   process.env.CENTRY_REWARD_ALLOCATIONS_PATH || "keeper/reward-allocations.json";
 
-const EXPECTED_CHAIN_ID = 5042002n;
-const REWARDS = process.env.CENTRY_REVENUE_REWARDS || "0xFE791C5141ef417100Ce56624bc975DA1fBE9815";
-const LENDING_POOL = "0x90C935687D91b3352b2C55cd79389C92950D94BD";
-const CENT = "0x76e6d50D3151f0B4645ac0E53584F4204Fc6f0e3";
-const WUSDC = "0x911b4000D3422F482F4062a913885f7b035382Df";
+const EXPECTED_CHAIN_ID = 5042n;
+const REWARDS = process.env.CENTRY_REVENUE_REWARDS || "0x0cBb0050cDCCC5D9CE8Ee2C407c8608B042D30D5";
+const LENDING_POOL = "0x0ee649E5A95eB9127cB7146b26349a92B68c17A4";
+const CENT = "0x75E1C49f3fAebEc149c4c997f209A8e639c2253F";
 const USDC = "0x3600000000000000000000000000000000000000";
-const UNITFLOW_SWAP_ROUTER = "0x4AA8c7Ac458479d9A4FA5c1481e03061ac76824A";
+const UNITFLOW_QUOTER = "0x5AF6E89F0960Ff375AF84d9911D8153ef6240E34";
+const UNITFLOW_FEES = [500, 3000, 10000];
 
 const SLIPPAGE_BPS = BigInt(process.env.CENTRY_REPAY_SLIPPAGE_BPS || "100");
 
@@ -50,9 +50,9 @@ async function main() {
     provider
   );
 
-  const swapRouter = new ethers.Contract(
-    UNITFLOW_SWAP_ROUTER,
-    ["function getAmountsOut(uint256 amountIn,address[] calldata path) view returns (uint256[] memory amounts)"],
+  const quoter = new ethers.Contract(
+    UNITFLOW_QUOTER,
+    ["function quoteExactInput(bytes path,uint256 amountIn) returns (uint256 amountOut,uint160[] sqrtPriceX96AfterList,uint32[] initializedTicksCrossedList,uint256 gasEstimate)"],
     provider
   );
 
@@ -82,30 +82,48 @@ async function main() {
       continue;
     }
 
-    const path = [CENT, WUSDC];
-    let quotedWusdc;
+    let bestQuote = null;
 
-    try {
-      const quoted = await swapRouter.getAmountsOut(rewardAmount, path);
-      quotedWusdc = BigInt(quoted[quoted.length - 1]);
-    } catch (error) {
-      throw new Error(
-        `tokenId ${tokenId}: UnitFlow quote failed for CENT -> WUSDC: ${error.shortMessage || error.message}`
+    for (const fee of UNITFLOW_FEES) {
+      const path = ethers.solidityPacked(
+        ["address", "uint24", "address"],
+        [CENT, fee, USDC]
       );
+
+      try {
+        const result = await quoter.quoteExactInput.staticCall(path, rewardAmount);
+        const amountOut = BigInt(result[0]);
+
+        if (amountOut > 0n && (!bestQuote || amountOut > bestQuote.amountOut)) {
+          bestQuote = { fee, amountOut };
+        }
+      } catch {}
     }
 
-    if (quotedWusdc <= 0n) throw new Error(`tokenId ${tokenId}: UnitFlow returned zero WUSDC quote`);
-
-    const quotedUsdc = quotedWusdc / 1_000_000_000_000n;
-    if (quotedUsdc <= 0n) {
-      throw new Error(`tokenId ${tokenId}: quoted USDC output is below one raw unit`);
+    if (!bestQuote) {
+      throw new Error(`tokenId ${tokenId}: no UnitFlow V3 CENT/USDC quote available`);
     }
 
-    const minDebtAssetOut = quotedUsdc * (10_000n - SLIPPAGE_BPS) / 10_000n;
-    if (minDebtAssetOut <= 0n) throw new Error(`tokenId ${tokenId}: computed minDebtAssetOut is zero`);
+    const minDebtAssetOut =
+      bestQuote.amountOut *
+      (10_000n - SLIPPAGE_BPS) /
+      10_000n;
+
+    if (minDebtAssetOut <= 0n) {
+      throw new Error(`tokenId ${tokenId}: computed minDebtAssetOut is zero`);
+    }
+
+    const deadline =
+      BigInt(Math.floor(Date.now() / 1000)) + 300n;
+
+    const swapData =
+      ethers.AbiCoder.defaultAbiCoder().encode(
+        ["uint256", "uint24"],
+        [deadline, bestQuote.fee]
+      );
 
     console.log(
-      `tokenId ${tokenId}: debt=${currentDebt.toString()} reward=${rewardAmount.toString()} quote=${quotedUsdc.toString()} minOut=${minDebtAssetOut.toString()}`
+      `tokenId ${tokenId}: debt=${currentDebt.toString()} reward=${rewardAmount.toString()} fee=${bestQuote.fee} quote=${bestQuote.amountOut.toString()} minOut=${minDebtAssetOut.toString()}`
     );
 
     updatedPositions.push({
@@ -115,7 +133,7 @@ async function main() {
           debtAsset: USDC,
           rewardAmountIn: rewardAmount.toString(),
           minDebtAssetOut: minDebtAssetOut.toString(),
-          swapData: "0x"
+          swapData
         }
       ]
     });
@@ -124,7 +142,7 @@ async function main() {
   manifest.positions = updatedPositions;
   manifest.selfRepay = {
     debtAsset: USDC,
-    quoteSource: "UnitFlow v2.5 swap router",
+    quoteSource: "UnitFlow V3 Quoter",
     slippageBps: SLIPPAGE_BPS.toString(),
     generatedAt: new Date().toISOString()
   };
