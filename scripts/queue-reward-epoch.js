@@ -22,7 +22,7 @@ const ALLOCATIONS_PATH =
   process.env.CENTRY_REWARD_ALLOCATIONS_PATH ||
   "keeper/reward-allocations.json";
 
-const EXPECTED_CHAIN_ID = 5042002n;
+const EXPECTED_CHAIN_ID = 5042n;
 
 const REWARDS_ABI = [
   "function owner() view returns (address)",
