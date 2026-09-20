@@ -1,4 +1,4 @@
-import { CIRCLE_GATEWAY_TESTNET_API } from '../../../../../constants/circleGateway';
+import { CIRCLE_GATEWAY_API, CIRCLE_GATEWAY_HEADERS } from '../../../../../constants/circleGateway';
 import { rateLimit, rateLimitResponse, withRateLimitHeaders } from '../../../../../lib/rateLimit';
 
 export async function POST(request) {
@@ -10,7 +10,7 @@ export async function POST(request) {
       ? body.requests
       : (body?.burnIntent && body?.signature ? [{ burnIntent: body.burnIntent, signature: body.signature }] : []);
     if (!requests.length) return withRateLimitHeaders(Response.json({ success: false, error: 'Signed Gateway transfer intents are required.' }, { status: 400 }), limit);
-    const response = await fetch(`${CIRCLE_GATEWAY_TESTNET_API}/v1/transfer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requests), cache: 'no-store' });
+    const response = await fetch(`${CIRCLE_GATEWAY_API}/v1/transfer`, { method: 'POST', headers: CIRCLE_GATEWAY_HEADERS, body: JSON.stringify(requests), cache: 'no-store' });
     const json = await response.json().catch(() => ({}));
     if (!response.ok) return withRateLimitHeaders(Response.json({ success: false, error: json?.message || json?.error || `Circle Gateway returned HTTP ${response.status}.` }, { status: response.status }), limit);
     if (!json?.attestation || !json?.signature) return withRateLimitHeaders(Response.json({ success: false, error: 'Circle Gateway did not return a usable attestation.' }, { status: 502 }), limit);
