@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import styles from './agents.module.css';
 import {
   AGENT_ACTION_OPTIONS,
@@ -50,7 +50,16 @@ export function AgentConfigForm({ mode = 'create', agent = null, onSubmit, submi
 
   useEffect(() => {
     if (mode !== 'edit' || !agent?.id || !API_BASE) return;
-    apiLoadProviders(agent.id).then(setConfiguredProviders).catch(() => setConfiguredProviders([]));
+    apiLoadProviders(agent.id)
+      .then((providers) => {
+        setConfiguredProviders(providers);
+        const currentProvider = providers.find((item) => item.provider === form.provider);
+        if (currentProvider?.model) {
+          setForm((current) => ({ ...current, model: currentProvider.model }));
+        }
+      })
+      .catch(() => setConfiguredProviders([]));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, agent?.id]);
 
   async function apiLoadProviders(agentId) {
