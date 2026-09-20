@@ -4,8 +4,8 @@ import { useState } from 'react';
 import { useAccount, usePublicClient, useSignMessage, useWriteContract } from 'wagmi';
 import { keccak256, toBytes } from 'viem';
 import { useRouter } from 'next/navigation';
-import { Providers } from '../../../../components/Providers';
-import { AppShell } from '../../../../components/AppShell';
+import { Providers } from '../../../components/Providers';
+import { AppShell } from '../../../components/AppShell';
 import { AgentConfigForm } from '../AgentConfigForm';
 import {
   AGENT_PRICE_RAW,
@@ -18,7 +18,7 @@ import {
   normalizeConfigForHash,
 } from '../agentClient';
 import styles from '../agents.module.css';
-import { CONTRACT_ADDRESSES } from '../../../../constants/contracts';
+import { CONTRACT_ADDRESSES } from '../../../constants/contracts';
 
 export default function CreateAgentPage() {
   const { address, isConnected } = useAccount();
@@ -29,6 +29,7 @@ export default function CreateAgentPage() {
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [createdAccount, setCreatedAccount] = useState('');
+  const [setupComplete, setSetupComplete] = useState(false);
 
   const ready = Boolean(isConnected && address && publicClient && FACTORY_ADDRESS && RUNNER_ADDRESS);
 
@@ -43,18 +44,19 @@ export default function CreateAgentPage() {
   }
 
   async function createAgent(config) {
-    if (!ready) throw new Error('Connect your wallet and make sure the Centry agent factory and runner are configured.');
-    if (!API_BASE) throw new Error('Agent API URL is not configured.');
-    if (!RUNNER_ADDRESS) throw new Error('Hosted runner address is not configured.');
+    if (!ready) return setError('Connect your wallet and make sure the Centry agent factory and runner are configured.');
+    if (!API_BASE) return setError('Agent API URL is not configured.');
+    if (!RUNNER_ADDRESS) return setError('Hosted runner address is not configured.');
 
     setStatus('Preparing the agent…');
     setError('');
-    const templateHash = keccak256(toBytes('centry-general-agent'));
-    const configHash = keccak256(toBytes(JSON.stringify(normalizeConfigForHash(config))));
-    const before = (await publicClient.readContract({ address: FACTORY_ADDRESS, abi: FACTORY_ABI, functionName: 'getAgentAccounts', args: [address] })).map(String);
-    let creationTx;
+    try {
+      const templateHash = keccak256(toBytes('centry-general-agent'));
+      const configHash = keccak256(toBytes(JSON.stringify(normalizeConfigForHash(config))));
+      const before = (await publicClient.readContract({ address: FACTORY_ADDRESS, abi: FACTORY_ABI, functionName: 'getAgentAccounts', args: [address] })).map(String);
+      let creationTx; 
 
-    if (PAYWALL_ENABLED) {
+      if (PAYWALL_ENABLED) {
       setStatus('Approve 2.50 USDC for the agent factory…');
       const approvalHash = await writeContractAsync({
         address: CONTRACT_ADDRESSES.USDC,
@@ -86,15 +88,16 @@ export default function CreateAgentPage() {
       });
     }
 
-    await publicClient.waitForTransactionReceipt({ hash: creationTx });
-    setStatus('Smart account created. Finishing agent setup…');
+      await publicClient.waitForTransactionReceipt({ hash: creationTx });
+      setStatus('Smart account created. Finishing agent setup…');
 
-    const after = (await publicClient.readContract({ address: FACTORY_ADDRESS, abi: FACTORY_ABI, functionName: 'getAgentAccounts', args: [address] })).map(String);
-    const beforeSet = new Set(before.map((item) => item.toLowerCase()));
-    const account = after.find((item) => !beforeSet.has(item.toLowerCase())) || after.at(-1);
-    if (!account) throw new Error('The factory transaction succeeded, but the new agent account could not be resolved.');
+      const after = (await publicClient.readContract({ address: FACTORY_ADDRESS, abi: FACTORY_ABI, functionName: 'getAgentAccounts', args: [address] })).map(String);
+      const beforeSet = new Set(before.map((item) => item.toLowerCase()));
+      const account = after.find((item) => !beforeSet.has(item.toLowerCase())) || after.at(-1);
+      if (!account) throw new Error('The factory transaction succeeded, but the new agent account could not be resolved.');
+      setCreatedAccount(account);
 
-    const agentId = crypto.randomUUID();
+      const agentId = crypto.randomUUID();
     if (PAYWALL_ENABLED) {
       await apiJson(`${API_BASE}/api/v1/agents/marketplace`, {
         method: 'POST',
@@ -151,8 +154,12 @@ export default function CreateAgentPage() {
       }),
     });
 
-    setCreatedAccount(account);
-    setStatus('Agent created and configured. Its smart account starts OFF.');
+      setSetupComplete(true);
+      setStatus('Agent created and configured. Its smart account starts OFF.');
+    } catch (e) {
+      setStatus('');
+      setError(e?.shortMessage || e?.message || 'Agent setup failed.');
+    }
   }
 
   if (createdAccount) {
@@ -163,8 +170,8 @@ export default function CreateAgentPage() {
             <section className={styles.successHero}>
               <div className={styles.successMark}>✓</div>
               <p className={styles.kicker}>Agent ready</p>
-              <h1>Your agent is created</h1>
-              <p>The smart account is owned by your connected wallet. It starts OFF until you activate it.</p>
+              <h1>{setupComplete ? 'Your agent is created' : 'Your smart account is created'}</h1>
+              <p>{setupComplete ? 'The smart account is owned by your connected wallet. It starts OFF until you activate it.' : 'The blockchain transaction succeeded, but the off-chain setup still needs attention. You can continue from the agent configuration page.'}</p>
               <div className={styles.addressPanel}>
                 <span>Smart account</span>
                 <code>{createdAccount}</code>
@@ -173,6 +180,7 @@ export default function CreateAgentPage() {
                 <button className={styles.secondaryButton} type="button" onClick={() => navigator.clipboard.writeText(createdAccount)}>Copy address</button>
                 <a className={styles.secondaryButton} href={`https://explorer.arc.io/address/${createdAccount}`} target="_blank" rel="noreferrer">View on Arc</a>
                 <button className={styles.primaryButton} type="button" onClick={() => router.push(`/app/agents/${createdAccount}`)}>Open agent</button>
+                <button className={styles.secondaryButton} type="button" onClick={() => router.push(`/app/agents/${createdAccount}/configure`)}>Configure</button>
               </div>
             </section>
           </main>
@@ -202,7 +210,7 @@ export default function CreateAgentPage() {
           <AgentConfigForm
             mode="create"
             onSubmit={createAgent}
-            submitting={isPending || Boolean(status && !createdAccount)}
+            submitting={isPending || Boolean(status && !createdAccount && !error)}
             submitLabel={PAYWALL_ENABLED ? 'Purchase & create agent' : 'Create agent'}
           />
         </main>
