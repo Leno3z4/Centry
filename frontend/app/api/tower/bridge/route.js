@@ -9,7 +9,6 @@ const SUPPORTED_CHAINS = new Set([
   8453,
   42161,
   43114,
-  1301,
   5042,
 ]);
 
