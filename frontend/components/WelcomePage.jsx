@@ -92,9 +92,9 @@ export default function WelcomePage() {
         <main className="landing-page">
             <div className="landing-aero-background" aria-hidden="true">
                 <AeroShards
-                    backgroundColor="#120F17"
-                    shardColor="#896ABD"
-                    accentColor="#A855F7"
+                    backgroundColor="#0b0d10"
+                    shardColor="#4a4f58"
+                    accentColor="#a79bdb"
                     placement="full"
                     flow="stream"
                     material="pearl"
@@ -214,7 +214,7 @@ export default function WelcomePage() {
                     z-index: 0;
                     width: 100vw;
                     height: 100vh;
-                    opacity: .14;
+                    opacity: .03;
                     pointer-events: none;
                     overflow: hidden;
                 }
@@ -339,7 +339,7 @@ export default function WelcomePage() {
                 .landing-governance-section { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, .75fr) minmax(180px, .7fr); gap: 90px; align-items: center; padding: 90px 0 120px; }
                 .landing-governance-copy { width: min(600px, 100%); }
                 .landing-governance-copy .secondary-btn { margin-top: 24px; }
-                .landing-governance-rule { height: 1px; background: linear-gradient(90deg, rgba(168, 85, 247, .42), transparent); }
+                .landing-governance-rule { height: 1px; background: #2a2e33; }
 
                 .landing-cta {
                     position: relative;
