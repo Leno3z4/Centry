@@ -4,7 +4,6 @@ export const GATEWAY_MINTER_ADDRESS = '0x2222222d7164433c4C09B0b0D809a9b52C04C20
 export const CIRCLE_GATEWAY_API = 'https://gateway-api.circle.com';
 export const CIRCLE_GATEWAY_HEADERS = {
   'Content-Type': 'application/json',
-  'X-ARC-PRIVATE-MAINNET-ENABLED': 'true',
 };
 
 export const GATEWAY_MAINNET_CHAINS = [
