@@ -14,7 +14,7 @@ import { useVeGovernance } from '../../hooks/useVeGovernance';
 
 const AeroShards = dynamic(() => import('../../components/AeroShards'), { ssr: false, loading: () => null });
 
-const ARC_CHAIN_ID = 5042002;
+const ARC_CHAIN_ID = 5042;
 const ZERO_ROOT = `0x${'0'.repeat(64)}`;
 const REWARDS_ABI = [
   { type: 'function', name: 'latestEpoch', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
