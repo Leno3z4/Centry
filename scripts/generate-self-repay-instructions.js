@@ -41,7 +41,7 @@ async function main() {
   const provider = new ethers.JsonRpcProvider(RPC_URL);
   const network = await provider.getNetwork();
   if (network.chainId !== EXPECTED_CHAIN_ID) {
-    throw new Error(`Wrong chain. Expected Arc Testnet ${EXPECTED_CHAIN_ID}, got ${network.chainId}`);
+    throw new Error(`Wrong chain. Expected Arc Mainnet ${EXPECTED_CHAIN_ID}, got ${network.chainId}`);
   }
 
   const lendingPool = new ethers.Contract(
