@@ -1,51 +1,55 @@
-export const GATEWAY_WALLET_ADDRESS = '0x0077777d7EBA4688BDeF3E311b846F25870A19B9';
-export const GATEWAY_MINTER_ADDRESS = '0x0022222ABE238Cc2C7Bb1f21003F0a260052475B';
+export const GATEWAY_WALLET_ADDRESS = '0x77777777Dcc4d5A8B6E418Fd04D8997ef11000eE';
+export const GATEWAY_MINTER_ADDRESS = '0x2222222d7164433c4C09B0b0D809a9b52C04C205';
 
-export const CIRCLE_GATEWAY_TESTNET_API = 'https://gateway-api-testnet.circle.com';
+export const CIRCLE_GATEWAY_API = 'https://gateway-api.circle.com';
+export const CIRCLE_GATEWAY_HEADERS = {
+  'Content-Type': 'application/json',
+  'X-ARC-PRIVATE-MAINNET-ENABLED': 'true',
+};
 
-export const GATEWAY_TESTNET_CHAINS = [
+export const GATEWAY_MAINNET_CHAINS = [
   {
-    id: 'arc-testnet',
-    name: 'Arc Testnet',
+    id: 'arc-mainnet',
+    name: 'Arc Mainnet',
     short: 'Arc',
-    chainId: 5042002,
+    chainId: 5042,
     domain: 26,
     usdc: '0x3600000000000000000000000000000000000000',
-    rpcUrl: 'https://rpc.testnet.arc.network',
-    explorerUrl: 'https://testnet.arcscan.app',
-    nativeCurrency: { name: 'USD Coin', symbol: 'USDC', decimals: 6 },
+    rpcUrl: 'https://rpc.mainnet.arc.io',
+    explorerUrl: 'https://explorer.arc.io',
+    nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 18 },
   },
   {
-    id: 'base-sepolia',
-    name: 'Base Sepolia',
+    id: 'base-mainnet',
+    name: 'Base',
     short: 'Base',
-    chainId: 84532,
+    chainId: 8453,
     domain: 6,
-    usdc: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
-    rpcUrl: 'https://sepolia.base.org',
-    explorerUrl: 'https://sepolia.basescan.org',
+    usdc: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+    rpcUrl: 'https://mainnet.base.org',
+    explorerUrl: 'https://basescan.org',
     nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
   },
   {
-    id: 'arbitrum-sepolia',
-    name: 'Arbitrum Sepolia',
+    id: 'arbitrum-mainnet',
+    name: 'Arbitrum',
     short: 'Arbitrum',
-    chainId: 421614,
+    chainId: 42161,
     domain: 3,
-    usdc: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d',
-    rpcUrl: 'https://sepolia-rollup.arbitrum.io/rpc',
-    explorerUrl: 'https://sepolia.arbiscan.io',
+    usdc: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
+    rpcUrl: 'https://arb1.arbitrum.io/rpc',
+    explorerUrl: 'https://arbiscan.io',
     nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
   },
   {
-    id: 'ethereum-sepolia',
-    name: 'Ethereum Sepolia',
+    id: 'ethereum-mainnet',
+    name: 'Ethereum',
     short: 'Ethereum',
-    chainId: 11155111,
+    chainId: 1,
     domain: 0,
-    usdc: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
-    rpcUrl: 'https://rpc.sepolia.org',
-    explorerUrl: 'https://sepolia.etherscan.io',
+    usdc: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+    rpcUrl: 'https://ethereum-rpc.publicnode.com',
+    explorerUrl: 'https://etherscan.io',
     nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
   },
 ];
@@ -82,6 +86,6 @@ export const ERC20_ALLOWANCE_ABI = [
       { name: 'spender', type: 'address' },
       { name: 'value', type: 'uint256' },
     ],
-    outputs: [{ name: '', type: 'bool' }],
+    outputs: [{ type: 'bool' }],
   },
 ];
