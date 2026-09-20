@@ -53,7 +53,7 @@ export async function POST(request) {
       id: typeof body.agentId === "string" && body.agentId ? body.agentId : crypto.randomUUID(),
       owner: getAddress(owner),
       account: getAddress(account),
-      type: body.type === "custom" ? "custom" : "purchased",
+      type: ["custom", "standard", "purchased"].includes(body.type) ? body.type : "purchased",
       templateId: body.templateId || templateId,
       name: body.name || "Centry Agent",
       description: body.description || "",
