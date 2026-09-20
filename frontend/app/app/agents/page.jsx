@@ -11,10 +11,12 @@ import styles from './agents.module.css';
 const FACTORY_ADDRESS = process.env.NEXT_PUBLIC_CENTRY_AGENT_FACTORY || '';
 const RUNNER_ADDRESS = process.env.NEXT_PUBLIC_CENTRY_AGENT_RUNNER_ADDRESS || '';
 const API_BASE = (process.env.NEXT_PUBLIC_CENTRY_AGENT_API_URL || '').replace(/\/$/, '');
+const PAYWALL_ENABLED = process.env.NEXT_PUBLIC_CENTRY_AGENT_PAYWALL === 'true';
 const AGENT_PRICE_RAW = 2500000n;
 
 const FACTORY_ABI = [
   { type: 'function', name: 'getAgentAccounts', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }], outputs: [{ name: 'accounts', type: 'address[]' }] },
+  { type: 'function', name: 'createAgentAccount', stateMutability: 'nonpayable', inputs: [{ name: 'templateId', type: 'bytes32' }, { name: 'configHash', type: 'bytes32' }, { name: 'metadataURI', type: 'string' }, { name: 'initialOperator', type: 'address' }], outputs: [{ name: 'agentAccount', type: 'address' }] },
   { type: 'function', name: 'purchaseAndCreateAgentAccount', stateMutability: 'nonpayable', inputs: [{ name: 'templateId', type: 'bytes32' }, { name: 'configHash', type: 'bytes32' }, { name: 'metadataURI', type: 'string' }, { name: 'initialOperator', type: 'address' }], outputs: [{ name: 'agentAccount', type: 'address' }] },
 ];
 
@@ -234,39 +236,53 @@ function AgentPageContent() {
     }
   }
 
-  async function purchaseAgent() {
+  async function createAgent() {
     if (!FACTORY_ADDRESS) return setError('Agent factory is not deployed/configured yet.');
     if (!publicClient) return setError('Wallet RPC is not ready.');
     if (!isAddress(RUNNER_ADDRESS)) return setError('Centry hosted agent runner is not configured yet.');
-    setError('');
-    setStatus('Approve 2.50 USDC for the agent factory…');
-    try {
-      const approvalHash = await writeContractAsync({
-        address: CONTRACT_ADDRESSES.USDC,
-        abi: [{
-          type: 'function',
-          name: 'approve',
-          stateMutability: 'nonpayable',
-          inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }],
-          outputs: [{ type: 'bool' }],
-        }],
-        functionName: 'approve',
-        args: [FACTORY_ADDRESS, AGENT_PRICE_RAW],
-      });
-      await publicClient.waitForTransactionReceipt({ hash: approvalHash });
 
+    setError('');
+    setStatus('');
+    try {
       const agentId = randomAgentId();
       const templateHash = keccak256(toBytes('centry-general-agent'));
       const configHash = keccak256(toBytes('centry-general-agent-config-v1'));
+      let creationTx;
 
-      setStatus('Creating purchased agent… Approve the factory transaction.');
-      const purchaseTx = await writeContractAsync({
-        address: FACTORY_ADDRESS,
-        abi: FACTORY_ABI,
-        functionName: 'purchaseAndCreateAgentAccount',
-        args: [templateHash, configHash, '', RUNNER_ADDRESS],
-      });
-      await publicClient.waitForTransactionReceipt({ hash: purchaseTx });
+      if (PAYWALL_ENABLED) {
+        setStatus('Approve 2.50 USDC for the agent factory…');
+        const approvalHash = await writeContractAsync({
+          address: CONTRACT_ADDRESSES.USDC,
+          abi: [{
+            type: 'function',
+            name: 'approve',
+            stateMutability: 'nonpayable',
+            inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }],
+            outputs: [{ type: 'bool' }],
+          }],
+          functionName: 'approve',
+          args: [FACTORY_ADDRESS, AGENT_PRICE_RAW],
+        });
+        await publicClient.waitForTransactionReceipt({ hash: approvalHash });
+
+        setStatus('Creating purchased agent… Approve the factory transaction.');
+        creationTx = await writeContractAsync({
+          address: FACTORY_ADDRESS,
+          abi: FACTORY_ABI,
+          functionName: 'purchaseAndCreateAgentAccount',
+          args: [templateHash, configHash, '', RUNNER_ADDRESS],
+        });
+      } else {
+        setStatus('Creating your free agent… Approve the factory transaction.');
+        creationTx = await writeContractAsync({
+          address: FACTORY_ADDRESS,
+          abi: FACTORY_ABI,
+          functionName: 'createAgentAccount',
+          args: [templateHash, configHash, '', RUNNER_ADDRESS],
+        });
+      }
+
+      await publicClient.waitForTransactionReceipt({ hash: creationTx });
 
       const updated = await publicClient.readContract({
         address: FACTORY_ADDRESS,
@@ -275,20 +291,22 @@ function AgentPageContent() {
         args: [address],
       });
       const account = updated.map(String).at(-1);
-      if (!account) throw new Error('Purchased agent account was not returned by the factory.');
+      if (!account) throw new Error('Agent account was not returned by the factory.');
 
-      await apiJson(`${API_BASE}/api/v1/agents/marketplace`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          owner: address,
-          templateId: 'centry-general-agent',
-          onchainTemplateId: templateHash,
-          agentId,
-          account,
-          purchaseTxHash: purchaseTx,
-        }),
-      });
+      if (PAYWALL_ENABLED) {
+        await apiJson(`${API_BASE}/api/v1/agents/marketplace`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            owner: address,
+            templateId: 'centry-general-agent',
+            onchainTemplateId: templateHash,
+            agentId,
+            account,
+            purchaseTxHash: creationTx,
+          }),
+        });
+      }
 
       const auth = await ownerAuth(account, 'register-agent');
       await apiJson(`${API_BASE}/api/v1/agents/register`, {
@@ -299,18 +317,20 @@ function AgentPageContent() {
           owner: address,
           account,
           agentId,
-          type: 'purchased',
+          type: PAYWALL_ENABLED ? 'purchased' : 'standard',
           name: 'Centry Agent',
           description: 'Configurable Centry onchain agent.',
           operator: RUNNER_ADDRESS,
-          priceUsdCents: 250,
+          priceUsdCents: PAYWALL_ENABLED ? 250 : 0,
         }),
       });
 
-      setStatus('Purchased agent created. It is OFF until you activate it.');
+      setStatus(PAYWALL_ENABLED
+        ? 'Purchased agent created. It is OFF until you activate it.'
+        : 'Free agent created. It is OFF until you activate it.');
       await refreshAgents();
     } catch (e) {
-      setError(e?.shortMessage || e?.message || 'Agent purchase failed.');
+      setError(e?.shortMessage || e?.message || 'Agent creation failed.');
       setStatus('');
     }
   }
@@ -548,7 +568,7 @@ function AgentPageContent() {
 
       {tab === 'agents' ? (
         <>
-          <Section title="Your agents" description="Purchased Centry agents are tied to your Centry account. Every new agent starts OFF and requires a wallet transaction to activate.">
+          <Section title="Your agents" description="Centry agents are tied to your Centry account. Every new agent starts OFF and requires a wallet transaction to activate.">
             {!FACTORY_ADDRESS ? <div className={styles.warning}>Agent factory is not configured yet. Deploy <code>CentryOnchainAgentFactory</code> first, then set <code>NEXT_PUBLIC_CENTRY_AGENT_FACTORY</code>.</div> : null}
             <div className={styles.agentGrid}>
               {managed.length ? managed.map((agent) => <AgentCard key={agent.account} agent={agent} onSelect={setSelectedAgent} selected={selectedAgent?.account === agent.account} />) : <div className={styles.empty}>No agent accounts yet.</div>}
@@ -596,16 +616,16 @@ function AgentPageContent() {
               </>
             )}
           </Section>
-          <Section title="Agent store" description="Purchased agents cost 2.50 USDC on Arc Mainnet. Payment goes to the configured Centry treasury.">
+          <Section title="Agent store" description={PAYWALL_ENABLED ? 'Purchased agents cost 2.50 USDC on Arc Mainnet. Payment goes to the configured Centry treasury.' : 'Centry agents are free for now. The paywall is kept available for when you are ready to charge.'}>
             <div className={styles.storeCard}>
               <div>
                 <strong>Centry Agent</strong>
                 <p>Configurable onchain agent with lending, repayment, swap and external-agent connectivity.</p>
               </div>
-              <div className={styles.price}>$2.50</div>
+              <div className={styles.price}>{PAYWALL_ENABLED ? '$2.50' : 'Free'}</div>
             </div>
-            <div className={styles.hint}>Your purchased agent gets its own smart-account wallet, owned by your connected wallet. Centry’s hosted runner is authorized as its execution operator; you never give Centry your owner private key.</div>
-            <button type="button" className={styles.primaryButton} disabled={isPending || !isConnected || !isAddress(RUNNER_ADDRESS)} onClick={purchaseAgent}>Purchase and create</button>
+            <div className={styles.hint}>{PAYWALL_ENABLED ? 'Your purchased agent gets its own smart-account wallet, owned by your connected wallet. Centry’s hosted runner is authorized as its execution operator; you never give Centry your owner private key.' : 'Your free agent gets its own smart-account wallet, owned by your connected wallet. Centry’s hosted runner is authorized as its execution operator; you never give Centry your owner private key. No payment is required while the paywall is disabled.'}</div>
+            <button type="button" className={styles.primaryButton} disabled={isPending || !isConnected || !isAddress(RUNNER_ADDRESS)} onClick={createAgent}>{PAYWALL_ENABLED ? 'Purchase and create' : 'Create free agent'}</button>
           </Section>
         </>
       ) : null}
