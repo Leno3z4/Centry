@@ -14,6 +14,8 @@ export async function GET(_request, { params }) {
     templateId: agent.template_id,
     name: agent.name,
     description: agent.description,
+    operator: agent.operator || null,
+    config: JSON.parse(agent.config_json || "{}"),
 
     active: Boolean(agent.active),
     priceUsdCents: Number(agent.price_usd_cents || 0),
