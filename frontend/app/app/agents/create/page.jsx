@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useAccount, usePublicClient, useSignMessage, useWriteContract } from 'wagmi';
 import { keccak256, toBytes } from 'viem';
 import { useRouter } from 'next/navigation';
@@ -15,9 +15,7 @@ import {
   PAYWALL_ENABLED,
   RUNNER_ADDRESS,
   apiJson,
-  defaultAgentConfig,
   normalizeConfigForHash,
-  shortAddress,
 } from '../agentClient';
 import styles from '../agents.module.css';
 import { CONTRACT_ADDRESSES } from '../../../../constants/contracts';
@@ -173,7 +171,7 @@ export default function CreateAgentPage() {
               </div>
               <div className={styles.headerActions}>
                 <button className={styles.secondaryButton} type="button" onClick={() => navigator.clipboard.writeText(createdAccount)}>Copy address</button>
-                <a className={styles.secondaryButton} href={`https://testnet.arcscan.app/address/${createdAccount}`} target="_blank" rel="noreferrer">View on Arc</a>
+                <a className={styles.secondaryButton} href={`https://explorer.arc.io/address/${createdAccount}`} target="_blank" rel="noreferrer">View on Arc</a>
                 <button className={styles.primaryButton} type="button" onClick={() => router.push(`/app/agents/${createdAccount}`)}>Open agent</button>
               </div>
             </section>
@@ -182,8 +180,6 @@ export default function CreateAgentPage() {
       </Providers>
     );
   }
-
-  const initial = useMemo(() => defaultAgentConfig(), []);
 
   return (
     <Providers>
@@ -205,7 +201,6 @@ export default function CreateAgentPage() {
 
           <AgentConfigForm
             mode="create"
-            initialConfig={initial}
             onSubmit={createAgent}
             submitting={isPending || Boolean(status && !createdAccount)}
             submitLabel={PAYWALL_ENABLED ? 'Purchase & create agent' : 'Create agent'}
