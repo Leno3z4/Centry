@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useAccount, usePublicClient, useReadContract, useSignMessage, useWriteContract } from 'wagmi';
+import { useAccount, usePublicClient, useReadContract, useSendTransaction, useSignMessage, useWriteContract } from 'wagmi';
 import { encodeFunctionData, isAddress, keccak256, parseUnits, toBytes } from 'viem';
 import { Providers } from '../../../components/Providers';
 import { AppShell } from '../../../components/AppShell';
@@ -102,6 +102,7 @@ function AgentPageContent() {
   const publicClient = usePublicClient();
   const { signMessageAsync } = useSignMessage();
   const { writeContractAsync, isPending } = useWriteContract();
+  const { sendTransactionAsync } = useSendTransaction();
 
   const [accounts, setAccounts] = useState([]);
   const [managed, setManaged] = useState([]);
@@ -124,6 +125,8 @@ function AgentPageContent() {
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
   const [chatProvider, setChatProvider] = useState('gemini');
+  const [fundAsset, setFundAsset] = useState('native');
+  const [fundAmount, setFundAmount] = useState('');
   const [withdrawAsset, setWithdrawAsset] = useState('native');
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [autonomyEnabled, setAutonomyEnabled] = useState(true);
@@ -312,6 +315,38 @@ function AgentPageContent() {
     }
   }
 
+
+  async function fundAgent() {
+    if (!selectedAgent) return;
+    const asset = WITHDRAWABLE_ASSETS.find((item) => item.key === fundAsset);
+    if (!asset) return setError('Unsupported funding asset.');
+    if (!fundAmount || Number(fundAmount) <= 0) return setError('Enter a funding amount.');
+
+    setError('');
+    setStatus('Preparing funding… Approve the wallet transaction.');
+    try {
+      const rawAmount = parseUnits(fundAmount, asset.decimals);
+      const hash = asset.address
+        ? await writeContractAsync({
+            address: asset.address,
+            abi: ERC20_ABI,
+            functionName: 'transfer',
+            args: [selectedAgent.account, rawAmount],
+          })
+        : await sendTransactionAsync({
+            to: selectedAgent.account,
+            value: rawAmount,
+            chainId: 5042,
+          });
+
+      await publicClient.waitForTransactionReceipt({ hash });
+      setFundAmount('');
+      setStatus(fundAmount + ' ' + asset.label + ' funded to the agent smart account.');
+    } catch (e) {
+      setError(e?.shortMessage || e?.message || 'Agent funding failed.');
+      setStatus('');
+    }
+  }
 
   async function withdrawFromAgent() {
     if (!selectedAgent) return;
@@ -520,6 +555,27 @@ function AgentPageContent() {
             </div>
           </Section>
 
+
+          <Section title="Fund agent" description="Send funds from your connected wallet directly to the selected agent smart account. These funds are what the agent can use for its permitted interactions.">
+            {!selectedAgent ? <div className={styles.empty}>Select an agent first.</div> : (
+              <>
+                <div className={styles.formGrid}>
+                  <div>
+                    <label className={styles.label}>Asset</label>
+                    <select className={styles.input} value={fundAsset} onChange={(e) => setFundAsset(e.target.value)}>
+                      {WITHDRAWABLE_ASSETS.map((asset) => <option key={asset.key} value={asset.key}>{asset.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={styles.label}>Amount</label>
+                    <input className={styles.input} inputMode="decimal" value={fundAmount} onChange={(e) => setFundAmount(e.target.value)} placeholder="0.00" />
+                  </div>
+                </div>
+                <button type="button" className={styles.primaryButton} disabled={isPending || !isConnected} onClick={fundAgent}>Fund selected agent</button>
+                <p className={styles.hint}>Native USDC uses Arc's native balance for the transfer. ERC-20 assets use their token contract. Funding the agent account is separate from supplying assets into Centry's lending pool.</p>
+              </>
+            )}
+          </Section>
 
           <Section title="Withdraw from agent" description="Withdraw funds from the selected agent back to the wallet that owns the agent. This works even while the agent is OFF.">
             {!selectedAgent ? <div className={styles.empty}>Select an agent first.</div> : (
