@@ -8,7 +8,7 @@ export async function GET(request) {
 
   const rpcUrl = process.env.CENTRY_AGENT_RPC_URL || process.env.CENTRY_ERC8004_RPC_URL;
   try {
-    return jsonResponse({ chainId: 5042002, markets: await getAgentMarkets({ rpcUrl }) });
+    return jsonResponse({ chainId: 5042, markets: await getAgentMarkets({ rpcUrl }) });
   } catch {
     return jsonResponse({ error: "markets_read_failed" }, 503);
   }
