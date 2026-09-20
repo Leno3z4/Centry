@@ -159,20 +159,15 @@ function assertActionPolicy(policy, action) {
     throw new Error(`agent_action_not_allowed_${type || "empty"}`);
   }
 
-  if (type === "approve") return;
-
-  if (["supply", "withdraw", "borrow", "repay", "swap", "transfer"].includes(type)) {
+  const needsAsset = ["approve", "supply", "withdraw", "borrow", "repay", "swap", "transfer"].includes(type);
+  if (needsAsset) {
     const asset = String(action?.asset || action?.inputToken || "").toUpperCase();
     if (!policy.allowedAssets.has(asset)) throw new Error(`agent_asset_not_allowed_${asset || "empty"}`);
-  }
 
-  if (type === "swap") {
-    const output = String(action?.toAsset || action?.outputToken || "").toUpperCase();
-    if (!policy.allowedAssets.has(output)) throw new Error(`agent_asset_not_allowed_${output || "empty"}`);
-  }
+    if (type === "approve" && !policy.allowedActions.has("supply") && !policy.allowedActions.has("repay")) {
+      throw new Error("agent_approval_not_allowed");
+    }
 
-  if (["supply", "withdraw", "borrow", "repay", "swap", "transfer"].includes(type)) {
-    const asset = String(action?.asset || action?.inputToken || "").toUpperCase();
     const cap = policy.maxAmountByAsset[asset];
     if (cap !== undefined && String(cap).trim() !== "") {
       let maxRaw;
@@ -184,6 +179,11 @@ function assertActionPolicy(policy, action) {
       const amount = positiveUint(action.amount, "amount");
       if (amount > maxRaw) throw new Error(`agent_amount_limit_exceeded_${asset}`);
     }
+  }
+
+  if (type === "swap") {
+    const output = String(action?.toAsset || action?.outputToken || "").toUpperCase();
+    if (!policy.allowedAssets.has(output)) throw new Error(`agent_asset_not_allowed_${output || "empty"}`);
   }
 }
 
