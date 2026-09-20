@@ -46,8 +46,8 @@
   border: 1px solid #282033;
   border-radius: 18px;
   padding: 24px;
-  background: linear-gradient(145deg, #100b1a, #0b0813);
-  box-shadow: 0 20px 60px rgba(0,0,0,.2);
+  background: #0e1013;
+  box-shadow: none;
 }
 
 .panelHead {
@@ -133,19 +133,19 @@
   padding: 8px 11px;
   border: 1px solid #342748;
   border-radius: 15px;
-  background: linear-gradient(145deg, #181021, #110b19);
+  background: #121418;
   color: #f5f0fb;
   text-align: left;
   cursor: pointer;
-  box-shadow: 0 10px 26px rgba(0,0,0,.16);
+  box-shadow: none;
   transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
 
 .tokenTrigger:hover,
 .tokenTriggerOpen {
   border-color: #76509e;
-  background: linear-gradient(145deg, #21142d, #140d1d);
-  box-shadow: 0 12px 30px rgba(0,0,0,.22), 0 0 0 3px rgba(155,98,255,.05);
+  background: #17191d;
+  box-shadow: 0 0 0 3px rgba(183,167,255,.08);
 }
 
 .tokenTriggerText {
@@ -164,7 +164,7 @@
 .tokenOptionText small {
   overflow: hidden;
   color: #71677d;
-  font-size: 8px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -256,7 +256,7 @@
 .tokenOption:hover,
 .tokenOptionActive {
   border-color: #35274a;
-  background: linear-gradient(135deg, #1a1127, #120c1b);
+  background: #15171a;
 }
 
 .tokenOption:hover {
@@ -395,9 +395,9 @@
 
 .primaryButton {
   border: 1px solid transparent;
-  background: linear-gradient(100deg, #8b4eff, #b67cff);
+  background: #b7a7ff;
   color: #fff;
-  box-shadow: 0 10px 35px rgba(108,49,181,.28);
+  box-shadow: none;
 }
 
 .primaryButton:hover:not(:disabled) {
@@ -412,15 +412,15 @@
 }
 
 .secondaryButton:not(:disabled) {
-  border-color: #7146a7;
-  background: linear-gradient(100deg, #7540d8, #a965ee);
-  color: #fff;
-  box-shadow: 0 10px 30px rgba(108,49,181,.22);
+  border-color: #666c76;
+  background: #171a1e;
+  color: #f1f2f4;
+  box-shadow: none;
 }
 
 .secondaryButton:hover:not(:disabled) {
-  border-color: #8f5ccc;
-  background: linear-gradient(100deg, #8248e8, #b374f5);
+  border-color: #858b95;
+  background: #1d2025;
   color: #fff;
   transform: translateY(-1px);
   filter: brightness(1.04);
