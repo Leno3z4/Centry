@@ -390,7 +390,7 @@ function AgentPageContent() {
     if (!selectedAgent || !internalTarget) return setError('Select another agent.');
     const target = managed.find((item) => item.id === internalTarget);
     if (!target || target.account === selectedAgent.account || String(target.owner).toLowerCase() !== String(address).toLowerCase()) return setError('That agent is not another agent owned by this wallet.');
-    const asset = internalAsset === 'CENT' ? { decimals: 18, address: CONTRACT_ADDRESSES.centryToken, label: 'CENT' } : internalAsset === 'USDC' ? { decimals: 18, address: CONTRACT_ADDRESSES.USDC, label: 'USDC' } : internalAsset === 'EURC' ? { decimals: 6, address: CONTRACT_ADDRESSES.EURC, label: 'EURC' } : internalAsset === 'CIRBTC' ? { decimals: 8, address: CONTRACT_ADDRESSES.CIRBTC, label: 'cirBTC' } : null;
+    const asset = internalAsset === 'CENT' ? { decimals: 18, address: CONTRACT_ADDRESSES.centryToken, label: 'CENT' } : internalAsset === 'USDC' ? { decimals: 6, address: CONTRACT_ADDRESSES.USDC, label: 'USDC' } : internalAsset === 'EURC' ? { decimals: 6, address: CONTRACT_ADDRESSES.EURC, label: 'EURC' } : internalAsset === 'CIRBTC' ? { decimals: 8, address: CONTRACT_ADDRESSES.CIRBTC, label: 'cirBTC' } : null;
     if (!asset || !internalAmount || Number(internalAmount) <= 0) return setError('Enter a valid asset and amount.');
     try {
       const amount = parseUnits(internalAmount, asset.decimals);
