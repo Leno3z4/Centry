@@ -46,7 +46,7 @@ function GatewayContent() {
     <div className={styles.page}>
       <div className={styles.header}>
         <div><div className={styles.kicker}>UNIFIED USDC LIQUIDITY</div><h1>Gateway</h1><p>Centry treats USDC across supported Gateway sources as one liquidity layer, while Arc remains the execution environment for lending.</p></div>
-        <div className={styles.statusPill}><i />Arc Testnet</div>
+        <div className={styles.statusPill}><i />Arc Mainnet</div>
       </div>
 
       {!isConnected ? <div className={styles.notice}>Connect your wallet to view your unified USDC liquidity.</div> : (
@@ -66,9 +66,9 @@ function GatewayContent() {
           </section>
 
           <section className={styles.card}>
-            <div className={styles.cardHeader}><div><div className={styles.kicker}>BALANCE SOURCES</div><h2>Where your USDC sits</h2></div><span className={styles.contractTag}>Gateway Testnet</span></div>
+            <div className={styles.cardHeader}><div><div className={styles.kicker}>BALANCE SOURCES</div><h2>Where your USDC sits</h2></div><span className={styles.contractTag}>Gateway Mainnet</span></div>
             <div className={styles.balanceList}>
-              <div className={styles.balanceRow}><div><strong>Arc Testnet</strong><small>Directly usable by Centry LendingPool</small></div><strong>{numberText(arcBalance)} USDC</strong></div>
+              <div className={styles.balanceRow}><div><strong>Arc Mainnet</strong><small>Directly usable by Centry LendingPool</small></div><strong>{numberText(arcBalance)} USDC</strong></div>
               {gateway.balances.map((balance) => <div className={styles.balanceRow} key={balance.id}><div><strong>{balance.name}</strong><small>{balance.spendable ? `Finalized Gateway USDC${balance.pendingCount ? ` · ${balance.pendingCount} pending` : ''}` : 'Pending or unavailable'}</small></div><strong>{numberText(balance.balance)} USDC</strong></div>)}
             </div>
             <div className={styles.infoBox}><strong>How Centry routes liquidity</strong><span>When a supply needs USDC on Arc, Centry first checks the connected Arc wallet. Only the missing finalized liquidity is funded through Gateway, then the existing Centry LendingPool supply flow continues.</span></div>
