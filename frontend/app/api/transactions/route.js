@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-const EXPLORER_API = 'https://testnet.arcscan.app/api/v2';
+const EXPLORER_API = 'https://api.arc-scan.org/api';
 
 export async function GET(request) {
   const address = new URL(request.url).searchParams.get('address')?.trim();
@@ -10,7 +10,18 @@ export async function GET(request) {
   }
 
   try {
-    const response = await fetch(`${EXPLORER_API}/addresses/${address}/transactions?filter=from`, {
+    const params = new URLSearchParams({
+      module: 'account',
+      action: 'txlist',
+      address,
+      startblock: '0',
+      endblock: '999999999',
+      page: '1',
+      offset: '15',
+      sort: 'desc',
+    });
+
+    const response = await fetch(`${EXPLORER_API}?${params.toString()}`, {
       headers: { Accept: 'application/json' },
       next: { revalidate: 15 },
     });
@@ -20,19 +31,22 @@ export async function GET(request) {
     }
 
     const data = await response.json();
-    const items = Array.isArray(data?.items) ? data.items : [];
+    const result = Array.isArray(data?.result) ? data.result : [];
+    if (data?.status === '0' && !Array.isArray(data?.result)) {
+      return NextResponse.json({ success: false, error: data?.message || 'Transaction history is temporarily unavailable.' }, { status: 502 });
+    }
 
     return NextResponse.json({
       success: true,
-      items: items.slice(0, 15).map((tx) => ({
+      items: result.map((tx) => ({
         hash: tx.hash,
-        timestamp: tx.timestamp,
-        status: tx.status,
-        method: tx.method || tx.transaction_types?.[0] || 'Transaction',
-        from: tx.from?.hash || null,
-        to: tx.to?.hash || null,
+        timestamp: tx.timeStamp ? new Date(Number(tx.timeStamp) * 1000).toISOString() : null,
+        status: tx.isError === '1' ? 'error' : 'ok',
+        method: tx.functionName || tx.methodId || 'Transaction',
+        from: tx.from || null,
+        to: tx.to || null,
         value: tx.value || '0',
-        fee: tx.fee?.value || null,
+        fee: tx.gasUsed && tx.gasPrice ? (BigInt(tx.gasUsed) * BigInt(tx.gasPrice)).toString() : null,
       })),
     });
   } catch {
