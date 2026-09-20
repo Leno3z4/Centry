@@ -31,7 +31,6 @@ const PRODUCTS = [
 ];
 
 const EXPLORE = [
-    ['Pools', 'Discover liquidity across the ecosystem.', '/app/pools'],
     ['Bridge', 'Move supported assets into the network.', '/app/bridge'],
     ['Portfolio', 'See your positions and balances in one place.', '/app/portfolio'],
     ['Analytics', 'Understand protocol activity and market data.', '/app/analytics'],
@@ -85,7 +84,7 @@ export default function LandingHome() {
             <section id="explore" className="landing-home-section landing-home-explore">
                 <div className="landing-home-section-heading">
                     <h2>Explore Centry</h2>
-                    <p>Pools · Bridge · Portfolio · Analytics</p>
+                    <p>Bridge · Portfolio · Analytics</p>
                 </div>
 
                 <div className="landing-home-explore-grid">
@@ -303,7 +302,7 @@ export default function LandingHome() {
 
                 .landing-home-explore-grid {
                     display: grid;
-                    grid-template-columns: repeat(4, minmax(0, 1fr));
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
                     gap: 10px;
                 }
 
