@@ -15,8 +15,8 @@ import { AppShell } from '../../../components/AppShell';
 import { CONTRACT_ADDRESSES } from '../../../constants/contracts';
 import { VE_CENTRY_ABI } from '../../../constants/abis';
 
-const ARC_CHAIN_ID = 5042002;
-const SELF_REPAY_EXECUTOR = '0x1672667EdB27fDF687A0Fe485EeE1240650dF4a9';
+const ARC_CHAIN_ID = 5042;
+const SELF_REPAY_EXECUTOR = CONTRACT_ADDRESSES.selfRepayExecutor;
 const ROOT_DELAY_SECONDS = 2 * 24 * 60 * 60;
 const REWARDS_ABI = [
   { type: 'function', name: 'latestEpoch', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
