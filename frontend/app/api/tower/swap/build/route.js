@@ -1,92 +1,135 @@
 import { NextResponse } from 'next/server';
-import { createPublicClient, encodeAbiParameters, encodeFunctionData, http } from 'viem';
-import { arc } from 'viem/chains';
+import { createPublicClient, encodeFunctionData, defineChain, http } from 'viem';
+import { ACTIVE_MARKETS } from '../../../../../constants/markets';
+import { CONTRACT_ADDRESSES } from '../../../../../constants/contracts';
 import { rateLimit, rateLimitResponse, withRateLimitHeaders } from '../../../../../lib/rateLimit';
 
-const TOWER_BASE_URL = 'https://www.tower.exchange/api/public';
-const ARC_CHAIN_ID = 5042002;
-const CENT = '0x76e6d50D3151f0B4645ac0E53584F4204Fc6f0e3';
-const USDC = '0x3600000000000000000000000000000000000000';
-const WUSDC = '0x911b4000D3422F482F4062a913885f7b035382Df';
-const UNITFLOW_UNIVERSAL_ROUTER = '0xEaF3195bE51861632cd32850973C9515DA48e76F';
-const WUSDC_SCALE = 10n ** 12n;
-const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+const ARC_CHAIN_ID = 5042;
+const ARC_RPC_URL = process.env.ARC_RPC_URL || process.env.NEXT_PUBLIC_ARC_RPC_URL || 'https://rpc.mainnet.arc.io';
+const UNITFLOW_V3_ROUTER = '0x6fD8351b9596C1F0b2f2479BfA6A171cb3d0f410';
 
-const UNITFLOW_UNIVERSAL_ROUTER_ABI = [{ type: 'function', name: 'execute', stateMutability: 'payable', inputs: [{ name: 'commands', type: 'bytes' }, { name: 'inputs', type: 'bytes[]' }, { name: 'deadline', type: 'uint256' }], outputs: [] }];
-const ERC20_ABI = [{ type: 'function', name: 'approve', stateMutability: 'nonpayable', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }] }, { type: 'function', name: 'allowance', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }, { name: 'spender', type: 'address' }], outputs: [{ type: 'uint256' }] }];
-function validAddress(value) { return typeof value === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value); }
-function isCentPair(inputToken, outputToken) { return ((inputToken.toLowerCase() === CENT.toLowerCase() && outputToken.toLowerCase() === USDC.toLowerCase()) || (inputToken.toLowerCase() === USDC.toLowerCase() && outputToken.toLowerCase() === CENT.toLowerCase())); }
-function parseQuoteBigInt(quote, key) { try { return BigInt(String(quote?.[key] || '0')); } catch { return 0n; } }
-function createArcClient() { const rpcUrl = process.env.ARC_RPC_URL || process.env.ARC_RPC_URL_VARIABLE || 'https://rpc.testnet.arc.network'; return createPublicClient({ chain: { ...arc, id: ARC_CHAIN_ID }, transport: http(rpcUrl) }); }
-async function getCentAllowance(userAddress, amountIn) { const client = createArcClient(); return client.readContract({ address: CENT, abi: ERC20_ABI, functionName: 'allowance', args: [userAddress, UNITFLOW_UNIVERSAL_ROUTER] }) >= amountIn; }
-async function normalizeTowerApproval(data, quote, userAddress) { if (!data?.success || !data?.data?.swap?.to || !validAddress(quote?.inputToken) || isCentPair(quote.inputToken, quote.outputToken)) return data; const amountIn = parseQuoteBigInt(quote, 'inputAmount'); if (amountIn <= 0n) return data; const spender = data.data.swap.to; if (!validAddress(spender) || spender.toLowerCase() === ZERO_ADDRESS) return data; const buildApproval = () => ({ to: quote.inputToken, data: encodeFunctionData({ abi: ERC20_ABI, functionName: 'approve', args: [spender, amountIn] }), value: '0', chainId: ARC_CHAIN_ID }); try { const client = createArcClient(); const allowance = await client.readContract({ address: quote.inputToken, abi: ERC20_ABI, functionName: 'allowance', args: [userAddress, spender] }); if (allowance >= amountIn) return { ...data, data: { ...data.data, approval: null } }; return { ...data, data: { ...data.data, approval: buildApproval() } }; } catch { if (data.data.approval) return data; return { ...data, data: { ...data.data, approval: buildApproval() } }; } }
-async function buildCentSwap(quote, userAddress) {
-  const inputToken = String(quote.inputToken || '').toLowerCase();
-  const outputToken = String(quote.outputToken || '').toLowerCase();
-  const amountIn = parseQuoteBigInt(quote, 'inputAmount');
-  const minOut = parseQuoteBigInt(quote, 'minOut');
-  if (!validAddress(userAddress) || !isCentPair(inputToken, outputToken)) throw new Error('Invalid CENT swap request.');
-  if (amountIn <= 0n || minOut <= 0n) throw new Error('Invalid CENT swap amount.');
-  const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
+const ERC20_ABI = [
+  { type: 'function', name: 'allowance', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }, { name: 'spender', type: 'address' }], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'approve', stateMutability: 'nonpayable', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }] },
+];
 
-  if (inputToken === CENT.toLowerCase()) {
-    const nativeMinOut = minOut / WUSDC_SCALE;
-    if (nativeMinOut <= 0n) throw new Error('CENT quote is below one USDC base unit.');
-    const path = [CENT, WUSDC];
-    const commands = '0x080c';
-    const inputs = [
-      encodeAbiParameters(
-        [{ type: 'address' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'address[]' }, { type: 'bool' }],
-        [UNITFLOW_UNIVERSAL_ROUTER, amountIn, minOut, path, true],
-      ),
-      encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [userAddress, nativeMinOut]),
-    ];
-    const approved = await getCentAllowance(userAddress, amountIn);
-    return {
-      approval: approved ? null : { to: CENT, data: encodeFunctionData({ abi: ERC20_ABI, functionName: 'approve', args: [UNITFLOW_UNIVERSAL_ROUTER, amountIn] }), value: '0' },
-      swap: { to: UNITFLOW_UNIVERSAL_ROUTER, data: encodeFunctionData({ abi: UNITFLOW_UNIVERSAL_ROUTER_ABI, functionName: 'execute', args: [commands, inputs, deadline] }), value: '0' },
-      chainId: ARC_CHAIN_ID,
-      provider: 'UnitFlow v2.5',
-      route: 'CENT → WUSDC → USDC',
-    };
-  }
+const ROUTER_ABI = [{
+  type: 'function',
+  name: 'exactInputSingle',
+  stateMutability: 'nonpayable',
+  inputs: [{
+    name: 'params',
+    type: 'tuple',
+    components: [
+      { name: 'tokenIn', type: 'address' },
+      { name: 'tokenOut', type: 'address' },
+      { name: 'fee', type: 'uint24' },
+      { name: 'recipient', type: 'address' },
+      { name: 'deadline', type: 'uint256' },
+      { name: 'amountIn', type: 'uint256' },
+      { name: 'amountOutMinimum', type: 'uint256' },
+      { name: 'sqrtPriceLimitX96', type: 'uint160' },
+    ],
+  }],
+  outputs: [{ type: 'uint256' }],
+}];
 
-  const nativeAmount = amountIn * WUSDC_SCALE;
-  const path = [WUSDC, CENT];
-  const commands = '0x0b08';
-  const inputs = [
-    encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [UNITFLOW_UNIVERSAL_ROUTER, nativeAmount]),
-    encodeAbiParameters(
-      [{ type: 'address' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'address[]' }, { type: 'bool' }],
-      [userAddress, nativeAmount, minOut, path, false],
-    ),
-  ];
-  return {
-    approval: null,
-    swap: { to: UNITFLOW_UNIVERSAL_ROUTER, data: encodeFunctionData({ abi: UNITFLOW_UNIVERSAL_ROUTER_ABI, functionName: 'execute', args: [commands, inputs, deadline] }), value: nativeAmount.toString() },
-    chainId: ARC_CHAIN_ID,
-    provider: 'UnitFlow v2.5',
-    route: 'USDC → WUSDC → CENT',
-  };
+function isAddress(value) {
+  return typeof value === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value);
+}
+
+function marketFor(value) {
+  if (!isAddress(value)) return null;
+  const normalized = value.toLowerCase();
+  return [...ACTIVE_MARKETS, { address: CONTRACT_ADDRESSES.centryToken, symbol: 'CENT', decimals: 18 }]
+    .find((item) => item.address?.toLowerCase() === normalized) || null;
+}
+
+function publicClient() {
+  return createPublicClient({
+    chain: defineChain({
+      id: ARC_CHAIN_ID,
+      name: 'Arc Mainnet',
+      nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 18 },
+      rpcUrls: { default: { http: [ARC_RPC_URL] } },
+    }),
+    transport: http(ARC_RPC_URL),
+  });
 }
 
 export async function POST(request) {
-  const limit = rateLimit(request, 'tower-build', { max: 20, windowMs: 60_000 });
+  const limit = rateLimit(request, 'unitflow-v3-build', { max: 20, windowMs: 60_000 });
   if (!limit.allowed) return rateLimitResponse(limit);
+
   try {
     const body = await request.json();
-    const { quote, userAddress } = body || {};
-    if (!quote || typeof quote !== 'object' || !validAddress(userAddress)) return withRateLimitHeaders(NextResponse.json({ success: false, error: 'A valid swap quote and wallet address are required.' }, { status: 400 }), limit);
-    if (Number(quote.chainId || ARC_CHAIN_ID) !== ARC_CHAIN_ID) return withRateLimitHeaders(NextResponse.json({ success: false, error: 'Only Arc Testnet swaps are enabled in Centry right now.' }, { status: 400 }), limit);
-    if (isCentPair(quote.inputToken, quote.outputToken)) return withRateLimitHeaders(NextResponse.json({ success: true, data: await buildCentSwap(quote, userAddress) }), limit);
-    const apiKey = process.env.TOWER_API_KEY;
-    if (!apiKey) return withRateLimitHeaders(NextResponse.json({ success: false, error: 'Tower is not configured. Set TOWER_API_KEY on the server.' }, { status: 503 }), limit);
-    const response = await fetch(`${TOWER_BASE_URL}/swap/build-tx`, { method: 'POST', headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ quote, userAddress }), cache: 'no-store' });
-    const data = await response.json();
-    if (!response.ok || !data?.success) return withRateLimitHeaders(NextResponse.json(data, { status: response.status }), limit);
-    const normalized = await normalizeTowerApproval(data, quote, userAddress);
-    return withRateLimitHeaders(NextResponse.json(normalized, { status: response.status }), limit);
+    const quote = body?.quote;
+    const userAddress = body?.userAddress;
+
+    if (!quote || typeof quote !== 'object' || !isAddress(userAddress)) {
+      return withRateLimitHeaders(NextResponse.json({ success: false, error: 'A valid swap quote and wallet address are required.' }, { status: 400 }), limit);
+    }
+
+    if (Number(quote.chainId || ARC_CHAIN_ID) !== ARC_CHAIN_ID) {
+      return withRateLimitHeaders(NextResponse.json({ success: false, error: 'Only Arc Mainnet swaps are enabled in Centry right now.' }, { status: 400 }), limit);
+    }
+
+    const input = marketFor(quote.inputToken);
+    const output = marketFor(quote.outputToken);
+    if (!input || !output || input.address.toLowerCase() === output.address.toLowerCase()) {
+      return withRateLimitHeaders(NextResponse.json({ success: false, error: 'Unsupported swap token pair.' }, { status: 400 }), limit);
+    }
+
+    const amountIn = BigInt(String(quote.inputAmount || '0'));
+    const minOut = BigInt(String(quote.minOut || '0'));
+    const fee = Number(quote.fee);
+    if (amountIn <= 0n || minOut <= 0n || ![500, 3000, 10000].includes(fee)) {
+      return withRateLimitHeaders(NextResponse.json({ success: false, error: 'Invalid UnitFlow V3 quote.' }, { status: 400 }), limit);
+    }
+
+    const client = publicClient();
+    const allowance = await client.readContract({
+      address: input.address,
+      abi: ERC20_ABI,
+      functionName: 'allowance',
+      args: [userAddress, UNITFLOW_V3_ROUTER],
+    });
+
+    const approval = allowance >= amountIn
+      ? null
+      : {
+          to: input.address,
+          data: encodeFunctionData({ abi: ERC20_ABI, functionName: 'approve', args: [UNITFLOW_V3_ROUTER, amountIn] }),
+          value: '0',
+          chainId: ARC_CHAIN_ID,
+        };
+
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
+    const swap = {
+      to: UNITFLOW_V3_ROUTER,
+      data: encodeFunctionData({
+        abi: ROUTER_ABI,
+        functionName: 'exactInputSingle',
+        args: [{
+          tokenIn: input.address,
+          tokenOut: output.address,
+          fee,
+          recipient: userAddress,
+          deadline,
+          amountIn,
+          amountOutMinimum: minOut,
+          sqrtPriceLimitX96: 0n,
+        }],
+      }),
+      value: '0',
+      chainId: ARC_CHAIN_ID,
+      fee,
+      provider: 'UnitFlow V3',
+      route: `${input.symbol} → ${output.symbol}`,
+    };
+
+    return withRateLimitHeaders(NextResponse.json({ success: true, data: { approval, swap } }), limit);
   } catch (error) {
-    return withRateLimitHeaders(NextResponse.json({ success: false, error: error?.message || 'Unable to build the swap transaction.' }, { status: 502 }), limit);
+    return withRateLimitHeaders(NextResponse.json({ success: false, error: error?.message || 'Unable to build the UnitFlow V3 swap transaction.' }, { status: 502 }), limit);
   }
 }
