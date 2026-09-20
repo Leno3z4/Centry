@@ -316,9 +316,11 @@ Every user-owned onchain agent starts **OFF**. The owner must sign an onchain ac
 
 The current product exposes the purchased Centry Agent as the standard user-facing onchain agent. A future developer-facing custom-agent integration can be added separately without changing the smart-account security boundary.
 
-## Agent purchase
+## Agent access
 
-The standard Centry agent is $2.50 USDC on Arc Mainnet. The purchase flow is atomic inside `CentryOnchainAgentFactory.purchaseAndCreateAgentAccount()`: the factory transfers exactly 2.5 USDC to the Centry treasury and creates the user-owned agent account in the same transaction.
+The standard Centry agent is free while `NEXT_PUBLIC_CENTRY_AGENT_PAYWALL=false` (the default). In that mode the frontend calls `CentryOnchainAgentFactory.createAgentAccount()` and no payment is required.
+
+When the paywall is needed, set `NEXT_PUBLIC_CENTRY_AGENT_PAYWALL=true`. The frontend then uses `purchaseAndCreateAgentAccount()`, which atomically transfers exactly 2.5 USDC to the configured Centry treasury and creates the user-owned agent account in the same transaction.
 
 ## Persistent external API keys
 
