@@ -59,6 +59,23 @@ const providerOptions = [
   ['anthropic', 'Anthropic'],
 ];
 
+const AGENT_ACTION_OPTIONS = [
+  ['supply', 'Supply', 'Supply assets into Centry lending'],
+  ['withdraw', 'Withdraw', 'Withdraw supplied assets'],
+  ['borrow', 'Borrow', 'Open or increase borrowing'],
+  ['repay', 'Repay', 'Repay existing debt'],
+  ['swap', 'Swap', 'Swap CENT and Arc-native USDC'],
+  ['castVote', 'Governance', 'Cast governance votes'],
+  ['transfer', 'Agent transfer', 'Move supported assets between your own agents'],
+];
+
+const AGENT_ASSET_OPTIONS = [
+  ['USDC', 'USDC'],
+  ['EURC', 'EURC'],
+  ['CIRBTC', 'cirBTC'],
+  ['CENT', 'CENT'],
+];
+
 function randomAgentId() {
   return crypto.randomUUID();
 }
@@ -135,6 +152,10 @@ function AgentPageContent() {
   const [autonomyInstructions, setAutonomyInstructions] = useState('');
   const [autonomyMaxActions, setAutonomyMaxActions] = useState('4');
   const [autonomySlippage, setAutonomySlippage] = useState('50');
+  const [allowedActions, setAllowedActions] = useState(AGENT_ACTION_OPTIONS.map(([value]) => value));
+  const [allowedAssets, setAllowedAssets] = useState(AGENT_ASSET_OPTIONS.map(([value]) => value));
+  const [maxAmountByAsset, setMaxAmountByAsset] = useState({ USDC: '', EURC: '', CIRBTC: '', CENT: '' });
+  const [configuredProviders, setConfiguredProviders] = useState([]);
   const [internalTarget, setInternalTarget] = useState('');
   const [internalAsset, setInternalAsset] = useState('USDC');
   const [internalAmount, setInternalAmount] = useState('');
@@ -189,13 +210,39 @@ function AgentPageContent() {
 
   useEffect(() => {
     const autonomy = selectedAgent?.config?.autonomy;
-    if (!autonomy) return;
-    setAutonomyEnabled(autonomy.enabled !== false);
-    setAutonomyInstructions(autonomy.instructions || '');
-    setAutonomyMaxActions(String(autonomy.maxActions || 4));
-    setAutonomySlippage(String(autonomy.slippageBps ?? 50));
-    if (autonomy.provider) setProvider(autonomy.provider);
+    const policy = selectedAgent?.config?.policy;
+    if (autonomy) {
+      setAutonomyEnabled(autonomy.enabled !== false);
+      setAutonomyInstructions(autonomy.instructions || '');
+      setAutonomyMaxActions(String(autonomy.maxActions || 4));
+      setAutonomySlippage(String(autonomy.slippageBps ?? 50));
+      if (autonomy.provider) setProvider(autonomy.provider);
+    }
+    if (policy) {
+      setAllowedActions(Array.isArray(policy.allowedActions) && policy.allowedActions.length ? policy.allowedActions : AGENT_ACTION_OPTIONS.map(([value]) => value));
+      setAllowedAssets(Array.isArray(policy.allowedAssets) && policy.allowedAssets.length ? policy.allowedAssets : AGENT_ASSET_OPTIONS.map(([value]) => value));
+      setMaxAmountByAsset({
+        USDC: String(policy.maxAmountByAsset?.USDC || ''),
+        EURC: String(policy.maxAmountByAsset?.EURC || ''),
+        CIRBTC: String(policy.maxAmountByAsset?.CIRBTC || ''),
+        CENT: String(policy.maxAmountByAsset?.CENT || ''),
+      });
+    } else {
+      setAllowedActions(AGENT_ACTION_OPTIONS.map(([value]) => value));
+      setAllowedAssets(AGENT_ASSET_OPTIONS.map(([value]) => value));
+      setMaxAmountByAsset({ USDC: '', EURC: '', CIRBTC: '', CENT: '' });
+    }
   }, [selectedAgent?.account, selectedAgent?.config]);
+
+  useEffect(() => {
+    if (!selectedAgent || !API_BASE) {
+      setConfiguredProviders([]);
+      return;
+    }
+    apiJson(API_BASE + '/api/v1/agents/' + selectedAgent.id + '/providers')
+      .then((body) => setConfiguredProviders(body.providers || []))
+      .catch(() => setConfiguredProviders([]));
+  }, [selectedAgent?.id]);
 
   async function toggleAgent() {
     if (!selectedAgent) return;
@@ -403,14 +450,32 @@ function AgentPageContent() {
 
   async function saveAutonomy() {
     if (!selectedAgent) return;
+    if (!allowedActions.length) return setError('Select at least one allowed action.');
+    if (!allowedAssets.length) return setError('Select at least one allowed asset.');
     try {
       const auth = await ownerAuth(selectedAgent.account, 'configure-agent');
-      await apiJson(`${API_BASE}/api/v1/agents/${selectedAgent.id}/config`, {
+      await apiJson(API_BASE + '/api/v1/agents/' + selectedAgent.id + '/config', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ...auth, owner: address, autonomy: { enabled: autonomyEnabled, provider, instructions: autonomyInstructions, maxActions: Number(autonomyMaxActions), slippageBps: Number(autonomySlippage) } }),
+        body: JSON.stringify({
+          ...auth,
+          owner: address,
+          autonomy: {
+            enabled: autonomyEnabled,
+            provider,
+            instructions: autonomyInstructions,
+            maxActions: Number(autonomyMaxActions),
+            slippageBps: Number(autonomySlippage),
+          },
+          policy: {
+            allowedActions,
+            allowedAssets,
+            maxAmountByAsset: Object.fromEntries(Object.entries(maxAmountByAsset).filter(([, value]) => String(value || '').trim())),
+          },
+        }),
       });
-      setStatus('Agent automation settings saved.');
+      setStatus('Agent behavior policy saved.');
+      await refreshAgents();
     } catch (e) { setError(e.message); }
   }
 
@@ -466,7 +531,9 @@ function AgentPageContent() {
         body: JSON.stringify({ ...auth, provider, model, apiKey: providerKey }),
       });
       setProviderKey('');
-      setStatus(`${provider} is configured for this agent.`);
+      const next = await apiJson(API_BASE + '/api/v1/agents/' + selectedAgent.id + '/providers');
+      setConfiguredProviders(next.providers || []);
+      setStatus(provider + ' is configured for this agent.');
     } catch (e) {
       setError(e.message);
     }
@@ -543,7 +610,7 @@ function AgentPageContent() {
     }
   }
 
-  const availableTabs = useMemo(() => ['agents', 'providers', 'automation', 'internal', 'external', 'analytics', 'chat'], []);
+  const availableTabs = useMemo(() => ['agents', 'configure', 'internal', 'external', 'analytics', 'chat'], []);
 
   return (
     <div className={styles.page}>
@@ -553,14 +620,17 @@ function AgentPageContent() {
           <p>Own, configure, activate, pause and connect onchain agents without giving them your owner key.</p>
         </div>
         {selectedAgent ? (
-          <button type="button" className={styles.toggleButton} disabled={isPending} onClick={toggleAgent}>
-            {selectedAgent.active ? 'Switch agent off' : 'Activate agent'}
-          </button>
+          <div className={styles.headerActions}>
+            <button type="button" className={styles.secondaryButton} onClick={() => setTab('configure')}>Configure agent</button>
+            <button type="button" className={styles.toggleButton} disabled={isPending} onClick={toggleAgent}>
+              {selectedAgent.active ? 'Switch agent off' : 'Activate agent'}
+            </button>
+          </div>
         ) : null}
       </header>
 
       <nav className={styles.tabs}>
-        {availableTabs.map((item) => <button key={item} type="button" className={tab === item ? styles.tabActive : styles.tab} onClick={() => setTab(item)}>{item === 'agents' ? 'My agents' : item === 'providers' ? 'AI provider' : item === 'automation' ? 'Automation' : item === 'internal' ? 'Agent network' : item === 'external' ? 'External agent' : item === 'analytics' ? 'Analytics' : 'Agent chat'}</button>)}
+        {availableTabs.map((item) => <button key={item} type="button" className={tab === item ? styles.tabActive : styles.tab} onClick={() => setTab(item)}>{item === 'agents' ? 'My agents' : item === 'configure' ? 'Configure' : item === 'internal' ? 'Agent network' : item === 'external' ? 'External agent' : item === 'analytics' ? 'Analytics' : 'Agent chat'}</button>)}
       </nav>
 
       {status ? <div className={styles.notice}>{status}</div> : null}
@@ -630,38 +700,130 @@ function AgentPageContent() {
         </>
       ) : null}
 
-      {tab === 'providers' ? (
-        <Section title="AI provider for this agent" description="Provider API keys are encrypted server-side and never exposed back to the browser after configuration.">
-          {!selectedAgent ? <div className={styles.empty}>Select an agent first.</div> : (
-            <>
-              <div className={styles.formGrid}>
-                <div><label className={styles.label}>Provider</label><select className={styles.input} value={provider} onChange={(e) => setProvider(e.target.value)}>{providerOptions.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></div>
-                <div><label className={styles.label}>Model</label><input className={styles.input} value={model} onChange={(e) => setModel(e.target.value)} placeholder="Enter provider model id" /></div>
-              </div>
-              <label className={styles.label}>API key</label>
-              <input className={styles.input} type="password" value={providerKey} onChange={(e) => setProviderKey(e.target.value)} placeholder="Provider API key" />
-              <button type="button" className={styles.primaryButton} onClick={configureProvider}>Save provider</button>
-              <p className={styles.hint}>Each agent can use a different provider/model. Centry stores the provider secret encrypted and only decrypts it server-side when the agent chat needs it.</p>
-            </>
-          )}
-        </Section>
-      ) : null}
+      {tab === 'configure' ? (
+        <>
+          <Section title="AI provider" description="Choose the model that reasons for this agent and store its provider credential securely.">
+            {!selectedAgent ? <div className={styles.empty}>Select an agent first.</div> : (
+              <>
+                <div className={styles.formGrid}>
+                  <div>
+                    <label className={styles.label}>Provider</label>
+                    <select className={styles.input} value={provider} onChange={(e) => setProvider(e.target.value)}>
+                      {providerOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={styles.label}>Model</label>
+                    <input className={styles.input} value={model} onChange={(e) => setModel(e.target.value)} placeholder="e.g. gemini-3.1-flash-lite" />
+                  </div>
+                </div>
+                <label className={styles.label}>Provider API key</label>
+                <input className={styles.input} type="password" value={providerKey} onChange={(e) => setProviderKey(e.target.value)} placeholder="Paste your Gemini, OpenAI or Anthropic API key" />
+                <div className={styles.rowBetween}>
+                  <p className={styles.hint}>{configuredProviders.length ? 'Configured: ' + configuredProviders.map((item) => item.provider + ' · ' + item.model).join(', ') : 'No provider credentials saved for this agent yet.'}</p>
+                  <button type="button" className={styles.primaryButton} onClick={configureProvider}>Save provider</button>
+                </div>
+                <p className={styles.hint}>Your raw API key is encrypted server-side and is not returned to the browser after storage.</p>
+              </>
+            )}
+          </Section>
 
+          <Section title="Agent behavior" description="Configure what the agent can do, what it should do, and the limits the hosted runner enforces before simulation.">
+            {!selectedAgent ? <div className={styles.empty}>Select an agent first.</div> : (
+              <>
+                <label className={styles.scope}>
+                  <input type="checkbox" checked={autonomyEnabled} onChange={(e) => setAutonomyEnabled(e.target.checked)} />
+                  <span><strong>Allow autonomous runs</strong><small>When OFF, the runner wakes the agent but does not execute AI-driven work.</small></span>
+                </label>
+                <label className={styles.label}>Strategy / instructions</label>
+                <textarea className={styles.textarea} rows={8} value={autonomyInstructions} onChange={(e) => setAutonomyInstructions(e.target.value)} placeholder="Example: supply idle USDC, never borrow, keep enough native USDC for gas, and only swap CENT when the specified condition is met." />
+                <div className={styles.formGrid}>
+                  <div>
+                    <label className={styles.label}>Provider used for autonomy</label>
+                    <select className={styles.input} value={provider} onChange={(e) => setProvider(e.target.value)}>
+                      {providerOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={styles.label}>Max actions per run</label>
+                    <input className={styles.input} inputMode="numeric" value={autonomyMaxActions} onChange={(e) => setAutonomyMaxActions(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className={styles.label}>Swap slippage (bps)</label>
+                    <input className={styles.input} inputMode="numeric" value={autonomySlippage} onChange={(e) => setAutonomySlippage(e.target.value)} />
+                  </div>
+                </div>
+                <label className={styles.label}>Allowed actions</label>
+                <div className={styles.scopeGrid}>
+                  {AGENT_ACTION_OPTIONS.map(([value, label, description]) => (
+                    <label key={value} className={styles.scope}>
+                      <input type="checkbox" checked={allowedActions.includes(value)} onChange={() => setAllowedActions((current) => current.includes(value) ? current.filter((item) => item !== value) : [...current, value])} />
+                      <span><strong>{label}</strong><small>{description}</small></span>
+                    </label>
+                  ))}
+                </div>
+                <p className={styles.hint}>Token approvals are treated as prerequisites for allowed actions rather than a separate user-facing behavior.</p>
+                <label className={styles.label}>Allowed assets</label>
+                <div className={styles.scopeGrid}>
+                  {AGENT_ASSET_OPTIONS.map(([value, label]) => (
+                    <label key={value} className={styles.scope}>
+                      <input type="checkbox" checked={allowedAssets.includes(value)} onChange={() => setAllowedAssets((current) => current.includes(value) ? current.filter((item) => item !== value) : [...current, value])} />
+                      <span><strong>{label}</strong><small>May be used by the allowed actions.</small></span>
+                    </label>
+                  ))}
+                </div>
+                <label className={styles.label}>Maximum amount per action</label>
+                <div className={styles.formGrid}>
+                  {AGENT_ASSET_OPTIONS.map(([value, label]) => (
+                    <div key={value}>
+                      <label className={styles.label}>{label}</label>
+                      <input className={styles.input} inputMode="decimal" value={maxAmountByAsset[value] || ''} onChange={(e) => setMaxAmountByAsset((current) => ({ ...current, [value]: e.target.value }))} placeholder={value === 'CIRBTC' ? 'e.g. 0.01' : value === 'CENT' ? 'e.g. 1000' : 'Leave blank for no cap'} />
+                    </div>
+                  ))}
+                </div>
+                <div className={styles.rowBetween}>
+                  <p className={styles.hint}>Amount caps apply per action. Blank means no application-level cap; the smart-account policy remains the final boundary.</p>
+                  <button type="button" className={styles.primaryButton} onClick={saveAutonomy}>Save behavior policy</button>
+                </div>
+              </>
+            )}
+          </Section>
 
-      {tab === 'automation' ? (
-        <Section title="24/7 automation" description="The hosted runner wakes active agents, reads their strategy and executes only calls allowed by the agent’s onchain permissions.">
-          {!selectedAgent ? <div className={styles.empty}>Select an agent first.</div> : (
-            <>
-              <label className={styles.scope}><input type="checkbox" checked={autonomyEnabled} onChange={(e) => setAutonomyEnabled(e.target.checked)} /><span><strong>Allow autonomous runs</strong><small>Turning this off stops AI-driven actions while keeping the agent wallet and owner controls intact.</small></span></label>
-              <label className={styles.label}>Strategy instructions</label>
-              <textarea className={styles.input} rows={7} value={autonomyInstructions} onChange={(e) => setAutonomyInstructions(e.target.value)} placeholder="Example: keep enough USDC for gas, supply idle USDC, never borrow, and only swap CENT when the configured condition is met." />
-              <div className={styles.formGrid}><div><label className={styles.label}>Provider</label><select className={styles.input} value={provider} onChange={(e) => setProvider(e.target.value)}>{providerOptions.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></div><div><label className={styles.label}>Max actions/run</label><input className={styles.input} inputMode="numeric" value={autonomyMaxActions} onChange={(e) => setAutonomyMaxActions(e.target.value)} /></div><div><label className={styles.label}>Swap slippage (bps)</label><input className={styles.input} inputMode="numeric" value={autonomySlippage} onChange={(e) => setAutonomySlippage(e.target.value)} /></div></div>
-              <button type="button" className={styles.primaryButton} onClick={saveAutonomy}>Save automation settings</button>
-              <button type="button" className={styles.secondaryButton} onClick={allowAgentAutomation}>Authorize hosted runner + internal transfers</button>
-              <p className={styles.hint}>The runner signs transactions with Centry’s dedicated execution key. Your owner key stays in your wallet. The provider API key is separate and is only used for the agent’s AI reasoning.</p>
-            </>
-          )}
-        </Section>
+          <Section title="Hosted execution" description="Authorize Centry's dedicated runner as an operator and apply the standard onchain permissions for this agent.">
+            {!selectedAgent ? <div className={styles.empty}>Select an agent first.</div> : (
+              <>
+                <div className={styles.storeCard}>
+                  <div><strong>Runner</strong><p>{RUNNER_ADDRESS || 'Not configured'}</p></div>
+                  <div className={styles.price}>Arc · 5042</div>
+                </div>
+                <button type="button" className={styles.secondaryButton} onClick={allowAgentAutomation}>Authorize hosted runner + selected permissions</button>
+                <p className={styles.hint}>This is owner-signed. The runner never receives your owner private key.</p>
+              </>
+            )}
+          </Section>
+
+          <Section title="Agent API access" description="Create a persistent credential for an external AI agent. The raw key is shown once and stored only as a hash.">
+            {!selectedAgent ? <div className={styles.empty}>Select an agent first.</div> : (
+              <>
+                <label className={styles.label}>External agent operator address</label>
+                <input className={styles.input} value={apiKeyOperator} onChange={(e) => setApiKeyOperator(e.target.value)} placeholder="0x…" />
+                <label className={styles.label}>Key label</label>
+                <input className={styles.input} value={apiKeyLabel} onChange={(e) => setApiKeyLabel(e.target.value)} placeholder="External AI" />
+                <label className={styles.label}>API capabilities</label>
+                <div className={styles.scopeGrid}>
+                  {scopeOptions.map(([scope, description]) => (
+                    <label key={scope} className={styles.scope}>
+                      <input type="checkbox" checked={apiKeyScopes.includes(scope)} onChange={() => setApiKeyScopes((current) => current.includes(scope) ? current.filter((item) => item !== scope) : [...current, scope])} />
+                      <span><strong>{scope}</strong><small>{description}</small></span>
+                    </label>
+                  ))}
+                </div>
+                <button type="button" className={styles.secondaryButton} onClick={generateApiKey}>Generate API key</button>
+                {newApiKey ? <div className={styles.secretBox}><div>Copy once</div><code>{newApiKey}</code></div> : null}
+              </>
+            )}
+          </Section>
+        </>
       ) : null}
 
       {tab === 'internal' ? (
