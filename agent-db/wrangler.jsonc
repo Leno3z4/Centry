@@ -7,7 +7,7 @@
     {
       "binding": "DB",
       "database_name": "centry-agents",
-      "database_id": "YOUR_CLOUDFLARE_D1_DATABASE_ID",
+      "database_id": "f9404943-2d31-43f2-b09d-a7fa82823855",
       "migrations_dir": "migrations"
     }
   ]
