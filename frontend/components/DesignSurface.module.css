@@ -20,7 +20,7 @@
   position: absolute;
   inset: 0 0 auto;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(197,156,255,.22), transparent);
+  background: #26292e;
   pointer-events: none;
 }
 
@@ -31,7 +31,7 @@
 .surfaceRoot :global(.action-card),
 .surfaceRoot :global(.feature-card),
 .surfaceRoot :global(.doc-card) {
-  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease, background 160ms ease;
+  transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
 }
 
 .surfaceRoot :global(.panel:hover),
@@ -41,24 +41,23 @@
 .surfaceRoot :global(.action-card:hover),
 .surfaceRoot :global(.feature-card:hover),
 .surfaceRoot :global(.doc-card:hover) {
-  border-color: #342642;
-  box-shadow: 0 24px 68px rgba(0,0,0,.26), inset 0 1px 0 rgba(255,255,255,.018);
+  border-color: #3a3e44;
 }
 
 .surfaceRoot :global(.amount-input-wrap:focus-within) {
-  border-color: #6b4595;
-  box-shadow: 0 0 0 3px rgba(155,98,255,.08), inset 0 1px 0 rgba(255,255,255,.02);
+  border-color: #656a73;
+  box-shadow: 0 0 0 3px rgba(183,167,255,.10);
 }
 
 .surfaceRoot :global(.action-tabs) {
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.025), 0 14px 34px rgba(0,0,0,.16);
+  box-shadow: none;
 }
 
 .surfaceRoot :global(.action-tabs button:focus-visible),
 .surfaceRoot :global(.form-meta button:focus-visible),
 .surfaceRoot :global(.market-list-item:focus-visible),
 .surfaceRoot :global(.doc-item:focus-visible) {
-  outline: 2px solid rgba(168,85,247,.42);
+  outline: 2px solid rgba(183,167,255,.55);
   outline-offset: 2px;
 }
 
@@ -69,8 +68,8 @@
 
 .surfaceRoot :global(.market-chip:hover),
 .surfaceRoot :global(.doc-item:hover) {
-  border-color: #3b2b4d;
-  background: #110c1c;
+  border-color: #3f444b;
+  background: #121418;
   transform: translateY(-1px);
 }
 
@@ -88,12 +87,12 @@
 
 .surfaceRoot :global(.status-live),
 .surfaceRoot :global(.reward-mini-status.live) {
-  text-shadow: 0 0 14px rgba(78,227,154,.18);
+  text-shadow: none;
 }
 
 .surfaceRoot :global(.warning-banner),
 .surfaceRoot :global(.notice) {
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.018);
+  box-shadow: none;
 }
 
 .surfaceRoot :global(.page-footer) {
