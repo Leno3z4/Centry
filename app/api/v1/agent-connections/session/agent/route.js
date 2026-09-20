@@ -1,5 +1,5 @@
 import { Contract, JsonRpcProvider, getAddress } from "ethers";
-import { authenticateAgent, jsonResponse, requireScope } from "../../../../../../lib/agentApi";
+import { authenticateAgent, jsonResponse, requireScope } from "../../../../../../../lib/agentApi";
 
 const ACCOUNT_ABI = [
   "function owner() view returns (address)",
