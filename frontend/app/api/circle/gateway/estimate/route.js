@@ -1,4 +1,4 @@
-import { CIRCLE_GATEWAY_TESTNET_API } from '../../../../../constants/circleGateway';
+import { CIRCLE_GATEWAY_API, CIRCLE_GATEWAY_HEADERS } from '../../../../../constants/circleGateway';
 import { rateLimit, rateLimitResponse, withRateLimitHeaders } from '../../../../../lib/rateLimit';
 
 export async function POST(request) {
@@ -8,7 +8,7 @@ export async function POST(request) {
     const body = await request.json();
     const specs = Array.isArray(body?.specs) ? body.specs : body?.spec ? [body.spec] : [];
     if (!specs.length) return withRateLimitHeaders(Response.json({ success: false, error: 'At least one Gateway transfer spec is required.' }, { status: 400 }), limit);
-    const response = await fetch(`${CIRCLE_GATEWAY_TESTNET_API}/v1/estimate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(specs.map((spec) => ({ spec }))), cache: 'no-store' });
+    const response = await fetch(`${CIRCLE_GATEWAY_API}/v1/estimate`, { method: 'POST', headers: CIRCLE_GATEWAY_HEADERS, body: JSON.stringify(specs.map((spec) => ({ spec }))), cache: 'no-store' });
     const json = await response.json().catch(() => ({}));
     if (!response.ok) return withRateLimitHeaders(Response.json({ success: false, error: json?.message || json?.error || `Circle Gateway returned HTTP ${response.status}.` }, { status: response.status }), limit);
     const estimates = Array.isArray(json?.body) ? json.body.map((item) => item?.burnIntent).filter(Boolean) : [];
