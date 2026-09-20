@@ -106,7 +106,7 @@ function SwapContent() {
   const networkBlocksAction = wrongNetwork && !gatewayCanQuoteOffArc;
   const { data: inputDecimals } = useReadContract({ address: fromMarket?.address, abi: ERC20_ABI, functionName: 'decimals', query: { enabled: Boolean(fromMarket?.address) } });
   const { data: outputDecimals } = useReadContract({ address: toMarket?.address, abi: ERC20_ABI, functionName: 'decimals', query: { enabled: Boolean(toMarket?.address) } });
-  const { data: arcWalletBalanceRaw } = useReadContract({ address: gatewayEnabled ? fromMarket?.address : undefined, abi: ERC20_ABI, functionName: 'balanceOf', args: address ? [address] : undefined, query: { enabled: Boolean(address && gatewayEnabled) } });
+  const { data: arcWalletBalanceRaw } = useReadContract({ address: gatewayEnabled ? fromMarket?.address : undefined, abi: ERC20_ABI, functionName: 'balanceOf', args: address ? [address] : undefined, chainId: ARC_CHAIN_ID, query: { enabled: Boolean(address && gatewayEnabled) } });
   const arcWalletBalance = gatewayEnabled && arcWalletBalanceRaw != null ? formatUnits(arcWalletBalanceRaw, 6) : '0';
   const fromTokenDecimals = Number(inputDecimals ?? fromMarket?.decimals ?? 6);
   const toTokenDecimals = Number(outputDecimals ?? toMarket?.decimals ?? 6);
