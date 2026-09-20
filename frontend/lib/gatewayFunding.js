@@ -1,8 +1,8 @@
 import { pad, parseUnits } from 'viem';
-import { GATEWAY_MINTER_ADDRESS, GATEWAY_TESTNET_CHAINS, GATEWAY_WALLET_ADDRESS } from '../constants/circleGateway';
+import { GATEWAY_MINTER_ADDRESS, GATEWAY_MAINNET_CHAINS, GATEWAY_WALLET_ADDRESS } from '../constants/circleGateway';
 
-export const ARC_CHAIN_ID = 5042002;
-export const ARC_GATEWAY_CHAIN = GATEWAY_TESTNET_CHAINS.find((chain) => chain.chainId === ARC_CHAIN_ID) || GATEWAY_TESTNET_CHAINS[0];
+export const ARC_CHAIN_ID = 5042;
+export const ARC_GATEWAY_CHAIN = GATEWAY_MAINNET_CHAINS.find((chain) => chain.chainId === ARC_CHAIN_ID) || GATEWAY_MAINNET_CHAINS[0];
 export const ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000';
 export const GATEWAY_EIP712_DOMAIN = { name: 'GatewayWallet', version: '1' };
 
