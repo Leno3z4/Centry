@@ -219,11 +219,11 @@ export function WalletConnect() {
           .wallet-connect-wrap .connect-wallet {
             min-height: 44px;
             padding: 10px 16px;
-            border: 1px solid #69439e;
+            border: 1px solid #c9c0ff;
             border-radius: 11px;
-            background: linear-gradient(135deg, #9253ff, #b77bff);
+            background: #b7a7ff;
             color: #fff;
-            box-shadow: 0 10px 30px rgba(112, 55, 202, 0.24);
+            box-shadow: none;
             font-size: 12px;
             font-weight: 700;
             transition: transform 160ms ease, filter 160ms ease;
@@ -231,7 +231,7 @@ export function WalletConnect() {
 
           .wallet-connect-wrap .connect-wallet:hover:not(:disabled) {
             transform: translateY(-1px);
-            filter: brightness(1.05);
+            filter: none;
           }
 
           .wallet-picker-backdrop {
@@ -254,10 +254,8 @@ export function WalletConnect() {
             padding: 24px;
             border: 1px solid #3c2d52;
             border-radius: 20px;
-            background:
-              radial-gradient(circle at 90% 0%, rgba(155, 98, 255, 0.18), transparent 35%),
-              linear-gradient(145deg, #151020, #0b0813);
-            box-shadow: 0 34px 90px rgba(0, 0, 0, 0.62);
+            background: #0e1013;
+            box-shadow: 0 24px 70px rgba(0, 0, 0, 0.52);
           }
 
           .wallet-picker-header {
