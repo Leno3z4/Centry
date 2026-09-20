@@ -114,9 +114,9 @@ export default function Page() {
                   </div>
                 </div>
                 <div style={{ marginTop: 16, padding: 14, border: '1px solid #21182d', borderRadius: 11, background: '#0c0814' }}>
-                  <div className="section-kicker">CURRENT ARC TESTNET CONFIGURATION</div>
+                  <div className="section-kicker">CURRENT ARC MAINNET CONFIGURATION</div>
                   <p className="panel-copy" style={{ marginBottom: 0 }}>
-                    Arc testnet chain ID: <code>5042002</code>. The live USDC reserve uses the Arc native USDC ERC-20 interface.
+                    Arc mainnet chain ID: <code>5042</code>. The live USDC reserve uses the Arc native USDC ERC-20 interface.
                     Development risk parameters are intentionally treated as testnet values and are not production recommendations.
                   </p>
                 </div>
@@ -224,7 +224,7 @@ export default function Page() {
 
               <section id="contracts" className="panel">
                 <div className="section-kicker">07 / CONTRACTS</div>
-                <h2>Live Arc testnet deployment</h2>
+                <h2>Live Arc mainnet deployment</h2>
                 <p className="panel-copy">These are the protocol addresses currently configured by the frontend.</p>
                 <div style={{ display: 'grid', gap: 7, marginTop: 14 }}>
                   {addressRows.map(([label, address]) => (
@@ -247,7 +247,7 @@ export default function Page() {
                 <div className="section-kicker">08 / RISK & TESTNET</div>
                 <h2>Important before using Centry</h2>
                 <p className="panel-copy">
-                  Centry is running on Arc testnet. Risk parameters, oracle configuration, reserves, and automation are still
+                  Centry is running on Arc mainnet. Risk parameters, oracle configuration, reserves, and automation are still
                   development infrastructure. Testnet behavior should not be treated as production-ready financial infrastructure.
                 </p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 16 }}>
