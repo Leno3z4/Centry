@@ -8,7 +8,7 @@ import { AppShell } from '../../../components/AppShell';
 import styles from './bridge.module.css';
 
 const ARC_CHAIN_ID = 5042;
-const TOKEN_MESSENGER_V2 = '0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA';
+const TOKEN_MESSENGER_V2 = '0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d';
 
 const BRIDGE_CHAINS = [
   { id: 'arc-mainnet', chainId: ARC_CHAIN_ID, domain: 26, name: 'Arc Mainnet', short: 'Arc', badge: 'A', usdc: '0x3600000000000000000000000000000000000000', rpcUrl: 'https://rpc.mainnet.arc.io', explorerUrl: 'https://explorer.arc.io', native: { name: 'USDC', symbol: 'USDC', decimals: 18 } },
@@ -295,7 +295,7 @@ function BridgeContent() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <div><span className={styles.kicker}>CENTRY · BRIDGE</span><h1>Move USDC across chains</h1><p>Bridge testnet USDC with Circle CCTP. Your wallet signs every source-chain transaction.</p></div>
+        <div><span className={styles.kicker}>CENTRY · BRIDGE</span><h1>Move USDC across chains</h1><p>Bridge USDC across supported networks with Circle CCTP. Your wallet signs every source-chain transaction.</p></div>
         <span className={styles.destinationPill}><i /> Circle CCTP · USDC</span>
       </header>
 
