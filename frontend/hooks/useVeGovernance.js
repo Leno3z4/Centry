@@ -9,7 +9,7 @@ import {
 import { parseUnits, formatUnits } from 'viem';
 import { CONTRACT_ADDRESSES, hasAddress } from '../constants/contracts';
 import { VE_CENTRY_ABI, ERC20_ABI } from '../constants/abis';
-import { arcTestnet } from '../config/multiWagmi';
+import { arcMainnet } from '../config/multiWagmi';
 
 export function useVeGovernance() {
   const { address } = useAccount();
@@ -20,7 +20,7 @@ export function useVeGovernance() {
   const [transactionError, setTransactionError] = useState(null);
 
   const configured = hasAddress('veCentry') && hasAddress('centryToken');
-  const correctNetwork = !address || chainId === arcTestnet.id;
+  const correctNetwork = !address || chainId === arcMainnet.id;
 
   const { data: veBalance, refetch: refetchVeBalance } = useReadContract({
     address: CONTRACT_ADDRESSES.veCentry,
@@ -85,7 +85,7 @@ export function useVeGovernance() {
 
   const sendAndWait = async (request) => {
     if (!address) throw new Error('Connect your wallet before submitting a transaction.');
-    if (chainId !== arcTestnet.id) throw new Error('Switch your wallet to Arc Testnet before submitting a transaction.');
+    if (chainId !== arcMainnet.id) throw new Error('Switch your wallet to Arc Mainnet before submitting a transaction.');
     if (!publicClient) throw new Error('Wallet client is not ready. Please reconnect your wallet.');
 
     setTransactionPending(true);
