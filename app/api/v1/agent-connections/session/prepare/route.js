@@ -148,7 +148,7 @@ export async function GET(request) {
   try {
     await assertLiveOperator({ rpcUrl, account: session.account, operator: session.operator });
     return json({
-      chainId: ARC_TESTNET_CHAIN_ID,
+      chainId: ARC_MAINNET_CHAIN_ID,
       account: session.account,
       operator: session.operator,
       scopes: session.scopes || [],
