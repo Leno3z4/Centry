@@ -38,7 +38,7 @@ async function main() {
   const provider = new ethers.JsonRpcProvider(RPC_URL);
   const network = await provider.getNetwork();
   if (network.chainId !== EXPECTED_CHAIN_ID) {
-    fail(`Wrong chain. Expected Arc Testnet ${EXPECTED_CHAIN_ID}, got ${network.chainId}`);
+    fail(`Wrong chain. Expected Arc Mainnet ${EXPECTED_CHAIN_ID}, got ${network.chainId}`);
   }
 
   const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
