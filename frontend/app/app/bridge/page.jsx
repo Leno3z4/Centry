@@ -99,7 +99,7 @@ function BridgeContent() {
   const walletChainId = useChainId();
   const { data: connectorClient } = useConnectorClient();
   const [fromId, setFromId] = useState('arc-mainnet');
-  const [toId, setToId] = useState('base-sepolia');
+  const [toId, setToId] = useState('base-mainnet');
   const [amount, setAmount] = useState('');
   const [balance, setBalance] = useState(null);
   const [loadingBalance, setLoadingBalance] = useState(false);
@@ -253,7 +253,7 @@ function BridgeContent() {
         const feeRaw = await connectorClient.request({ method: 'eth_call', params: [{ to: TOKEN_MESSENGER_V2, data: feeData }, 'latest'] });
         maxFee = (BigInt(decodeFunctionResult({ abi: TOKEN_MESSENGER_V2_ABI, functionName: 'getMinFeeAmount', data: feeRaw })) * 120n / 100n) + 1n;
       } catch {
-        // Standard-transfer fees are normally zero; retain a small testnet safety ceiling if the optional fee read is unavailable.
+        // Standard-transfer fees are normally zero; retain a small safety ceiling if the optional fee read is unavailable.
       }
 
       await approveIfNeeded(amountRaw);
@@ -334,7 +334,7 @@ function BridgeContent() {
         ) : null}
       </section>
 
-      <p className={styles.disclaimer}>Bridge support is currently limited to USDC and the supported testnet networks shown above.</p>
+      <p className={styles.disclaimer}>Bridge support is currently limited to USDC and the supported mainnet networks shown above.</p>
     </div>
   );
 }
