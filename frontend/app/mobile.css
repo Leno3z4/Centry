@@ -347,3 +347,126 @@
         height: 32px;
     }
 }
+
+
+@media (max-width: 760px) {
+  body {
+    overscroll-behavior-x: none;
+  }
+
+  .page-view {
+    width: 100%;
+  }
+
+  .topbar .wallet-area {
+    gap: 5px;
+  }
+
+  .topbar .connect-wallet,
+  .topbar .wallet-address,
+  .topbar .network-warning {
+    min-height: 42px;
+  }
+
+  .page-footer {
+    padding-top: 18px;
+    font-size: 8px;
+  }
+
+  .hero-copy,
+  .section-header,
+  .content-grid,
+  .workspace-grid,
+  .page-stack,
+  .panel,
+  .form-card {
+    min-width: 0;
+  }
+
+  .primary-btn,
+  .secondary-btn,
+  .large-btn,
+  .connect-wallet,
+  .wallet-address,
+  .network-warning,
+  .mobile-menu-button {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@media (max-width: 480px) {
+  .main-content {
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+
+  .hero {
+    padding-top: 34px;
+    padding-bottom: 26px;
+  }
+
+  .hero h1 {
+    font-size: clamp(40px, 13vw, 54px);
+    letter-spacing: -2.5px;
+  }
+
+  .hero-copy p,
+  .section-header p,
+  .panel-copy {
+    font-size: 12px;
+  }
+
+  .stats-grid {
+    gap: 8px;
+  }
+
+  .metric {
+    min-height: 92px;
+    padding: 12px;
+  }
+
+  .metric > strong {
+    margin-top: 8px;
+    font-size: 17px;
+  }
+
+  .panel {
+    padding: 14px;
+    border-radius: 13px;
+  }
+
+  .panel-head {
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .action-tabs button {
+    min-height: 46px;
+    padding: 9px 8px;
+  }
+
+  .form-card {
+    padding: 16px 14px;
+  }
+
+  .form-card h2 {
+    font-size: 22px;
+  }
+
+  .field-label {
+    margin-top: 16px;
+  }
+
+  .amount-input-wrap input {
+    min-height: 54px;
+    font-size: 20px;
+  }
+
+  .primary-btn,
+  .secondary-btn,
+  .large-btn,
+  .connect-wallet,
+  .wallet-address {
+    min-height: 48px;
+  }
+}
