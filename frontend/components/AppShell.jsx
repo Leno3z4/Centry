@@ -15,7 +15,6 @@ const NAV_ITEMS = [
   { href: '/app/rewards', label: 'Rewards', icon: '✦', group: 'product' },
   { href: '/app/governance', label: 'Governance', icon: '♢', group: 'product' },
   { href: '/app/agents', label: 'Agents', icon: '✧', group: 'product' },
-  { href: '/app/pools', label: 'Pools', icon: '◒', group: 'explore' },
   { href: '/app/bridge', label: 'Bridge', icon: '↗', group: 'explore' },
   { href: '/app/portfolio', label: 'Portfolio', icon: '◐', group: 'explore' },
   { href: '/app/analytics', label: 'Analytics', icon: '⌁', group: 'explore' },
