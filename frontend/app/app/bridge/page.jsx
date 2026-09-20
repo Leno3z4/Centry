@@ -7,14 +7,14 @@ import { Providers } from '../../../components/Providers';
 import { AppShell } from '../../../components/AppShell';
 import styles from './bridge.module.css';
 
-const ARC_CHAIN_ID = 5042002;
+const ARC_CHAIN_ID = 5042;
 const TOKEN_MESSENGER_V2 = '0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA';
 
 const BRIDGE_CHAINS = [
-  { id: 'arc-testnet', chainId: ARC_CHAIN_ID, domain: 26, name: 'Arc Testnet', short: 'Arc', badge: 'A', usdc: '0x3600000000000000000000000000000000000000', rpcUrl: 'https://rpc.testnet.arc.network', explorerUrl: 'https://testnet.arcscan.app', native: { name: 'USD Coin', symbol: 'USDC', decimals: 6 } },
-  { id: 'base-sepolia', chainId: 84532, domain: 6, name: 'Base Sepolia', short: 'Base', badge: 'B', usdc: '0x036CbD53842c5426634e7929541eC2318f3dCF7e', rpcUrl: 'https://sepolia.base.org', explorerUrl: 'https://sepolia.basescan.org', native: { name: 'Ether', symbol: 'ETH', decimals: 18 } },
-  { id: 'arbitrum-sepolia', chainId: 421614, domain: 3, name: 'Arbitrum Sepolia', short: 'Arbitrum', badge: 'A', usdc: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d', rpcUrl: 'https://sepolia-rollup.arbitrum.io/rpc', explorerUrl: 'https://sepolia.arbiscan.io', native: { name: 'Ether', symbol: 'ETH', decimals: 18 } },
-  { id: 'ethereum-sepolia', chainId: 11155111, domain: 0, name: 'Ethereum Sepolia', short: 'Ethereum', badge: 'E', usdc: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', rpcUrl: 'https://rpc.sepolia.org', explorerUrl: 'https://sepolia.etherscan.io', native: { name: 'Ether', symbol: 'ETH', decimals: 18 } },
+  { id: 'arc-mainnet', chainId: ARC_CHAIN_ID, domain: 26, name: 'Arc Mainnet', short: 'Arc', badge: 'A', usdc: '0x3600000000000000000000000000000000000000', rpcUrl: 'https://rpc.mainnet.arc.io', explorerUrl: 'https://explorer.arc.io', native: { name: 'USDC', symbol: 'USDC', decimals: 18 } },
+  { id: 'base-mainnet', chainId: 8453, domain: 6, name: 'Base', short: 'Base', badge: 'B', usdc: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', rpcUrl: 'https://mainnet.base.org', explorerUrl: 'https://basescan.org', native: { name: 'Ether', symbol: 'ETH', decimals: 18 } },
+  { id: 'arbitrum-mainnet', chainId: 42161, domain: 3, name: 'Arbitrum', short: 'Arbitrum', badge: 'A', usdc: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', rpcUrl: 'https://arb1.arbitrum.io/rpc', explorerUrl: 'https://arbiscan.io', native: { name: 'Ether', symbol: 'ETH', decimals: 18 } },
+  { id: 'ethereum-mainnet', chainId: 1, domain: 0, name: 'Ethereum', short: 'Ethereum', badge: 'E', usdc: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', rpcUrl: 'https://ethereum-rpc.publicnode.com', explorerUrl: 'https://etherscan.io', native: { name: 'Ether', symbol: 'ETH', decimals: 18 } },
 ];
 
 const EXTERNAL_CHAINS = BRIDGE_CHAINS.filter((chain) => chain.chainId !== ARC_CHAIN_ID);
@@ -98,7 +98,7 @@ function BridgeContent() {
   const { address, isConnected } = useAccount();
   const walletChainId = useChainId();
   const { data: connectorClient } = useConnectorClient();
-  const [fromId, setFromId] = useState('arc-testnet');
+  const [fromId, setFromId] = useState('arc-mainnet');
   const [toId, setToId] = useState('base-sepolia');
   const [amount, setAmount] = useState('');
   const [balance, setBalance] = useState(null);
@@ -107,8 +107,8 @@ function BridgeContent() {
   const [txHash, setTxHash] = useState('');
   const [error, setError] = useState('');
 
-  const fromArc = fromId === 'arc-testnet';
-  const toArc = toId === 'arc-testnet';
+  const fromArc = fromId === 'arc-mainnet';
+  const toArc = toId === 'arc-mainnet';
   const sourceChains = useMemo(() => toArc ? EXTERNAL_CHAINS : [BRIDGE_CHAINS[0]], [toArc]);
   const destinationChains = useMemo(() => fromArc ? EXTERNAL_CHAINS : [BRIDGE_CHAINS[0]], [fromArc]);
   const source = BRIDGE_CHAINS.find((chain) => chain.id === fromId) || BRIDGE_CHAINS[0];
@@ -157,13 +157,13 @@ function BridgeContent() {
 
   const changeFrom = (next) => {
     setFromId(next);
-    if (next === toId) setToId(next === 'arc-testnet' ? EXTERNAL_CHAINS[0].id : 'arc-testnet');
+    if (next === toId) setToId(next === 'arc-mainnet' ? EXTERNAL_CHAINS[0].id : 'arc-mainnet');
     resetFlow();
   };
 
   const changeTo = (next) => {
     setToId(next);
-    if (next === fromId) setFromId(next === 'arc-testnet' ? EXTERNAL_CHAINS[0].id : 'arc-testnet');
+    if (next === fromId) setFromId(next === 'arc-mainnet' ? EXTERNAL_CHAINS[0].id : 'arc-mainnet');
     resetFlow();
   };
 
