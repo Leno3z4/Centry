@@ -7,7 +7,7 @@ import { rateLimit, rateLimitResponse, withRateLimitHeaders } from '../../../../
 const ARC_CHAIN_ID = 5042;
 const ARC_RPC_URL = process.env.ARC_RPC_URL || process.env.NEXT_PUBLIC_ARC_RPC_URL || 'https://rpc.mainnet.arc.io';
 const UNITFLOW_V3_QUOTER = '0x5AF6E89F0960Ff375AF84d9911D8153ef6240E34';
-const UNITFLOW_FEES = [500, 3000, 10000];
+const UNITFLOW_FEES = [100, 500, 3000, 10000];
 
 const QUOTER_ABI = [{
   type: 'function',
