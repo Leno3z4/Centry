@@ -4,10 +4,10 @@ This package replaces the legacy factory/vault keeper with the deployed Centry V
 
 ## Contracts
 
-- veCENT: `0xF8B71bAed42c28e7e376C4DbD4A137047B92a503`
-- RevenueRewards: `0x06e627ce43F2ddd37e8f196824f7049416c3025b`
-- SelfRepayExecutorV2: `0x02356D1E4557b8D656cE1493D751C914EA84efe7`
-- LendingPool: `0x90C935687D91b3352b2C55cd79389C92950D94BD`
+- veCENT: `0x3c1771B971329f3eCf9A1bB8B3adC8756e13d334`
+- RevenueRewards: `0x0cBb0050cDCCC5D9CE8Ee2C407c8608B042D30D5`
+- SelfRepayExecutorV2: `0x6D87e89C015509F84B4e01b8a193d1A2CcE7De37`
+- LendingPool: `0x0ee649E5A95eB9127cB7146b26349a92B68c17A4`
 
 Network: Arc Mainnet, chain ID `5042`.
 
