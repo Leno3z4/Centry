@@ -95,7 +95,7 @@ async function main() {
 
   if (network.chainId !== EXPECTED_CHAIN_ID) {
     throw new Error(
-      `Wrong chain. Expected Arc Testnet ${EXPECTED_CHAIN_ID}, got ${network.chainId}`
+      `Wrong chain. Expected Arc Mainnet ${EXPECTED_CHAIN_ID}, got ${network.chainId}`
     );
   }
 
