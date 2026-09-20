@@ -120,7 +120,7 @@ export default function LandingHome() {
                     min-height: 100vh;
                     overflow: hidden;
                     padding: 0 24px 36px;
-                    background: #090711;
+                    background: #07080a;
                     color: var(--text);
                     isolation: isolate;
                 }
