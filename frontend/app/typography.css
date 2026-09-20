@@ -1,10 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Lusitana:wght@400;700&display=swap');
 
 :root {
-  --display-font: 'Lusitana', Georgia, serif;
+  --display-font: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-/* Large/display text uses Lusitana. Body/UI copy remains Inter/DM Mono. */
+/* Product display uses the same neutral sans family as the UI; DM Mono stays reserved for addresses and technical values. */
 .brand,
 .hero h1,
 .section-header h1,
@@ -120,4 +120,41 @@
   .protocol-stats-grid {
     grid-template-columns: 1fr;
   }
+}
+
+
+/* Product typography refinements */
+.brand,
+.hero h1,
+.section-header h1,
+.panel h2,
+.metric > strong,
+.protocol-stat > strong {
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.hero h1,
+.section-header h1 {
+  font-weight: 600;
+}
+
+.section-header h1 {
+  letter-spacing: -2px;
+}
+
+.panel h2 {
+  font-weight: 600;
+  letter-spacing: -0.5px;
+}
+
+.metric > span,
+.metric > small,
+.protocol-stat > span,
+.protocol-stat > em {
+  font-family: Inter, system-ui, sans-serif;
+}
+
+.metric > small,
+.protocol-stat > em {
+  font-size: 12px;
 }
