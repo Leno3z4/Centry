@@ -170,6 +170,8 @@ export default function CreateAgentPage() {
       <Providers>
         <AppShell>
           <main className={styles.page}>
+            {status ? <div className={styles.notice}>{status}</div> : null}
+            {error ? <div className={styles.error}>{error}</div> : null}
             <section className={styles.successHero}>
               <div className={styles.successMark}>✓</div>
               <p className={styles.kicker}>Agent ready</p>
