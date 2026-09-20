@@ -3,44 +3,51 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useAccount, usePublicClient } from 'wagmi';
+import { useAccount, useReadContract } from 'wagmi';
 import { Providers } from '../../../components/Providers';
 import { AppShell } from '../../../components/AppShell';
-import { API_BASE, FACTORY_ADDRESS, RUNNER_ADDRESS, loadOwnedAgents } from './agentClient';
+import { API_BASE, FACTORY_ABI, FACTORY_ADDRESS, RUNNER_ADDRESS } from './agentClient';
 import styles from './agents.module.css';
 
 function AgentsGate() {
   const { address, isConnected } = useAccount();
-  const publicClient = usePublicClient();
   const router = useRouter();
   const [state, setState] = useState('loading');
-  const [error, setError] = useState('');
+
+  const ownedAccounts = useReadContract({
+    address: FACTORY_ADDRESS || undefined,
+    abi: FACTORY_ABI,
+    functionName: 'getAgentAccounts',
+    args: address ? [address] : undefined,
+    query: {
+      enabled: Boolean(address && FACTORY_ADDRESS),
+      staleTime: 30000,
+      retry: 2,
+      refetchOnWindowFocus: false,
+    },
+  });
 
   useEffect(() => {
-    let cancelled = false;
-    if (!address || !publicClient) {
+    if (!address) {
       setState('connect');
       return;
     }
+    if (ownedAccounts.isLoading || ownedAccounts.isFetching) {
+      setState('loading');
+      return;
+    }
+    if (ownedAccounts.error) {
+      setState('error');
+      return;
+    }
 
-    loadOwnedAgents({ address, publicClient })
-      .then((agents) => {
-        if (cancelled) return;
-        if (agents.length) {
-          router.replace(`/app/agents/${agents[0].account}`);
-        } else {
-          setState('empty');
-        }
-      })
-      .catch((e) => {
-        if (!cancelled) {
-          setError(e.message);
-          setState('error');
-        }
-      });
-
-    return () => { cancelled = true; };
-  }, [address, publicClient, router]);
+    const accounts = Array.isArray(ownedAccounts.data) ? ownedAccounts.data : [];
+    if (accounts.length) {
+      router.replace(`/app/agents/${accounts[0]}`);
+    } else {
+      setState('empty');
+    }
+  }, [address, ownedAccounts.data, ownedAccounts.error, ownedAccounts.isFetching, ownedAccounts.isLoading, router]);
 
   if (state === 'connect' || !isConnected) {
     return (
@@ -61,7 +68,7 @@ function AgentsGate() {
   if (state === 'error') {
     return (
       <main className={styles.page}>
-        <div className={styles.error}>{error || 'Unable to load your agents.'}</div>
+        <div className={styles.error}>{ownedAccounts.error?.message || 'Unable to load your agents.'}</div>
         <Link className={styles.secondaryButton} href="/app/agents">Try again</Link>
       </main>
     );
