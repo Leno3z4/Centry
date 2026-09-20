@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useAccount, usePublicClient, useSignMessage } from 'wagmi';
-import { Providers } from '../../../../../components/Providers';
-import { AppShell } from '../../../../../components/AppShell';
+import { Providers } from '../../../../components/Providers';
+import { AppShell } from '../../../../components/AppShell';
 import { loadOwnedAgents, API_BASE, apiJson, providerOptions } from '../../agentClient';
 import styles from '../../agents.module.css';
 
