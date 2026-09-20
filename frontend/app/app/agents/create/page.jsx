@@ -50,6 +50,7 @@ export default function CreateAgentPage() {
 
     setStatus('Preparing the agent…');
     setError('');
+    let createdAccountForRecovery = '';
     try {
       const templateHash = keccak256(toBytes('centry-general-agent'));
       const configHash = keccak256(toBytes(JSON.stringify(normalizeConfigForHash(config))));
@@ -95,7 +96,7 @@ export default function CreateAgentPage() {
       const beforeSet = new Set(before.map((item) => item.toLowerCase()));
       const account = after.find((item) => !beforeSet.has(item.toLowerCase())) || after.at(-1);
       if (!account) throw new Error('The factory transaction succeeded, but the new agent account could not be resolved.');
-      setCreatedAccount(account);
+      createdAccountForRecovery = account;
 
       const agentId = crypto.randomUUID();
     if (PAYWALL_ENABLED) {
@@ -154,9 +155,11 @@ export default function CreateAgentPage() {
       }),
     });
 
+      setCreatedAccount(account);
       setSetupComplete(true);
       setStatus('Agent created and configured. Its smart account starts OFF.');
     } catch (e) {
+      if (createdAccountForRecovery) setCreatedAccount(createdAccountForRecovery);
       setStatus('');
       setError(e?.shortMessage || e?.message || 'Agent setup failed.');
     }
