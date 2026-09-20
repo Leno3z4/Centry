@@ -1,5 +1,5 @@
-import { authenticateAgent, jsonResponse, requireScope } from "../../../../../../lib/agentApi";
-import { getAgentByAccount, getAgentTask } from "../../../../../../lib/agentStore";
+import { authenticateAgent, jsonResponse, requireScope } from "../../../../../../../lib/agentApi";
+import { getAgentByAccount, getAgentTask } from "../../../../../../../lib/agentStore";
 
 export async function GET(request) {
   const auth = await authenticateAgent(request);
