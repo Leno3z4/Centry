@@ -42,10 +42,6 @@ function ConfigureContent() {
   const [agent, setAgent] = useState(null);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
-  const [apiKeyOperator, setApiKeyOperator] = useState('');
-  const [apiKeyLabel, setApiKeyLabel] = useState('External AI');
-  const [apiKeyScopes, setApiKeyScopes] = useState(['read', 'lend', 'borrow', 'repay', 'swap']);
-  const [newApiKey, setNewApiKey] = useState('');
 
   async function loadAgent() {
     if (!address || !publicClient) return;
@@ -160,39 +156,6 @@ function ConfigureContent() {
     }
   }
 
-  async function authorizeExternalOperator() {
-    if (!agent) return;
-    if (!apiKeyOperator) return setError('Enter an external operator address.');
-    try {
-      const tx = await writeContractAsync({
-        address: agent.account,
-        abi: ACCOUNT_ABI,
-        functionName: 'setAgentOperator',
-        args: [apiKeyOperator, true],
-      });
-      await publicClient.waitForTransactionReceipt({ hash: tx });
-      setStatus('External operator authorized on the smart account.');
-    } catch (e) {
-      setError(e?.shortMessage || e?.message || 'External operator authorization failed.');
-    }
-  }
-
-  async function generateApiKey() {
-    if (!agent || !apiKeyOperator) return setError('Enter an external operator address first.');
-    try {
-      const auth = await ownerAuth('create-api-key');
-      const result = await apiJson(`${API_BASE}/api/v1/agents/${agent.id}/keys`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ...auth, owner: address, operator: apiKeyOperator, label: apiKeyLabel, scopes: apiKeyScopes }),
-      });
-      setNewApiKey(result.key);
-      setStatus('API key generated. Copy it now; it will not be shown again.');
-    } catch (e) {
-      setError(e.message);
-    }
-  }
-
   if (!agent) return <main className={styles.page}><div className={styles.emptyState}>Loading agent…</div></main>;
 
   return (
@@ -222,32 +185,6 @@ function ConfigureContent() {
           <div className={styles.price}>Arc · 5042</div>
         </div>
         <button className={styles.secondaryButton} onClick={authorizeRunner}>Authorize runner + saved permissions</button>
-      </section>
-
-      <section className={styles.card}>
-        <div className={styles.sectionHead}>
-          <div>
-            <h2>External agent access</h2>
-            <p>Connect another AI agent without giving it your owner key. The operator is still constrained by the smart-account policy.</p>
-          </div>
-        </div>
-        <label className={styles.label}>Operator address</label>
-        <input className={styles.input} value={apiKeyOperator} onChange={(e) => setApiKeyOperator(e.target.value)} placeholder="0x…" />
-        <button className={styles.secondaryButton} onClick={authorizeExternalOperator}>Authorize external operator</button>
-        <div className={styles.divider} />
-        <label className={styles.label}>Credential label</label>
-        <input className={styles.input} value={apiKeyLabel} onChange={(e) => setApiKeyLabel(e.target.value)} />
-        <label className={styles.label}>API capabilities</label>
-        <div className={styles.scopeGrid}>
-          {['read', 'lend', 'borrow', 'repay', 'swap', 'governance', 'agent-to-agent'].map((scope) => (
-            <label key={scope} className={styles.scope}>
-              <input type="checkbox" checked={apiKeyScopes.includes(scope)} onChange={() => setApiKeyScopes((current) => current.includes(scope) ? current.filter((item) => item !== scope) : [...current, scope])} />
-              <span><strong>{scope}</strong><small>User-scoped API access.</small></span>
-            </label>
-          ))}
-        </div>
-        <button className={styles.secondaryButton} onClick={generateApiKey}>Generate API key</button>
-        {newApiKey ? <div className={styles.secretBox}><div>Copy once</div><code>{newApiKey}</code></div> : null}
       </section>
 
       <section className={styles.card}>
