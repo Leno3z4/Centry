@@ -481,29 +481,74 @@ function AgentPageContent() {
 
   async function allowAgentAutomation() {
     if (!selectedAgent || !isAddress(RUNNER_ADDRESS)) return setError('Hosted runner address is not configured.');
+    if (!allowedActions.length) return setError('Select at least one allowed action first.');
+    if (allowedActions.includes('swap') && (!allowedAssets.includes('CENT') || !allowedAssets.includes('USDC'))) {
+      return setError('Swap requires both CENT and USDC to be allowed.');
+    }
+
     const selectors = (signature) => '0x' + keccak256(toBytes(signature)).slice(2, 10);
     try {
-      setStatus('Authorizing the hosted runner for agent-to-agent transfers…');
-      const hash = await writeContractAsync({ address: selectedAgent.account, abi: ACCOUNT_ABI, functionName: 'setAgentOperator', args: [RUNNER_ADDRESS, true] });
-      await publicClient.waitForTransactionReceipt({ hash });
-      const permissions = [
-        [selectedAgent.account, selectors('transferToAgent(address,address,uint256)')],
-        [CONTRACT_ADDRESSES.lendingPool, selectors('supply(address,uint256)')],
-        [CONTRACT_ADDRESSES.lendingPool, selectors('withdraw(address,uint256)')],
-        [CONTRACT_ADDRESSES.lendingPool, selectors('borrow(address,uint256)')],
-        [CONTRACT_ADDRESSES.lendingPool, selectors('repay(address,uint256)')],
-        [CONTRACT_ADDRESSES.USDC, selectors('approve(address,uint256)')],
-        [CONTRACT_ADDRESSES.EURC, selectors('approve(address,uint256)')],
-        [CONTRACT_ADDRESSES.CIRBTC, selectors('approve(address,uint256)')],
-        [CONTRACT_ADDRESSES.centryToken, selectors('approve(address,uint256)')],
-        [CONTRACT_ADDRESSES.unitFlowRouter, selectors('exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))')],
-      ];
+      setStatus('Authorizing the hosted runner for the selected agent policy…');
+      const operatorHash = await writeContractAsync({
+        address: selectedAgent.account,
+        abi: ACCOUNT_ABI,
+        functionName: 'setAgentOperator',
+        args: [RUNNER_ADDRESS, true],
+      });
+      await publicClient.waitForTransactionReceipt({ hash: operatorHash });
+
+      const permissions = [];
+      const addPermission = (target, signature) => permissions.push([target, selectors(signature)]);
+
+      if (allowedActions.some((action) => ['supply', 'withdraw', 'borrow', 'repay'].includes(action))) {
+        if (allowedActions.includes('supply')) addPermission(CONTRACT_ADDRESSES.lendingPool, 'supply(address,uint256)');
+        if (allowedActions.includes('withdraw')) addPermission(CONTRACT_ADDRESSES.lendingPool, 'withdraw(address,uint256)');
+        if (allowedActions.includes('borrow')) addPermission(CONTRACT_ADDRESSES.lendingPool, 'borrow(address,uint256)');
+        if (allowedActions.includes('repay')) addPermission(CONTRACT_ADDRESSES.lendingPool, 'repay(address,uint256)');
+      }
+
+      if (allowedActions.includes('supply') || allowedActions.includes('repay')) {
+        for (const asset of allowedAssets) {
+          const tokenAddress = AGENT_ASSET_OPTIONS.find(([value]) => value === asset)?.[0] === 'USDC'
+            ? CONTRACT_ADDRESSES.USDC
+            : asset === 'EURC'
+              ? CONTRACT_ADDRESSES.EURC
+              : asset === 'CIRBTC'
+                ? CONTRACT_ADDRESSES.CIRBTC
+                : asset === 'CENT'
+                  ? CONTRACT_ADDRESSES.centryToken
+                  : null;
+          if (tokenAddress) addPermission(tokenAddress, 'approve(address,uint256)');
+        }
+      }
+
+      if (allowedActions.includes('swap')) {
+        addPermission(CONTRACT_ADDRESSES.centryToken, 'approve(address,uint256)');
+        addPermission(CONTRACT_ADDRESSES.unitFlowRouter, 'exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))');
+      }
+
+      if (allowedActions.includes('transfer')) {
+        addPermission(selectedAgent.account, 'transferToAgent(address,address,uint256)');
+      }
+
+      if (allowedActions.includes('castVote')) {
+        addPermission(CONTRACT_ADDRESSES.governor, 'castVote(uint256,uint8)');
+      }
+
       for (const [target, selector] of permissions) {
-        const permissionHash = await writeContractAsync({ address: selectedAgent.account, abi: ACCOUNT_ABI, functionName: 'setPermission', args: [RUNNER_ADDRESS, target, selector, true, 0, 0n] });
+        const permissionHash = await writeContractAsync({
+          address: selectedAgent.account,
+          abi: ACCOUNT_ABI,
+          functionName: 'setPermission',
+          args: [RUNNER_ADDRESS, target, selector, true, 0, 0n],
+        });
         await publicClient.waitForTransactionReceipt({ hash: permissionHash });
       }
-      setStatus('Hosted automation and internal agent transfers are authorized for the standard Centry actions.');
-    } catch (e) { setError(e?.shortMessage || e?.message || 'Automation authorization failed.'); }
+
+      setStatus('Hosted runner authorized for the selected policy. Save the behavior policy before changing this authorization again.');
+    } catch (e) {
+      setError(e?.shortMessage || e?.message || 'Automation authorization failed.');
+    }
   }
 
   async function sendToInternalAgent() {
