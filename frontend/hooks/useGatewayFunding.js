@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { encodeFunctionData, parseUnits } from 'viem';
 import { useAccount, useChainId, useConnectorClient } from 'wagmi';
-import { GATEWAY_TESTNET_CHAINS, GATEWAY_MINTER_ADDRESS } from '../constants/circleGateway';
+import { GATEWAY_MINTER_ADDRESS } from '../constants/circleGateway';
 import { ARC_GATEWAY_CHAIN, GATEWAY_EIP712_DOMAIN, GATEWAY_EIP712_TYPES, buildTransferSpec, estimateGatewayTransfer, pickGatewaySources, requestGatewayAttestation } from '../lib/gatewayFunding';
 
 const GATEWAY_MINTER_ABI = [{ type: 'function', name: 'gatewayMint', stateMutability: 'nonpayable', inputs: [{ name: 'attestationPayload', type: 'bytes' }, { name: 'signature', type: 'bytes' }], outputs: [] }];
@@ -91,13 +91,13 @@ export function useGatewayFunding() {
     for (let attempt = 0; attempt < 80; attempt += 1) {
       const receipt = await request('eth_getTransactionReceipt', [mintHash]);
       if (receipt) {
-        if (receipt.status === '0x0') throw new Error('Gateway mint was reverted on Arc Testnet.');
+        if (receipt.status === '0x0') throw new Error('Gateway mint was reverted on Arc Mainnet.');
         await refresh();
         return { sources, mintHash, attestation, requiredGatewayAmount: formatRaw(shortfall), usedGateway: true, sourceCount: sources.length };
       }
       await sleep(1500);
     }
-    throw new Error('Timed out waiting for the Gateway mint to confirm on Arc Testnet.');
+    throw new Error('Timed out waiting for the Gateway mint to confirm on Arc Mainnet.');
   }, [address, isConnected, refresh, request, switchToChain]);
 
   return { balances, total, pendingTotal, loading, refresh, ensureArcUsdc };
