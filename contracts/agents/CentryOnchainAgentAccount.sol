@@ -153,10 +153,10 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
         emit AgentActivationSet(active_);
     }
 
-    function setAgentOperator(address operator, bool active) external onlyOwner {
+    function setAgentOperator(address operator, bool active_) external onlyOwner {
         if (operator == address(0)) revert InvalidOwner();
-        agentOperators[operator] = active;
-        emit AgentOperatorSet(operator, active);
+        agentOperators[operator] = active_;
+        emit AgentOperatorSet(operator, active_);
     }
 
     function setPermission(
