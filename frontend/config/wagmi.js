@@ -3,23 +3,23 @@ import { defineChain, fallback } from 'viem';
 import { injected } from 'wagmi/connectors';
 import { walletConnect } from '@wagmi/connectors/walletConnect';
 
-export const arcTestnet = defineChain({
-  id: 5042002,
-  name: 'Arc Testnet',
+export const arcMainnet = defineChain({
+  id: 5042,
+  name: 'Arc Mainnet',
   nativeCurrency: {
     name: 'USD Coin',
     symbol: 'USDC',
-    decimals: 6,
+    decimals: 18,
   },
   rpcUrls: {
     default: {
-      http: ['https://rpc.testnet.arc.network'],
+      http: ['https://rpc.mainnet.arc.io'],
     },
   },
   blockExplorers: {
     default: {
       name: 'ArcScan',
-      url: 'https://testnet.arcscan.app',
+      url: 'https://explorer.arc.io',
     },
   },
 });
@@ -40,7 +40,7 @@ if (walletConnectProjectId) {
       metadata: {
         name: 'Centry',
         description: 'Arc-native lending protocol',
-        url: 'https://centry-car-xen.vercel.app',
+        url: 'https://centry.ink',
         icons: [],
       },
     }),
@@ -49,17 +49,14 @@ if (walletConnectProjectId) {
 
 const arcRpcUrls = [
   process.env.NEXT_PUBLIC_ARC_RPC_URL,
-  'https://rpc.testnet.arc.network',
-  'https://rpc.drpc.testnet.arc.network',
-  'https://rpc.quicknode.testnet.arc.network',
-  'https://rpc.blockdaemon.testnet.arc.network',
+  'https://rpc.mainnet.arc.io',
 ].filter(Boolean);
 
 export const config = createConfig({
-  chains: [arcTestnet],
+  chains: [arcMainnet],
   connectors,
   transports: {
-    [arcTestnet.id]: fallback(
+    [arcMainnet.id]: fallback(
       arcRpcUrls.map((url) => http(url)),
       { rank: true },
     ),
