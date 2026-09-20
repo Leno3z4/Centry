@@ -75,7 +75,7 @@ jobs:
             const MIN_NATIVE_BALANCE = ethers.parseEther(process.env.CENTRY_MIN_NATIVE_BALANCE || "0.001");
             const SLIPPAGE_BPS = BigInt(process.env.CENTRY_SWAP_SLIPPAGE_BPS || "100");
             const DEADLINE_SECONDS = BigInt(process.env.CENTRY_SWAP_DEADLINE_SECONDS || "300");
-            const UNITFLOW_FEES = [500, 3000, 10000];
+            const UNITFLOW_FEES = [100, 500, 3000, 10000];
             const EXPECTED_CHAIN_ID = 5042n;
 
             if (!RPC_URL) throw new Error("Missing ARC_RPC_URL");
