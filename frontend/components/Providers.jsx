@@ -4,17 +4,17 @@ import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WagmiProvider, useAccount, useChainId } from 'wagmi';
-import { config, arcTestnet } from '../config/multiWagmi';
+import { config, arcMainnet } from '../config/multiWagmi';
 import { MobileMenuController } from './MobileMenuController';
 
 const queryClient = new QueryClient();
-const ARC_CHAIN_HEX = `0x${arcTestnet.id.toString(16)}`;
+const ARC_CHAIN_HEX = `0x${arcMainnet.id.toString(16)}`;
 const ARC_ADD_CHAIN_PARAMS = {
   chainId: ARC_CHAIN_HEX,
-  chainName: 'Arc Testnet',
-  nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 6 },
-  rpcUrls: ['https://rpc.testnet.arc.network'],
-  blockExplorerUrls: ['https://testnet.arcscan.app'],
+  chainName: 'Arc Mainnet',
+  nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 18 },
+  rpcUrls: ['https://rpc.mainnet.arc.io'],
+  blockExplorerUrls: ['https://explorer.arc.io'],
 };
 
 async function addAndSwitchSelectedArc(provider) {
@@ -73,7 +73,7 @@ function AutoSwitchToArc() {
       return;
     }
 
-    if (chainId === arcTestnet.id) {
+    if (chainId === arcMainnet.id) {
       attemptedForAddress.current = '';
       return;
     }
