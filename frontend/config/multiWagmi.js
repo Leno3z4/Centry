@@ -171,9 +171,6 @@ if (walletConnectProjectId) connectors.push(centryWalletConnect());
 const arcRpcUrls = [
   process.env.NEXT_PUBLIC_ARC_RPC_URL,
   'https://rpc.mainnet.arc.io',
-  'https://rpc.drpc.testnet.arc.network',
-  'https://rpc.quicknode.testnet.arc.network',
-  'https://rpc.blockdaemon.testnet.arc.network',
 ].filter(Boolean);
 
 export const config = createConfig({
