@@ -49,7 +49,7 @@ async function main() {
     EXPECTED_CHAIN_ID
   ) {
     throw new Error(
-      `Wrong network. Expected Arc Testnet ${EXPECTED_CHAIN_ID}, got ${network.chainId}`
+      `Wrong network. Expected Arc Mainnet ${EXPECTED_CHAIN_ID}, got ${network.chainId}`
     );
   }
 
