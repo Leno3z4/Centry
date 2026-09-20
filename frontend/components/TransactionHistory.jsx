@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useAccount } from 'wagmi';
 import styles from './TransactionHistory.module.css';
 
+const EXPLORER_URL = 'https://explorer.arc.io';
+
 function shortHash(value) {
   return value ? `${value.slice(0, 8)}…${value.slice(-6)}` : '—';
 }
@@ -60,7 +62,7 @@ export default function TransactionHistory() {
           <h2>Transactions</h2>
           <p>Recent transactions sent from your connected wallet.</p>
         </div>
-        {address ? <a href={`https://testnet.arcscan.app/address/${address}?tab=txs`} target="_blank" rel="noreferrer">Open explorer ↗</a> : null}
+        {address ? <a href={`${EXPLORER_URL}/address/${address}?tab=txs`} target="_blank" rel="noreferrer">Open explorer ↗</a> : null}
       </div>
 
       {!isConnected ? <div className={styles.empty}>Connect your wallet to view your transaction history.</div> : null}
@@ -71,7 +73,7 @@ export default function TransactionHistory() {
       {!loading && !error && items.length > 0 ? (
         <div className={styles.list}>
           {items.map((tx) => (
-            <a key={tx.hash} className={styles.item} href={`https://testnet.arcscan.app/tx/${tx.hash}`} target="_blank" rel="noreferrer">
+            <a key={tx.hash} className={styles.item} href={`${EXPLORER_URL}/tx/${tx.hash}`} target="_blank" rel="noreferrer">
               <div className={styles.icon}>{tx.status === 'ok' ? '✓' : '·'}</div>
               <div className={styles.main}>
                 <strong>{labelForMethod(tx.method)}</strong>
