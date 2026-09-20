@@ -5,24 +5,20 @@ import { useAccount, useChainId, useConnectorClient, useReadContract, useSendTra
 import { formatUnits, parseUnits } from 'viem';
 import { Providers } from '../../../components/Providers';
 import { AppShell } from '../../../components/AppShell';
-import { MARKETS } from '../../../constants/markets';
+import { SWAP_MARKETS } from '../../../constants/markets';
 import { ERC20_ABI } from '../../../constants/abis';
 import { useGatewayFunding } from '../../../hooks/useGatewayFunding';
 import BalanceSourceSelector from '../../../components/BalanceSourceSelector';
 import styles from './swap.module.css';
 
-const LIVE_MARKETS = MARKETS.filter((market) => market.status === 'live' && market.address);
+const LIVE_MARKETS = SWAP_MARKETS.filter((market) => market.status === 'live' && market.address);
 const ARC_CHAIN_ID = 5042;
-const TOWER_QUOTE_DECIMALS = 18;
-
 function safeNumber(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
 
 function formatQuoteAmount(raw, outputDecimals) {
   if (raw == null || outputDecimals == null) return '—';
   try {
-    let displayRaw = BigInt(String(raw));
-    if (outputDecimals < TOWER_QUOTE_DECIMALS) displayRaw /= 10n ** BigInt(TOWER_QUOTE_DECIMALS - outputDecimals);
-    else if (outputDecimals > TOWER_QUOTE_DECIMALS) displayRaw *= 10n ** BigInt(outputDecimals - TOWER_QUOTE_DECIMALS);
+    const displayRaw = BigInt(String(raw));
     const formatted = formatUnits(displayRaw, outputDecimals);
     const [whole, fraction = ''] = formatted.split('.');
     const trimmed = fraction.slice(0, 8).replace(/0+$/, '');
@@ -136,7 +132,7 @@ function SwapContent() {
         const response = await fetch('/api/tower/swap/quote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ inputToken: fromMarket.address, outputToken: toMarket.address, inputAmount: amountRaw, slippageTolerance: slippageBps }) });
         const result = await response.json();
         if (requestId !== requestIdRef.current) return;
-        if (!response.ok || !result.success) throw new Error(result.error || 'Tower could not find a route.');
+        if (!response.ok || !result.success) throw new Error(result.error || 'UnitFlow V3 could not find a route.');
         setQuote(result.data); setStage('quoted');
       } catch (caughtError) {
         if (requestId !== requestIdRef.current) return;
@@ -234,7 +230,7 @@ function SwapContent() {
         if (result.data?.swap?.chainId != null && Number(result.data.swap.chainId) !== ARC_CHAIN_ID) throw new Error('Swap transaction is not targeting Arc Mainnet.');
         transactions = result.data || {}; setPreparedTransactions(transactions);
       }
-      if (!transactions.swap?.to || !transactions.swap?.data) throw new Error('Tower returned an incomplete swap transaction.');
+      if (!transactions.swap?.to || !transactions.swap?.data) throw new Error('UnitFlow V3 returned an incomplete swap transaction.');
       if (transactions.swap.chainId != null && Number(transactions.swap.chainId) !== ARC_CHAIN_ID) throw new Error('Swap transaction is not targeting Arc Mainnet.');
       if (transactions.approval && !approvalComplete) { setError('Approve the token first.'); setStage('quoted'); return; }
       setNotice('Approve the swap transaction in your wallet.'); setStage('swapping');
@@ -271,7 +267,7 @@ function SwapContent() {
           </div>
           {gatewayEnabled ? <div style={{ marginTop: 12 }}><BalanceSourceSelector value={fundingSource} onChange={setFundingSource} walletBalance={arcWalletBalance} gatewayBalances={gateway.balances} disabled={isPreparing || approvalPending} /></div> : null}
           <div className={styles.metaRow}><span>Slippage</span><input className={styles.slippageInput} value={slippage} onChange={(event) => setSlippage(event.target.value)} inputMode="decimal" aria-label="Slippage percentage" /><span>%</span></div>
-          {quote ? <div className={styles.quoteCard}><div className={styles.quoteRow}><span>Expected output</span><strong className={styles.quoteOutput}>{outputAmount} {toMarket.symbol}</strong></div><div className={styles.quoteRow}><span>Minimum received</span><strong>{minOutput} {toMarket.symbol}</strong></div><div className={styles.quoteRow}><span>Price impact</span><strong>{formatPriceImpact(safePriceImpactPercent)}</strong></div>{safePriceImpactPercent != null && safePriceImpactPercent >= 5 ? <div className={`${styles.notice} ${styles.noticeError}`}>High price impact: {formatPriceImpact(safePriceImpactPercent)}. Consider a smaller trade or a different route.</div> : null}<div className={styles.quoteRow}><span>Route</span><strong>{typeof quote.route === 'string' ? quote.route : quote.dexName || quote.dexId || 'Tower routing'}</strong></div></div> : <div className={styles.quoteStatus}>{networkBlocksAction ? 'Switch to Arc Mainnet or select Gateway unified.' : stage === 'quoting' ? 'Fetching the best UnitFlow V3 route…' : stage === 'preparing' ? 'Preparing the transaction…' : 'Enter an amount to get a quote.'}</div>}
+          {quote ? <div className={styles.quoteCard}><div className={styles.quoteRow}><span>Expected output</span><strong className={styles.quoteOutput}>{outputAmount} {toMarket.symbol}</strong></div><div className={styles.quoteRow}><span>Minimum received</span><strong>{minOutput} {toMarket.symbol}</strong></div><div className={styles.quoteRow}><span>Price impact</span><strong>{formatPriceImpact(safePriceImpactPercent)}</strong></div>{safePriceImpactPercent != null && safePriceImpactPercent >= 5 ? <div className={`${styles.notice} ${styles.noticeError}`}>High price impact: {formatPriceImpact(safePriceImpactPercent)}. Consider a smaller trade or a different route.</div> : null}<div className={styles.quoteRow}><span>Route</span><strong>{typeof quote.route === 'string' ? quote.route : quote.dexName || quote.dexId || 'UnitFlow V3 routing'}</strong></div></div> : <div className={styles.quoteStatus}>{networkBlocksAction ? 'Switch to Arc Mainnet or select Gateway unified.' : stage === 'quoting' ? 'Fetching the best UnitFlow V3 route…' : stage === 'preparing' ? 'Preparing the transaction…' : 'Enter an amount to get a quote.'}</div>}
           {gatewayAmountUnavailable ? <div className={`${styles.notice} ${styles.noticeError}`}>Gateway unified balance is too low for this amount.</div> : null}
           {notice && <div className={styles.notice}>{notice}</div>}
           {error && <div className={`${styles.notice} ${styles.noticeError}`}>{error}</div>}
@@ -283,7 +279,7 @@ function SwapContent() {
 
         <details className={`${styles.panel} ${styles.bridgeCard}`}>
           <summary style={{ cursor: 'pointer' }}><span className={styles.kicker}>TRADE INFO</span><h2>Trade details</h2></summary>
-          <p className={styles.bridgeDescription}>Tower selects the best available Arc route. CENT routes are handled by UnitFlow v2.5.</p>
+          <p className={styles.bridgeDescription}>UnitFlow V3 selects the best available Arc route across the supported Centry swap assets.</p>
           <div className={styles.quoteCard}><div className={styles.bridgeRow}><span>Network</span><strong>Arc Mainnet</strong></div><div className={styles.bridgeRow}><span>Slippage tolerance</span><strong>{slippage}%</strong></div><div className={styles.bridgeRow}><span>Price impact</span><strong>{quote ? formatPriceImpact(safePriceImpactPercent) : '—'}</strong></div><div className={styles.bridgeRow}><span>Gas</span><strong>{quote?.gasEstimate ? `${quote.gasEstimate} units` : 'Calculated by wallet'}</strong></div></div>
           {quote?.feeBps != null ? <div className={styles.quoteCard}><div className={styles.bridgeRow}><span>Liquidity fee</span><strong>{(Number(quote.feeBps) / 100).toFixed(2)}%</strong></div></div> : null}
         </details>
