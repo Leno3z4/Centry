@@ -5,9 +5,8 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useAccount, usePublicClient, useSignMessage, useSendTransaction, useWriteContract } from 'wagmi';
 import { parseUnits } from 'viem';
-import { Providers } from '../../../../components/Providers';
-import { AppShell } from '../../../../components/AppShell';
-import { CONTRACT_ADDRESSES } from '../../../../constants/contracts';
+import { Providers } from '../../../components/Providers';
+import { AppShell } from '../../../components/AppShell';
 import styles from '../agents.module.css';
 import {
   ACCOUNT_ABI,
