@@ -4,6 +4,7 @@ import { getAgentTemplate } from "../../../../../lib/agentCatalog";
 import { createPurchase } from "../../../../../lib/agentStore";
 
 const FACTORY = getAddress(process.env.CENTRY_AGENT_FACTORY || "0x0000000000000000000000000000000000000000");
+const PAYWALL_ENABLED = process.env.NEXT_PUBLIC_CENTRY_AGENT_PAYWALL === "true";
 const PRICE_RAW = 2500000n;
 
 const FACTORY_INTERFACE = new Interface([
@@ -14,9 +15,9 @@ export async function GET() {
   return Response.json({
     chainId: 5042,
     currency: "USDC",
-    priceUsdCents: 250,
-    priceUsdcRaw: PRICE_RAW.toString(),
-    paymentMode: "factory-atomic-purchase",
+    priceUsdCents: PAYWALL_ENABLED ? 250 : 0,
+    priceUsdcRaw: PAYWALL_ENABLED ? PRICE_RAW.toString() : "0",
+    paymentMode: PAYWALL_ENABLED ? "factory-atomic-purchase" : "free-create",
     factory: FACTORY,
   }, { headers: { "Cache-Control": "no-store" } });
 }
