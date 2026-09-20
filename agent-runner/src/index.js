@@ -66,7 +66,7 @@ const LENDING_POOL = getAddress("0x0ee649E5A95eB9127cB7146b26349a92B68c17A4");
 const UNITFLOW_ROUTER = getAddress("0x6fD8351b9596C1F0b2f2479BfA6A171cb3d0f410");
 const UNITFLOW_QUOTER = getAddress("0x5AF6E89F0960Ff375AF84d9911D8153ef6240E34");
 const GOVERNOR = getAddress("0x0F54683a09a73cB60575E0DF36E474D4F9e1157B");
-const UNITFLOW_FEES = [500, 3000, 10000];
+const UNITFLOW_FEES = [100, 500, 3000, 10000];
 
 const publicClientFor = (rpcUrl) => createPublicClient({
   chain: { ...ARC_CHAIN, rpcUrls: { default: { http: [rpcUrl] } } },
@@ -566,7 +566,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
       "You may send A2A messages only when needed for the strategy or a task. Never treat an outbound message as execution authority.",
       instructions ? `Persistent strategy/instructions:\n${instructions}` : "No persistent strategy is configured. Only process explicit pending A2A tasks and do not originate discretionary financial actions.",
       "Return ONLY a JSON object. No markdown, no prose outside JSON.",
-      'Schema: {"reason":"string","actions":[{"action":"approve|supply|withdraw|borrow|repay|swap|castVote","asset":"USDC|EURC|CIRBTC|CENT","toAsset":"USDC|EURC|CIRBTC|CENT","amount":"uint256","minOut":"uint256","fee":500|3000|10000,"proposalId":"uint256","support":0|1|2,"slippageBps":number}],"replies":[{"taskId":"string","response":"string"}],"messages":[{"toAgentId":"string","task":"string"}]}',
+      'Schema: {"reason":"string","actions":[{"action":"approve|supply|withdraw|borrow|repay|swap|castVote","asset":"USDC|EURC|CIRBTC|CENT","toAsset":"USDC|EURC|CIRBTC|CENT","amount":"uint256","minOut":"uint256","fee":100|500|3000|10000,"proposalId":"uint256","support":0|1|2,"slippageBps":number}],"replies":[{"taskId":"string","response":"string"}],"messages":[{"toAgentId":"string","task":"string"}]}',
       "Only use supported actions. Keep actions to 4 or fewer.",
     ].join("\n\n");
 
