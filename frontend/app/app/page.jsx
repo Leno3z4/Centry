@@ -101,9 +101,9 @@ function OverviewContent() {
     <div className="page-stack">
       <div className="overview-aero-background" aria-hidden="true">
         <AeroShards
-          backgroundColor="#120F17"
-          shardColor="#896ABD"
-          accentColor="#A855F7"
+          backgroundColor="#0b0d10"
+          shardColor="#4a4f58"
+          accentColor="#a79bdb"
           placement="full"
           flow="stream"
           material="pearl"
@@ -195,12 +195,12 @@ function OverviewContent() {
 
       <style jsx global>{`
         .page-stack{position:relative;isolation:isolate}
-        .overview-aero-background{position:fixed;inset:0;z-index:0;opacity:.10;pointer-events:none;overflow:hidden}
+        .overview-aero-background{position:fixed;inset:0;z-index:0;opacity:.025;pointer-events:none;overflow:hidden}
         .overview-aero-background > *{width:100%;height:100%}
         .page-stack > :not(.overview-aero-background){position:relative;z-index:1}
         .overview-stats-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
         .overview-bottom-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-        .panel-head .text-link,.text-link{color:#bda9e9;text-decoration:none;font-size:11px}
+        .panel-head .text-link,.text-link{color: #b8adcb;text-decoration:none;font-size:11px}
         .text-link:hover{color:#e2d7ff}
         .overview-feature-number{margin-top:4px;font-size:34px;font-weight:700;letter-spacing:-.03em}
         .overview-feature-label{margin-top:4px;color:#8f849d;font-size:11px}
