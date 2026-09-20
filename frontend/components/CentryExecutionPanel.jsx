@@ -12,7 +12,7 @@ import styles from './CentryExecutionPanel.module.css';
 const TOKEN_MESSENGER_V2 = '0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA';
 const TOKEN_MESSENGER_ABI = [{ type: 'function', name: 'depositForBurn', stateMutability: 'nonpayable', inputs: [{ name: 'amount', type: 'uint256' }, { name: 'destinationDomain', type: 'uint32' }, { name: 'mintRecipient', type: 'bytes32' }, { name: 'burnToken', type: 'address' }, { name: 'destinationCaller', type: 'bytes32' }, { name: 'maxFee', type: 'uint256' }, { name: 'minFinalityThreshold', type: 'uint32' }], outputs: [] }];
 const BRIDGE_CHAINS = {
-  arc: { chainId: 5042002, domain: 26, usdc: '0x3600000000000000000000000000000000000000', name: 'Arc Testnet', rpcUrl: 'https://rpc.testnet.arc.network', explorerUrl: 'https://testnet.arcscan.app' },
+  arc: { chainId: 5042, domain: 26, usdc: '0x3600000000000000000000000000000000000000', name: 'Arc Mainnet', rpcUrl: 'https://rpc.mainnet.arc.io', explorerUrl: 'https://explorer.arc.io' },
   base: { chainId: 84532, domain: 6, usdc: '0x036CbD53842c5426634e7929541eC2318f3dCF7e', name: 'Base Sepolia', rpcUrl: 'https://sepolia.base.org', explorerUrl: 'https://sepolia.basescan.org' },
   arbitrum: { chainId: 421614, domain: 3, usdc: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d', name: 'Arbitrum Sepolia', rpcUrl: 'https://sepolia-rollup.arbitrum.io/rpc', explorerUrl: 'https://sepolia.arbiscan.io' },
   ethereum: { chainId: 11155111, domain: 0, usdc: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', name: 'Ethereum Sepolia', rpcUrl: 'https://rpc.sepolia.org', explorerUrl: 'https://sepolia.etherscan.io' },
@@ -54,7 +54,7 @@ export default function CentryExecutionPanel({ plan, onDone }) {
     catch (e) {
       const code = Number(e?.code);
       if (code !== 4902 && code !== -32603 && code !== -32602) throw e;
-      await connectorClient.request({ method: 'wallet_addEthereumChain', params: [{ chainId: hex, chainName: target.name, nativeCurrency: { name: target.name === 'Arc Testnet' ? 'USDC' : 'Ether', symbol: target.name === 'Arc Testnet' ? 'USDC' : 'ETH', decimals: target.name === 'Arc Testnet' ? 6 : 18 }, rpcUrls: [target.rpcUrl], blockExplorerUrls: [target.explorerUrl] }] });
+      await connectorClient.request({ method: 'wallet_addEthereumChain', params: [{ chainId: hex, chainName: target.name, nativeCurrency: { name: target.name === 'Arc Mainnet' ? 'USDC' : 'Ether', symbol: target.name === 'Arc Mainnet' ? 'USDC' : 'ETH', decimals: target.name === 'Arc Mainnet' ? 18 : 18 }, rpcUrls: [target.rpcUrl], blockExplorerUrls: [target.explorerUrl] }] });
       await connectorClient.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hex }] });
     }
     for (let i = 0; i < 30; i += 1) { const c = Number(BigInt(await connectorClient.request({ method: 'eth_chainId' }))); if (c === target.chainId) return; await sleep(250); }
