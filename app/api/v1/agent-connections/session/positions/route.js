@@ -9,7 +9,7 @@ export async function GET(request) {
   const rpcUrl = process.env.CENTRY_AGENT_RPC_URL || process.env.CENTRY_ERC8004_RPC_URL;
   try {
     const positions = await getAgentPositions({ rpcUrl, account: auth.session.account });
-    return jsonResponse({ chainId: 5042002, account: auth.session.account, positions });
+    return jsonResponse({ chainId: 5042, account: auth.session.account, positions });
   } catch {
     return jsonResponse({ error: "positions_read_failed" }, 503);
   }
