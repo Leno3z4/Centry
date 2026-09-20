@@ -1,4 +1,4 @@
-import { CIRCLE_GATEWAY_TESTNET_API, GATEWAY_TESTNET_CHAINS } from '../../../../../constants/circleGateway';
+import { CIRCLE_GATEWAY_API, CIRCLE_GATEWAY_HEADERS, GATEWAY_MAINNET_CHAINS } from '../../../../../constants/circleGateway';
 import { rateLimit, rateLimitResponse, withRateLimitHeaders } from '../../../../../lib/rateLimit';
 
 function isEvmAddress(value) { return /^0x[a-fA-F0-9]{40}$/.test(String(value || '')); }
@@ -12,11 +12,11 @@ export async function POST(request) {
     const depositor = body?.depositor;
     if (!isEvmAddress(depositor)) return withRateLimitHeaders(Response.json({ success: false, error: 'A valid EVM wallet address is required.' }, { status: 400 }), limit);
 
-    const sources = GATEWAY_TESTNET_CHAINS.map(({ domain }) => ({ domain, depositor }));
+    const sources = GATEWAY_MAINNET_CHAINS.map(({ domain }) => ({ domain, depositor }));
     const payload = { token: 'USDC', sources };
     const [balanceResponse, depositResponse] = await Promise.all([
-      fetch(`${CIRCLE_GATEWAY_TESTNET_API}/v1/balances`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), cache: 'no-store' }),
-      fetch(`${CIRCLE_GATEWAY_TESTNET_API}/v1/deposits`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), cache: 'no-store' }),
+      fetch(`${CIRCLE_GATEWAY_API}/v1/balances`, { method: 'POST', headers: CIRCLE_GATEWAY_HEADERS, body: JSON.stringify(payload), cache: 'no-store' }),
+      fetch(`${CIRCLE_GATEWAY_API}/v1/deposits`, { method: 'POST', headers: CIRCLE_GATEWAY_HEADERS, body: JSON.stringify(payload), cache: 'no-store' }),
     ]);
 
     const balancesJson = await balanceResponse.json().catch(() => ({}));
@@ -26,7 +26,7 @@ export async function POST(request) {
 
     const balances = Array.isArray(balancesJson?.balances) ? balancesJson.balances : [];
     const pendingDeposits = Array.isArray(depositsJson?.deposits) ? depositsJson.deposits : [];
-    const normalized = GATEWAY_TESTNET_CHAINS.map((chain) => {
+    const normalized = GATEWAY_MAINNET_CHAINS.map((chain) => {
       const match = balances.find((item) => Number(item?.domain) === chain.domain);
       const finalized = decimal(match?.balance);
       const chainPending = pendingDeposits.filter((item) => Number(item?.domain) === chain.domain);
