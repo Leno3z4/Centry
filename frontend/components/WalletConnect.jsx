@@ -222,7 +222,7 @@ export function WalletConnect() {
             border: 1px solid #c9c0ff;
             border-radius: 11px;
             background: #b7a7ff;
-            color: #fff;
+            color: #0d0d10;
             box-shadow: none;
             font-size: 12px;
             font-weight: 700;
