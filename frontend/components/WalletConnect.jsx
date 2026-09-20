@@ -8,7 +8,7 @@ import {
   useChainId,
   useSwitchChain,
 } from 'wagmi';
-import { arcTestnet } from '../config/multiWagmi';
+import { arcMainnet } from '../config/multiWagmi';
 import { useLendingPool } from '../hooks/useLendingPool';
 
 function shortenAddress(address) {
@@ -40,7 +40,7 @@ export function WalletConnect() {
 
   const isWrongNetwork =
     isConnected &&
-    chainId !== arcTestnet.id;
+    chainId !== arcMainnet.id;
 
   useEffect(() => {
     if (!pickerOpen) {
@@ -83,7 +83,7 @@ export function WalletConnect() {
     }
 
     try {
-      await switchChain({ chainId: arcTestnet.id });
+      await switchChain({ chainId: arcMainnet.id });
     } catch {
       // wagmi exposes the switch error through switchError.
     }
@@ -126,7 +126,7 @@ export function WalletConnect() {
                   <span className="wallet-picker-kicker">CENTRY WALLET</span>
                   <h2 id="wallet-picker-title">Connect a wallet</h2>
                   <p>
-                    Choose a wallet to use with Centry on Arc Testnet.
+                    Choose a wallet to use with Centry on Arc Mainnet.
                   </p>
                 </div>
 
@@ -524,7 +524,7 @@ export function WalletConnect() {
           onClick={handleSwitchNetwork}
           disabled={isSwitching}
         >
-          {isSwitching ? 'Switching network…' : 'Switch to Arc Testnet'}
+          {isSwitching ? 'Switching network…' : 'Switch to Arc Mainnet'}
         </button>
       ) : null}
 
