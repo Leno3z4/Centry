@@ -12,7 +12,7 @@ const docsSections = [
   ['self-repay', 'Self-repayment'],
   ['automation', 'Automation'],
   ['contracts', 'Contracts'],
-  ['risk', 'Risk & testnet'],
+  ['risk', 'Risk & mainnet'],
 ];
 
 const addressRows = [
@@ -117,7 +117,7 @@ export default function Page() {
                   <div className="section-kicker">CURRENT ARC MAINNET CONFIGURATION</div>
                   <p className="panel-copy" style={{ marginBottom: 0 }}>
                     Arc mainnet chain ID: <code>5042</code>. The live USDC reserve uses the Arc native USDC ERC-20 interface.
-                    Development risk parameters are intentionally treated as testnet values and are not production recommendations.
+                    Risk parameters shown here reflect the deployed Arc Mainnet configuration; verify the live contracts before changing any risk assumption.
                   </p>
                 </div>
               </section>
@@ -244,11 +244,11 @@ export default function Page() {
               </section>
 
               <section id="risk" className="panel">
-                <div className="section-kicker">08 / RISK & TESTNET</div>
+                <div className="section-kicker">08 / RISK & MAINNET</div>
                 <h2>Important before using Centry</h2>
                 <p className="panel-copy">
                   Centry is running on Arc mainnet. Risk parameters, oracle configuration, reserves, and automation are still
-                  development infrastructure. Testnet behavior should not be treated as production-ready financial infrastructure.
+                  live mainnet infrastructure. Review current onchain configuration before relying on these values.
                 </p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 16 }}>
                   <div style={{ padding: 14, border: '1px solid #21182d', borderRadius: 11 }}>
@@ -260,7 +260,7 @@ export default function Page() {
                     <p className="panel-copy" style={{ marginBottom: 0 }}>Independent security review is required before any production/mainnet use.</p>
                   </div>
                   <div style={{ padding: 14, border: '1px solid #21182d', borderRadius: 11 }}>
-                    <strong style={{ fontSize: 11 }}>Testnet parameters</strong>
+                    <strong style={{ fontSize: 11 }}>Mainnet parameters</strong>
                     <p className="panel-copy" style={{ marginBottom: 0 }}>USDC limits and risk settings are development values and can change as the system is tested.</p>
                   </div>
                   <div style={{ padding: 14, border: '1px solid #21182d', borderRadius: 11 }}>
