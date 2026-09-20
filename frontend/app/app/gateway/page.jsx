@@ -18,7 +18,7 @@ function GatewayContent() {
   const [amount, setAmount] = useState('');
   const [notice, setNotice] = useState('');
   const [txHash, setTxHash] = useState('');
-  const { data: arcBalanceRaw, isLoading: arcBalanceLoading, refetch: refetchArcBalance } = useReadContract({ address: ARC_GATEWAY_CHAIN.usdc, abi: USDC_ABI, functionName: 'balanceOf', args: [address], query: { enabled: Boolean(address) } });
+  const { data: arcBalanceRaw, isLoading: arcBalanceLoading, refetch: refetchArcBalance } = useReadContract({ address: ARC_GATEWAY_CHAIN.usdc, abi: USDC_ABI, functionName: 'balanceOf', args: [address], chainId: ARC_GATEWAY_CHAIN.chainId, query: { enabled: Boolean(address) } });
 
   const arcBalance = arcBalanceRaw === undefined ? '0' : formatUnits(arcBalanceRaw, 6);
   const gatewayTotal = gateway.total || '0';
