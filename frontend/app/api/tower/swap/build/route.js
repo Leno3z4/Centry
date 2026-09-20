@@ -83,7 +83,7 @@ export async function POST(request) {
     const amountIn = BigInt(String(quote.inputAmount || '0'));
     const minOut = BigInt(String(quote.minOut || '0'));
     const fee = Number(quote.fee);
-    if (amountIn <= 0n || minOut <= 0n || ![500, 3000, 10000].includes(fee)) {
+    if (amountIn <= 0n || minOut <= 0n || ![100, 500, 3000, 10000].includes(fee)) {
       return withRateLimitHeaders(NextResponse.json({ success: false, error: 'Invalid UnitFlow V3 quote.' }, { status: 400 }), limit);
     }
 
