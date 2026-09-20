@@ -1,5 +1,5 @@
-import { authenticateAgent, jsonResponse, requireScope } from "../../../../../../lib/agentApi";
-import { getAgentPortfolio } from "../../../../../../lib/agentReadRuntime";
+import { authenticateAgent, jsonResponse, requireScope } from "../../../../../../../lib/agentApi";
+import { getAgentPortfolio } from "../../../../../../../lib/agentReadRuntime";
 
 export async function GET(request) {
   const auth = await authenticateAgent(request);
