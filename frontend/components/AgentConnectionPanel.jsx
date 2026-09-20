@@ -7,7 +7,7 @@ import {
   useReadContract,
   useSignMessage,
 } from 'wagmi';
-import { arcTestnet } from '../config/multiWagmi';
+import { arcMainnet } from '../config/multiWagmi';
 import styles from './AgentConnectionPanel.module.css';
 
 const FACTORY_ABI = [
@@ -37,7 +37,7 @@ function apiBase() {
 
 function explorerAddress(address) {
   if (!address) return '#';
-  return `${arcTestnet.blockExplorers.default.url}/address/${address}`;
+  return `${arcMainnet.blockExplorers.default.url}/address/${address}`;
 }
 
 function short(address) {
@@ -46,7 +46,7 @@ function short(address) {
 
 export default function AgentConnectionPanel() {
   const { address, isConnected, chainId } = useAccount();
-  const publicClient = usePublicClient({ chainId: arcTestnet.id });
+  const publicClient = usePublicClient({ chainId: arcMainnet.id });
   const { signMessageAsync } = useSignMessage();
   const [selectedScopes, setSelectedScopes] = useState(DEFAULT_SCOPES);
   const [selectedAccount, setSelectedAccount] = useState('');
@@ -66,13 +66,13 @@ export default function AgentConnectionPanel() {
     abi: FACTORY_ABI,
     functionName: 'getAgentAccounts',
     args: address ? [address] : undefined,
-    chainId: arcTestnet.id,
-    query: { enabled: Boolean(factoryAddress && address && isConnected && chainId === arcTestnet.id) },
+    chainId: arcMainnet.id,
+    query: { enabled: Boolean(factoryAddress && address && isConnected && chainId === arcMainnet.id) },
   });
 
   const accounts = useMemo(() => accountsQuery.data || [], [accountsQuery.data]);
   const activeAccount = selectedAccount || existingAccount || accounts[0] || '';
-  const wrongNetwork = isConnected && chainId !== arcTestnet.id;
+  const wrongNetwork = isConnected && chainId !== arcMainnet.id;
 
   useEffect(() => {
     if (!selectedAccount && accounts[0]) setSelectedAccount(accounts[0]);
@@ -165,7 +165,7 @@ export default function AgentConnectionPanel() {
           <div className={styles.walletBadge}>{short(address)}</div>
         </div>
 
-        {wrongNetwork ? <div className={styles.error}>Switch to Arc Testnet before creating or connecting an agent.</div> : null}
+        {wrongNetwork ? <div className={styles.error}>Switch to Arc Mainnet before creating or connecting an agent.</div> : null}
 
         {!factoryAddress ? (
           <div className={styles.notice}>Select an agent created in your Centry Agents page before connecting an external agent.</div>
