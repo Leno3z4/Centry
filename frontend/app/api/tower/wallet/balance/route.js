@@ -1,24 +1,26 @@
 import { NextResponse } from 'next/server';
 
 const TOWER_BASE_URL = 'https://www.tower.exchange/api/public';
-const ARC_RPC_URL = process.env.NEXT_PUBLIC_ARC_RPC_URL || process.env.ARC_RPC_URL || 'https://rpc.testnet.arc.network';
+const ARC_RPC_URL = process.env.NEXT_PUBLIC_ARC_RPC_URL || process.env.ARC_RPC_URL || 'https://rpc.mainnet.arc.io';
 
 const SUPPORTED = {
-  'base-sepolia': {
-    rpcUrl: 'https://sepolia.base.org',
-    usdc: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
+  'base-mainnet': {
+    chainId: 8453,
+    rpcUrl: 'https://mainnet.base.org',
+    usdc: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
   },
-  'arbitrum-sepolia': {
-    rpcUrl: 'https://sepolia-rollup.arbitrum.io/rpc',
-    usdc: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d',
+  'arbitrum-mainnet': {
+    chainId: 42161,
+    rpcUrl: 'https://arb1.arbitrum.io/rpc',
+    usdc: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
   },
-  'ethereum-sepolia': {
-    chainId: 11155111,
-    rpcUrl: `${TOWER_BASE_URL}/rpc/11155111`,
-    usdc: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
+  'ethereum-mainnet': {
+    chainId: 1,
+    rpcUrl: 'https://ethereum-rpc.publicnode.com',
+    usdc: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
   },
-  'arc-testnet': {
-    chainId: 5042002,
+  'arc-mainnet': {
+    chainId: 5042,
     rpcUrl: ARC_RPC_URL,
     usdc: '0x3600000000000000000000000000000000000000',
   },
