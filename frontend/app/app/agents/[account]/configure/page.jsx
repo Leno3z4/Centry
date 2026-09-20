@@ -5,9 +5,9 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useAccount, usePublicClient, useSignMessage, useWriteContract } from 'wagmi';
 import { keccak256, toBytes } from 'viem';
-import { Providers } from '../../../components/Providers';
-import { AppShell } from '../../../components/AppShell';
-import { CONTRACT_ADDRESSES } from '../../../constants/contracts';
+import { Providers } from '../../../../../components/Providers';
+import { AppShell } from '../../../../../components/AppShell';
+import { CONTRACT_ADDRESSES } from '../../../../../constants/contracts';
 import { AgentConfigForm } from '../../AgentConfigForm';
 import {
   ACCOUNT_ABI,
