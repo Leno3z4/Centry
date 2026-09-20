@@ -9,7 +9,7 @@ This package replaces the legacy factory/vault keeper with the deployed Centry V
 - SelfRepayExecutorV2: `0x02356D1E4557b8D656cE1493D751C914EA84efe7`
 - LendingPool: `0x90C935687D91b3352b2C55cd79389C92950D94BD`
 
-Network: Arc Testnet, chain ID `5042002`.
+Network: Arc Mainnet, chain ID `5042`.
 
 ## GitHub Actions configuration
 
