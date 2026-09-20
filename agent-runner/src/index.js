@@ -6,6 +6,7 @@ import {
   getAddress,
   http,
   parseAbi,
+  parseUnits,
   zeroAddress,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -117,6 +118,73 @@ function selector(data) {
 
 function makeCall(target, data) {
   return { target: getAddress(target), value: 0n, data, selector: selector(data) };
+}
+
+const DEFAULT_ALLOWED_ACTIONS = Object.freeze([
+  "supply",
+  "withdraw",
+  "borrow",
+  "repay",
+  "swap",
+  "castVote",
+  "transfer",
+]);
+
+const DEFAULT_ALLOWED_ASSETS = Object.freeze(["USDC", "EURC", "CIRBTC", "CENT"]);
+
+const ASSET_DECIMALS = Object.freeze({
+  USDC: 6,
+  EURC: 6,
+  CIRBTC: 8,
+  CENT: 18,
+});
+
+function agentPolicy(autonomy) {
+  const policy = autonomy && typeof autonomy.policy === "object" ? autonomy.policy : {};
+  const allowedActions = Array.isArray(policy.allowedActions) && policy.allowedActions.length
+    ? new Set(policy.allowedActions.map((item) => String(item)))
+    : new Set(DEFAULT_ALLOWED_ACTIONS);
+  const allowedAssets = Array.isArray(policy.allowedAssets) && policy.allowedAssets.length
+    ? new Set(policy.allowedAssets.map((item) => String(item).toUpperCase()))
+    : new Set(DEFAULT_ALLOWED_ASSETS);
+  const maxAmountByAsset = policy.maxAmountByAsset && typeof policy.maxAmountByAsset === "object"
+    ? policy.maxAmountByAsset
+    : {};
+  return { allowedActions, allowedAssets, maxAmountByAsset };
+}
+
+function assertActionPolicy(policy, action) {
+  const type = String(action?.action || "").trim();
+  if (type !== "approve" && !policy.allowedActions.has(type)) {
+    throw new Error(`agent_action_not_allowed_${type || "empty"}`);
+  }
+
+  if (type === "approve") return;
+
+  if (["supply", "withdraw", "borrow", "repay", "swap", "transfer"].includes(type)) {
+    const asset = String(action?.asset || action?.inputToken || "").toUpperCase();
+    if (!policy.allowedAssets.has(asset)) throw new Error(`agent_asset_not_allowed_${asset || "empty"}`);
+  }
+
+  if (type === "swap") {
+    const output = String(action?.toAsset || action?.outputToken || "").toUpperCase();
+    if (!policy.allowedAssets.has(output)) throw new Error(`agent_asset_not_allowed_${output || "empty"}`);
+  }
+
+  if (["supply", "withdraw", "borrow", "repay", "swap", "transfer"].includes(type)) {
+    const asset = String(action?.asset || action?.inputToken || "").toUpperCase();
+    const cap = policy.maxAmountByAsset[asset];
+    if (cap !== undefined && String(cap).trim() !== "") {
+      let maxRaw;
+      try {
+        maxRaw = parseUnits(String(cap), ASSET_DECIMALS[asset]);
+      } catch {
+        throw new Error(`invalid_agent_max_amount_${asset || "empty"}`);
+      }
+      const amount = positiveUint(action.amount, "amount");
+      if (amount > maxRaw) throw new Error(`agent_amount_limit_exceeded_${asset}`);
+    }
+  }
 }
 
 function fromHex(hex) {
@@ -363,9 +431,11 @@ async function buildCalls(publicClient, agent, actions, autonomy, db) {
 
   const calls = [];
   const account = getAddress(agent.account);
+  const policy = agentPolicy(autonomy);
 
   for (const action of actions) {
     const type = String(action?.action || "").trim();
+    assertActionPolicy(policy, action);
     switch (type) {
       case "approve": {
         const asset = assetAddress(action.asset);
@@ -525,7 +595,9 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
 
     tasks = await getPendingTasks(db, agent.id);
     const config = parseJson(agent.config_json || "{}", {});
-    const autonomy = config?.autonomy && typeof config.autonomy === "object" ? config.autonomy : {};
+    const storedAutonomy = config?.autonomy && typeof config.autonomy === "object" ? config.autonomy : {};
+    const policy = config?.policy && typeof config.policy === "object" ? config.policy : {};
+    const autonomy = { ...storedAutonomy, policy };
     const autonomyEnabled = autonomy.enabled !== false;
     const instructions = String(autonomy.instructions || "").trim();
 
