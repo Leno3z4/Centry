@@ -14,7 +14,7 @@
   display: block;
   margin-bottom: 8px;
   color: #9277b9;
-  font-size: 9px;
+  font-size: 12px;
   font-family: 'DM Mono', monospace;
   letter-spacing: 1.5px;
   text-transform: uppercase;
@@ -88,7 +88,7 @@
   display: block;
   margin-bottom: 8px;
   color: #756d83;
-  font: 9px 'DM Mono', monospace;
+  font: 11px 'DM Mono', monospace;
   letter-spacing: 1px;
   text-transform: uppercase;
 }
