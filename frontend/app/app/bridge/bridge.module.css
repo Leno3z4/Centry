@@ -46,7 +46,7 @@
   border-radius: 999px;
   background: #0e0917;
   color: #bfb1ca;
-  font-size: 10px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -164,7 +164,7 @@
 .chainOption:hover,
 .chainOptionActive {
   border-color: #382a4a;
-  background: linear-gradient(120deg, #171022, #120c1b);
+  background: #171a1e;
 }
 
 .chainOption:hover {
@@ -237,21 +237,21 @@
   justify-self: center;
   border: 1px solid #4b3563;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #21152f, #0f0a17 72%);
+  background: #15181c;
   color: #d6c2e8;
   font-size: 21px;
   line-height: 1;
   cursor: pointer;
-  box-shadow: 0 12px 28px rgba(0,0,0,.34), 0 0 0 1px rgba(155,98,255,.04);
+  box-shadow: none;
   transition: border-color 160ms ease, background 160ms ease, color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
 }
 
 .arrowButton:hover:not(:disabled) {
   border-color: #8a60b5;
-  background: radial-gradient(circle at 35% 30%, #2a1a3c, #120c1c 72%);
+  background: #1c2025;
   color: #f4ebff;
   transform: translateY(-1px);
-  box-shadow: 0 16px 32px rgba(0,0,0,.38), 0 0 18px rgba(155,98,255,.12);
+  box-shadow: none;
 }
 
 .arrowButton:active:not(:disabled) {
@@ -366,12 +366,12 @@
   margin-top: 8px;
   border: 1px solid transparent;
   border-radius: 13px;
-  background: linear-gradient(100deg, #8b4eff, #b67cff);
+  background: #b7a7ff;
   color: #fff;
   font: inherit;
   font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 10px 35px rgba(108,49,181,.28);
+  box-shadow: none;
 }
 
 .primaryButton:hover:not(:disabled) {
@@ -407,7 +407,7 @@
   overflow-wrap: anywhere;
   color: #d8c6ea;
   font-family: 'DM Mono', monospace;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .noticeError {
