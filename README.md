@@ -95,7 +95,7 @@ Users do **not** deploy an individual implementation manually. The factory deplo
 
 ## Agent connection model
 
-Centry uses a Skill-first connection flow rather than making MCP the primary integration surface.
+Centry uses a Skill-first connection flow.
 
 The flow is:
 
