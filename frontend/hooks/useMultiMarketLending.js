@@ -11,7 +11,7 @@ import { formatUnits, maxUint256, parseUnits } from 'viem';
 import { CONTRACT_ADDRESSES, hasAddress } from '../constants/contracts';
 import { ACTIVE_MARKETS } from '../constants/markets';
 import { ERC20_ABI, LENDING_POOL_ABI, ORACLE_ABI } from '../constants/abis';
-import { arcTestnet } from '../config/multiWagmi';
+import { arcMainnet } from '../config/multiWagmi';
 
 const ZERO = 0n;
 const MAX_UINT256 = maxUint256;
@@ -32,7 +32,7 @@ export function useMultiMarketLending(asset, decimals = 18) {
   const configured =
     hasAddress('lendingPool') &&
     /^0x[a-fA-F0-9]{40}$/.test(asset || '');
-  const correctNetwork = !address || chainId === arcTestnet.id;
+  const correctNetwork = !address || chainId === arcMainnet.id;
   const commonQuery = { enabled: configured && correctNetwork };
   const walletQuery = {
     enabled: configured && Boolean(address) && correctNetwork,
@@ -183,8 +183,8 @@ export function useMultiMarketLending(asset, decimals = 18) {
     if (!address) {
       throw new Error('Connect your wallet before submitting a transaction.');
     }
-    if (chainId !== arcTestnet.id) {
-      throw new Error('Switch your wallet to Arc Testnet before submitting a transaction.');
+    if (chainId !== arcMainnet.id) {
+      throw new Error('Switch your wallet to Arc Mainnet before submitting a transaction.');
     }
     if (!publicClient) {
       throw new Error('Wallet client is not ready. Please reconnect your wallet.');
