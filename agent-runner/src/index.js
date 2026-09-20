@@ -278,7 +278,8 @@ async function providerFor(db, agent, autonomy) {
 
   if (!rows.length) return null;
   const requested = autonomy.provider ? String(autonomy.provider).toLowerCase() : "";
-  return rows.find((item) => String(item.provider).toLowerCase() === requested) || rows[0];
+  if (requested) return rows.find((item) => String(item.provider).toLowerCase() === requested) || null;
+  return rows[0];
 }
 
 function extractJson(text) {
