@@ -7,13 +7,13 @@ import { useAccount, usePublicClient, useSignMessage, useWriteContract } from 'w
 import { keccak256, toBytes } from 'viem';
 import { Providers } from '../../../../../components/Providers';
 import { AppShell } from '../../../../../components/AppShell';
+import { CONTRACT_ADDRESSES } from '../../../../../constants/contracts';
 import { AgentConfigForm } from '../../AgentConfigForm';
 import {
   ACCOUNT_ABI,
   API_BASE,
   AGENT_ACTION_OPTIONS,
   AGENT_ASSET_OPTIONS,
-  CONTRACT_ADDRESSES,
   RUNNER_ADDRESS,
   apiJson,
   loadOwnedAgents,
