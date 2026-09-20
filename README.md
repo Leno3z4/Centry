@@ -19,13 +19,14 @@ Self-repay and keeper functionality is treated as background protocol infrastruc
 
 ```text
 contracts/     Solidity protocol, governance, agent, oracle and adapter contracts
-aapp/          Application routes/components
+app/            Application routes/components
 frontend/      Frontend configuration and UI
+agent-runner/    Hosted agent runner
 keeper/        Keeper/background execution services
 skills/        External-agent skills, including Centry Connect
 docs/          Product, architecture and deployment documentation
 scripts/       Operational/deployment scripts
-lib/           Solidity dependencies
+lib/           Agent/runtime helpers
 ```
 
 ## Smart-contract architecture
