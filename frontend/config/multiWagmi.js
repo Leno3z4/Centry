@@ -171,6 +171,7 @@ if (walletConnectProjectId) connectors.push(centryWalletConnect());
 const arcRpcUrls = [
   process.env.NEXT_PUBLIC_ARC_RPC_URL,
   'https://rpc.mainnet.arc.io',
+  'https://rpc.arc-scan.org',
 ].filter(Boolean);
 
 export const config = createConfig({
@@ -178,8 +179,11 @@ export const config = createConfig({
   connectors,
   transports: {
     [arcMainnet.id]: fallback(
-      arcRpcUrls.map((url) => http(url)),
-      { rank: true },
+      arcRpcUrls.map((url) => http(url, {
+        retryCount: 0,
+        timeout: 10000,
+      })),
+      { rank: false },
     ),
   },
   multiInjectedProviderDiscovery: true,
