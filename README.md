@@ -2,7 +2,7 @@
 
 Centry is a non-custodial lending and onchain-agent protocol built around user-owned smart accounts. The repository contains the protocol contracts, frontend, agent connection layer, keeper infrastructure, deployment documentation, and the external-agent skill.
 
-> **Development status:** Centry is actively being developed and deployed in stages. Existing production/testnet deployments are kept separate from newer contract implementations. Check the deployment documents and network-specific configuration before deploying a changed contract.
+> **Development status:** Centry is actively being developed and deployed in stages. Existing deployed contracts are kept unchanged while newer application and agent infrastructure is wired to the live Arc Mainnet deployment. Check the deployment documents and network-specific configuration before changing any contract.
 
 ## What Centry does
 
@@ -156,7 +156,7 @@ Proposal creation and arbitrary governance calldata are not exposed through the 
 
 ## Frontend
 
-The frontend keeps network-specific contract addresses centralized under `frontend/constants/contracts.js`. The current checked-in configuration is explicitly marked as **Arc Testnet**; do not treat those addresses as Arc Mainnet addresses.
+The frontend keeps network-specific contract addresses centralized under `frontend/constants/contracts.js`. The current checked-in protocol configuration targets **Arc Mainnet (5042)** and the already-deployed Centry contracts.
 
 When deploying a new mainnet contract, update the appropriate network configuration only after the deployment transaction and verification have been confirmed.
 
