@@ -5,7 +5,7 @@ import { getAgentById, updateAgentConfig } from "../../../../../../lib/agentStor
 export async function POST(request, { params }) {
   let body;
   try { body = await request.json(); } catch { return Response.json({ error: "invalid_json" }, { status: 400 }); }
-  const agentId = String(params?.agentId || "").trim();
+  const { agentId: rawAgentId } = await params;\n  const agentId = String(rawAgentId || "").trim();
   if (!agentId) return Response.json({ error: "agent_id_required" }, { status: 400 });
 
   try {
