@@ -58,7 +58,6 @@ export function normalizeTowerQuoteDecimals(quote, actualOutputDecimals) {
   }
 
   const providerOutputDecimals = TOWER_OUTPUT_DECIMAL_OVERRIDES[outputToken] ?? actualOutputDecimals;
-
   if (providerOutputDecimals === actualOutputDecimals) {
     return {
       ...quote,
@@ -68,11 +67,18 @@ export function normalizeTowerQuoteDecimals(quote, actualOutputDecimals) {
     };
   }
 
+  const providerOutputAmount = String(quote.outputAmount ?? '0');
+  const providerMinOut = String(quote.minOut ?? '0');
+  const providerRoute = quote.route;
+
   const normalized = {
     ...quote,
-    outputAmount: scaleRawAmount(quote.outputAmount, providerOutputDecimals, actualOutputDecimals).toString(),
-    minOut: scaleRawAmount(quote.minOut, providerOutputDecimals, actualOutputDecimals).toString(),
-    route: normalizeHopAmounts(quote.route, providerOutputDecimals, actualOutputDecimals),
+    outputAmount: scaleRawAmount(providerOutputAmount, providerOutputDecimals, actualOutputDecimals).toString(),
+    minOut: scaleRawAmount(providerMinOut, providerOutputDecimals, actualOutputDecimals).toString(),
+    route: normalizeHopAmounts(providerRoute, providerOutputDecimals, actualOutputDecimals),
+    providerOutputAmount,
+    providerMinOut,
+    providerRoute,
     quoteDecimals: actualOutputDecimals,
     providerQuoteDecimals: providerOutputDecimals,
     decimalsNormalized: true,
@@ -87,4 +93,29 @@ export function normalizeTowerQuoteDecimals(quote, actualOutputDecimals) {
   }
 
   return normalized;
+}
+
+export function toTowerQuote(quote) {
+  if (!quote || typeof quote !== 'object') throw new Error('Invalid quote payload.');
+
+  if (quote.decimalsNormalized !== true || quote.providerOutputAmount == null || quote.providerMinOut == null) {
+    return quote;
+  }
+
+  const {
+    providerOutputAmount,
+    providerMinOut,
+    providerRoute,
+    providerQuoteDecimals,
+    quoteDecimals,
+    decimalsNormalized,
+    ...rest
+  } = quote;
+
+  return {
+    ...rest,
+    outputAmount: providerOutputAmount,
+    minOut: providerMinOut,
+    ...(providerRoute !== undefined ? { route: providerRoute } : {}),
+  };
 }
