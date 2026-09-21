@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "find app -type f \\( -name '*.js' -o -name '*.jsx' \\) -print0 | xargs -0 sed -i 's#../../../../../components/#../../../../components/#g; s#../../../../../constants/#../../../../constants/#g' && next build",
+    "build": "find app -type f \\( -name '*.js' -o -name '*.jsx' \\) -print0 | xargs -0 perl -pi -e 's#\\.\\./\\.\\./\\.\\./\\.\\./\\.\\./components/#../../../../components/#g; s#\\.\\./\\.\\./\\.\\./\\.\\./\\.\\./constants/#../../../../constants/#g' && next build",
     "start": "next start"
   },
   "dependencies": {
