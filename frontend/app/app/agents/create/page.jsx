@@ -4,8 +4,8 @@ import { useState } from 'react';
 import { useAccount, usePublicClient, useSignMessage, useWriteContract } from 'wagmi';
 import { keccak256, toBytes } from 'viem';
 import { useRouter } from 'next/navigation';
-import { Providers } from '../../../../../components/Providers';
-import { AppShell } from '../../../../../components/AppShell';
+import { Providers } from '../../../../components/Providers';
+import { AppShell } from '../../../../components/AppShell';
 import { AgentConfigForm } from '../AgentConfigForm';
 import {
   AGENT_PRICE_RAW,
@@ -18,7 +18,7 @@ import {
   normalizeConfigForHash,
 } from '../agentClient';
 import styles from '../agents.module.css';
-import { CONTRACT_ADDRESSES } from '../../../../../constants/contracts';
+import { CONTRACT_ADDRESSES } from '../../../../constants/contracts';
 
 export default function CreateAgentPage() {
   const { address, isConnected } = useAccount();
@@ -40,7 +40,6 @@ export default function CreateAgentPage() {
 
   async function createAgent(config) {
     if (!ready) return setError('Connect your wallet and make sure the Centry agent factory and runner are configured.');
-    if (!API_BASE) return setError('Agent API URL is not configured.');
     if (!RUNNER_ADDRESS) return setError('Hosted runner address is not configured.');
     setStatus('Preparing the agent…');
     setError('');
@@ -73,8 +72,10 @@ export default function CreateAgentPage() {
       }
       const registerAuth = await ownerAuth(account, 'register-agent');
       await apiJson(`${API_BASE}/api/v1/agents/register`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...registerAuth, owner: address, account, agentId, type: PAYWALL_ENABLED ? 'purchased' : 'standard', name: config.name, description: config.description || 'Configurable Centry onchain agent.', operator: RUNNER_ADDRESS, priceUsdCents: PAYWALL_ENABLED ? 250 : 0 }) });
-      const providerAuth = await ownerAuth(account, 'configure-ai-provider');
-      await apiJson(`${API_BASE}/api/v1/agents/${agentId}/providers`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...providerAuth, provider: config.provider, model: config.model, apiKey: config.providerKey }) });
+      if (config.provider && config.model && config.providerKey) {
+        const providerAuth = await ownerAuth(account, 'configure-ai-provider');
+        await apiJson(`${API_BASE}/api/v1/agents/${agentId}/providers`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...providerAuth, provider: config.provider, model: config.model, apiKey: config.providerKey }) });
+      }
       const configAuth = await ownerAuth(account, 'configure-agent');
       await apiJson(`${API_BASE}/api/v1/agents/${agentId}/config`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...configAuth, owner: address, autonomy: { ...config.autonomy, provider: config.provider }, policy: config.policy }) });
       setCreatedAccount(account);
