@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useAccount, useChainId, useConnectorClient } from 'wagmi';
+import { useAccount, useConnectorClient } from 'wagmi';
 import { encodeFunctionData, formatUnits } from 'viem';
 import { Providers } from '../../../components/Providers';
 import { AppShell } from '../../../components/AppShell';
@@ -22,7 +22,6 @@ const ERC20_ABI = [
   { type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }], outputs: [{ type: 'uint256' }] },
 ];
 
-const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
 function ChainPicker({ value, chains, onChange, label }) {
   const [open, setOpen] = useState(false);
@@ -65,7 +64,6 @@ export default function Page() {
 
 function BridgeContent() {
   const { address, isConnected } = useAccount();
-  const walletChainId = useChainId();
   const { data: connectorClient } = useConnectorClient();
   const [fromId, setFromId] = useState('arc-mainnet');
   const [toId, setToId] = useState('base-mainnet');
@@ -82,7 +80,6 @@ function BridgeContent() {
   const destinationChains = useMemo(() => fromArc ? EXTERNAL_CHAINS : [BRIDGE_CHAINS[0]], [fromArc]);
   const source = BRIDGE_CHAINS.find((chain) => chain.id === fromId) || BRIDGE_CHAINS[0];
   const destination = BRIDGE_CHAINS.find((chain) => chain.id === toId) || BRIDGE_CHAINS[1];
-  const walletOnSource = !isConnected || walletChainId === source.chainId;
   const validAmount = /^\d+(\.\d{1,6})?$/.test(amount) && Number(amount) > 0;
 
   const readBalance = async () => {
@@ -113,7 +110,6 @@ function BridgeContent() {
     setAmount('');
     setError('');
     setBridgeResult(null);
-    setWalletTxHash('');
     setStage('idle');
   };
 
@@ -137,50 +133,6 @@ function BridgeContent() {
 
   const setMax = () => {
     if (balance && Number(balance) > 0) setAmount(balance);
-  };
-
-  const waitForChain = async (targetChainId) => {
-    if (!connectorClient?.request) throw new Error('The connected wallet does not expose a network provider.');
-    for (let attempt = 0; attempt < 30; attempt += 1) {
-      const current = await connectorClient.request({ method: 'eth_chainId' });
-      if (Number(BigInt(current)) === targetChainId) return;
-      await sleep(250);
-    }
-    throw new Error(`Wallet did not switch to ${BRIDGE_CHAINS.find((chain) => chain.chainId === targetChainId)?.name || 'the selected source chain'}.`);
-  };
-
-  const switchToSource = async () => {
-    if (!isConnected || walletChainId === source.chainId) return true;
-    if (!connectorClient?.request) {
-      setError('The connected wallet does not expose a network switch provider.');
-      return false;
-    }
-    setError('');
-    try {
-      const chainHex = `0x${source.chainId.toString(16)}`;
-      try {
-        await connectorClient.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: chainHex }] });
-      } catch (caughtError) {
-        const code = Number(caughtError?.code);
-        if (code !== 4902 && code !== -32603 && code !== -32602) throw caughtError;
-        await connectorClient.request({
-          method: 'wallet_addEthereumChain',
-          params: [{
-            chainId: chainHex,
-            chainName: source.name,
-            nativeCurrency: source.native,
-            rpcUrls: [source.rpcUrl],
-            blockExplorerUrls: [source.explorerUrl],
-          }],
-        });
-        await connectorClient.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: chainHex }] });
-      }
-      await waitForChain(source.chainId);
-      return true;
-    } catch (caughtError) {
-      setError(errorText(caughtError));
-      return false;
-    }
   };
 
   const bridge = async () => {
