@@ -47,10 +47,23 @@ if (walletConnectProjectId) {
   );
 }
 
+const DEFAULT_ARC_RPC_URL = 'https://rpc.mainnet.arc.io';
+
+function usableRpcUrl(value) {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (['localhost', '127.0.0.1', '0.0.0.0', '::1'].includes(url.hostname)) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 const arcRpcUrls = [
-  process.env.NEXT_PUBLIC_ARC_RPC_URL,
-  'https://rpc.mainnet.arc.io',
-].filter(Boolean);
+  usableRpcUrl(process.env.NEXT_PUBLIC_ARC_RPC_URL),
+  DEFAULT_ARC_RPC_URL,
+].filter((url, index, list) => Boolean(url) && list.indexOf(url) === index);
 
 export const config = createConfig({
   chains: [arcMainnet],
