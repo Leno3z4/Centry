@@ -133,11 +133,11 @@ function OverviewContent() {
       </div>
       <section className="hero">
         <div className="hero-copy">
-          <h1>Your DeFi<br /><em>hub.</em></h1>
-          <p>Swap, lend, earn rewards, and help govern Centry from one place.</p>
+          <h1>Your Centry<br /><em>account.</em></h1>
+          <p>See your position first, then choose what you want to trade, lend, earn, govern, or automate.</p>
           <div className="hero-actions">
-            <a className="primary-btn" href="/app/swap">Start with Swap</a>
-            <a className="secondary-btn" href="/app/markets">Explore Markets</a>
+            <a className="primary-btn" href="/app/portfolio">View my position</a>
+            <a className="secondary-btn" href="/app/swap">Swap assets</a>
           </div>
         </div>
         <div className="orbital-art" aria-hidden="true">
@@ -151,6 +151,21 @@ function OverviewContent() {
         <div className="metric"><span>Borrowed</span><strong>{isConnected ? `${formatNumber(lending.borrowBalance, 1)} ${firstMarket?.symbol || ''}` : '—'}</strong><small>Your active debt</small></div>
         <div className="metric"><span>Health factor</span><strong>{isConnected ? lending.healthFactor : '—'}</strong><small>{isConnected ? `${lending.healthFactorPercent}% account health` : 'Connect wallet'}</small></div>
         <div className="metric"><span>Borrow room</span><strong>{isConnected ? `$${formatNumber(lending.borrowLimit, 1)}` : '—'}</strong><small>Remaining borrowing power</small></div>
+      </section>
+      <section className="panel overview-actions-panel">
+        <div className="panel-head">
+          <div>
+            <h2>What do you want to do?</h2>
+            <p className="panel-copy">Centry is organized around the decision you are making, not the infrastructure behind it.</p>
+          </div>
+        </div>
+        <div className="overview-actions-grid">
+          <a className="overview-action-card" href="/app/swap"><strong>Swap</strong><span>Trade supported assets on Arc.</span><b>Open swap →</b></a>
+          <a className="overview-action-card" href="/app/markets"><strong>Borrow & lend</strong><span>Open a market, supply liquidity, or manage debt.</span><b>View markets →</b></a>
+          <a className="overview-action-card" href="/app/rewards"><strong>Earn</strong><span>Review CENT rewards and choose what happens to them.</span><b>View rewards →</b></a>
+          <a className="overview-action-card" href="/app/governance"><strong>Govern</strong><span>Lock CENT, manage veCENT, and use your voting power.</span><b>Open governance →</b></a>
+          <a className="overview-action-card" href="/app/agents"><strong>Automate</strong><span>Create controlled automation with its own smart-account wallet.</span><b>Open agents →</b></a>
+        </div>
       </section>
 
       <section className="content-grid">
@@ -176,28 +191,36 @@ function OverviewContent() {
 
       <section className="content-grid overview-bottom-grid">
         <div className="panel">
-          <div className="panel-head"><div><h2>veCENT</h2></div><a className="text-link" href="/app/governance">Manage →</a></div>
-          <div className="overview-feature-number">{isConnected ? `${formatNumber(walletVotingPower, 1)}` : '—'}</div>
+          <div className="panel-head"><div><h2>Your governance position</h2></div><a className="text-link" href="/app/governance">Manage →</a></div>
+          <div className="overview-feature-number">{isConnected ? formatNumber(walletVotingPower, 1) : '—'}</div>
           <div className="overview-feature-label">Voting power</div>
           <div className="overview-inline-stats">
-            <span>Locked <strong>{isConnected ? `${formatNumber(governance.lockedAmount, 1)} CENT` : '—'}</strong></span>
-            <span>Positions <strong>{isConnected ? governance.veBalance : '—'}</strong></span>
+            <span>Locked <strong>{isConnected ? formatNumber(governance.lockedAmount, 1) + ' CENT' : '—'}</strong></span>
+            <span>veCENT positions <strong>{isConnected ? governance.veBalance : '—'}</strong></span>
           </div>
+          <p className="panel-copy overview-card-copy">Locking CENT creates veCENT. That position connects governance and revenue rewards.</p>
         </div>
-
         <div className="panel">
-          <div className="panel-head"><div><h2>Latest distribution</h2></div><a className="text-link" href="/app/rewards">Open →</a></div>
-          <div className="overview-reward-row"><div><span className="overview-feature-label">Epoch</span><strong className="overview-reward-value">{rewardPending ? nextEpoch.toString() : latestEpoch.toString()}</strong></div><div className="overview-reward-right"><span className={`reward-mini-status ${rewardPending ? 'pending' : 'live'}`}>{rewardPending ? 'IN PROGRESS' : 'ACTIVE'}</span><small>{rewardPending ? formatCountdown(pendingCountdown) : 'Claims available'}</small></div></div>
+          <div className="panel-head"><div><h2>Rewards</h2></div><a className="text-link" href="/app/rewards">Open →</a></div>
+          <div className="overview-reward-row"><div><span className="overview-feature-label">Next allocation</span><strong className="overview-reward-value">{rewardPending ? nextEpoch.toString() : latestEpoch.toString()}</strong></div><div className="overview-reward-right"><span className={`reward-mini-status ${rewardPending ? 'pending' : 'live'}`}>{rewardPending ? 'PREPARING' : 'ACTIVE'}</span><small>{rewardPending ? formatCountdown(pendingCountdown) : 'Claims available'}</small></div></div>
           <div className="overview-reward-line"><span>Voting power</span><strong>{isConnected ? formatNumber(walletVotingPower, 1) : '—'}</strong></div>
-          <div className="overview-reward-line"><span>Manage rewards</span><strong className="text-link">Open rewards →</strong></div>
+          <div className="overview-reward-line"><span>Reward destination</span><strong>Wallet or self-repay</strong></div>
         </div>
-      </section>
+      </section>      </section>
 
       <style jsx global>{`
         .page-stack{position:relative;isolation:isolate}
         .overview-aero-background{position:fixed;inset:0;z-index:0;opacity:.025;pointer-events:none;overflow:hidden}
         .overview-aero-background > *{width:100%;height:100%}
         .page-stack > :not(.overview-aero-background){position:relative;z-index:1}
+        .overview-actions-panel{margin-top:0}
+        .overview-actions-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+        .overview-action-card{display:grid;min-height:154px;align-content:start;gap:8px;padding:17px;border:1px solid #292e35;border-radius:13px;background:#0c0f12;transition:border-color 160ms ease,background 160ms ease,transform 160ms ease}
+        .overview-action-card:hover{border-color:#444a52;background:#111419;transform:translateY(-1px)}
+        .overview-action-card strong{font-size:16px}
+        .overview-action-card span{color:#89919a;font-size:13px;line-height:1.55}
+        .overview-action-card b{align-self:end;margin-top:auto;color:#bdb5c8;font-size:12px}
+        .overview-card-copy{margin-bottom:0}
         .overview-stats-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
         .overview-bottom-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
         .panel-head .text-link,.text-link{color: #b8adcb;text-decoration:none;font-size:11px}
@@ -210,8 +233,9 @@ function OverviewContent() {
         .overview-reward-value{display:block;margin-top:5px;font-size:30px;letter-spacing:-.02em}
         .overview-reward-right{text-align:right}.reward-mini-status{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.08em}.reward-mini-status.pending{color:#c8b7e4}.reward-mini-status.live{color:#75ddb2}.overview-reward-right small{display:block;margin-top:5px;color:#8f849d;font-size:11px}
         .overview-reward-line{display:flex;justify-content:space-between;align-items:center;padding-top:14px;margin-top:14px;border-top:1px solid #2a2235;color:#8f849d;font-size:11px}.overview-reward-line strong{color:#e9e1f1}
-        @media (max-width:900px){.overview-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-bottom-grid{grid-template-columns:1fr}}
-        @media (max-width:640px){.overview-stats-grid{grid-template-columns:1fr}.overview-reward-row{align-items:flex-start;flex-direction:column}.overview-reward-right{text-align:left}}
+        @media (max-width:1100px){.overview-actions-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+        @media (max-width:900px){.overview-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-bottom-grid{grid-template-columns:1fr}.overview-actions-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+        @media (max-width:640px){.overview-stats-grid{grid-template-columns:1fr}.overview-actions-grid{grid-template-columns:1fr}.overview-reward-row{align-items:flex-start;flex-direction:column}.overview-reward-right{text-align:left}}
       `}</style>
     </div>
   );
