@@ -218,6 +218,15 @@ function BridgeContent() {
           <div><span>Recipient</span><strong>{address ? `${address.slice(0, 6)}…${address.slice(-4)}` : 'Connect wallet'}</strong></div>
         </div>
 
+        <button
+          type="button"
+          className={styles.primaryButton}
+          disabled={!isConnected || !validAmount || fromId === toId || stage === 'submitting' || stage === 'pending'}
+          onClick={bridge}
+        >
+          {buttonLabel}
+        </button>
+
         {stage === 'submitting' ? <div className={styles.notice}>Submitting the bridge request to Tower…</div> : null}
 
         {stage !== 'pending' && isConnected && <button type="button" className={styles.refreshButton} onClick={readBalance} disabled={loadingBalance}>{loadingBalance ? 'Checking balance…' : `Refresh ${source.short} USDC balance`}</button>}
