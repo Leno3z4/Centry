@@ -3,7 +3,7 @@ import { createPublicClient, encodeFunctionData, defineChain, http } from 'viem'
 import { ACTIVE_MARKETS } from '../../../../../constants/markets';
 import { CONTRACT_ADDRESSES } from '../../../../../constants/contracts';
 import { rateLimit, rateLimitResponse, withRateLimitHeaders } from '../../../../../lib/rateLimit';
-import { normalizeTowerQuoteDecimals } from '../../../../../lib/towerQuoteDecimals';
+import { toTowerQuote } from '../../../../../lib/towerQuoteDecimals';
 
 const ARC_CHAIN_ID = 5042;
 const ARC_RPC_URL = process.env.ARC_RPC_URL || process.env.NEXT_PUBLIC_ARC_RPC_URL || 'https://rpc.mainnet.arc.io';
@@ -200,7 +200,7 @@ export async function POST(request) {
       );
     }
 
-    const normalizedQuote = normalizeTowerQuoteDecimals(quote, output.decimals);
+    const towerQuote = toTowerQuote(quote);
 
     const response = await fetch(`${TOWER_BASE_URL}/swap/build-tx`, {
       method: 'POST',
@@ -208,7 +208,7 @@ export async function POST(request) {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ quote: normalizedQuote, userAddress }),
+      body: JSON.stringify({ quote: towerQuote, userAddress }),
       cache: 'no-store',
     });
 
