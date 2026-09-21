@@ -382,6 +382,116 @@ export default function LandingHome() {
                     .landing-home-cta .landing-home-primary { justify-self: stretch; }
                     .landing-home-footer { align-items: flex-start; flex-direction: column; }
                 }
+
+                /* Unified Centry / Apple flagship palette. */
+                .landing-home {
+                    --landing-bg: #f5f5f7;
+                    --landing-surface: rgba(255,255,255,.86);
+                    --landing-card: #ffffff;
+                    --landing-line: #d2d2d7;
+                    --landing-line-soft: #e5e5ea;
+                    --landing-text: #1d1d1f;
+                    --landing-muted: #6e6e73;
+                    --landing-muted-2: #86868b;
+                    --landing-accent: #0071e3;
+                    color: var(--landing-text);
+                    background: var(--landing-bg);
+                }
+
+                .landing-home::before,
+                .landing-home::after {
+                    display: none !important;
+                }
+
+                .landing-home-nav {
+                    border-color: rgba(210,210,215,.82) !important;
+                    background: rgba(245,245,247,.78) !important;
+                    color: var(--landing-text) !important;
+                    backdrop-filter: blur(20px) saturate(150%);
+                    -webkit-backdrop-filter: blur(20px) saturate(150%);
+                }
+
+                .landing-home-nav a,
+                .landing-home-nav span {
+                    color: var(--landing-muted) !important;
+                }
+
+                .landing-home-nav .landing-home-open,
+                .landing-home-primary {
+                    border-color: var(--landing-accent) !important;
+                    background: var(--landing-accent) !important;
+                    color: #fff !important;
+                }
+
+                .landing-home-primary:hover {
+                    background: #0066cc !important;
+                }
+
+                .landing-home-secondary,
+                .landing-home-product,
+                .landing-home-explore-card {
+                    border-color: var(--landing-line) !important;
+                    background: var(--landing-card) !important;
+                    color: var(--landing-text) !important;
+                    box-shadow: 0 2px 10px rgba(0,0,0,.025);
+                }
+
+                .landing-home-secondary:hover,
+                .landing-home-product:hover,
+                .landing-home-explore-card:hover {
+                    border-color: #b7b7bc !important;
+                    background: #fff !important;
+                    transform: none !important;
+                }
+
+                .landing-home-hero h1,
+                .landing-home-section-heading h2,
+                .landing-home-cta h2,
+                .landing-home-product h3,
+                .landing-home-explore-card h3 {
+                    color: var(--landing-text) !important;
+                }
+
+                .landing-home-hero p,
+                .landing-home-section-heading p,
+                .landing-home-product p,
+                .landing-home-explore-card p {
+                    color: var(--landing-muted) !important;
+                }
+
+                .landing-home-product-number,
+                .landing-home-arrow,
+                .landing-home-explore-card > span {
+                    color: var(--landing-accent) !important;
+                }
+
+                .landing-home-cta {
+                    border-color: var(--landing-line) !important;
+                    background: #fff !important;
+                }
+
+                .landing-home-footer {
+                    border-top-color: var(--landing-line) !important;
+                    color: var(--landing-muted-2) !important;
+                }
+
+                .landing-home-footer strong {
+                    color: var(--landing-text) !important;
+                }
+
+                .landing-home-footer a:hover {
+                    color: var(--landing-text) !important;
+                }
+
+                @media (prefers-reduced-motion: reduce) {
+                    .landing-home *,
+                    .landing-home *::before,
+                    .landing-home *::after {
+                        transition-duration: .001ms !important;
+                        animation-duration: .001ms !important;
+                        animation-iteration-count: 1 !important;
+                    }
+                }
             `}</style>
         </main>
     );
