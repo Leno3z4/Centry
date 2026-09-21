@@ -1,9 +1,9 @@
 :root {
-  --bg: #f5f5f7;
-  --panel: #ffffff;
-  --panel-2: #fbfbfd;
-  --line: #d2d2d7;
-  --line-soft: #e5e5ea;
+  --bg: #eceff1;
+  --panel: #f7f8fa;
+  --panel-2: #f2f3f5;
+  --line: #cfd3d8;
+  --line-soft: #dde1e5;
   --muted: #6e6e73;
   --muted-2: #86868b;
   --accent: #0071e3;
@@ -53,7 +53,7 @@ input,
 select,
 textarea {
   border-color: var(--line);
-  background: #fff;
+  background: #f7f8fa;
   color: var(--text);
   border-radius: 12px;
 }
@@ -75,7 +75,7 @@ select {
 }
 
 select option {
-  background: #fff;
+  background: #f7f8fa;
   color: var(--text);
 }
 
@@ -88,7 +88,7 @@ select option {
   width: 238px;
   padding: 24px 14px 18px;
   border-right: 1px solid rgba(210, 210, 215, .9);
-  background: rgba(255, 255, 255, .78);
+  background: rgba(247, 248, 250, .9);
   -webkit-backdrop-filter: blur(20px) saturate(150%);
   backdrop-filter: blur(20px) saturate(150%);
 }
@@ -149,7 +149,7 @@ select option {
 
 .nav-item.active {
   border-color: transparent;
-  background: #ffffff;
+  background: #f7f8fa;
   color: var(--text);
   box-shadow: 0 1px 2px rgba(0, 0, 0, .06);
 }
@@ -188,7 +188,7 @@ select option {
   z-index: 20;
   height: 72px;
   border-bottom: 1px solid rgba(210, 210, 215, .82);
-  background: rgba(245, 245, 247, .82);
+  background: rgba(236, 239, 241, .88);
   -webkit-backdrop-filter: blur(18px) saturate(150%);
   backdrop-filter: blur(18px) saturate(150%);
 }
@@ -253,7 +253,7 @@ select option {
   padding: 54px 38px 42px;
   border: 1px solid var(--line);
   border-radius: 24px;
-  background: #fff;
+  background: #f7f8fa;
   box-shadow: 0 8px 30px rgba(0, 0, 0, .035);
 }
 
@@ -316,14 +316,14 @@ select option {
 .secondary-btn,
 .wallet-address {
   border: 1px solid var(--line);
-  background: #fff;
+  background: #f7f8fa;
   color: var(--text);
 }
 
 .secondary-btn:hover:not(:disabled),
 .wallet-address:hover:not(:disabled) {
   border-color: #b7b7bc;
-  background: #f8f8fa;
+  background: #eef1f3;
   transform: none;
 }
 
@@ -338,7 +338,7 @@ select option {
   padding: 19px;
   border: 1px solid var(--line);
   border-radius: 17px;
-  background: #fff;
+  background: #f7f8fa;
   box-shadow: 0 2px 8px rgba(0, 0, 0, .025);
 }
 
@@ -368,7 +368,7 @@ select option {
 .doc-card {
   border: 1px solid var(--line);
   border-radius: 18px;
-  background: #fff;
+  background: #f7f8fa;
   box-shadow: 0 2px 10px rgba(0, 0, 0, .025);
 }
 
@@ -397,12 +397,12 @@ select option {
   padding: 14px 15px;
   border: 1px solid var(--line-soft);
   border-radius: 14px;
-  background: #fbfbfd;
+  background: #f2f3f5;
 }
 
 .market-list-item:hover {
   border-color: #c7c7cc;
-  background: #fff;
+  background: #f7f8fa;
   transform: none;
 }
 
@@ -433,7 +433,7 @@ select option {
 
 .connect-prompt {
   border-color: #d2d2d7;
-  background: #f5f5f7;
+  background: #e6e9ec;
   color: var(--muted);
 }
 
@@ -461,7 +461,7 @@ select option {
 
 .action-tabs {
   border-color: var(--line);
-  background: #f5f5f7;
+  background: #e6e9ec;
 }
 
 .action-tabs button {
@@ -475,14 +475,14 @@ select option {
 
 .action-tabs button.active {
   border-color: transparent;
-  background: #fff;
+  background: #f7f8fa;
   color: var(--text);
   box-shadow: 0 1px 3px rgba(0, 0, 0, .08);
 }
 
 .amount-input-wrap {
   border-color: var(--line);
-  background: #fff;
+  background: #f7f8fa;
 }
 
 .amount-input-wrap:focus-within {
@@ -522,7 +522,7 @@ textarea,
   padding: 8px 12px;
   border: 1px solid var(--line);
   border-radius: 11px;
-  background: #fff;
+  background: #f7f8fa;
 }
 
 .wallet-balance span {
