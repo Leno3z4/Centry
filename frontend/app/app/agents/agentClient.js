@@ -76,7 +76,7 @@ export function defaultAgentConfig() {
   return {
     name: '',
     description: '',
-    provider: 'gemini',
+    provider: '',
     model: '',
     providerKey: '',
     autonomy: {
