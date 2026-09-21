@@ -611,3 +611,293 @@ textarea,
     animation-iteration-count: 1 !important;
   }
 }
+
+
+/* Rewards + governance utility surfaces */
+.rewards-page { scroll-margin-top: 20px; }
+
+.reward-header-status {
+  border-color: #d2d2d7 !important;
+  background: #fff !important;
+  color: #6e6e73 !important;
+}
+
+.reward-status-dot {
+  background: #34c759 !important;
+}
+
+.reward-hero {
+  align-items: center !important;
+  padding: 28px !important;
+  border: 1px solid #d2d2d7 !important;
+  border-radius: 20px !important;
+  background: #fff !important;
+}
+
+.reward-hero-copy > strong {
+  color: #1d1d1f !important;
+  font-weight: 650 !important;
+  letter-spacing: -3px !important;
+}
+
+.reward-hero-copy p,
+.reward-hero-label,
+.preference-title {
+  color: #6e6e73 !important;
+}
+
+.reward-hero-meta > div {
+  border-color: #e5e5ea !important;
+  background: #fbfbfd !important;
+}
+
+.reward-hero-meta span,
+.reward-position-title span,
+.reward-position-amount span {
+  color: #6e6e73 !important;
+}
+
+.reward-hero-meta strong,
+.reward-position-title strong,
+.reward-position-amount strong,
+.self-repay-row strong,
+.distribution-detail-grid strong {
+  color: #1d1d1f !important;
+}
+
+.preference-group + .preference-group,
+.reward-position-actions,
+.distribution-detail-grid {
+  border-color: #e5e5ea !important;
+}
+
+.preference-option {
+  border-color: #d2d2d7 !important;
+  background: #fbfbfd !important;
+  color: #6e6e73 !important;
+}
+
+.preference-option:hover {
+  border-color: #b7b7bc !important;
+  background: #fff !important;
+}
+
+.preference-option.active {
+  border-color: #0071e3 !important;
+  background: rgba(0, 113, 227, .05) !important;
+  box-shadow: inset 0 0 0 1px #0071e3 !important;
+  color: #1d1d1f !important;
+}
+
+.preference-option strong {
+  color: #1d1d1f !important;
+}
+
+.preference-option span,
+.preference-note,
+.panel-copy {
+  color: #6e6e73 !important;
+}
+
+.reward-position,
+.self-repay-row,
+.distribution-detail-grid > div,
+.self-repay-explainer,
+.reward-progress {
+  border-color: #e5e5ea !important;
+  background: #fbfbfd !important;
+}
+
+.reward-position-title .token {
+  background: #f5f5f7 !important;
+  border-color: #d2d2d7 !important;
+  color: #1d1d1f !important;
+}
+
+.self-repay-explainer strong,
+.self-repay-flow,
+.self-repay-flow span,
+.self-repay-row strong {
+  color: #1d1d1f !important;
+}
+
+.self-repay-explainer span,
+.self-repay-row > div:first-child span,
+.self-repay-state,
+.distribution-detail-grid span,
+.reward-progress-head span,
+.reward-progress p {
+  color: #6e6e73 !important;
+}
+
+.self-repay-state.active,
+.status-live,
+.reward-mini-status.live {
+  color: #248a3d !important;
+}
+
+.self-repay-state-dot,
+.self-repay-state.active .self-repay-state-dot {
+  background: #34c759 !important;
+  box-shadow: none !important;
+}
+
+.distribution-details summary {
+  color: #1d1d1f !important;
+}
+
+.distribution-details summary::after {
+  color: #6e6e73 !important;
+}
+
+.reward-progress-track {
+  background: #e5e5ea !important;
+}
+
+.reward-progress-fill,
+.reward-progress-fill.running {
+  background: #b7b7bc !important;
+}
+
+.reward-progress-fill.complete {
+  background: #34c759 !important;
+}
+
+.governance-flow-panel {
+  border-color: #d2d2d7 !important;
+  background: #fff !important;
+}
+
+.governance-flow-copy h2,
+.governance-flow strong,
+.governance-hero-card .big-number,
+.governance-stat-line strong,
+.governance-position-card strong,
+.position-power strong {
+  color: #1d1d1f !important;
+}
+
+.governance-flow-copy p,
+.governance-flow span,
+.governance-stat-line span,
+.governance-value-label,
+.position-topline span,
+.position-power span,
+.position-detail-grid span,
+.position-count {
+  color: #6e6e73 !important;
+}
+
+.governance-flow > div,
+.governance-position-card,
+.position-detail-grid > div {
+  border-color: #e5e5ea !important;
+  background: #fbfbfd !important;
+}
+
+.governance-flow > b {
+  color: #86868b !important;
+}
+
+.governance-position-card {
+  border-radius: 16px !important;
+}
+
+.duration-trigger {
+  border-color: #d2d2d7 !important;
+  background: #fff !important;
+  color: #1d1d1f !important;
+}
+
+.duration-trigger:hover,
+.duration-picker-open .duration-trigger {
+  border-color: #0071e3 !important;
+  box-shadow: 0 0 0 3px rgba(0, 113, 227, .1) !important;
+}
+
+.duration-chevron {
+  color: #6e6e73 !important;
+}
+
+.duration-menu {
+  border-color: #d2d2d7 !important;
+  background: rgba(255, 255, 255, .98) !important;
+  box-shadow: 0 20px 55px rgba(0, 0, 0, .15) !important;
+}
+
+.duration-option {
+  color: #1d1d1f !important;
+}
+
+.duration-option:hover,
+.duration-option-active {
+  border-color: #e5e5ea !important;
+  background: #f5f5f7 !important;
+}
+
+.duration-check {
+  color: #0071e3 !important;
+}
+
+.early-exit-modal-backdrop {
+  background: rgba(0, 0, 0, .32) !important;
+}
+
+.early-exit-modal {
+  border-color: #d2d2d7 !important;
+  background: #fff !important;
+  color: #1d1d1f !important;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, .18) !important;
+}
+
+.modal-kicker,
+.modal-position-grid span,
+.consequence-row span {
+  color: #6e6e73 !important;
+}
+
+.early-exit-modal h2,
+.modal-position-grid strong,
+.consequence-row strong {
+  color: #1d1d1f !important;
+}
+
+.modal-close {
+  border-color: #d2d2d7 !important;
+  background: #fff !important;
+  color: #6e6e73 !important;
+}
+
+.modal-position-grid > div,
+.modal-consequences {
+  border-color: #e5e5ea !important;
+  background: #fbfbfd !important;
+}
+
+.consequence-row {
+  border-color: #e5e5ea !important;
+}
+
+.consequence-note {
+  color: #6e6e73 !important;
+}
+
+.early-exit-link {
+  color: #0071e3 !important;
+}
+
+@media (max-width: 760px) {
+  .reward-hero {
+    align-items: stretch !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overview-action-card,
+  .market-list-item,
+  .nav-item,
+  .primary-btn,
+  .secondary-btn {
+    transition: none !important;
+  }
+}
