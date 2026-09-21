@@ -7,6 +7,7 @@ import './wallet-mobile-fix.css';
 import './health-meter.css';
 import './overview.css';
 import './eyebrow-reset.css';
+import './apple-skin.css';
 import { Providers } from '../components/Providers';
 
 export const metadata = {
