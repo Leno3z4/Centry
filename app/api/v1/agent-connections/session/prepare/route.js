@@ -1,4 +1,4 @@
-import { verifyAgentSession } from "../../../../../../../lib/agentConnectionTokens";
+import { verifyAgentSession } from "../../../../../../lib/agentConnectionTokens";
 import {
   ACCOUNT_INTERFACE,
   actionCatalog,
@@ -6,7 +6,7 @@ import {
   checkActionPermissions,
   assertLiveOperator,
   ARC_MAINNET_CHAIN_ID,
-} from "../../../../../../../lib/agentExecutionRuntime";
+} from "../../../../../../lib/agentExecutionRuntime";
 
 function json(body, status = 200) {
   return Response.json(body, {
