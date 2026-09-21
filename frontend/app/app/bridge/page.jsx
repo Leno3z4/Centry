@@ -353,7 +353,6 @@ function BridgeContent() {
         return;
       }
 
-      setError('Tower accepted the bridge request but did not return an executable transaction. Continuing with wallet-signed CCTP.');
       await sleep(1500);
       const sourceBalanceAfterTower = await readBalanceRaw();
       if (sourceBalanceAfterTower != null && sourceBalanceAfterTower !== sourceBalanceBefore) {
@@ -365,28 +364,45 @@ function BridgeContent() {
         return;
       }
 
-      await walletSignedCctpBridge();
+      setStage('fallback');
+      setError('Tower accepted the request but did not return a source transaction. Review the route, then continue with a wallet-signed CCTP bridge.');
     } catch (caughtError) {
       setError(errorText(caughtError));
       setStage('idle');
     }
   };
 
+  const continueWithWalletBridge = async () => {
+    if (stage !== 'fallback' || !address || !validAmount) return;
+    setError('');
+    try {
+      if (isConnected && walletChainId !== source.chainId) {
+        const switched = await switchToSource();
+        if (!switched) return;
+      }
+      await walletSignedCctpBridge();
+    } catch (caughtError) {
+      setError(errorText(caughtError));
+      setStage('fallback');
+    }
+  };
   const buttonLabel = !isConnected
     ? 'Connect wallet'
     : stage === 'switching'
       ? `Switching to ${source.short}…`
       : stage === 'submitting'
         ? 'Starting bridge…'
-        : stage === 'approval'
-          ? 'Approve USDC in wallet…'
-          : stage === 'bridging'
-            ? 'Confirm bridge in wallet…'
-            : stage === 'pending'
-              ? 'Bridge submitted'
-              : stage === 'submitted'
-                ? 'Bridge complete'
-                : `Bridge USDC to ${destination.short}`;
+        : stage === 'fallback'
+          ? 'Continue with wallet bridge'
+          : stage === 'approval'
+            ? 'Approve USDC in wallet…'
+            : stage === 'bridging'
+              ? 'Confirm bridge in wallet…'
+              : stage === 'pending'
+                ? 'Bridge submitted'
+                : stage === 'submitted'
+                  ? 'Bridge complete'
+                  : `Bridge USDC to ${destination.short}`;
 
   return (
     <div className={styles.page}>
@@ -415,10 +431,13 @@ function BridgeContent() {
 
         {stage !== 'pending' && !walletOnSource && isConnected ? <div className={styles.notice}>Wallet is on chain {walletChainId}. Centry will switch to {source.name} before starting the Tower bridge.</div> : null}
         {stage === 'submitting' ? <div className={styles.notice}>Submitting the bridge request to Tower…</div> : null}
+        {stage === 'fallback' ? <div className={`${styles.notice} ${styles.noticeError}`}><strong>Tower did not return an executable source transaction.</strong><span>Nothing has been signed by your wallet yet. Review the route above, then continue with the wallet-signed CCTP bridge.</span></div> : null}
+        {stage === 'approval' ? <div className={styles.notice}>Approve USDC in your wallet. The bridge will continue automatically after approval confirms.</div> : null}
+        {stage === 'bridging' ? <div className={styles.notice}>Confirm the bridge transaction in your wallet. This is the source-chain burn that actually moves your USDC.</div> : null}
         {stage === 'approval' ? <div className={styles.notice}>Approve USDC in your wallet. The bridge will continue automatically after approval confirms.</div> : null}
         {stage === 'bridging' ? <div className={styles.notice}>Confirm the bridge transaction in your wallet. This is the source-chain burn that actually moves your USDC.</div> : null}
 
-        <button type="button" className={styles.primaryButton} disabled={!isConnected || !validAmount || fromId === toId || ['switching', 'submitting', 'approval', 'bridging', 'pending', 'submitted'].includes(stage)} onClick={bridge}>{buttonLabel}</button>
+        <button type="button" className={styles.primaryButton} disabled={!isConnected || !validAmount || fromId === toId || ['switching', 'submitting', 'approval', 'bridging', 'pending', 'submitted'].includes(stage)} onClick={stage === 'fallback' ? continueWithWalletBridge : bridge}>{buttonLabel}</button>
         {stage !== 'pending' && isConnected && <button type="button" className={styles.refreshButton} onClick={readBalance} disabled={loadingBalance}>{loadingBalance ? 'Checking balance…' : `Refresh ${source.short} USDC balance`}</button>}
         {error && <div className={`${styles.notice} ${styles.noticeError}`} role="alert">{error}</div>}
         {stage === 'pending' && bridgeResult ? (
