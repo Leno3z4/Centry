@@ -32,7 +32,7 @@ const SCOPE_OPTIONS = [
 ];
 
 function apiBase() {
-  return (process.env.NEXT_PUBLIC_CENTRY_AGENT_API_URL || '').replace(/\/$/, '');
+  return (process.env.NEXT_PUBLIC_CENTRY_AGENT_API_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
 }
 
 function explorerAddress(address) {
