@@ -9,12 +9,12 @@ import surfaceStyles from './DesignSurface.module.css';
 
 const NAV_ITEMS = [
   { href: '/app', label: 'Overview', icon: '⌂', group: 'overview' },
-  { href: '/app/swap', label: 'Swap', icon: '⇄', group: 'product' },
-  { href: '/app/markets', label: 'Markets', icon: '◈', group: 'product' },
-  { href: '/app/gateway', label: 'Gateway', icon: '◉', group: 'product' },
-  { href: '/app/rewards', label: 'Rewards', icon: '✦', group: 'product' },
-  { href: '/app/governance', label: 'Governance', icon: '♢', group: 'product' },
-  { href: '/app/agents', label: 'Agents', icon: '✧', group: 'product' },
+  { href: '/app/swap', label: 'Swap', icon: '⇄', group: 'use' },
+  { href: '/app/markets', label: 'Markets', icon: '◈', group: 'use' },
+  { href: '/app/gateway', label: 'Gateway', icon: '◉', group: 'use' },
+  { href: '/app/rewards', label: 'Rewards', icon: '✦', group: 'earn' },
+  { href: '/app/governance', label: 'Governance', icon: '♢', group: 'earn' },
+  { href: '/app/agents', label: 'Agents', icon: '✧', group: 'automation' },
   { href: '/app/bridge', label: 'Bridge', icon: '↗', group: 'explore' },
   { href: '/app/portfolio', label: 'Portfolio', icon: '◐', group: 'explore' },
   { href: '/app/analytics', label: 'Analytics', icon: '⌁', group: 'explore' },
@@ -23,7 +23,9 @@ const NAV_ITEMS = [
 
 const NAV_GROUPS = [
   { key: 'overview', label: null },
-  { key: 'product', label: 'Main' },
+  { key: 'use', label: 'Use Centry' },
+  { key: 'earn', label: 'Earn & Govern' },
+  { key: 'automation', label: 'Automation' },
   { key: 'explore', label: 'Explore' },
   { key: 'docs', label: null },
 ];
