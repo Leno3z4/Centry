@@ -104,7 +104,7 @@ function BridgeContent() {
   const [balance, setBalance] = useState(null);
   const [loadingBalance, setLoadingBalance] = useState(false);
   const [stage, setStage] = useState('idle');
-  const [txHash, setTxHash] = useState('');
+  const [bridgeResult, setBridgeResult] = useState(null);
   const [error, setError] = useState('');
 
   const fromArc = fromId === 'arc-mainnet';
@@ -135,7 +135,6 @@ function BridgeContent() {
 
   useEffect(() => {
     setAmount('');
-    setTxHash('');
     setError('');
     setStage('idle');
     if (address && walletChainId === source.chainId) void readBalance();
@@ -144,7 +143,6 @@ function BridgeContent() {
 
   const resetFlow = () => {
     setAmount('');
-    setTxHash('');
     setError('');
     setStage('idle');
   };
@@ -235,42 +233,35 @@ function BridgeContent() {
   };
 
   const bridge = async () => {
-    if (!address || !validAmount || fromId === toId || !connectorClient?.request || stage === 'approval' || stage === 'bridging' || stage === 'submitted') return;
+    if (!address || !validAmount || fromId === toId || submitted || stage === 'submitting') return;
     setError('');
-    setTxHash('');
+    setBridgeResult(null);
     setStage('switching');
+
     try {
-      if (!(await switchToSource())) return;
+      if (isConnected && walletChainId !== source.chainId) await switchToSource();
 
-      const amountRaw = parseUnits(amount.trim(), 6);
-      const mintRecipient = `0x${address.slice(2).padStart(64, '0')}`;
-      const destinationCaller = `0x${'0'.repeat(64)}`;
-      const finalityThreshold = 2000;
-      let maxFee = 1000n;
-
-      try {
-        const feeData = encodeFunctionData({ abi: TOKEN_MESSENGER_V2_ABI, functionName: 'getMinFeeAmount', args: [destination.domain, mintRecipient, destinationCaller, finalityThreshold, '0x'] });
-        const feeRaw = await connectorClient.request({ method: 'eth_call', params: [{ to: TOKEN_MESSENGER_V2, data: feeData }, 'latest'] });
-        maxFee = (BigInt(decodeFunctionResult({ abi: TOKEN_MESSENGER_V2_ABI, functionName: 'getMinFeeAmount', data: feeRaw })) * 120n / 100n) + 1n;
-      } catch {
-        // Standard-transfer fees are normally zero; retain a small safety ceiling if the optional fee read is unavailable.
-      }
-
-      await approveIfNeeded(amountRaw);
-
-      setStage('bridging');
-      const bridgeData = encodeFunctionData({
-        abi: TOKEN_MESSENGER_V2_ABI,
-        functionName: 'depositForBurn',
-        args: [amountRaw, destination.domain, mintRecipient, source.usdc, destinationCaller, maxFee, finalityThreshold],
+      setStage('submitting');
+      const response = await fetch('/api/tower/bridge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fromChainId: source.chainId,
+          toChainId: destination.chainId,
+          amount: amount.trim(),
+          token: 'USDC',
+          recipientAddress: address,
+          senderAddress: address,
+          useForwarder: true,
+        }),
       });
-      const hash = await requestWalletTransaction({ to: TOKEN_MESSENGER_V2, data: bridgeData });
-      setTxHash(hash);
-      const receipt = await waitForReceipt(connectorClient, hash);
-      if (receipt.status === '0x0') throw new Error('The bridge transaction was reverted on the source chain.');
+      const text = await response.text();
+      let result;
+      try { result = JSON.parse(text); } catch { throw new Error('Tower returned an invalid bridge response.'); }
+      if (!response.ok || !result?.success) throw new Error(result?.error || 'Tower could not start the bridge.');
+      setBridgeResult(result);
       setAmount('');
-      setStage('submitted');
-      setError('');
+      setStage('pending');
       void readBalance();
     } catch (caughtError) {
       setError(errorText(caughtError));
@@ -282,26 +273,22 @@ function BridgeContent() {
     ? 'Connect wallet'
     : stage === 'switching'
       ? `Switching to ${source.short}…`
-      : stage === 'approval'
-        ? 'Approve USDC in wallet…'
-        : stage === 'bridging'
-          ? 'Confirm bridge in wallet…'
-          : stage === 'submitted'
-            ? 'Bridge complete'
-            : !walletOnSource
-              ? `Switch to ${source.short} & bridge`
-              : `Bridge USDC to ${destination.short}`;
+      : stage === 'submitting'
+        ? 'Starting bridge…'
+        : stage === 'pending'
+          ? 'Bridge submitted'
+          : `Bridge USDC to ${destination.short}`;
 
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <div><span className={styles.kicker}>CENTRY · BRIDGE</span><h1>Move USDC across chains</h1><p>Bridge USDC across supported networks with Circle CCTP. Your wallet signs every source-chain transaction.</p></div>
-        <span className={styles.destinationPill}><i /> Circle CCTP · USDC</span>
+        <div><span className={styles.kicker}>CENTRY · BRIDGE</span><h1>Move USDC across chains</h1><p>Tower handles the cross-chain USDC route while Centry tracks the bridge status.</p></div>
+        <span className={styles.destinationPill}><i /> Tower Bridge</span>
       </header>
 
       <section className={styles.card}>
         <div className={styles.fieldBlock}><label>From</label><ChainPicker value={fromId} chains={sourceChains} onChange={changeFrom} label="Source chain" /></div>
-        <button type="button" className={styles.arrowButton} onClick={switchDirection} disabled={stage === 'approval' || stage === 'bridging'} aria-label="Switch bridge direction" title="Switch bridge direction">⇅</button>
+        <button type="button" className={styles.arrowButton} onClick={switchDirection} disabled={stage === 'switching' || stage === 'submitting' || submitted} aria-label="Switch bridge direction" title="Switch bridge direction">⇅</button>
         <div className={styles.fieldBlock}><label>To</label><ChainPicker value={toId} chains={destinationChains} onChange={changeTo} label="Destination chain" /></div>
 
         <div className={styles.amountBlock}>
@@ -312,23 +299,22 @@ function BridgeContent() {
         <div className={styles.summary}>
           <div><span>From</span><strong>{source.name}</strong></div>
           <div><span>To</span><strong>{destination.name}</strong></div>
-          <div><span>Route</span><strong>Circle CCTP</strong></div>
+          <div><span>Route</span><strong>Tower</strong></div>
           <div><span>Transfer type</span><strong>1:1 USDC</strong></div>
           <div><span>Recipient</span><strong>{address ? `${address.slice(0, 6)}…${address.slice(-4)}` : 'Connect wallet'}</strong></div>
         </div>
 
-        {stage !== 'submitted' && !walletOnSource && isConnected ? <div className={styles.notice}>Wallet is on chain {walletChainId}. Switch to {source.name} before starting this bridge.</div> : null}
-        {stage === 'approval' ? <div className={styles.notice}>Approve USDC in your wallet. The bridge will continue automatically after the approval confirms.</div> : null}
-        {stage === 'bridging' ? <div className={styles.notice}>Confirm the bridge transaction in your wallet. Your USDC stays in your wallet until you approve the transaction.</div> : null}
+        {stage !== 'pending' && !walletOnSource && isConnected ? <div className={styles.notice}>Wallet is on chain {walletChainId}. Centry will switch to {source.name} before starting the Tower bridge.</div> : null}
+        {stage === 'submitting' ? <div className={styles.notice}>Submitting the bridge request to Tower…</div> : null}
 
-        <button type="button" className={styles.primaryButton} disabled={!isConnected || !validAmount || fromId === toId || stage === 'approval' || stage === 'bridging' || stage === 'submitted'} onClick={bridge}>{buttonLabel}</button>
-        {stage !== 'submitted' && isConnected && <button type="button" className={styles.refreshButton} onClick={readBalance} disabled={loadingBalance}>{loadingBalance ? 'Checking balance…' : `Refresh ${source.short} USDC balance`}</button>}
+        <button type="button" className={styles.primaryButton} disabled={!isConnected || !validAmount || fromId === toId || stage === 'switching' || stage === 'submitting' || submitted} onClick={bridge}>{buttonLabel}</button>
+        {stage !== 'pending' && isConnected && <button type="button" className={styles.refreshButton} onClick={readBalance} disabled={loadingBalance}>{loadingBalance ? 'Checking balance…' : `Refresh ${source.short} USDC balance`}</button>}
         {error && <div className={`${styles.notice} ${styles.noticeError}`} role="alert">{error}</div>}
-        {stage === 'submitted' && txHash ? (
+        {stage === 'pending' && bridgeResult ? (
           <div className={`${styles.notice} ${styles.noticeSuccess}`}>
-            <strong>Bridge complete.</strong>
-            <span>The source-chain burn was confirmed. Circle can now attest the transfer for destination minting.</span>
-            <a href={`${source.explorerUrl}/tx/${txHash}`} target="_blank" rel="noreferrer">View source transaction ↗</a>
+            <strong>Bridge submitted through Tower.</strong>
+            <span>Status: {bridgeResult.status || 'pending'}{bridgeResult.estimatedTime ? ` · Estimated time: ${bridgeResult.estimatedTime}` : ''}</span>
+            {bridgeResult.transactionHash ? <a href={`${source.explorerUrl}/tx/${bridgeResult.transactionHash}`} target="_blank" rel="noreferrer">View source transaction ↗</a> : null}
             <button type="button" className={styles.refreshButton} onClick={resetFlow}>Start another bridge</button>
           </div>
         ) : null}
