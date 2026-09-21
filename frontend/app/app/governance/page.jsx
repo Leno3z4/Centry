@@ -231,15 +231,29 @@ function GovernanceContent() {
     <div className="page-stack">
       <div className="section-header governance-header">
         <div>
-          <h1>veCENT</h1>
-          <p>Lock CENT to create and manage your governance positions.</p>
+          <h1>Governance</h1>
+          <p>Lock CENT to create veCENT. Your veCENT position is the bridge between voting power and protocol rewards.</p>
         </div>
       </div>
+
+      <section className="panel governance-flow-panel">
+        <div className="governance-flow-copy">
+          <h2>How CENT works here</h2>
+          <p>Locking creates a veCENT position. That position gives you voting power and makes it the unit used for revenue rewards. You manage the lock here; you manage the rewards on the Rewards page.</p>
+        </div>
+        <div className="governance-flow">
+          <div><strong>CENT</strong><span>Token</span></div>
+          <b>→</b>
+          <div><strong>veCENT</strong><span>Locked position</span></div>
+          <b>→</b>
+          <div><strong>Vote + earn</strong><span>Governance & rewards</span></div>
+        </div>
+      </section>
 
       <section className="governance-hero-grid">
         <div className="panel governance-hero-card">
           <div className="big-number">{isConnected ? formatCENT(governance.votingPower) : '—'}</div>
-          <span className="muted-label">Voting power</span>
+          <span className="governance-value-label">Voting power</span>
           <div className="governance-stat-line"><span>CENT balance</span><strong>{isConnected ? formatCENT(governance.centBalance) : '—'}</strong></div>
           <div className="governance-stat-line"><span>Locked CENT</span><strong>{isConnected ? formatCENT(governance.lockedAmount) : '—'}</strong></div>
           <div className="governance-stat-line"><span>veNFTs</span><strong>{isConnected ? governance.veBalance : '—'}</strong></div>
@@ -354,6 +368,16 @@ function GovernanceContent() {
       ) : null}
 
       <style jsx global>{`
+        .governance-flow-panel{display:grid;grid-template-columns:minmax(0,1fr) minmax(430px,1.1fr);gap:28px;align-items:center}
+        .governance-flow-copy h2{margin:0;font-size:18px}
+        .governance-flow-copy p{max-width:640px;margin:9px 0 0;color:#929aa3;font-size:13px;line-height:1.6}
+        .governance-flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:center;gap:12px}
+        .governance-flow>div{padding:16px;border:1px solid #292e35;border-radius:12px;background:#0c0f12}
+        .governance-flow strong,.governance-flow span{display:block}
+        .governance-flow strong{font-size:15px}
+        .governance-flow span{margin-top:5px;color:#858d96;font-size:12px}
+        .governance-flow>b{color:#777f89;font-size:18px}
+        .governance-value-label{display:block;margin-bottom:22px;color:#858d96;font-size:12px}
         .governance-header{align-items:flex-start}
         .governance-positions-panel{margin-top:2px}
         .position-count{color:#8f849d;font-size:11px}
@@ -385,6 +409,7 @@ function GovernanceContent() {
         .duration-option{display:flex;width:100%;min-height:42px;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px;border:1px solid transparent;border-radius:10px;background:transparent;color:#e9e2f2;text-align:left;cursor:pointer}
         .duration-option:hover,.duration-option-active{border-color:#382a4a;background:#171a1e}
         .duration-check{color:#b38aff;font-weight:800}
+        @media (max-width:980px){.governance-flow-panel{grid-template-columns:1fr}.governance-flow{grid-template-columns:1fr}.governance-flow>b{text-align:center;transform:rotate(90deg)}}
         @media (max-width:700px){.position-actions-grid,.position-detail-grid,.modal-position-grid{grid-template-columns:1fr}.position-topline{align-items:flex-start;flex-direction:column}.position-power{text-align:left}.modal-actions{flex-direction:column-reverse}.modal-actions .primary-btn,.modal-actions .secondary-btn{width:100%}}
       `}</style>
     </div>
