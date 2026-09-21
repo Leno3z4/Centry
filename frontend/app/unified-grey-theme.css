@@ -1,0 +1,310 @@
+/* Centry unified grey UI theme. */
+:root {
+  --ui-bg: #6f757b;
+  --ui-panel: #686e74;
+  --ui-panel-2: #62686e;
+  --ui-panel-3: #767c82;
+  --ui-line: #959ca2;
+  --ui-text: #ffffff;
+  --ui-muted: #edf0f2;
+  --ui-muted-2: #dce1e5;
+  --ui-accent: #0a84ff;
+  --ui-accent-strong: #0077ee;
+}
+
+html,
+body {
+  background: var(--ui-bg) !important;
+  color: var(--ui-text) !important;
+  color-scheme: dark;
+}
+
+body,
+body * {
+  color: var(--ui-text);
+}
+
+.app-shell,
+.main-content,
+.page-view,
+.page-stack {
+  background: var(--ui-bg) !important;
+  color: var(--ui-text) !important;
+}
+
+.sidebar,
+.network-card,
+.wallet-balance,
+.panel,
+.metric,
+.form-card,
+.risk-card,
+.action-card,
+.feature-card,
+.doc-card,
+.market-list-item,
+.market-chip,
+.doc-item,
+.emptyState,
+.loadingState,
+.successHero,
+.analyticsHero,
+.statsLarge > div,
+.quickCard,
+.chat,
+.agentSwitcher,
+.configPanel,
+.addressPanel,
+.storeCard,
+.scope,
+.activity,
+.emptyHero,
+.createHero {
+  background: var(--ui-panel) !important;
+  border-color: var(--ui-line) !important;
+  color: var(--ui-text) !important;
+  box-shadow: none !important;
+}
+
+.topbar {
+  background: rgba(105, 111, 117, .96) !important;
+  border-bottom-color: var(--ui-line) !important;
+}
+
+.nav-item,
+.action-tabs button {
+  background: transparent !important;
+  color: var(--ui-muted) !important;
+}
+
+.nav-item:hover,
+.action-tabs button:hover {
+  background: rgba(255, 255, 255, .10) !important;
+  border-color: var(--ui-line) !important;
+  color: var(--ui-text) !important;
+}
+
+.nav-item.active,
+.action-tabs button.active {
+  background: var(--ui-panel-3) !important;
+  border-color: var(--ui-line) !important;
+  color: var(--ui-text) !important;
+}
+
+.nav-icon,
+.nav-item.active .nav-icon,
+.text-link,
+.backButton,
+.balanceButton,
+.refreshButton,
+.early-exit-link {
+  color: var(--ui-accent) !important;
+}
+
+.section-header h1,
+.panel h2,
+.form-card h2,
+.metric > strong,
+.market-list-item strong,
+.market-chip strong,
+.position-row strong,
+.governance-stat-line strong,
+.big-number,
+.brand,
+.breadcrumb span {
+  color: var(--ui-text) !important;
+}
+
+.section-header p,
+.section-kicker,
+.nav-group-label,
+.breadcrumb,
+.sidebar-footer,
+.sidebar-footer span,
+.metric > span,
+.metric > small,
+.panel-copy,
+.field-label,
+.market-list-item > div:not(.asset) span,
+.subsection-head > span:last-child,
+.market-chip span,
+.asset small,
+.muted-label,
+.page-footer,
+.form-meta,
+.disclaimer {
+  color: var(--ui-muted) !important;
+}
+
+button,
+input,
+select,
+textarea,
+.input,
+.textarea,
+.textareaCode,
+.amountField,
+.amount-input-wrap {
+  background: var(--ui-panel-2) !important;
+  border-color: var(--ui-line) !important;
+  color: var(--ui-text) !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--ui-muted-2) !important;
+}
+
+select option {
+  background: var(--ui-panel-2) !important;
+  color: var(--ui-text) !important;
+}
+
+.primary-btn,
+.connect-wallet,
+.primaryButton,
+.landing-home-primary,
+.landing-nav-app,
+.chatUser {
+  background: var(--ui-accent) !important;
+  border-color: var(--ui-accent) !important;
+  color: #fff !important;
+}
+
+.primary-btn:hover:not(:disabled),
+.connect-wallet:hover:not(:disabled),
+.primaryButton:hover:not(:disabled),
+.landing-home-primary:hover,
+.landing-nav-app:hover {
+  background: var(--ui-accent-strong) !important;
+  border-color: var(--ui-accent-strong) !important;
+  color: #fff !important;
+}
+
+.secondary-btn,
+.wallet-address,
+.refreshButton,
+.balanceButton,
+.textButton {
+  background: var(--ui-panel-2) !important;
+  border-color: var(--ui-line) !important;
+  color: var(--ui-text) !important;
+}
+
+.secondary-btn:hover:not(:disabled),
+.wallet-address:hover:not(:disabled) {
+  background: var(--ui-panel-3) !important;
+  color: var(--ui-text) !important;
+}
+
+.connect-prompt,
+.notice,
+.warning-banner,
+.network-warning,
+.chatAgent {
+  background: var(--ui-panel-2) !important;
+  border-color: var(--ui-line) !important;
+  color: var(--ui-text) !important;
+}
+
+[class*="page__"],
+[class*="card__"],
+[class*="panel__"],
+[class*="hero__"],
+[class*="surface__"],
+[class*="menu__"],
+[class*="picker__"],
+[class*="trigger__"],
+[class*="option__"],
+[class*="summary__"],
+[class*="list__"],
+[class*="row__"] {
+  border-color: var(--ui-line) !important;
+  background: var(--ui-panel) !important;
+  color: var(--ui-text) !important;
+  box-shadow: none !important;
+}
+
+[class*="menu__"] {
+  background: var(--ui-panel-2) !important;
+}
+
+[class*="option__"]:hover,
+[class*="optionActive__"],
+[class*="trigger__"]:hover,
+[class*="triggerOpen__"] {
+  background: var(--ui-panel-3) !important;
+  color: var(--ui-text) !important;
+}
+
+.landing-home,
+.landing-page,
+.landing-nav,
+.landing-hero,
+.landing-how-section,
+.landing-governance-section,
+.landing-cta,
+.landing-footer,
+.landing-metric,
+.landing-how-item {
+  background: var(--ui-bg) !important;
+  color: var(--ui-text) !important;
+  border-color: var(--ui-line) !important;
+}
+
+.landing-home-nav,
+.landing-home-secondary,
+.landing-home-product,
+.landing-home-explore-card,
+.landing-home-cta,
+.landing-metric,
+.landing-how-item {
+  background: var(--ui-panel) !important;
+  border-color: var(--ui-line) !important;
+  color: var(--ui-text) !important;
+}
+
+.landing-home-hero h1,
+.landing-home-section-heading h2,
+.landing-home-cta h2,
+.landing-home-product h3,
+.landing-home-explore-card h3,
+.landing-home-footer strong,
+.landing-hero h1,
+.landing-how-copy h2,
+.landing-how-item h3,
+.landing-governance-copy h2,
+.landing-cta h2,
+.landing-metric strong,
+.landing-brand,
+.landing-footer strong {
+  color: var(--ui-text) !important;
+}
+
+.landing-home-nav-links,
+.landing-home-hero p,
+.landing-home-section-heading p,
+.landing-home-product p,
+.landing-home-explore-card p,
+.landing-home-cta p,
+.landing-home-footer,
+.landing-nav-links,
+.landing-hero-copy p,
+.landing-metric span,
+.landing-metric-note,
+.landing-how-item p,
+.landing-governance-copy p,
+.landing-cta p,
+.landing-footer {
+  color: var(--ui-muted) !important;
+}
+
+.landing-home-glow,
+.overview-aero-background,
+.orbital-art {
+  display: none !important;
+}
+
+.landing-aero-background {
+  opacity: .015 !important;
+}
