@@ -1,9 +1,9 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { Providers } from '../../../components/Providers';
-import { AppShell } from '../../../components/AppShell';
-import MarketDetail from '../../../components/MarketDetail';
+import { Providers } from '../../../../components/Providers';
+import { AppShell } from '../../../../components/AppShell';
+import MarketDetail from '../../../../components/MarketDetail';
 
 export default function MarketPage() {
   const params = useParams();
