@@ -12,19 +12,19 @@ Centry should feel closer to a high-end product dashboard than a crypto casino.
 
 ### Color
 
-- Canvas: `#07080A`
-- Surface 1: `#0D0F12`
-- Surface 2: `#111317`
+- Canvas: `#F5F5F7`
+- Surface 1: `#FFFFFF`
+- Surface 2: `#FBFBFD`
 - Surface 3: `#15181C`
-- Hairline: `#24272B`
+- Hairline: `#D2D2D7`
 - Hairline strong: `#34383F`
-- Primary text: `#F4F5F7`
-- Secondary text: `#A0A5AD`
-- Tertiary text: `#747B84`
-- Brand accent: `#B7A7FF`
-- Brand accent strong: `#D2C8FF`
-- Success: `#4EE39A`
-- Danger: `#F07A8A`
+- Primary text: `#1D1D1F`
+- Secondary text: `#6E6E73`
+- Tertiary text: `#86868B`
+- Brand accent: `#0071E3`
+- Brand accent strong: `#0066CC`
+- Success: `#34C759`
+- Danger: `#FF3B30`
 - Warning: `#E2AA73`
 
 Violet is an accent, not a background system. Do not turn whole sections purple.
