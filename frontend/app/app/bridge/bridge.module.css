@@ -4,6 +4,8 @@
   max-width: 920px;
   gap: 24px;
   overflow: visible;
+  margin: 0 auto;
+  color: #1d1d1f;
 }
 
 .header {
@@ -16,25 +18,25 @@
 .kicker {
   display: block;
   margin-bottom: 8px;
-  color: #9277b9;
-  font: 11px 'DM Mono', monospace;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
+  color: #6e6e73;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .header h1 {
   margin: 0;
-  color: #f7f4ff;
+  color: #1d1d1f;
   font-size: clamp(36px, 4vw, 58px);
-  line-height: .98;
-  letter-spacing: -3px;
+  line-height: 1;
+  letter-spacing: -2.8px;
+  font-weight: 650;
 }
 
 .header p {
   max-width: 650px;
   margin: 10px 0 0;
-  color: #9c92a7;
-  line-height: 1.6;
+  color: #6e6e73;
+  line-height: 1.55;
 }
 
 .destinationPill {
@@ -42,10 +44,10 @@
   align-items: center;
   gap: 8px;
   padding: 8px 11px;
-  border: 1px solid #322542;
+  border: 1px solid #d2d2d7;
   border-radius: 999px;
-  background: #0e0917;
-  color: #bfb1ca;
+  background: #f5f5f7;
+  color: #6e6e73;
   font-size: 12px;
   white-space: nowrap;
 }
@@ -54,8 +56,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #9b62ff;
-  box-shadow: 0 0 10px rgba(155,98,255,.7);
+  background: #0071e3;
 }
 
 .card {
@@ -66,10 +67,10 @@
   box-sizing: border-box;
   gap: 12px;
   padding: 24px;
-  border: 1px solid #282033;
+  border: 1px solid #d2d2d7;
   border-radius: 20px;
-  background: #0e1013;
-  box-shadow: none;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .025);
   overflow: visible;
 }
 
@@ -82,10 +83,9 @@
 
 .fieldBlock label,
 .amountHeader label {
-  color: #756d83;
-  font: 11px 'DM Mono', monospace;
-  letter-spacing: 1px;
-  text-transform: uppercase;
+  color: #6e6e73;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .chainPicker {
@@ -106,23 +106,20 @@
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
-  border: 1px solid #342748;
+  border: 1px solid #d2d2d7;
   border-radius: 15px;
-  background: #0e0917;
-  color: #f5f0fb;
-}
-
-.chainTrigger {
+  background: #fff;
+  color: #1d1d1f;
   text-align: left;
   cursor: pointer;
-  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+  transition: border-color 160ms ease, background 160ms ease;
 }
 
 .chainTrigger:hover,
 .chainTriggerOpen {
-  border-color: #76509e;
-  background: #151022;
-  box-shadow: 0 0 0 3px rgba(155,98,255,.06);
+  border-color: #b7b7bc;
+  background: #f8f8fa;
+  box-shadow: none;
 }
 
 .chainMenu {
@@ -136,11 +133,11 @@
   overflow: auto;
   gap: 4px;
   padding: 7px;
-  border: 1px solid #3a2a4f;
+  border: 1px solid #d2d2d7;
   border-radius: 16px;
-  background: #0e1013;
-  box-shadow: 0 18px 42px rgba(0,0,0,.42);
-  backdrop-filter: blur(14px);
+  background: rgba(255, 255, 255, .98);
+  box-shadow: 0 20px 55px rgba(0, 0, 0, .14);
+  backdrop-filter: blur(16px);
 }
 
 .chainOption {
@@ -154,20 +151,16 @@
   border: 1px solid transparent;
   border-radius: 11px;
   background: transparent;
-  color: #e9e2f2;
+  color: #1d1d1f;
   text-align: left;
   cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+  transition: background 120ms ease, border-color 120ms ease;
 }
 
 .chainOption:hover,
 .chainOptionActive {
-  border-color: #382a4a;
-  background: #171a1e;
-}
-
-.chainOption:hover {
-  transform: translateX(2px);
+  border-color: #e5e5ea;
+  background: #f5f5f7;
 }
 
 .chainBadge {
@@ -176,11 +169,11 @@
   width: 34px;
   height: 34px;
   place-items: center;
-  border: 1px solid #65458a;
+  border: 1px solid #d2d2d7;
   border-radius: 50%;
-  background: #1c1229;
-  color: #d4b6ff;
-  font-weight: 800;
+  background: #f5f5f7;
+  color: #1d1d1f;
+  font-weight: 700;
 }
 
 .chainText {
@@ -191,24 +184,24 @@
 }
 
 .chainText strong {
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .chainText small {
-  color: #71677d;
+  color: #6e6e73;
   font-size: 12px;
 }
 
 .chevron,
 .check {
   flex: 0 0 auto;
-  color: #9e8eac;
+  color: #6e6e73;
   font-size: 12px;
 }
 
 .check {
-  color: #b38aff;
-  font-weight: 800;
+  color: #0071e3;
+  font-weight: 700;
 }
 
 .arrowButton {
@@ -219,27 +212,26 @@
   place-items: center;
   align-self: center;
   justify-self: center;
-  border: 1px solid #4b3563;
+  border: 1px solid #d2d2d7;
   border-radius: 50%;
-  background: #15181c;
-  color: #d6c2e8;
+  background: #fff;
+  color: #1d1d1f;
   font-size: 21px;
   line-height: 1;
   cursor: pointer;
-  box-shadow: none;
-  transition: border-color 160ms ease, background 160ms ease, color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
 }
 
 .arrowButton:hover:not(:disabled) {
-  border-color: #8a60b5;
-  background: #1c2025;
-  color: #f4ebff;
-  transform: translateY(-1px);
+  border-color: #b7b7bc;
+  background: #f8f8fa;
+  color: #0071e3;
+  transform: none;
   box-shadow: none;
 }
 
 .arrowButton:active:not(:disabled) {
-  transform: translateY(0) scale(.97);
+  transform: scale(.97);
 }
 
 .arrowButton:disabled {
@@ -262,14 +254,15 @@
 .refreshButton {
   border: 0;
   background: transparent;
-  color: #a992c0;
-  font: 10px 'DM Mono', monospace;
+  color: #0071e3;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
 }
 
 .balanceButton:hover:not(:disabled),
 .refreshButton:hover:not(:disabled) {
-  color: #d4b6ff;
+  color: #0066cc;
 }
 
 .balanceButton:disabled,
@@ -285,14 +278,15 @@
   gap: 12px;
   min-width: 0;
   padding: 16px;
-  border: 1px solid #292139;
+  border: 1px solid #d2d2d7;
   border-radius: 16px;
-  background: #0b0712;
+  background: #fbfbfd;
 }
 
 .amountField:focus-within {
-  border-color: #65458a;
-  box-shadow: 0 0 0 3px rgba(155,98,255,.08);
+  border-color: #0071e3;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(0, 113, 227, .1);
 }
 
 .amountField input {
@@ -301,15 +295,15 @@
   border: 0;
   outline: 0;
   background: transparent;
-  color: #f8f4ff;
+  color: #1d1d1f;
   font: inherit;
   font-size: 30px;
 }
 
 .amountField span {
-  color: #d4c9df;
+  color: #1d1d1f;
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 650;
 }
 
 .summary {
@@ -317,9 +311,9 @@
   gap: 1px;
   margin-top: 8px;
   overflow: hidden;
-  border: 1px solid #292039;
+  border: 1px solid #e5e5ea;
   border-radius: 14px;
-  background: #292039;
+  background: #e5e5ea;
 }
 
 .summary div {
@@ -328,18 +322,18 @@
   justify-content: space-between;
   gap: 18px;
   padding: 12px 14px;
-  background: #0d0916;
+  background: #fbfbfd;
 }
 
 .summary span {
-  color: #766b82;
-  font-size: 11px;
+  color: #6e6e73;
+  font-size: 12px;
 }
 
 .summary strong {
   min-width: 0;
-  color: #e9e1f3;
-  font-size: 11px;
+  color: #1d1d1f;
+  font-size: 12px;
   text-align: right;
   overflow-wrap: anywhere;
 }
@@ -348,19 +342,20 @@
   width: 100%;
   min-height: 52px;
   margin-top: 8px;
-  border: 1px solid transparent;
+  border: 1px solid #0071e3;
   border-radius: 13px;
-  background: #b7a7ff;
+  background: #0071e3;
   color: #fff;
   font: inherit;
-  font-weight: 700;
+  font-weight: 650;
   cursor: pointer;
   box-shadow: none;
 }
 
 .primaryButton:hover:not(:disabled) {
-  filter: brightness(1.06);
-  transform: translateY(-1px);
+  border-color: #0066cc;
+  background: #0066cc;
+  transform: none;
 }
 
 .primaryButton:disabled {
@@ -378,36 +373,38 @@
   gap: 6px;
   margin-top: 15px;
   padding: 13px 14px;
-  border: 1px solid #34294a;
+  border: 1px solid rgba(0, 113, 227, .18);
   border-radius: 12px;
-  background: #100b19;
-  color: #a594b6;
-  font-size: 12px;
+  background: rgba(0, 113, 227, .055);
+  color: #2b5f92;
+  font-size: 13px;
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
 .notice code {
   overflow-wrap: anywhere;
-  color: #d8c6ea;
-  font-family: 'DM Mono', monospace;
+  color: #2b5f92;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
 }
 
 .noticeError {
-  border-color: rgba(255,100,120,.25);
-  color: #e6a3ae;
+  border-color: rgba(255, 59, 48, .22);
+  background: rgba(255, 59, 48, .06);
+  color: #b42318;
 }
 
 .noticeSuccess {
-  border-color: rgba(80,220,170,.25);
-  color: #9ce1c5;
+  border-color: rgba(52, 199, 89, .22);
+  background: rgba(52, 199, 89, .06);
+  color: #248a3d;
 }
 
 .disclaimer {
   margin: 0;
-  color: #675d71;
-  font-size: 11px;
+  color: #6e6e73;
+  font-size: 12px;
 }
 
 @media (max-width: 620px) {
@@ -422,5 +419,4 @@
   .amountField {
     grid-template-columns: 1fr auto;
   }
-
 }
