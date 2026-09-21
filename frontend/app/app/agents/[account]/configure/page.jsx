@@ -42,6 +42,7 @@ function ConfigureContent() {
   const [agent, setAgent] = useState(null);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   async function loadAgent() {
     if (!address || !publicClient) return;
@@ -70,33 +71,77 @@ function ConfigureContent() {
   async function saveConfiguration(config) {
     if (!agent) return;
     setError('');
-    setStatus('Saving configuration…');
-    if (config.providerKey) {
-      const providerAuth = await ownerAuth('configure-ai-provider');
-      await apiJson(`${API_BASE}/api/v1/agents/${agent.id}/providers`, {
+    setStatus('');
+    setSaving(true);
+
+    try {
+      let targetAgent = agent;
+
+      if (agent.type === 'unregistered') {
+        if (!RUNNER_ADDRESS) {
+          throw new Error('Hosted runner address is not configured, so this smart account cannot be registered yet.');
+        }
+
+        setStatus('Registering this smart account…');
+        const agentId = crypto.randomUUID();
+        const registerAuth = await ownerAuth('register-agent');
+        const registered = await apiJson(`${API_BASE}/api/v1/agents/register`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            ...registerAuth,
+            owner: address,
+            account: agent.account,
+            agentId,
+            type: 'standard',
+            name: config.name.trim() || 'Centry Agent',
+            description: config.description.trim() || 'Configurable Centry onchain agent.',
+            operator: RUNNER_ADDRESS,
+            priceUsdCents: 0,
+          }),
+        });
+
+        targetAgent = registered.agent;
+        setAgent(targetAgent);
+      }
+
+      if (config.providerKey) {
+        setStatus('Saving encrypted provider configuration…');
+        const providerAuth = await ownerAuth('configure-ai-provider');
+        await apiJson(`${API_BASE}/api/v1/agents/${targetAgent.id}/providers`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            ...providerAuth,
+            provider: config.provider,
+            model: config.model,
+            apiKey: config.providerKey,
+          }),
+        });
+      }
+
+      setStatus('Saving agent configuration…');
+      const configAuth = await ownerAuth('configure-agent');
+      await apiJson(`${API_BASE}/api/v1/agents/${targetAgent.id}/config`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          ...providerAuth,
-          provider: config.provider,
-          model: config.model,
-          apiKey: config.providerKey,
+          ...configAuth,
+          owner: address,
+          autonomy: { ...config.autonomy, provider: config.provider },
+          policy: config.policy,
         }),
       });
+
+      await loadAgent();
+      setStatus('Agent configuration saved.');
+    } catch (e) {
+      setStatus('');
+      setError(e?.shortMessage || e?.message || 'Configuration could not be saved.');
+      throw e;
+    } finally {
+      setSaving(false);
     }
-    const configAuth = await ownerAuth('configure-agent');
-    await apiJson(`${API_BASE}/api/v1/agents/${agent.id}/config`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        ...configAuth,
-        owner: address,
-        autonomy: { ...config.autonomy, provider: config.provider },
-        policy: config.policy,
-      }),
-    });
-    await loadAgent();
-    setStatus('Agent configuration saved.');
   }
 
   function selector(signature) {
@@ -171,7 +216,7 @@ function ConfigureContent() {
       {status ? <div className={styles.notice}>{status}</div> : null}
       {error ? <div className={styles.error}>{error}</div> : null}
 
-      <AgentConfigForm mode="edit" agent={agent} onSubmit={saveConfiguration} submitting={isPending} submitLabel="Save configuration" />
+      <AgentConfigForm mode="edit" agent={agent} onSubmit={saveConfiguration} submitting={isPending || saving} submitLabel="Save configuration" />
 
       <section className={styles.card}>
         <div className={styles.sectionHead}>
