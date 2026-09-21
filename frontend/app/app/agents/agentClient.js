@@ -3,7 +3,7 @@ import { CONTRACT_ADDRESSES } from '../../../constants/contracts';
 
 export const FACTORY_ADDRESS = process.env.NEXT_PUBLIC_CENTRY_AGENT_FACTORY || '';
 export const RUNNER_ADDRESS = process.env.NEXT_PUBLIC_CENTRY_AGENT_RUNNER_ADDRESS || '';
-export const API_BASE = (process.env.NEXT_PUBLIC_CENTRY_AGENT_API_URL || '').replace(/\/$/, '');
+export const API_BASE = (process.env.NEXT_PUBLIC_CENTRY_AGENT_API_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
 export const PAYWALL_ENABLED = process.env.NEXT_PUBLIC_CENTRY_AGENT_PAYWALL === 'true';
 export const AGENT_PRICE_RAW = 2500000n;
 
