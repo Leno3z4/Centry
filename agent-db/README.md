@@ -4,7 +4,7 @@ This Worker is  the persistence boundary for Centry's server-side agent data.
 
 ## Setup
 
-1. Create the D1 database:
+1. Create the D1 database: 
 
 ```bash
 cd agent-db
