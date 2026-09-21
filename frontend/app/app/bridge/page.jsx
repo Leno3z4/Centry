@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useAccount, useConnectorClient } from 'wagmi';
+import { useAccount, useChainId, useConnectorClient } from 'wagmi';
 import { encodeFunctionData, formatUnits } from 'viem';
 import { Providers } from '../../../components/Providers';
 import { AppShell } from '../../../components/AppShell';
@@ -64,6 +64,7 @@ export default function Page() {
 
 function BridgeContent() {
   const { address, isConnected } = useAccount();
+  const walletChainId = useChainId();
   const { data: connectorClient } = useConnectorClient();
   const [fromId, setFromId] = useState('arc-mainnet');
   const [toId, setToId] = useState('base-mainnet');
