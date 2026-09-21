@@ -508,6 +508,148 @@ export function WalletConnect() {
               min-width: 48px;
             }
           }
+
+          /* Apple utility chrome */
+          .wallet-connect-wrap .connect-wallet {
+            min-height: 44px;
+            padding: 10px 16px;
+            border: 1px solid #0071e3;
+            border-radius: 11px;
+            background: #0071e3;
+            color: #fff;
+            box-shadow: none;
+            font: inherit;
+            font-size: 14px;
+            font-weight: 600;
+            transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+          }
+
+          .wallet-connect-wrap .connect-wallet:hover:not(:disabled) {
+            border-color: #0066cc;
+            background: #0066cc;
+            transform: none;
+            filter: none;
+          }
+
+          .wallet-picker-backdrop {
+            background: rgba(0, 0, 0, .32);
+            backdrop-filter: blur(20px) saturate(130%);
+            -webkit-backdrop-filter: blur(20px) saturate(130%);
+          }
+
+          .wallet-picker {
+            border: 1px solid rgba(210, 210, 215, .9);
+            border-radius: 20px;
+            background: rgba(255, 255, 255, .95);
+            color: #1d1d1f;
+            box-shadow: 0 28px 80px rgba(0, 0, 0, .18);
+            backdrop-filter: blur(20px) saturate(140%);
+          }
+
+          .wallet-picker-kicker {
+            color: #6e6e73;
+            font-family: var(--display-font, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif);
+            letter-spacing: 0;
+            text-transform: none;
+          }
+
+          .wallet-picker-heading h2,
+          .wallet-option-copy strong,
+          .wallet-empty-state strong {
+            color: #1d1d1f;
+          }
+
+          .wallet-picker-heading p,
+          .wallet-option-copy small,
+          .wallet-empty-state span,
+          .wallet-picker-footer {
+            color: #6e6e73;
+          }
+
+          .wallet-picker-divider {
+            background: #e5e5ea;
+          }
+
+          .wallet-picker-close {
+            border: 1px solid #d2d2d7;
+            border-radius: 9px;
+            background: #fff;
+            color: #1d1d1f;
+          }
+
+          .wallet-picker-close:hover {
+            border-color: #b7b7bc;
+            color: #1d1d1f;
+          }
+
+          .wallet-option {
+            border: 1px solid #e5e5ea;
+            border-radius: 14px;
+            background: #fff;
+            color: #1d1d1f;
+            transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+          }
+
+          .wallet-option:hover:not(:disabled) {
+            border-color: #b7b7bc;
+            background: #f8f8fa;
+            transform: none;
+          }
+
+          .wallet-option-mark,
+          .wallet-option-mark.is-walletconnect {
+            border: 1px solid #d2d2d7;
+            border-radius: 12px;
+            background: #f5f5f7;
+            color: #1d1d1f;
+          }
+
+          .wallet-option-action {
+            color: #0071e3;
+          }
+
+          .wallet-empty-state {
+            border-color: #d2d2d7;
+            background: #f5f5f7;
+          }
+
+          .wallet-picker-footer {
+            color: #6e6e73;
+          }
+
+          .wallet-security-dot,
+          .wallet-status-dot {
+            background: #34c759;
+            box-shadow: none;
+          }
+
+          .wallet-error {
+            border-color: rgba(255, 59, 48, .22);
+            background: rgba(255, 59, 48, .06);
+            color: #b42318;
+          }
+
+          .wallet-address {
+            min-height: 42px;
+            border: 1px solid #d2d2d7;
+            border-radius: 11px;
+            background: #fff;
+            color: #1d1d1f;
+            font-family: var(--mono-font, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+          }
+
+          .wallet-address:hover {
+            border-color: #b7b7bc;
+            background: #f8f8fa;
+            color: #1d1d1f;
+          }
+
+          .network-warning {
+            border: 1px solid rgba(255, 159, 10, .34);
+            border-radius: 11px;
+            background: rgba(255, 159, 10, .1);
+            color: #7a5310;
+          }
         `}</style>
       </>
     );
