@@ -1,35 +1,40 @@
-/* Centry unified grey UI theme. */
+/* Centry unified black UI theme. Canonical site background: #080808. */
 :root {
-  --ui-bg: #6f757b;
-  --ui-panel: #686e74;
-  --ui-panel-2: #62686e;
-  --ui-panel-3: #767c82;
-  --ui-line: #959ca2;
+  --ui-bg: #080808;
+  --ui-panel: #0d0d0d;
+  --ui-panel-2: #111111;
+  --ui-panel-3: #161616;
+  --ui-line: #2a2a2a;
+  --ui-line-soft: #202020;
   --ui-text: #ffffff;
-  --ui-muted: #edf0f2;
-  --ui-muted-2: #dce1e5;
+  --ui-muted: rgba(255,255,255,.78);
+  --ui-muted-2: rgba(255,255,255,.60);
   --ui-accent: #0a84ff;
   --ui-accent-strong: #0077ee;
+  --ui-green: #34c759;
+  --ui-warning: #ffb000;
+  --ui-danger: #ff453a;
 }
 
 html,
 body {
-  background: var(--ui-bg) !important;
-  color: var(--ui-text) !important;
+  background: #080808 !important;
+  color: #ffffff !important;
   color-scheme: dark;
 }
 
-body,
-body * {
-  color: var(--ui-text);
-}
+body { min-height: 100vh; }
+body, body * { color: #ffffff; }
+a { color: inherit; }
 
 .app-shell,
 .main-content,
 .page-view,
-.page-stack {
-  background: var(--ui-bg) !important;
-  color: var(--ui-text) !important;
+.page-stack,
+.landing-home,
+.landing-page {
+  background: #080808 !important;
+  color: #ffffff !important;
 }
 
 .sidebar,
@@ -59,36 +64,43 @@ body * {
 .scope,
 .activity,
 .emptyHero,
-.createHero {
-  background: var(--ui-panel) !important;
-  border-color: var(--ui-line) !important;
-  color: var(--ui-text) !important;
+.createHero,
+.landing-home-nav,
+.landing-home-secondary,
+.landing-home-product,
+.landing-home-explore-card,
+.landing-home-cta,
+.landing-metric,
+.landing-how-item {
+  background: #0d0d0d !important;
+  border-color: #2a2a2a !important;
+  color: #ffffff !important;
   box-shadow: none !important;
 }
 
 .topbar {
-  background: rgba(105, 111, 117, .96) !important;
-  border-bottom-color: var(--ui-line) !important;
+  background: #080808 !important;
+  border-bottom-color: #2a2a2a !important;
 }
 
 .nav-item,
 .action-tabs button {
   background: transparent !important;
-  color: var(--ui-muted) !important;
+  color: rgba(255,255,255,.78) !important;
 }
 
 .nav-item:hover,
 .action-tabs button:hover {
-  background: rgba(255, 255, 255, .10) !important;
-  border-color: var(--ui-line) !important;
-  color: var(--ui-text) !important;
+  background: #111111 !important;
+  border-color: #2a2a2a !important;
+  color: #ffffff !important;
 }
 
 .nav-item.active,
 .action-tabs button.active {
-  background: var(--ui-panel-3) !important;
-  border-color: var(--ui-line) !important;
-  color: var(--ui-text) !important;
+  background: #161616 !important;
+  border-color: #2a2a2a !important;
+  color: #ffffff !important;
 }
 
 .nav-icon,
@@ -98,7 +110,7 @@ body * {
 .balanceButton,
 .refreshButton,
 .early-exit-link {
-  color: var(--ui-accent) !important;
+  color: #0a84ff !important;
 }
 
 .section-header h1,
@@ -111,8 +123,22 @@ body * {
 .governance-stat-line strong,
 .big-number,
 .brand,
-.breadcrumb span {
-  color: var(--ui-text) !important;
+.breadcrumb span,
+.landing-home-hero h1,
+.landing-home-section-heading h2,
+.landing-home-cta h2,
+.landing-home-product h3,
+.landing-home-explore-card h3,
+.landing-home-footer strong,
+.landing-hero h1,
+.landing-how-copy h2,
+.landing-how-item h3,
+.landing-governance-copy h2,
+.landing-cta h2,
+.landing-metric strong,
+.landing-brand,
+.landing-footer strong {
+  color: #ffffff !important;
 }
 
 .section-header p,
@@ -132,155 +158,7 @@ body * {
 .muted-label,
 .page-footer,
 .form-meta,
-.disclaimer {
-  color: var(--ui-muted) !important;
-}
-
-button,
-input,
-select,
-textarea,
-.input,
-.textarea,
-.textareaCode,
-.amountField,
-.amount-input-wrap {
-  background: var(--ui-panel-2) !important;
-  border-color: var(--ui-line) !important;
-  color: var(--ui-text) !important;
-}
-
-input::placeholder,
-textarea::placeholder {
-  color: var(--ui-muted-2) !important;
-}
-
-select option {
-  background: var(--ui-panel-2) !important;
-  color: var(--ui-text) !important;
-}
-
-.primary-btn,
-.connect-wallet,
-.primaryButton,
-.landing-home-primary,
-.landing-nav-app,
-.chatUser {
-  background: var(--ui-accent) !important;
-  border-color: var(--ui-accent) !important;
-  color: #fff !important;
-}
-
-.primary-btn:hover:not(:disabled),
-.connect-wallet:hover:not(:disabled),
-.primaryButton:hover:not(:disabled),
-.landing-home-primary:hover,
-.landing-nav-app:hover {
-  background: var(--ui-accent-strong) !important;
-  border-color: var(--ui-accent-strong) !important;
-  color: #fff !important;
-}
-
-.secondary-btn,
-.wallet-address,
-.refreshButton,
-.balanceButton,
-.textButton {
-  background: var(--ui-panel-2) !important;
-  border-color: var(--ui-line) !important;
-  color: var(--ui-text) !important;
-}
-
-.secondary-btn:hover:not(:disabled),
-.wallet-address:hover:not(:disabled) {
-  background: var(--ui-panel-3) !important;
-  color: var(--ui-text) !important;
-}
-
-.connect-prompt,
-.notice,
-.warning-banner,
-.network-warning,
-.chatAgent {
-  background: var(--ui-panel-2) !important;
-  border-color: var(--ui-line) !important;
-  color: var(--ui-text) !important;
-}
-
-[class*="page__"],
-[class*="card__"],
-[class*="panel__"],
-[class*="hero__"],
-[class*="surface__"],
-[class*="menu__"],
-[class*="picker__"],
-[class*="trigger__"],
-[class*="option__"],
-[class*="summary__"],
-[class*="list__"],
-[class*="row__"] {
-  border-color: var(--ui-line) !important;
-  background: var(--ui-panel) !important;
-  color: var(--ui-text) !important;
-  box-shadow: none !important;
-}
-
-[class*="menu__"] {
-  background: var(--ui-panel-2) !important;
-}
-
-[class*="option__"]:hover,
-[class*="optionActive__"],
-[class*="trigger__"]:hover,
-[class*="triggerOpen__"] {
-  background: var(--ui-panel-3) !important;
-  color: var(--ui-text) !important;
-}
-
-.landing-home,
-.landing-page,
-.landing-nav,
-.landing-hero,
-.landing-how-section,
-.landing-governance-section,
-.landing-cta,
-.landing-footer,
-.landing-metric,
-.landing-how-item {
-  background: var(--ui-bg) !important;
-  color: var(--ui-text) !important;
-  border-color: var(--ui-line) !important;
-}
-
-.landing-home-nav,
-.landing-home-secondary,
-.landing-home-product,
-.landing-home-explore-card,
-.landing-home-cta,
-.landing-metric,
-.landing-how-item {
-  background: var(--ui-panel) !important;
-  border-color: var(--ui-line) !important;
-  color: var(--ui-text) !important;
-}
-
-.landing-home-hero h1,
-.landing-home-section-heading h2,
-.landing-home-cta h2,
-.landing-home-product h3,
-.landing-home-explore-card h3,
-.landing-home-footer strong,
-.landing-hero h1,
-.landing-how-copy h2,
-.landing-how-item h3,
-.landing-governance-copy h2,
-.landing-cta h2,
-.landing-metric strong,
-.landing-brand,
-.landing-footer strong {
-  color: var(--ui-text) !important;
-}
-
+.disclaimer,
 .landing-home-nav-links,
 .landing-home-hero p,
 .landing-home-section-heading p,
@@ -296,15 +174,135 @@ select option {
 .landing-governance-copy p,
 .landing-cta p,
 .landing-footer {
-  color: var(--ui-muted) !important;
+  color: rgba(255,255,255,.78) !important;
 }
+
+button,
+input,
+select,
+textarea,
+.input,
+.textarea,
+.textareaCode,
+.amountField,
+.amount-input-wrap {
+  background: #111111 !important;
+  border-color: #2a2a2a !important;
+  color: #ffffff !important;
+}
+
+input::placeholder,
+textarea::placeholder { color: rgba(255,255,255,.55) !important; }
+select option { background: #111111 !important; color: #ffffff !important; }
+
+.primary-btn,
+.connect-wallet,
+.primaryButton,
+.landing-home-primary,
+.landing-nav-app,
+.chatUser {
+  background: #0a84ff !important;
+  border-color: #0a84ff !important;
+  color: #ffffff !important;
+}
+
+.primary-btn:hover:not(:disabled),
+.connect-wallet:hover:not(:disabled),
+.primaryButton:hover:not(:disabled),
+.landing-home-primary:hover,
+.landing-nav-app:hover {
+  background: #0077ee !important;
+  border-color: #0077ee !important;
+  color: #ffffff !important;
+}
+
+.secondary-btn,
+.wallet-address,
+.refreshButton,
+.balanceButton,
+.textButton {
+  background: #111111 !important;
+  border-color: #2a2a2a !important;
+  color: #ffffff !important;
+}
+
+.secondary-btn:hover:not(:disabled),
+.wallet-address:hover:not(:disabled) {
+  background: #161616 !important;
+  color: #ffffff !important;
+}
+
+.connect-prompt,
+.notice,
+.warning-banner,
+.network-warning,
+.chatAgent {
+  background: #111111 !important;
+  border-color: #2a2a2a !important;
+  color: #ffffff !important;
+}
+
+.status-live,
+.reward-mini-status.live,
+.self-repay-state.active { color: #34c759 !important; }
+.network-dot,
+.reward-status-dot,
+.self-repay-state-dot,
+.self-repay-state.active .self-repay-state-dot { background: #34c759 !important; box-shadow: none !important; }
+.warning-banner strong,
+.network-warning strong { color: #ffb000 !important; }
+
+.error,
+.noticeError {
+  border-color: rgba(255,69,58,.55) !important;
+  background: rgba(255,69,58,.16) !important;
+  color: #ffffff !important;
+}
+.noticeSuccess {
+  border-color: rgba(52,199,89,.55) !important;
+  background: rgba(52,199,89,.16) !important;
+  color: #ffffff !important;
+}
+
+[class*="page__"],
+[class*="card__"],
+[class*="panel__"],
+[class*="hero__"],
+[class*="surface__"],
+[class*="menu__"],
+[class*="picker__"],
+[class*="trigger__"],
+[class*="option__"],
+[class*="summary__"],
+[class*="list__"],
+[class*="row__"],
+[class*="storeCard__"],
+[class*="quickCard__"],
+[class*="configSummary__"],
+[class*="configPanel__"] {
+  background: #0d0d0d !important;
+  border-color: #2a2a2a !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+[class*="menu__"] { background: #111111 !important; }
+[class*="option__"]:hover,
+[class*="optionActive__"],
+[class*="trigger__"]:hover,
+[class*="triggerOpen__"] { background: #161616 !important; color: #ffffff !important; border-color: #2a2a2a !important; }
+[class*="badge__"],
+[class*="token__"] { background: #161616 !important; color: #ffffff !important; border-color: #2a2a2a !important; }
+[class*="label__"],
+[class*="kicker__"],
+[class*="description__"],
+[class*="text__"],
+[class*="subtext__"] { color: rgba(255,255,255,.78) !important; }
 
 .landing-home-glow,
 .overview-aero-background,
-.orbital-art {
-  display: none !important;
-}
+.orbital-art { display: none !important; }
+.landing-aero-background { opacity: .015 !important; }
+.landing-aero-background > * { filter: grayscale(1) !important; }
 
-.landing-aero-background {
-  opacity: .015 !important;
-}
+main, section, article, aside, nav, header, footer { border-color: #2a2a2a; }
