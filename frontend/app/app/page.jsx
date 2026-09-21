@@ -133,10 +133,10 @@ function OverviewContent() {
       </div>
       <section className="hero">
         <div className="hero-copy">
-          <h1>Your Centry<br /><em>account.</em></h1>
-          <p>See your position first, then choose what you want to trade, lend, earn, govern, or automate.</p>
+          <h1>See where you<br /><em>stand.</em></h1>
+          <p>Check your balances, then choose what to do next.</p>
           <div className="hero-actions">
-            <a className="primary-btn" href="/app/portfolio">View my position</a>
+            <a className="primary-btn" href="/app/portfolio">View portfolio</a>
             <a className="secondary-btn" href="/app/swap">Swap assets</a>
           </div>
         </div>
@@ -156,15 +156,15 @@ function OverviewContent() {
         <div className="panel-head">
           <div>
             <h2>What do you want to do?</h2>
-            <p className="panel-copy">Centry is organized around the decision you are making, not the infrastructure behind it.</p>
+            <p className="panel-copy">Choose what you want to do next.</p>
           </div>
         </div>
         <div className="overview-actions-grid">
-          <a className="overview-action-card" href="/app/swap"><strong>Swap</strong><span>Trade supported assets on Arc.</span><b>Open swap →</b></a>
-          <a className="overview-action-card" href="/app/markets"><strong>Borrow & lend</strong><span>Open a market, supply liquidity, or manage debt.</span><b>View markets →</b></a>
-          <a className="overview-action-card" href="/app/rewards"><strong>Earn</strong><span>Review CENT rewards and choose what happens to them.</span><b>View rewards →</b></a>
-          <a className="overview-action-card" href="/app/governance"><strong>Govern</strong><span>Lock CENT, manage veCENT, and use your voting power.</span><b>Open governance →</b></a>
-          <a className="overview-action-card" href="/app/agents"><strong>Automate</strong><span>Create controlled automation with its own smart-account wallet.</span><b>Open agents →</b></a>
+          <a className="overview-action-card" href="/app/swap"><strong>Swap</strong><span>Trade one supported asset for another.</span><b>Swap assets →</b></a>
+          <a className="overview-action-card" href="/app/markets"><strong>Borrow &amp; lend</strong><span>Supply an asset or borrow when you need it.</span><b>Open markets →</b></a>
+          <a className="overview-action-card" href="/app/rewards"><strong>Earn</strong><span>See your rewards and choose what to do with them.</span><b>View rewards →</b></a>
+          <a className="overview-action-card" href="/app/governance"><strong>Govern</strong><span>Lock CENT and manage your voting power.</span><b>View governance →</b></a>
+          <a className="overview-action-card" href="/app/agents"><strong>Automate</strong><span>Set up an agent to handle approved actions for you.</span><b>View agents →</b></a>
         </div>
       </section>
 
@@ -183,7 +183,7 @@ function OverviewContent() {
         </div>
 
         <div className="panel overview-account-panel">
-          <div className="panel-head"><div><h2>Position</h2></div></div>
+          <div className="panel-head"><div><h2>Your position</h2></div></div>
           {isConnected ? <HealthMeter percent={lending.healthFactorPercent} factor={lending.healthFactor} /> : <div className="connect-prompt">Connect your wallet to see account health and position details.</div>}
           <a className="secondary-btn full-btn" href="/app/portfolio">View portfolio</a>
         </div>
@@ -191,14 +191,14 @@ function OverviewContent() {
 
       <section className="content-grid overview-bottom-grid">
         <div className="panel">
-          <div className="panel-head"><div><h2>Your governance position</h2></div><a className="text-link" href="/app/governance">Manage →</a></div>
+          <div className="panel-head"><div><h2>Voting power</h2></div><a className="text-link" href="/app/governance">Manage →</a></div>
           <div className="overview-feature-number">{isConnected ? formatNumber(walletVotingPower, 1) : '—'}</div>
           <div className="overview-feature-label">Voting power</div>
           <div className="overview-inline-stats">
             <span>Locked <strong>{isConnected ? formatNumber(governance.lockedAmount, 1) + ' CENT' : '—'}</strong></span>
             <span>veCENT positions <strong>{isConnected ? governance.veBalance : '—'}</strong></span>
           </div>
-          <p className="panel-copy overview-card-copy">Locking CENT creates veCENT. That position connects governance and revenue rewards.</p>
+          <p className="panel-copy overview-card-copy">Lock CENT to get voting power and share in protocol rewards.</p>
         </div>
         <div className="panel">
           <div className="panel-head"><div><h2>Rewards</h2></div><a className="text-link" href="/app/rewards">Open →</a></div>
@@ -215,11 +215,11 @@ function OverviewContent() {
         .page-stack > :not(.overview-aero-background){position:relative;z-index:1}
         .overview-actions-panel{margin-top:0}
         .overview-actions-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
-        .overview-action-card{display:grid;min-height:154px;align-content:start;gap:8px;padding:17px;border:1px solid #292e35;border-radius:13px;background:#0c0f12;transition:border-color 160ms ease,background 160ms ease,transform 160ms ease}
-        .overview-action-card:hover{border-color:#444a52;background:#111419;transform:translateY(-1px)}
-        .overview-action-card strong{font-size:16px}
-        .overview-action-card span{color:#89919a;font-size:13px;line-height:1.55}
-        .overview-action-card b{align-self:end;margin-top:auto;color:#bdb5c8;font-size:12px}
+        .overview-action-card{display:grid;min-height:154px;align-content:start;gap:8px;padding:17px;border:1px solid #d4d8dc;border-radius:14px;background:#f4f5f6;color:#1f2328;transition:border-color 160ms ease,background 160ms ease,transform 160ms ease}
+        .overview-action-card:hover{border-color:#bfc4c9;background:#eceff1;transform:translateY(-1px)}
+        .overview-action-card strong{font-size:16px;color:#1f2328}
+        .overview-action-card span{color:#62676d;font-size:13px;line-height:1.55}
+        .overview-action-card b{align-self:end;margin-top:auto;color:#0066cc;font-size:12px}
         .overview-card-copy{margin-bottom:0}
         .overview-stats-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
         .overview-bottom-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
