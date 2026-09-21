@@ -385,11 +385,11 @@ export default function LandingHome() {
 
                 /* Unified Centry / Apple flagship palette. */
                 .landing-home {
-                    --landing-bg: #f5f5f7;
-                    --landing-surface: rgba(255,255,255,.86);
-                    --landing-card: #ffffff;
-                    --landing-line: #d2d2d7;
-                    --landing-line-soft: #e5e5ea;
+                    --landing-bg: #eceff1;
+                    --landing-surface: rgba(247,248,250,.9);
+                    --landing-card: #f7f8fa;
+                    --landing-line: #cfd3d8;
+                    --landing-line-soft: #dde1e5;
                     --landing-text: #1d1d1f;
                     --landing-muted: #6e6e73;
                     --landing-muted-2: #86868b;
@@ -405,7 +405,7 @@ export default function LandingHome() {
 
                 .landing-home-nav {
                     border-color: rgba(210,210,215,.82) !important;
-                    background: rgba(245,245,247,.78) !important;
+                    background: rgba(236,239,241,.88) !important;
                     color: var(--landing-text) !important;
                     backdrop-filter: blur(20px) saturate(150%);
                     -webkit-backdrop-filter: blur(20px) saturate(150%);
@@ -440,7 +440,7 @@ export default function LandingHome() {
                 .landing-home-product:hover,
                 .landing-home-explore-card:hover {
                     border-color: #b7b7bc !important;
-                    background: #fff !important;
+                    background: #f7f8fa !important;
                     transform: none !important;
                 }
 
@@ -467,7 +467,7 @@ export default function LandingHome() {
 
                 .landing-home-cta {
                     border-color: var(--landing-line) !important;
-                    background: #fff !important;
+                    background: #f7f8fa !important;
                 }
 
                 .landing-home-footer {
