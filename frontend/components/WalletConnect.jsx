@@ -567,7 +567,7 @@ export function WalletConnect() {
           }
 
           .wallet-picker-divider {
-            background: #e5e5ea;
+            background: #202020;
           }
 
           .wallet-picker-close {
