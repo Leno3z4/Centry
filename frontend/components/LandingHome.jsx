@@ -7,26 +7,32 @@ const PRODUCTS = [
     {
         number: '01',
         title: 'Swap',
-        text: 'Trade supported assets through Centry with a clear route and execution flow.',
+        text: 'Trade supported assets with a clear quote, route, and wallet confirmation.',
         href: '/app/swap',
     },
     {
         number: '02',
         title: 'Markets',
-        text: 'Supply liquidity, borrow against supported collateral, and manage your position.',
+        text: 'Supply liquidity, borrow supported assets, and manage your position.',
         href: '/app/markets',
     },
     {
         number: '03',
         title: 'Rewards',
-        text: 'Track incentives and the rewards connected to your participation in the protocol.',
+        text: 'See what your veCENT positions earned and choose where rewards should go.',
         href: '/app/rewards',
     },
     {
         number: '04',
         title: 'Governance',
-        text: 'Lock CENT into veCENT, build voting power, and participate in protocol decisions.',
+        text: 'Lock CENT into veCENT, manage voting power, and shape the protocol.',
         href: '/app/governance',
+    },
+    {
+        number: '05',
+        title: 'Automation',
+        text: 'Create controlled agents with explicit permissions and wallet-owned smart accounts.',
+        href: '/app/agents',
     },
 ];
 
@@ -51,10 +57,10 @@ export default function LandingHome() {
             </nav>
 
             <section className="landing-home-hero">
-                <div className="landing-home-kicker">DECENTRALIZED FINANCE, IN ONE PLACE</div>
-                <h1>Your DeFi hub.</h1>
+                <div className="landing-home-kicker">CENTRY PROTOCOL</div>
+                <h1>Trade, lend,<br />earn, govern.</h1>
                 <p>
-                    Swap, lend, earn rewards, and help govern Centry.
+                    Centry brings markets, rewards, governance, and controlled automation into one system.
                 </p>
                 <div className="landing-home-actions">
                     <Link href="/app" className="landing-home-primary">Enter Centry</Link>
@@ -64,7 +70,7 @@ export default function LandingHome() {
 
             <section id="products" className="landing-home-section">
                 <div className="landing-home-section-heading">
-                    <h2>Swap · Markets · Rewards · Governance</h2>
+                    <h2>Start with what you need.</h2>
                 </div>
 
                 <div className="landing-home-products">
@@ -102,7 +108,7 @@ export default function LandingHome() {
                 <div>
                     <span>READY WHEN YOU ARE</span>
                     <h2>Start with what you need.</h2>
-                    <p>Centry keeps the primary DeFi actions close and the rest of the ecosystem within reach.</p>
+                    <p>Trade, manage liquidity, earn through veCENT, govern with your locked position, or build controlled automation.</p>
                 </div>
                 <Link href="/app" className="landing-home-primary">Launch app</Link>
             </section>
@@ -127,12 +133,13 @@ export default function LandingHome() {
 
                 .landing-home-glow {
                     position: absolute;
-                    top: -180px;
+                    top: 0;
                     left: 50%;
                     width: 720px;
-                    height: 520px;
+                    height: 260px;
                     transform: translateX(-50%);
-                    background: radial-gradient(circle, rgba(168, 85, 247, .12), transparent 68%);
+                    background: #0b0d10;
+                    opacity: .35;
                     pointer-events: none;
                 }
 
@@ -174,10 +181,10 @@ export default function LandingHome() {
 
                 .landing-home-open {
                     padding: 9px 14px;
-                    border: 1px solid rgba(161, 128, 193, .32);
+                    border: 1px solid #343a41;
                     border-radius: 999px;
-                    color: #eee7f3 !important;
-                    background: rgba(109, 71, 145, .16);
+                    color: #eeeff2 !important;
+                    background: #0f1215;
                 }
 
                 .landing-home-hero {
@@ -230,13 +237,13 @@ export default function LandingHome() {
                 }
 
                 .landing-home-primary {
-                    border: 1px solid rgba(192, 155, 223, .45);
-                    background: #b06ce9;
-                    color: #130b1a;
+                    border: 1px solid #c6ccd3;
+                    background: #f1f3f5;
+                    color: #111316;
                     font-weight: 600;
                 }
 
-                .landing-home-primary:hover { filter: brightness(1.08); }
+                .landing-home-primary:hover { background: #fff; }
 
                 .landing-home-secondary {
                     border: 1px solid #33283e;
@@ -276,21 +283,21 @@ export default function LandingHome() {
                 }
 
                 .landing-home-product {
-                    min-height: 235px;
+                    min-height: 220px;
                     position: relative;
                     display: grid;
                     grid-template-columns: 42px minmax(0, 1fr) auto;
                     gap: 20px;
                     padding: 30px;
-                    border-right: 1px solid rgba(139, 113, 171, .18);
-                    border-bottom: 1px solid rgba(139, 113, 171, .18);
-                    background: rgba(16, 11, 23, .5);
+                    border-right: 1px solid #23282d;
+                    border-bottom: 1px solid #23282d;
+                    background: #0c0f12;
                     transition: background .18s ease, border-color .18s ease, transform .18s ease;
                 }
 
                 .landing-home-product:hover {
-                    background: rgba(28, 18, 39, .72);
-                    border-color: rgba(168, 85, 247, .3);
+                    background: #111418;
+                    border-color: #444a52;
                 }
 
                 .landing-home-product-number { color: #6f5b82; font: 10px 'DM Mono', monospace; }
@@ -330,7 +337,7 @@ export default function LandingHome() {
                     gap: 30px;
                     border: 1px solid #2c2239;
                     border-radius: 18px;
-                    background: linear-gradient(135deg, rgba(23, 16, 33, .96), rgba(13, 9, 21, .96));
+                    background: #0d1013;
                 }
 
                 .landing-home-cta .landing-home-primary { justify-self: end; white-space: nowrap; }
