@@ -88,8 +88,13 @@ function AgentsGate() {
         </div>
       </section>
 
-      {!FACTORY_ADDRESS || !RUNNER_ADDRESS || !API_BASE ? (
-        <div className={styles.warning}>The agent factory, hosted runner, and API must be configured before an agent can be created.</div>
+      {!FACTORY_ADDRESS || !RUNNER_ADDRESS ? (
+        <div className={styles.warning}>
+          {[
+            !FACTORY_ADDRESS ? 'agent factory' : null,
+            !RUNNER_ADDRESS ? 'hosted runner' : null,
+          ].filter(Boolean).join(' and ')} must be configured before an agent can be created.
+        </div>
       ) : null}
     </main>
   );
