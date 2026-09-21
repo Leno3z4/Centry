@@ -279,21 +279,32 @@ function RewardsContent() {
   };
 
   useEffect(() => {
+    setPreferencesReady(false);
+    setRewardDestination('wallet');
+    setClaimFrequency('epoch');
+    if (!address) return;
+
+    const storageKey = `centry-rewards-preferences:${address.toLowerCase()}`;
     try {
-      const savedDestination = window.localStorage.getItem('centry-rewards-destination');
-      const savedFrequency = window.localStorage.getItem('centry-rewards-frequency');
-      if (savedDestination === 'wallet' || savedDestination === 'self-repay') setRewardDestination(savedDestination);
-      if (savedFrequency === 'epoch' || savedFrequency === 'weekly') setClaimFrequency(savedFrequency);
+      const saved = window.localStorage.getItem(storageKey);
+      const parsed = saved ? JSON.parse(saved) : null;
+      if (parsed?.destination === 'wallet' || parsed?.destination === 'self-repay') setRewardDestination(parsed.destination);
+      if (parsed?.frequency === 'epoch' || parsed?.frequency === 'weekly') setClaimFrequency(parsed.frequency);
+    } catch {
+      // Ignore malformed local preferences and fall back to the defaults.
     } finally {
       setPreferencesReady(true);
     }
-  }, []);
+  }, [address]);
 
   useEffect(() => {
-    if (!preferencesReady) return;
-    window.localStorage.setItem('centry-rewards-destination', rewardDestination);
-    window.localStorage.setItem('centry-rewards-frequency', claimFrequency);
-  }, [preferencesReady, rewardDestination, claimFrequency]);
+    if (!preferencesReady || !address) return;
+    const storageKey = `centry-rewards-preferences:${address.toLowerCase()}`;
+    window.localStorage.setItem(storageKey, JSON.stringify({
+      destination: rewardDestination,
+      frequency: claimFrequency,
+    }));
+  }, [address, preferencesReady, rewardDestination, claimFrequency]);
 
   const claimPosition = async (position, index) => {
     if (!isConnected || chainId !== ARC_CHAIN_ID || !active || !rootMatches) return;
