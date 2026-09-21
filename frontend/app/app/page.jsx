@@ -152,22 +152,6 @@ function OverviewContent() {
         <div className="metric"><span>Account health</span><strong>{isConnected ? lending.healthFactor : '—'}</strong><small>{isConnected ? `${lending.healthFactorPercent}% account health` : 'Connect wallet'}</small></div>
         <div className="metric"><span>Available to borrow</span><strong>{isConnected ? `$${formatNumber(lending.borrowLimit, 1)}` : '—'}</strong><small>Based on your current position</small></div>
       </section>
-      <section className="panel overview-actions-panel">
-        <div className="panel-head">
-          <div>
-            <h2>What do you want to do?</h2>
-            <p className="panel-copy">Choose what you want to do next.</p>
-          </div>
-        </div>
-        <div className="overview-actions-grid">
-          <a className="overview-action-card" href="/app/swap"><strong>Swap</strong><span>Trade one supported asset for another.</span><b>Swap assets →</b></a>
-          <a className="overview-action-card" href="/app/markets"><strong>Borrow &amp; lend</strong><span>Supply an asset or borrow when you need it.</span><b>Open markets →</b></a>
-          <a className="overview-action-card" href="/app/rewards"><strong>Earn</strong><span>See your rewards and choose what to do with them.</span><b>View rewards →</b></a>
-          <a className="overview-action-card" href="/app/governance"><strong>Govern</strong><span>Lock CENT and manage your voting power.</span><b>View governance →</b></a>
-          <a className="overview-action-card" href="/app/agents"><strong>Automate</strong><span>Set up an agent to handle approved actions for you.</span><b>View agents →</b></a>
-        </div>
-      </section>
-
       <section className="content-grid">
         <div className="panel panel-large">
           <div className="panel-head"><div><h2>Available markets</h2></div><a className="text-link" href="/app/markets">View markets →</a></div>
@@ -213,13 +197,6 @@ function OverviewContent() {
         .overview-aero-background{position:fixed;inset:0;z-index:0;opacity:.025;pointer-events:none;overflow:hidden}
         .overview-aero-background > *{width:100%;height:100%}
         .page-stack > :not(.overview-aero-background){position:relative;z-index:1}
-        .overview-actions-panel{margin-top:0}
-        .overview-actions-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
-        .overview-action-card{display:grid;min-height:154px;align-content:start;gap:8px;padding:17px;border:1px solid #d4d8dc;border-radius:14px;background:#f4f5f6;color:#1f2328;transition:border-color 160ms ease,background 160ms ease,transform 160ms ease}
-        .overview-action-card:hover{border-color:#bfc4c9;background:#eceff1;transform:translateY(-1px)}
-        .overview-action-card strong{font-size:16px;color:#1f2328}
-        .overview-action-card span{color:#62676d;font-size:13px;line-height:1.55}
-        .overview-action-card b{align-self:end;margin-top:auto;color:#0066cc;font-size:12px}
         .overview-card-copy{margin-bottom:0}
         .overview-stats-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
         .overview-bottom-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -233,9 +210,8 @@ function OverviewContent() {
         .overview-reward-value{display:block;margin-top:5px;font-size:30px;letter-spacing:-.02em}
         .overview-reward-right{text-align:right}.reward-mini-status{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.08em}.reward-mini-status.pending{color:#c8b7e4}.reward-mini-status.live{color:#75ddb2}.overview-reward-right small{display:block;margin-top:5px;color:#8f849d;font-size:11px}
         .overview-reward-line{display:flex;justify-content:space-between;align-items:center;padding-top:14px;margin-top:14px;border-top:1px solid #2a2235;color:#8f849d;font-size:11px}.overview-reward-line strong{color:#e9e1f1}
-        @media (max-width:1100px){.overview-actions-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
-        @media (max-width:900px){.overview-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-bottom-grid{grid-template-columns:1fr}.overview-actions-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-        @media (max-width:640px){.overview-stats-grid{grid-template-columns:1fr}.overview-actions-grid{grid-template-columns:1fr}.overview-reward-row{align-items:flex-start;flex-direction:column}.overview-reward-right{text-align:left}}
+        @media (max-width:900px){.overview-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-bottom-grid{grid-template-columns:1fr}}
+        @media (max-width:640px){.overview-stats-grid{grid-template-columns:1fr}.overview-reward-row{align-items:flex-start;flex-direction:column}.overview-reward-right{text-align:left}}
       `}</style>
     </div>
   );
