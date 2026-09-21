@@ -181,74 +181,20 @@ export default function LandingHome() {
 
                 .landing-home-open {
                     padding: 9px 14px;
-                    border: 1px solid #343a41;
+                    border: 1px solid #2a2a2a;
                     border-radius: 999px;
-                    color: #eeeff2 !important;
-                    background: #0f1215;
-                }
-
-                .landing-home-hero {
-                    padding: 130px 0 120px;
-                    text-align: center;
-                }
-
-                .landing-home-kicker,
-                .landing-home-section-heading > span,
-                .landing-home-cta > div > span {
-                    color: #806d91;
-                    font: 9px/1.5 'DM Mono', monospace;
-                    letter-spacing: 1.8px;
-                }
-
-                .landing-home-hero h1 {
-                    margin: 18px 0 20px;
-                    font-family: var(--display-font, Georgia, serif);
-                    font-size: clamp(64px, 10vw, 116px);
-                    line-height: .9;
-                    letter-spacing: -5px;
-                    font-weight: 400;
-                }
-
-                .landing-home-hero p {
-                    max-width: 610px;
-                    margin: 0 auto;
-                    color: #aaa0b1;
-                    font-size: 14px;
-                    line-height: 1.8;
-                }
-
-                .landing-home-actions {
-                    display: flex;
-                    justify-content: center;
-                    flex-wrap: wrap;
-                    gap: 10px;
-                    margin-top: 30px;
-                }
-
-                .landing-home-primary,
-                .landing-home-secondary {
-                    min-height: 46px;
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    padding: 0 18px;
-                    border-radius: 10px;
-                    font-size: 11px;
-                }
-
-                .landing-home-primary {
-                    border: 1px solid #c6ccd3;
-                    background: #f1f3f5;
-                    color: #111316;
+                    color: #ffffff !important;
+                    background: #111111;
+                    color: #ffffff;
                     font-weight: 600;
                 }
 
-                .landing-home-primary:hover { background: #fff; }
+                .landing-home-primary:hover { background: #0d0d0d; }
 
                 .landing-home-secondary {
-                    border: 1px solid #33283e;
-                    background: rgba(20, 14, 27, .72);
-                    color: #d1c7d8;
+                    border: 1px solid #2a2a2a;
+                    background: #111111;
+                    color: #ffffff;
                 }
 
                 .landing-home-secondary:hover { border-color: #574463; }
@@ -385,14 +331,14 @@ export default function LandingHome() {
 
                 /* Unified Centry / Apple flagship palette. */
                 .landing-home {
-                    --landing-bg: #eceff1;
-                    --landing-surface: rgba(247,248,250,.9);
-                    --landing-card: #f7f8fa;
-                    --landing-line: #cfd3d8;
-                    --landing-line-soft: #dde1e5;
-                    --landing-text: #1d1d1f;
-                    --landing-muted: #6e6e73;
-                    --landing-muted-2: #86868b;
+                    --landing-bg: #080808;
+                    --landing-surface: rgba(13,13,13,.94);
+                    --landing-card: #0d0d0d;
+                    --landing-line: #2a2a2a;
+                    --landing-line-soft: #2a2a2a;
+                    --landing-text: #ffffff;
+                    --landing-muted: rgba(255,255,255,.78);
+                    --landing-muted-2: rgba(255,255,255,.60);
                     --landing-accent: #0071e3;
                     color: var(--landing-text);
                     background: var(--landing-bg);
@@ -405,7 +351,7 @@ export default function LandingHome() {
 
                 .landing-home-nav {
                     border-color: rgba(210,210,215,.82) !important;
-                    background: rgba(236,239,241,.88) !important;
+                    background: rgba(8,8,8,.94) !important;
                     color: var(--landing-text) !important;
                     backdrop-filter: blur(20px) saturate(150%);
                     -webkit-backdrop-filter: blur(20px) saturate(150%);
@@ -439,8 +385,8 @@ export default function LandingHome() {
                 .landing-home-secondary:hover,
                 .landing-home-product:hover,
                 .landing-home-explore-card:hover {
-                    border-color: #b7b7bc !important;
-                    background: #f7f8fa !important;
+                    border-color: rgba(255,255,255,.38) !important;
+                    background: #0d0d0d !important;
                     transform: none !important;
                 }
 
@@ -467,7 +413,7 @@ export default function LandingHome() {
 
                 .landing-home-cta {
                     border-color: var(--landing-line) !important;
-                    background: #f7f8fa !important;
+                    background: #0d0d0d !important;
                 }
 
                 .landing-home-footer {
