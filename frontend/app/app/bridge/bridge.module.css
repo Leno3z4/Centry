@@ -5,7 +5,7 @@
   gap: 24px;
   overflow: visible;
   margin: 0 auto;
-  color: #1d1d1f;
+  color: #ffffff;
 }
 
 .header {
@@ -18,14 +18,14 @@
 .kicker {
   display: block;
   margin-bottom: 8px;
-  color: #6e6e73;
+  color: rgba(255,255,255,.78);
   font-size: 12px;
   font-weight: 600;
 }
 
 .header h1 {
   margin: 0;
-  color: #1d1d1f;
+  color: #ffffff;
   font-size: clamp(36px, 4vw, 58px);
   line-height: 1;
   letter-spacing: -2.8px;
@@ -35,7 +35,7 @@
 .header p {
   max-width: 650px;
   margin: 10px 0 0;
-  color: #6e6e73;
+  color: rgba(255,255,255,.78);
   line-height: 1.55;
 }
 
@@ -44,10 +44,10 @@
   align-items: center;
   gap: 8px;
   padding: 8px 11px;
-  border: 1px solid #d2d2d7;
+  border: 1px solid #2a2a2a;
   border-radius: 999px;
-  background: #f5f5f7;
-  color: #6e6e73;
+  background: #111111;
+  color: rgba(255,255,255,.78);
   font-size: 12px;
   white-space: nowrap;
 }
@@ -67,9 +67,9 @@
   box-sizing: border-box;
   gap: 12px;
   padding: 24px;
-  border: 1px solid #d2d2d7;
+  border: 1px solid #2a2a2a;
   border-radius: 20px;
-  background: #fff;
+  background: #0d0d0d;
   box-shadow: 0 2px 10px rgba(0, 0, 0, .025);
   overflow: visible;
 }
@@ -83,7 +83,7 @@
 
 .fieldBlock label,
 .amountHeader label {
-  color: #6e6e73;
+  color: rgba(255,255,255,.78);
   font-size: 12px;
   font-weight: 600;
 }
@@ -106,10 +106,10 @@
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
-  border: 1px solid #d2d2d7;
+  border: 1px solid #2a2a2a;
   border-radius: 15px;
-  background: #fff;
-  color: #1d1d1f;
+  background: #0d0d0d;
+  color: #ffffff;
   text-align: left;
   cursor: pointer;
   transition: border-color 160ms ease, background 160ms ease;
@@ -117,8 +117,8 @@
 
 .chainTrigger:hover,
 .chainTriggerOpen {
-  border-color: #b7b7bc;
-  background: #f8f8fa;
+  border-color: #383838;
+  background: #111111;
   box-shadow: none;
 }
 
@@ -133,9 +133,9 @@
   overflow: auto;
   gap: 4px;
   padding: 7px;
-  border: 1px solid #d2d2d7;
+  border: 1px solid #2a2a2a;
   border-radius: 16px;
-  background: rgba(255, 255, 255, .98);
+  background: rgba(17,17,17,.98);
   box-shadow: 0 20px 55px rgba(0, 0, 0, .14);
   backdrop-filter: blur(16px);
 }
@@ -151,7 +151,7 @@
   border: 1px solid transparent;
   border-radius: 11px;
   background: transparent;
-  color: #1d1d1f;
+  color: #ffffff;
   text-align: left;
   cursor: pointer;
   transition: background 120ms ease, border-color 120ms ease;
@@ -159,8 +159,8 @@
 
 .chainOption:hover,
 .chainOptionActive {
-  border-color: #e5e5ea;
-  background: #f5f5f7;
+  border-color: #202020;
+  background: #111111;
 }
 
 .chainBadge {
@@ -169,10 +169,10 @@
   width: 34px;
   height: 34px;
   place-items: center;
-  border: 1px solid #d2d2d7;
+  border: 1px solid #2a2a2a;
   border-radius: 50%;
-  background: #f5f5f7;
-  color: #1d1d1f;
+  background: #111111;
+  color: #ffffff;
   font-weight: 700;
 }
 
@@ -188,14 +188,14 @@
 }
 
 .chainText small {
-  color: #6e6e73;
+  color: rgba(255,255,255,.78);
   font-size: 12px;
 }
 
 .chevron,
 .check {
   flex: 0 0 auto;
-  color: #6e6e73;
+  color: rgba(255,255,255,.78);
   font-size: 12px;
 }
 
@@ -212,10 +212,10 @@
   place-items: center;
   align-self: center;
   justify-self: center;
-  border: 1px solid #d2d2d7;
+  border: 1px solid #2a2a2a;
   border-radius: 50%;
-  background: #fff;
-  color: #1d1d1f;
+  background: #0d0d0d;
+  color: #ffffff;
   font-size: 21px;
   line-height: 1;
   cursor: pointer;
@@ -223,8 +223,8 @@
 }
 
 .arrowButton:hover:not(:disabled) {
-  border-color: #b7b7bc;
-  background: #f8f8fa;
+  border-color: #383838;
+  background: #111111;
   color: #0071e3;
   transform: none;
   box-shadow: none;
@@ -278,14 +278,14 @@
   gap: 12px;
   min-width: 0;
   padding: 16px;
-  border: 1px solid #d2d2d7;
+  border: 1px solid #2a2a2a;
   border-radius: 16px;
-  background: #fbfbfd;
+  background: #111111;
 }
 
 .amountField:focus-within {
   border-color: #0071e3;
-  background: #fff;
+  background: #0d0d0d;
   box-shadow: 0 0 0 3px rgba(0, 113, 227, .1);
 }
 
@@ -295,13 +295,13 @@
   border: 0;
   outline: 0;
   background: transparent;
-  color: #1d1d1f;
+  color: #ffffff;
   font: inherit;
   font-size: 30px;
 }
 
 .amountField span {
-  color: #1d1d1f;
+  color: #ffffff;
   font-size: 14px;
   font-weight: 650;
 }
@@ -311,9 +311,9 @@
   gap: 1px;
   margin-top: 8px;
   overflow: hidden;
-  border: 1px solid #e5e5ea;
+  border: 1px solid #202020;
   border-radius: 14px;
-  background: #e5e5ea;
+  background: #202020;
 }
 
 .summary div {
@@ -322,17 +322,17 @@
   justify-content: space-between;
   gap: 18px;
   padding: 12px 14px;
-  background: #fbfbfd;
+  background: #111111;
 }
 
 .summary span {
-  color: #6e6e73;
+  color: rgba(255,255,255,.78);
   font-size: 12px;
 }
 
 .summary strong {
   min-width: 0;
-  color: #1d1d1f;
+  color: #ffffff;
   font-size: 12px;
   text-align: right;
   overflow-wrap: anywhere;
@@ -342,9 +342,9 @@
   width: 100%;
   min-height: 52px;
   margin-top: 8px;
-  border: 1px solid #0071e3;
+  border: 1px solid #0a84ff;
   border-radius: 13px;
-  background: #0071e3;
+  background: #0a84ff;
   color: #fff;
   font: inherit;
   font-weight: 650;
@@ -403,7 +403,7 @@
 
 .disclaimer {
   margin: 0;
-  color: #6e6e73;
+  color: rgba(255,255,255,.78);
   font-size: 12px;
 }
 
