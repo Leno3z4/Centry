@@ -29,7 +29,7 @@ export default function Page() {
   return (
     <Providers>
       <AppShell>
-        <div className="page-stack">
+        <div className="page-stack docs-page">
           <div className="section-header">
             <div>
               <div className="section-kicker">CENTRY / DOCUMENTATION</div>
