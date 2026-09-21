@@ -1,6 +1,6 @@
 # Centry agent D1 worker
 
-This Worker is the persistence boundary for Centry's server-side agent data.
+This Worker is  the persistence boundary for Centry's server-side agent data.
 
 ## Setup
 
