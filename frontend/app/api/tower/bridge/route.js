@@ -67,16 +67,25 @@ export async function POST(request) {
       || data?.data?.transactionHash
       || data?.txHash
       || data?.data?.txHash
+      || data?.result?.transactionHash
+      || data?.result?.txHash
+      || data?.transaction?.hash
+      || data?.data?.transaction?.hash
+      || data?.result?.transaction?.hash
       || null;
-    const status = data?.status ?? data?.data?.status ?? null;
-    const estimatedTime = data?.estimatedTime ?? data?.data?.estimatedTime ?? null;
+    const status = data?.status ?? data?.data?.status ?? data?.result?.status ?? null;
+    const estimatedTime = data?.estimatedTime ?? data?.data?.estimatedTime ?? data?.result?.estimatedTime ?? null;
 
-    if (response.ok && data?.success === true && !transactionHash) {
-      return NextResponse.json(
-        { success: false, error: 'Tower accepted the bridge request but did not return a source transaction hash.', status: status || 'pending', estimatedTime },
-        { status: 502 },
-      );
-    }
+    console.info('[tower-bridge] response', {
+      httpStatus: response.status,
+      success: data?.success === true,
+      topLevelKeys: data && typeof data === 'object' ? Object.keys(data) : [],
+      dataKeys: data?.data && typeof data.data === 'object' ? Object.keys(data.data) : [],
+      resultKeys: data?.result && typeof data.result === 'object' ? Object.keys(data.result) : [],
+      hasTransactionHash: Boolean(transactionHash),
+      status: status || null,
+      estimatedTime: estimatedTime || null,
+    });
 
     return NextResponse.json(
       { ...data, ...(transactionHash ? { transactionHash } : {}), ...(status ? { status } : {}), ...(estimatedTime ? { estimatedTime } : {}) },
