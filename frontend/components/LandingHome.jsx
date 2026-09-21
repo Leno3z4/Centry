@@ -185,11 +185,67 @@ export default function LandingHome() {
                     border-radius: 999px;
                     color: #ffffff !important;
                     background: #111111;
+                    font-weight: 600;
+                }
+
+                .landing-home-hero {
+                    padding: 130px 0 120px;
+                    text-align: center;
+                }
+
+                .landing-home-kicker,
+                .landing-home-section-heading > span,
+                .landing-home-cta > div > span {
+                    color: rgba(255,255,255,.60);
+                    font: 9px/1.5 'DM Mono', monospace;
+                    letter-spacing: 1.8px;
+                }
+
+                .landing-home-hero h1 {
+                    margin: 18px 0 20px;
+                    font-family: var(--display-font, Georgia, serif);
+                    font-size: clamp(64px, 10vw, 116px);
+                    line-height: .9;
+                    letter-spacing: -5px;
+                    font-weight: 400;
+                    color: #ffffff;
+                }
+
+                .landing-home-hero p {
+                    max-width: 610px;
+                    margin: 0 auto;
+                    color: rgba(255,255,255,.78);
+                    font-size: 14px;
+                    line-height: 1.8;
+                }
+
+                .landing-home-actions {
+                    display: flex;
+                    justify-content: center;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                    margin-top: 30px;
+                }
+
+                .landing-home-primary,
+                .landing-home-secondary {
+                    min-height: 46px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 0 18px;
+                    border-radius: 10px;
+                    font-size: 11px;
+                }
+
+                .landing-home-primary {
+                    border: 1px solid #0a84ff;
+                    background: #0a84ff;
                     color: #ffffff;
                     font-weight: 600;
                 }
 
-                .landing-home-primary:hover { background: #0d0d0d; }
+                .landing-home-primary:hover { background: #0077ee; }
 
                 .landing-home-secondary {
                     border: 1px solid #2a2a2a;
