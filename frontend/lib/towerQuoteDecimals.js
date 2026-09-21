@@ -48,6 +48,15 @@ export function normalizeTowerQuoteDecimals(quote, actualOutputDecimals) {
   }
 
   const outputToken = String(quote.outputToken || '').toLowerCase();
+  if (quote.decimalsNormalized === true || Number(quote.quoteDecimals) === actualOutputDecimals) {
+    return {
+      ...quote,
+      quoteDecimals: actualOutputDecimals,
+      providerQuoteDecimals: Number(quote.providerQuoteDecimals ?? actualOutputDecimals),
+      decimalsNormalized: true,
+    };
+  }
+
   const providerOutputDecimals = TOWER_OUTPUT_DECIMAL_OVERRIDES[outputToken] ?? actualOutputDecimals;
 
   if (providerOutputDecimals === actualOutputDecimals) {
