@@ -259,9 +259,9 @@
     padding-top: env(safe-area-inset-top);
     height: calc(64px + env(safe-area-inset-top));
     min-height: calc(64px + env(safe-area-inset-top));
-    border-bottom: 1px solid #e5e5ea;
+    border-bottom: 1px solid #202020;
     background: rgba(245, 245, 247, .86);
-    color: #1d1d1f;
+    color: #ffffff;
     backdrop-filter: blur(20px) saturate(150%);
     -webkit-backdrop-filter: blur(20px) saturate(150%);
   }
@@ -271,10 +271,10 @@
     left: max(10px, env(safe-area-inset-left));
     width: 44px;
     height: 44px;
-    border: 1px solid #d2d2d7;
+    border: 1px solid #2a2a2a;
     border-radius: 12px;
     background: rgba(255, 255, 255, .92);
-    color: #1d1d1f;
+    color: #ffffff;
     box-shadow: 0 5px 18px rgba(0, 0, 0, .08);
     backdrop-filter: blur(16px) saturate(140%);
     -webkit-backdrop-filter: blur(16px) saturate(140%);
@@ -291,20 +291,20 @@
     right: max(8px, env(safe-area-inset-right));
     max-height: calc(100dvh - 74px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
     padding: 8px;
-    border: 1px solid #d2d2d7;
+    border: 1px solid #2a2a2a;
     border-radius: 18px;
-    background: rgba(255, 255, 255, .96);
+    background: rgba(17,17,17,.96);
     box-shadow: 0 24px 60px rgba(0, 0, 0, .14), 0 0 0 9999px rgba(0, 0, 0, .18);
     backdrop-filter: blur(22px) saturate(150%);
     -webkit-backdrop-filter: blur(22px) saturate(150%);
   }
 
   .app-shell .sidebar .nav-group + .nav-group {
-    border-top-color: #e5e5ea;
+    border-top-color: #202020;
   }
 
   .app-shell .sidebar .nav-group-label {
-    color: #6e6e73;
+    color: rgba(255,255,255,.78);
     letter-spacing: .01em;
     text-transform: none;
   }
@@ -313,20 +313,20 @@
     min-height: 48px;
     border: 1px solid transparent;
     border-radius: 11px;
-    color: #6e6e73;
+    color: rgba(255,255,255,.78);
     background: transparent;
     font-size: 14px;
     touch-action: manipulation;
   }
 
   .app-shell .sidebar .nav-item > .nav-icon {
-    color: #86868b;
+    color: rgba(255,255,255,.60);
   }
 
   .app-shell .sidebar .nav-item.active {
     border-color: transparent;
-    background: #f5f5f7;
-    color: #1d1d1f;
+    background: #080808;
+    color: #ffffff;
     box-shadow: none;
   }
 
@@ -337,7 +337,7 @@
   .app-shell .sidebar .nav-item:hover {
     border-color: transparent;
     background: #f0f0f2;
-    color: #1d1d1f;
+    color: #ffffff;
   }
 
   .app-shell .sidebar .nav-item:active {
@@ -345,17 +345,17 @@
   }
 
   .app-shell .breadcrumb {
-    color: #6e6e73;
+    color: rgba(255,255,255,.78);
     font-family: var(--display-font, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif);
     font-size: 12px;
   }
 
   .app-shell .breadcrumb span {
-    color: #1d1d1f;
+    color: #ffffff;
   }
 
   .app-shell .breadcrumb b {
-    color: #aeaeb2;
+    color: rgba(255,255,255,.60);
   }
 
   .app-shell .main-content {
