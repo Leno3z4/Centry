@@ -339,7 +339,7 @@ export default function WelcomePage() {
                 .landing-governance-section { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, .75fr) minmax(180px, .7fr); gap: 90px; align-items: center; padding: 90px 0 120px; }
                 .landing-governance-copy { width: min(600px, 100%); }
                 .landing-governance-copy .secondary-btn { margin-top: 24px; }
-                .landing-governance-rule { height: 1px; background: #d2d2d7; }
+                .landing-governance-rule { height: 1px; background: #2a2a2a; }
 
                 .landing-cta {
                     position: relative;
