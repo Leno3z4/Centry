@@ -51,7 +51,7 @@ function HealthMeter({ percent, factor }) {
   return (
     <div className="health-meter">
       <div className="health-meter-head">
-        <span>Position health</span>
+        <span>Account health</span>
         <strong>{safe}%</strong>
       </div>
       <div className="health-factor-label">Health factor {factor || '—'}</div>
@@ -149,8 +149,8 @@ function OverviewContent() {
       <section className="stats-grid overview-stats-grid">
         <div className="metric"><span>Supplied</span><strong>{isConnected ? `${formatNumber(lending.supplyBalance, 1)} ${firstMarket?.symbol || ''}` : '—'}</strong><small>Your active deposit</small></div>
         <div className="metric"><span>Borrowed</span><strong>{isConnected ? `${formatNumber(lending.borrowBalance, 1)} ${firstMarket?.symbol || ''}` : '—'}</strong><small>Your active debt</small></div>
-        <div className="metric"><span>Health factor</span><strong>{isConnected ? lending.healthFactor : '—'}</strong><small>{isConnected ? `${lending.healthFactorPercent}% account health` : 'Connect wallet'}</small></div>
-        <div className="metric"><span>Borrow room</span><strong>{isConnected ? `$${formatNumber(lending.borrowLimit, 1)}` : '—'}</strong><small>Remaining borrowing power</small></div>
+        <div className="metric"><span>Account health</span><strong>{isConnected ? lending.healthFactor : '—'}</strong><small>{isConnected ? `${lending.healthFactorPercent}% account health` : 'Connect wallet'}</small></div>
+        <div className="metric"><span>Available to borrow</span><strong>{isConnected ? `$${formatNumber(lending.borrowLimit, 1)}` : '—'}</strong><small>Based on your current position</small></div>
       </section>
       <section className="panel overview-actions-panel">
         <div className="panel-head">
