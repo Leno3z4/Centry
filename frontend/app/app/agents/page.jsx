@@ -53,7 +53,7 @@ function AgentsGate() {
     return (
       <main className={styles.page}>
         <section className={styles.emptyHero}>
-          <div className={styles.kicker}>Centry Agents</div>
+          <div className={styles.kicker}>Automation</div>
           <h1>Your agents start here.</h1>
           <p>Connect your wallet to create and manage an onchain agent with its own smart-account wallet.</p>
         </section>
@@ -78,13 +78,28 @@ function AgentsGate() {
     <main className={styles.page}>
       <section className={styles.createHero}>
         <div className={styles.kicker}>Centry Agents</div>
-        <h1>Build an agent that works for you.</h1>
-        <p>Give it its own smart-account wallet, choose the AI that powers it, and define exactly what it is allowed to do.</p>
+        <h1>Build automation you control.</h1>
+        <p>Give an agent its own smart-account wallet, define exactly what it may do, and keep execution off until you decide to activate it.</p>
         <Link className={styles.primaryHeroButton} href="/app/agents/create">Create agent</Link>
         <div className={styles.heroFoot}>
-          <span>Non-custodial</span>
+          <span>Wallet-controlled</span>
           <span>Runs on Arc</span>
           <span>Starts OFF</span>
+        </div>
+      </section>
+
+      <section className={styles.quickLinks} aria-label="How Centry automation works">
+        <div className={styles.quickCard}>
+          <strong>1. Decide</strong>
+          <span>Choose the job, AI provider, and actions the agent is allowed to use.</span>
+        </div>
+        <div className={styles.quickCard}>
+          <strong>2. Authorize</strong>
+          <span>Your connected wallet remains the owner of the smart account and its configuration.</span>
+        </div>
+        <div className={styles.quickCard}>
+          <strong>3. Run</strong>
+          <span>Activation turns the configured agent on. Execution stays bounded by its policy and permissions.</span>
         </div>
       </section>
 
