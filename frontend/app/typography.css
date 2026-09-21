@@ -70,9 +70,9 @@
 .protocol-stat {
   min-height: 132px;
   padding: 20px;
-  border: 1px solid #d2d2d7;
+  border: 1px solid #2a2a2a;
   border-radius: 15px;
-  background: #fff;
+  background: #0d0d0d;
 }
 
 .protocol-stat > span,
