@@ -541,13 +541,13 @@ export function WalletConnect() {
             border: 1px solid rgba(210, 210, 215, .9);
             border-radius: 20px;
             background: rgba(255, 255, 255, .95);
-            color: #1d1d1f;
+            color: #ffffff;
             box-shadow: 0 28px 80px rgba(0, 0, 0, .18);
             backdrop-filter: blur(20px) saturate(140%);
           }
 
           .wallet-picker-kicker {
-            color: #6e6e73;
+            color: rgba(255,255,255,.78);
             font-family: var(--display-font, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif);
             letter-spacing: 0;
             text-transform: none;
@@ -556,14 +556,14 @@ export function WalletConnect() {
           .wallet-picker-heading h2,
           .wallet-option-copy strong,
           .wallet-empty-state strong {
-            color: #1d1d1f;
+            color: #ffffff;
           }
 
           .wallet-picker-heading p,
           .wallet-option-copy small,
           .wallet-empty-state span,
           .wallet-picker-footer {
-            color: #6e6e73;
+            color: rgba(255,255,255,.78);
           }
 
           .wallet-picker-divider {
@@ -571,37 +571,37 @@ export function WalletConnect() {
           }
 
           .wallet-picker-close {
-            border: 1px solid #d2d2d7;
+            border: 1px solid #2a2a2a;
             border-radius: 9px;
-            background: #fff;
-            color: #1d1d1f;
+            background: #0d0d0d;
+            color: #ffffff;
           }
 
           .wallet-picker-close:hover {
-            border-color: #b7b7bc;
-            color: #1d1d1f;
+            border-color: rgba(255,255,255,.38);
+            color: #ffffff;
           }
 
           .wallet-option {
-            border: 1px solid #e5e5ea;
+            border: 1px solid #202020;
             border-radius: 14px;
-            background: #fff;
-            color: #1d1d1f;
+            background: #0d0d0d;
+            color: #ffffff;
             transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
           }
 
           .wallet-option:hover:not(:disabled) {
-            border-color: #b7b7bc;
-            background: #f8f8fa;
+            border-color: rgba(255,255,255,.38);
+            background: #111111;
             transform: none;
           }
 
           .wallet-option-mark,
           .wallet-option-mark.is-walletconnect {
-            border: 1px solid #d2d2d7;
+            border: 1px solid #2a2a2a;
             border-radius: 12px;
-            background: #f5f5f7;
-            color: #1d1d1f;
+            background: #080808;
+            color: #ffffff;
           }
 
           .wallet-option-action {
@@ -609,12 +609,12 @@ export function WalletConnect() {
           }
 
           .wallet-empty-state {
-            border-color: #d2d2d7;
-            background: #f5f5f7;
+            border-color: #2a2a2a;
+            background: #080808;
           }
 
           .wallet-picker-footer {
-            color: #6e6e73;
+            color: rgba(255,255,255,.78);
           }
 
           .wallet-security-dot,
@@ -631,17 +631,17 @@ export function WalletConnect() {
 
           .wallet-address {
             min-height: 42px;
-            border: 1px solid #d2d2d7;
+            border: 1px solid #2a2a2a;
             border-radius: 11px;
-            background: #fff;
-            color: #1d1d1f;
+            background: #0d0d0d;
+            color: #ffffff;
             font-family: var(--mono-font, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
           }
 
           .wallet-address:hover {
-            border-color: #b7b7bc;
-            background: #f8f8fa;
-            color: #1d1d1f;
+            border-color: rgba(255,255,255,.38);
+            background: #111111;
+            color: #ffffff;
           }
 
           .network-warning {
