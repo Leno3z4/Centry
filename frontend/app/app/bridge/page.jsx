@@ -2,58 +2,26 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAccount, useChainId, useConnectorClient } from 'wagmi';
-import { decodeFunctionResult, encodeFunctionData, formatUnits, parseUnits } from 'viem';
+import { decodeFunctionResult, encodeFunctionData, formatUnits } from 'viem';
 import { Providers } from '../../../components/Providers';
 import { AppShell } from '../../../components/AppShell';
 import styles from './bridge.module.css';
 
 const ARC_CHAIN_ID = 5042;
-const TOKEN_MESSENGER_V2 = '0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d';
-
 const BRIDGE_CHAINS = [
-  { id: 'arc-mainnet', chainId: ARC_CHAIN_ID, domain: 26, name: 'Arc Mainnet', short: 'Arc', badge: 'A', usdc: '0x3600000000000000000000000000000000000000', rpcUrl: 'https://rpc.mainnet.arc.io', explorerUrl: 'https://explorer.arc.io', native: { name: 'USDC', symbol: 'USDC', decimals: 18 } },
-  { id: 'base-mainnet', chainId: 8453, domain: 6, name: 'Base', short: 'Base', badge: 'B', usdc: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', rpcUrl: 'https://mainnet.base.org', explorerUrl: 'https://basescan.org', native: { name: 'Ether', symbol: 'ETH', decimals: 18 } },
-  { id: 'arbitrum-mainnet', chainId: 42161, domain: 3, name: 'Arbitrum', short: 'Arbitrum', badge: 'A', usdc: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', rpcUrl: 'https://arb1.arbitrum.io/rpc', explorerUrl: 'https://arbiscan.io', native: { name: 'Ether', symbol: 'ETH', decimals: 18 } },
-  { id: 'ethereum-mainnet', chainId: 1, domain: 0, name: 'Ethereum', short: 'Ethereum', badge: 'E', usdc: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', rpcUrl: 'https://ethereum-rpc.publicnode.com', explorerUrl: 'https://etherscan.io', native: { name: 'Ether', symbol: 'ETH', decimals: 18 } },
+  { id: 'arc-mainnet', chainId: ARC_CHAIN_ID, name: 'Arc Mainnet', short: 'Arc', badge: 'A', usdc: '0x3600000000000000000000000000000000000000', rpcUrl: 'https://rpc.mainnet.arc.io', explorerUrl: 'https://explorer.arc.io', native: { name: 'USDC', symbol: 'USDC', decimals: 18 } },
+  { id: 'base-mainnet', chainId: 8453, name: 'Base', short: 'Base', badge: 'B', usdc: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', rpcUrl: 'https://mainnet.base.org', explorerUrl: 'https://basescan.org', native: { name: 'Ether', symbol: 'ETH', decimals: 18 } },
+  { id: 'arbitrum-mainnet', chainId: 42161, name: 'Arbitrum', short: 'Arbitrum', badge: 'A', usdc: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', rpcUrl: 'https://arb1.arbitrum.io/rpc', explorerUrl: 'https://arbiscan.io', native: { name: 'Ether', symbol: 'ETH', decimals: 18 } },
+  { id: 'ethereum-mainnet', chainId: 1, name: 'Ethereum', short: 'Ethereum', badge: 'E', usdc: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', rpcUrl: 'https://ethereum-rpc.publicnode.com', explorerUrl: 'https://etherscan.io', native: { name: 'Ether', symbol: 'ETH', decimals: 18 } },
 ];
 
 const EXTERNAL_CHAINS = BRIDGE_CHAINS.filter((chain) => chain.chainId !== ARC_CHAIN_ID);
 
 const ERC20_ABI = [
-  { type: 'function', name: 'allowance', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }, { name: 'spender', type: 'address' }], outputs: [{ type: 'uint256' }] },
-  { type: 'function', name: 'approve', stateMutability: 'nonpayable', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }] },
   { type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }], outputs: [{ type: 'uint256' }] },
 ];
 
-const TOKEN_MESSENGER_V2_ABI = [
-  { type: 'function', name: 'depositForBurn', stateMutability: 'nonpayable', inputs: [
-    { name: 'amount', type: 'uint256' },
-    { name: 'destinationDomain', type: 'uint32' },
-    { name: 'mintRecipient', type: 'bytes32' },
-    { name: 'burnToken', type: 'address' },
-    { name: 'destinationCaller', type: 'bytes32' },
-    { name: 'maxFee', type: 'uint256' },
-    { name: 'minFinalityThreshold', type: 'uint32' },
-  ], outputs: [] },
-  { type: 'function', name: 'getMinFeeAmount', stateMutability: 'view', inputs: [
-    { name: 'destinationDomain', type: 'uint32' },
-    { name: 'recipient', type: 'bytes32' },
-    { name: 'destinationCaller', type: 'bytes32' },
-    { name: 'minFinalityThreshold', type: 'uint32' },
-    { name: 'messageBody', type: 'bytes' },
-  ], outputs: [{ type: 'uint256' }] },
-];
-
 const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
-
-async function waitForReceipt(provider, hash, attempts = 80) {
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const receipt = await provider.request({ method: 'eth_getTransactionReceipt', params: [hash] });
-    if (receipt) return receipt;
-    await sleep(1500);
-  }
-  throw new Error('Timed out waiting for the wallet transaction to confirm.');
-}
 
 function ChainPicker({ value, chains, onChange, label }) {
   const [open, setOpen] = useState(false);
@@ -213,27 +181,8 @@ function BridgeContent() {
     }
   };
 
-  const requestWalletTransaction = async ({ to, data }) => {
-    if (!connectorClient?.request || !address) throw new Error('Wallet connection is unavailable.');
-    return connectorClient.request({ method: 'eth_sendTransaction', params: [{ from: address, to, data, value: '0x0' }] });
-  };
-
-  const approveIfNeeded = async (amountRaw) => {
-    const allowanceData = encodeFunctionData({ abi: ERC20_ABI, functionName: 'allowance', args: [address, TOKEN_MESSENGER_V2] });
-    const allowanceRaw = await connectorClient.request({ method: 'eth_call', params: [{ to: source.usdc, data: allowanceData }, 'latest'] });
-    const allowance = BigInt(allowanceRaw);
-    if (allowance >= amountRaw) return;
-
-    setStage('approval');
-    const approvalData = encodeFunctionData({ abi: ERC20_ABI, functionName: 'approve', args: [TOKEN_MESSENGER_V2, amountRaw] });
-    const approvalHash = await requestWalletTransaction({ to: source.usdc, data: approvalData });
-    setTxHash(approvalHash);
-    const receipt = await waitForReceipt(connectorClient, approvalHash);
-    if (receipt.status === '0x0') throw new Error('USDC approval was reverted on the source chain.');
-  };
-
   const bridge = async () => {
-    if (!address || !validAmount || fromId === toId || submitted || stage === 'submitting') return;
+    if (!address || !validAmount || fromId === toId || stage === 'submitting') return;
     setError('');
     setBridgeResult(null);
     setStage('switching');
@@ -288,7 +237,7 @@ function BridgeContent() {
 
       <section className={styles.card}>
         <div className={styles.fieldBlock}><label>From</label><ChainPicker value={fromId} chains={sourceChains} onChange={changeFrom} label="Source chain" /></div>
-        <button type="button" className={styles.arrowButton} onClick={switchDirection} disabled={stage === 'switching' || stage === 'submitting' || submitted} aria-label="Switch bridge direction" title="Switch bridge direction">⇅</button>
+        <button type="button" className={styles.arrowButton} onClick={switchDirection} disabled={stage === 'switching' || stage === 'submitting'} aria-label="Switch bridge direction" title="Switch bridge direction">⇅</button>
         <div className={styles.fieldBlock}><label>To</label><ChainPicker value={toId} chains={destinationChains} onChange={changeTo} label="Destination chain" /></div>
 
         <div className={styles.amountBlock}>
@@ -307,7 +256,7 @@ function BridgeContent() {
         {stage !== 'pending' && !walletOnSource && isConnected ? <div className={styles.notice}>Wallet is on chain {walletChainId}. Centry will switch to {source.name} before starting the Tower bridge.</div> : null}
         {stage === 'submitting' ? <div className={styles.notice}>Submitting the bridge request to Tower…</div> : null}
 
-        <button type="button" className={styles.primaryButton} disabled={!isConnected || !validAmount || fromId === toId || stage === 'switching' || stage === 'submitting' || submitted} onClick={bridge}>{buttonLabel}</button>
+        <button type="button" className={styles.primaryButton} disabled={!isConnected || !validAmount || fromId === toId || stage === 'switching' || stage === 'submitting'} onClick={bridge}>{buttonLabel}</button>
         {stage !== 'pending' && isConnected && <button type="button" className={styles.refreshButton} onClick={readBalance} disabled={loadingBalance}>{loadingBalance ? 'Checking balance…' : `Refresh ${source.short} USDC balance`}</button>}
         {error && <div className={`${styles.notice} ${styles.noticeError}`} role="alert">{error}</div>}
         {stage === 'pending' && bridgeResult ? (
