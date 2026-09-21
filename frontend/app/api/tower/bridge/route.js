@@ -63,7 +63,25 @@ export async function POST(request) {
     });
 
     const data = await response.json();
-    return NextResponse.json(data, { status: response.status });
+    const transactionHash = data?.transactionHash
+      || data?.data?.transactionHash
+      || data?.txHash
+      || data?.data?.txHash
+      || null;
+    const status = data?.status ?? data?.data?.status ?? null;
+    const estimatedTime = data?.estimatedTime ?? data?.data?.estimatedTime ?? null;
+
+    if (response.ok && data?.success === true && !transactionHash) {
+      return NextResponse.json(
+        { success: false, error: 'Tower accepted the bridge request but did not return a source transaction hash.', status: status || 'pending', estimatedTime },
+        { status: 502 },
+      );
+    }
+
+    return NextResponse.json(
+      { ...data, ...(transactionHash ? { transactionHash } : {}), ...(status ? { status } : {}), ...(estimatedTime ? { estimatedTime } : {}) },
+      { status: response.status },
+    );
   } catch {
     return NextResponse.json({ success: false, error: 'Unable to reach Tower for the bridge request.' }, { status: 502 });
   }
