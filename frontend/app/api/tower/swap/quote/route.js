@@ -3,6 +3,7 @@ import { createPublicClient, defineChain, http } from 'viem';
 import { ACTIVE_MARKETS } from '../../../../../constants/markets';
 import { CONTRACT_ADDRESSES } from '../../../../../constants/contracts';
 import { rateLimit, rateLimitResponse, withRateLimitHeaders } from '../../../../../lib/rateLimit';
+import { normalizeTowerQuoteDecimals } from '../../../../../lib/towerQuoteDecimals';
 
 const ARC_CHAIN_ID = 5042;
 const ARC_RPC_URL = process.env.ARC_RPC_URL || process.env.NEXT_PUBLIC_ARC_RPC_URL || 'https://rpc.mainnet.arc.io';
@@ -226,6 +227,9 @@ export async function POST(request) {
           limit,
         );
       }
+
+      const normalizedQuote = normalizeTowerQuoteDecimals(data.data, outputMarket.decimals);
+      data.data = normalizedQuote;
 
       const providerImpact = Number(data.data.priceImpact);
       data.data.priceImpact = Number.isFinite(providerImpact) && providerImpact >= 0 && providerImpact <= 100
