@@ -1,5 +1,5 @@
 import { getAddress, isAddress } from "ethers";
-import { issueOwnerChallenge } from "../../../../../lib/agentOwnerAuth";
+import { issueOwnerChallenge } from "../../../../lib/agentOwnerAuth";
 
 export async function POST(request) {
   let body;
