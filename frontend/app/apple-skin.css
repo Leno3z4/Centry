@@ -107,7 +107,7 @@ select option {
 }
 
 .side-nav {
-  scrollbar-color: #c7c7cc transparent;
+  scrollbar-color: #383838 transparent;
 }
 
 .nav-group {
@@ -751,12 +751,12 @@ textarea,
 }
 
 .reward-progress-track {
-  background: #e5e5ea !important;
+  background: #202020 !important;
 }
 
 .reward-progress-fill,
 .reward-progress-fill.running {
-  background: #b7b7bc !important;
+  background: #383838 !important;
 }
 
 .reward-progress-fill.complete {
