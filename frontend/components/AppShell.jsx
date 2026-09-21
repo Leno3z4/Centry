@@ -1,6 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { WalletConnect } from './WalletConnect';
 import CentryAssistantBubble from './CentryAssistantBubble';
@@ -33,13 +34,27 @@ const NAV_GROUPS = [
 export function AppShell({ children }) {
   const pathname = usePathname();
   const { address } = useAccount();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const active = pathname === '/app'
     ? '/app'
     : NAV_ITEMS.find((item) => item.href !== '/app' && pathname.startsWith(item.href))?.href || '/app';
 
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
+
   return (
     <div className={`app-shell ${surfaceStyles.surfaceRoot}`}>
-      <aside className="sidebar">
+      <button
+        type="button"
+        className="mobile-menu-button"
+        aria-label={mobileNavOpen ? 'Close navigation' : 'Open navigation'}
+        aria-expanded={mobileNavOpen}
+        onClick={() => setMobileNavOpen((open) => !open)}
+      >
+        <span className="mobile-menu-icon" aria-hidden="true" />
+      </button>
+      <aside className={`sidebar${mobileNavOpen ? ' mobile-nav-open' : ''}`}>
         <div className="brand"><span className="brand-mark">C</span><span>Centry</span></div>
         <nav className={`${styles.sideNav} side-nav`} aria-label="Primary navigation">
           {NAV_GROUPS.map((group) => (
