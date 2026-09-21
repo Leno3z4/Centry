@@ -901,3 +901,125 @@ textarea,
     transition: none !important;
   }
 }
+
+
+/* Phone layout polish */
+@media (max-width: 900px) {
+  .governance-flow-panel {
+    grid-template-columns: 1fr !important;
+  }
+
+  .governance-flow {
+    grid-template-columns: 1fr !important;
+  }
+
+  .governance-flow > b {
+    display: none !important;
+  }
+
+  .analytics-market-numbers {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .docs-page [style*="grid-template-columns: 210px"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  .docs-page [style*="grid-template-columns: repeat(4, 1fr)"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .docs-page [style*="grid-template-columns: repeat(3, 1fr)"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .docs-page [style*="grid-template-columns: 190px minmax(0, 1fr)"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .position-actions-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .early-exit-modal {
+    width: min(100% - 28px, 560px) !important;
+    max-height: calc(100dvh - 28px) !important;
+    overflow-y: auto !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .governance-flow {
+    gap: 8px !important;
+  }
+
+  .governance-flow > div {
+    padding: 14px !important;
+  }
+
+  .position-topline {
+    align-items: flex-start !important;
+    flex-direction: column !important;
+  }
+
+  .position-power {
+    text-align: left !important;
+  }
+
+  .position-detail-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .modal-position-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .modal-actions {
+    grid-template-columns: 1fr !important;
+  }
+
+  .duration-trigger {
+    min-height: 48px !important;
+  }
+
+  .duration-option {
+    min-height: 48px !important;
+  }
+
+  .docs-page [style*="grid-template-columns: repeat(4, 1fr)"],
+  .docs-page [style*="grid-template-columns: repeat(3, 1fr)"],
+  .docs-page [style*="grid-template-columns: 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  .docs-page aside[style*="position: sticky"] {
+    position: static !important;
+  }
+
+  .docs-page main code {
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 430px) {
+  .docs-page {
+    padding-bottom: 28px;
+  }
+
+  .docs-page .panel {
+    padding: 16px !important;
+  }
+
+  .early-exit-modal {
+    width: calc(100vw - 20px) !important;
+    border-radius: 18px !important;
+  }
+
+  .governance-flow strong {
+    font-size: 14px !important;
+  }
+
+  .governance-flow span {
+    font-size: 11px !important;
+  }
+}
