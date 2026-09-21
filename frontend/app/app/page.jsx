@@ -206,7 +206,7 @@ function OverviewContent() {
           <div className="overview-reward-line"><span>Voting power</span><strong>{isConnected ? formatNumber(walletVotingPower, 1) : '—'}</strong></div>
           <div className="overview-reward-line"><span>Reward destination</span><strong>Wallet or self-repay</strong></div>
         </div>
-      </section>      </section>
+      </section>
 
       <style jsx global>{`
         .page-stack{position:relative;isolation:isolate}
