@@ -1,7 +1,10 @@
 .page {
   display: grid;
-  gap: 18px;
-  padding: 30px 0 10px;
+  gap: 20px;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 30px 0 12px;
+  color: #1d1d1f;
 }
 
 .header {
@@ -9,28 +12,29 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
-  padding: 8px 0;
 }
 
 .kicker {
-  color: #967ab8;
-  font: 11px 'DM Mono', monospace;
-  letter-spacing: 1.5px;
+  color: #6e6e73;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .header h1 {
-  margin: 9px 0 10px;
-  font-size: clamp(40px, 4.5vw, 62px);
-  line-height: 0.98;
-  letter-spacing: -3px;
+  margin: 8px 0 10px;
+  color: #1d1d1f;
+  font-size: clamp(38px, 4.5vw, 58px);
+  line-height: 1;
+  letter-spacing: -2.8px;
+  font-weight: 650;
 }
 
 .header p {
   max-width: 700px;
   margin: 0;
-  color: #9c92a7;
-  font-size: 13px;
-  line-height: 1.6;
+  color: #6e6e73;
+  font-size: 15px;
+  line-height: 1.55;
 }
 
 .statusPill,
@@ -40,34 +44,33 @@
   gap: 8px;
   flex: 0 0 auto;
   padding: 8px 11px;
-  border: 1px solid #312640;
+  border: 1px solid #d2d2d7;
   border-radius: 999px;
-  background: #0d0916;
-  color: #aaa0b8;
-  font: 11px 'DM Mono', monospace;
+  background: #f5f5f7;
+  color: #6e6e73;
+  font-size: 12px;
 }
 
 .statusPill i {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #4ee39a;
-  box-shadow: 0 0 9px #4ee39a;
+  background: #34c759;
 }
 
 .grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.9fr);
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, .9fr);
+  gap: 18px;
 }
 
 .card {
   min-width: 0;
   padding: 24px;
-  border: 1px solid #282033;
-  border-radius: 15px;
-  background: #0e1013;
-  box-shadow: none;
+  border: 1px solid #d2d2d7;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .025);
 }
 
 .cardHeader {
@@ -79,18 +82,18 @@
 }
 
 .card h2 {
-  margin: 7px 0 0;
-  font-size: 21px;
-  letter-spacing: -0.5px;
+  margin: 6px 0 0;
+  color: #1d1d1f;
+  font-size: 20px;
+  letter-spacing: -.35px;
 }
 
 .fieldLabel {
   display: block;
   margin: 18px 0 8px;
-  color: #80768c;
-  font: 11px 'DM Mono', monospace;
-  letter-spacing: 1px;
-  text-transform: uppercase;
+  color: #6e6e73;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .card select {
@@ -99,13 +102,13 @@
 
 .amountField {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0,1fr) auto;
   align-items: center;
   gap: 10px;
   padding: 0 14px 0 0;
-  border: 1px solid #282033;
+  border: 1px solid #d2d2d7;
   border-radius: 12px;
-  background: #0b0712;
+  background: #fbfbfd;
 }
 
 .amountField input {
@@ -115,17 +118,18 @@
   border: 0;
   outline: 0;
   background: transparent;
-  color: #fff;
+  color: #1d1d1f;
   font-size: 23px;
 }
 
 .amountField input::placeholder {
-  color: #41394c;
+  color: #aeaeb2;
 }
 
 .amountField span {
-  color: #9a8ba6;
-  font: 10px 'DM Mono', monospace;
+  color: #6e6e73;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .metaRow {
@@ -134,77 +138,83 @@
   justify-content: space-between;
   gap: 12px;
   margin: 10px 0 16px;
-  color: #665d6f;
-  font: 11px 'DM Mono', monospace;
+  color: #6e6e73;
+  font-size: 12px;
 }
 
 .metaRow strong {
-  color: #c7bdd2;
-  font-weight: 500;
+  color: #1d1d1f;
+  font-weight: 600;
   text-align: right;
 }
 
 .primaryButton,
 .refreshButton {
   display: inline-flex;
-  min-height: 46px;
+  min-height: 44px;
   align-items: center;
   justify-content: center;
   border-radius: 11px;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .primaryButton {
   width: 100%;
   margin-top: 5px;
-  border: 1px solid transparent;
-  background: #b7a7ff;
+  border: 1px solid #0071e3;
+  background: #0071e3;
   color: #fff;
   box-shadow: none;
 }
 
-.refreshButton {
-  padding: 9px 12px;
-  border: 1px solid #332744;
-  background: #0e0917;
-  color: #aa9db8;
+.primaryButton:hover:not(:disabled) {
+  border-color: #0066cc;
+  background: #0066cc;
 }
 
-.primaryButton:hover:not(:disabled),
+.refreshButton {
+  padding: 9px 12px;
+  border: 1px solid #d2d2d7;
+  background: #fff;
+  color: #1d1d1f;
+}
+
 .refreshButton:hover:not(:disabled) {
-  filter: brightness(1.05);
+  border-color: #b7b7bc;
+  background: #f8f8fa;
 }
 
 .notice {
   display: grid;
   gap: 6px;
   margin: 12px 0;
-  padding: 11px 12px;
-  border: 1px solid #30243d;
+  padding: 12px 13px;
+  border: 1px solid rgba(0, 113, 227, .18);
   border-radius: 11px;
-  background: #0d0916;
-  color: #94899e;
-  font-size: 10px;
+  background: rgba(0, 113, 227, .055);
+  color: #2b5f92;
+  font-size: 12px;
   line-height: 1.5;
 }
 
 .noticeSuccess {
-  border-color: #214f3e;
-  background: #0c1712;
-  color: #90d9b2;
+  border-color: rgba(52, 199, 89, .22);
+  background: rgba(52, 199, 89, .06);
+  color: #248a3d;
 }
 
 .noticeError {
-  border-color: #633243;
-  background: #1d0d14;
-  color: #f2a5b7;
+  border-color: rgba(255, 59, 48, .22);
+  background: rgba(255, 59, 48, .06);
+  color: #b42318;
 }
 
 .helper,
 .disclaimer {
-  color: #6e647a;
-  font-size: 10px;
+  color: #6e6e73;
+  font-size: 12px;
   line-height: 1.55;
 }
 
@@ -215,38 +225,37 @@
 .txLink {
   display: inline-flex;
   margin-top: 10px;
-  color: #b995ff;
-  font: 10px 'DM Mono', monospace;
+  color: #0071e3;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .txLink:hover {
-  color: #e1d3ff;
+  color: #0066cc;
 }
 
 .totalCard {
   display: grid;
   gap: 5px;
   padding: 18px;
-  border: 1px solid #31233f;
-  border-radius: 13px;
-  background: #0d0f12;
+  border: 1px solid #e5e5ea;
+  border-radius: 14px;
+  background: #fbfbfd;
 }
 
 .totalCard span {
-  color: #766b81;
-  font: 11px 'DM Mono', monospace;
-  letter-spacing: 1px;
-  text-transform: uppercase;
+  color: #6e6e73;
+  font-size: 12px;
 }
 
 .totalCard strong {
-  color: #f5efff;
+  color: #1d1d1f;
   font-size: 31px;
   letter-spacing: -1.3px;
 }
 
 .totalCard small {
-  color: #655b6f;
+  color: #86868b;
   font-size: 12px;
 }
 
@@ -262,9 +271,9 @@
   justify-content: space-between;
   gap: 14px;
   padding: 13px;
-  border: 1px solid #21182d;
+  border: 1px solid #e5e5ea;
   border-radius: 11px;
-  background: #0b0712;
+  background: #fbfbfd;
 }
 
 .balanceRow div {
@@ -274,20 +283,21 @@
 }
 
 .balanceRow strong {
-  color: #e8e0f1;
-  font-size: 11px;
+  color: #1d1d1f;
+  font-size: 13px;
 }
 
 .balanceRow > strong {
-  color: #c8b5e6;
-  font: 11px 'DM Mono', monospace;
+  color: #1d1d1f;
+  font-size: 12px;
+  font-weight: 600;
   text-align: right;
   white-space: nowrap;
 }
 
 .balanceRow small {
-  color: #655b6e;
-  font: 8px 'DM Mono', monospace;
+  color: #86868b;
+  font-size: 11px;
 }
 
 .infoBox {
@@ -295,19 +305,19 @@
   gap: 7px;
   margin-top: 14px;
   padding: 13px;
-  border: 1px solid #21182d;
+  border: 1px solid #e5e5ea;
   border-radius: 11px;
-  background: #0c0814;
+  background: #f5f5f7;
 }
 
 .infoBox strong {
-  color: #d8cee4;
-  font-size: 11px;
+  color: #1d1d1f;
+  font-size: 13px;
 }
 
 .infoBox span {
-  color: #756b80;
-  font-size: 10px;
+  color: #6e6e73;
+  font-size: 12px;
   line-height: 1.55;
 }
 
@@ -336,7 +346,7 @@
   }
 
   .card {
-    padding: 16px;
+    padding: 17px;
   }
 
   .cardHeader {
