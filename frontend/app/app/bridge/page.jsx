@@ -90,8 +90,9 @@ function BridgeContent() {
     setLoadingBalance(true);
     setError('');
     try {
-      const raw = await readBalanceRaw();
-      setBalance(raw == null ? null : formatUnits(raw, 6));
+      const data = encodeFunctionData({ abi: ERC20_ABI, functionName: 'balanceOf', args: [address] });
+      const raw = await connectorClient.request({ method: 'eth_call', params: [{ to: source.usdc, data }, 'latest'] });
+      setBalance(formatUnits(BigInt(raw), 6));
     } catch (caughtError) {
       setBalance(null);
       setError(errorText(caughtError));
@@ -273,12 +274,6 @@ function BridgeContent() {
             <strong>Bridge accepted by Tower.</strong>
             <span>Status: {bridgeResult.status || 'pending'}{bridgeResult.estimatedTime ? ` · Estimated time: ${bridgeResult.estimatedTime}` : ''}</span>
             {bridgeResult.transactionHash ? <a href={`${source.explorerUrl}/tx/${bridgeResult.transactionHash}`} target="_blank" rel="noreferrer">View source transaction ↗</a> : <span>Tower did not expose the source transaction hash.</span>}
-            <button type="button" className={styles.refreshButton} onClick={resetFlow}>Start another bridge</button>
-          </div>
-        ) : null}
-          <div className={`${styles.notice} ${styles.noticeSuccess}`}>
-            <strong>Bridge transaction submitted.</strong>
-            <span>The wallet-signed source-chain burn is confirmed and the CCTP message can now settle on {destination.name}.</span>
             <button type="button" className={styles.refreshButton} onClick={resetFlow}>Start another bridge</button>
           </div>
         ) : null}
