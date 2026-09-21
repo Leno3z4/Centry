@@ -16,6 +16,24 @@ function isAddress(value) {
   return typeof value === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value);
 }
 
+function findTransactionHash(value, seen = new Set(), depth = 0) {
+  if (typeof value === 'string' && /^0x[a-fA-F0-9]{64}$/.test(value)) return value;
+  if (!value || typeof value !== 'object' || depth > 6 || seen.has(value)) return null;
+  seen.add(value);
+
+  for (const key of ['transactionHash', 'txHash', 'hash']) {
+    const candidate = value?.[key];
+    if (typeof candidate === 'string' && /^0x[a-fA-F0-9]{64}$/.test(candidate)) return candidate;
+  }
+
+  for (const key of ['transaction', 'tx', 'bridge', 'data', 'result', 'response']) {
+    const nested = findTransactionHash(value?.[key], seen, depth + 1);
+    if (nested) return nested;
+  }
+
+  return null;
+}
+
 export async function POST(request) {
   const apiKey = process.env.TOWER_API_KEY;
   if (!apiKey) {
@@ -63,16 +81,7 @@ export async function POST(request) {
     });
 
     const data = await response.json();
-    const transactionHash = data?.transactionHash
-      || data?.data?.transactionHash
-      || data?.txHash
-      || data?.data?.txHash
-      || data?.result?.transactionHash
-      || data?.result?.txHash
-      || data?.transaction?.hash
-      || data?.data?.transaction?.hash
-      || data?.result?.transaction?.hash
-      || null;
+    const transactionHash = findTransactionHash(data);
     const status = data?.status ?? data?.data?.status ?? data?.result?.status ?? null;
     const estimatedTime = data?.estimatedTime ?? data?.data?.estimatedTime ?? data?.result?.estimatedTime ?? null;
 
