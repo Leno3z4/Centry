@@ -98,8 +98,7 @@
   z-index: 30;
 }
 
-.chainTrigger,
-.destinationBox {
+.chainTrigger {
   display: flex;
   width: 100%;
   min-height: 62px;
@@ -171,8 +170,7 @@
   transform: translateX(2px);
 }
 
-.chainBadge,
-.arcBadge {
+.chainBadge {
   display: grid;
   flex: 0 0 auto;
   width: 34px;
@@ -183,11 +181,6 @@
   background: #1c1229;
   color: #d4b6ff;
   font-weight: 800;
-}
-
-.arcBadge {
-  border-color: #8d64bb;
-  background: #2a183c;
 }
 
 .chainText {
@@ -207,8 +200,7 @@
 }
 
 .chevron,
-.check,
-.locked {
+.check {
   flex: 0 0 auto;
   color: #9e8eac;
   font-size: 12px;
@@ -217,14 +209,6 @@
 .check {
   color: #b38aff;
   font-weight: 800;
-}
-
-.locked {
-  padding: 6px 9px;
-  border: 1px solid #2b2137;
-  border-radius: 999px;
-  background: #0b0712;
-  font-size: 12px;
 }
 
 .arrowButton {
@@ -439,7 +423,4 @@
     grid-template-columns: 1fr auto;
   }
 
-  .locked {
-    display: none;
-  }
 }
