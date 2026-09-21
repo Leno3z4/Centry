@@ -8,6 +8,7 @@ import { AppShell } from '../../../components/AppShell';
 import styles from './bridge.module.css';
 
 const ARC_CHAIN_ID = 5042;
+const TOWER_BRIDGE_ENDPOINT = '/api/tower/bridge';
 const BRIDGE_CHAINS = [
   { id: 'arc-mainnet', chainId: ARC_CHAIN_ID, name: 'Arc Mainnet', short: 'Arc', badge: 'A', usdc: '0x3600000000000000000000000000000000000000', rpcUrl: 'https://rpc.mainnet.arc.io', explorerUrl: 'https://explorer.arc.io', native: { name: 'USDC', symbol: 'USDC', decimals: 18 } },
   { id: 'base-mainnet', chainId: 8453, name: 'Base', short: 'Base', badge: 'B', usdc: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', rpcUrl: 'https://mainnet.base.org', explorerUrl: 'https://basescan.org', native: { name: 'Ether', symbol: 'ETH', decimals: 18 } },
@@ -191,7 +192,7 @@ function BridgeContent() {
       if (isConnected && walletChainId !== source.chainId) await switchToSource();
 
       setStage('submitting');
-      const response = await fetch('/api/tower/bridge', {
+      const response = await fetch(TOWER_BRIDGE_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
