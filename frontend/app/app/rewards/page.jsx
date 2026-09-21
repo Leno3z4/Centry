@@ -329,66 +329,8 @@ function RewardsContent() {
   const epochStatusHint = epochFullyDistributed ? 'All rewards for this epoch are claimed' : active ? 'Claims are live' : pendingForManifest ? 'Timelock is running' : 'Waiting for distribution';
   const newerEpochAvailable = Boolean(latestEpoch !== undefined && manifest?.epoch && latestEpoch > manifestEpoch);
 
-  return (
-    <div className="page-stack">
-      <div className="section-header reward-section-header">
-        <div>
-          <h1>Protocol rewards</h1>
-          <p>Revenue-funded CENT rewards are published by epoch and verified onchain.</p>
-        </div>
-        <div className={`reward-header-status ${epochFullyDistributed ? 'is-complete' : active ? 'is-active' : pendingForManifest ? 'is-progress' : ''}`}>
-          <span className="reward-status-dot" />
-          <span>{epochFullyDistributed ? 'Epoch fully distributed' : active ? 'Epoch active' : pendingForManifest ? 'Epoch in progress' : 'Awaiting distribution'}</span>
-        </div>
-      </div>
 
-      {manifestError ? <div className="notice reward-error">{manifestError}</div> : null}
-      {error ? <div className="notice reward-error">{error}</div> : null}
-      {newerEpochAvailable ? <div className="notice reward-notice">A newer reward epoch is active onchain. Refreshing the published reward data…</div> : null}
-      {notice ? <div className="notice reward-notice">{notice}</div> : null}
-
-      <section className="stats-grid rewards-stats-grid">
-        <div className="metric reward-metric">
-          <span>Current epoch</span>
-          <strong>{manifest?.epoch ?? '—'}</strong>
-          <small>{newerEpochAvailable ? 'Newer epoch detected' : epochFullyDistributed ? 'Fully distributed' : active ? 'Active onchain' : pendingForManifest ? 'Queued onchain' : 'Not active'}</small>
-        </div>
-        <div className="metric reward-metric">
-          <span>Reward budget</span>
-          <strong>{formatCENT(rewardBudgetRaw)} CENT</strong>
-          <small>{epochBudget !== undefined ? 'Onchain budget' : 'Manifest total'}</small>
-        </div>
-        <div className="metric reward-metric">
-          <span>Distributed</span>
-          <strong>{formatCENT(rewardClaimedRaw)} CENT</strong>
-          <small>{epochFullyDistributed ? 'Fully distributed' : 'Claimed from this epoch'}</small>
-        </div>
-        <div className="metric reward-metric reward-status-metric">
-          <span>Root status</span>
-          <strong>{epochStatus}</strong>
-          <small>{epochStatusHint}</small>
-        </div>
-      </section>
-
-      <section className="content-grid rewards-content-grid">
-        <div className="panel panel-large">
-          <div className="panel-head">
-            <div>
-              <h2>veCENT positions</h2>
-            </div>
-          </div>
-          {!isConnected ? (
-            <div className="connect-prompt">Connect your wallet to see rewards attached to your veCENT positions.</div>
-          ) : userPositions.length === 0 ? (
-            <div className="connect-prompt">No eligible veCENT reward position is present in the published manifest.</div>
-          ) : (
-            <div className="reward-position-list">
-              {userPositions.map((position, index) => {
-                const claimed = Boolean(positionState?.[index]?.result);
-                const selfRepayEnabled = isSelfRepayEnabled(index);
-                const claiming = claimingTokenId === String(position.tokenId) || isPending;
-                const configuring = repayActionTokenId === String(position.tokenId);
-                const userRewardTotalRaw = userPositions.reduce((sum, position) => sum + BigInt(position.amount || 0), 0n);
+  const userRewardTotalRaw = userPositions.reduce((sum, position) => sum + BigInt(position.amount || 0), 0n);
   const claimableCount = userPositions.filter((position, index) => (
     active &&
     rootMatches &&
@@ -423,7 +365,7 @@ function RewardsContent() {
           <strong>{formatCENT(userRewardTotalRaw)} CENT</strong>
           <p>
             {userPositions.length > 0
-              ? \`Across \${userPositions.length} veCENT position\${userPositions.length === 1 ? '' : 's'} in the current published epoch.\`
+              ? `Across ${userPositions.length} veCENT position${userPositions.length === 1 ? '' : 's'} in the current published epoch.`
               : 'Connect a wallet with veCENT to see rewards assigned to your positions.'}
           </p>
         </div>
@@ -450,23 +392,11 @@ function RewardsContent() {
           <div className="preference-group">
             <span className="preference-title">Where should rewards go?</span>
             <div className="preference-options" role="radiogroup" aria-label="Reward destination">
-              <button
-                type="button"
-                className={rewardDestination === 'wallet' ? 'preference-option active' : 'preference-option'}
-                role="radio"
-                aria-checked={rewardDestination === 'wallet'}
-                onClick={() => setRewardDestination('wallet')}
-              >
+              <button type="button" className={rewardDestination === 'wallet' ? 'preference-option active' : 'preference-option'} role="radio" aria-checked={rewardDestination === 'wallet'} onClick={() => setRewardDestination('wallet')}>
                 <strong>My wallet</strong>
                 <span>Claim CENT directly to this wallet.</span>
               </button>
-              <button
-                type="button"
-                className={rewardDestination === 'self-repay' ? 'preference-option active' : 'preference-option'}
-                role="radio"
-                aria-checked={rewardDestination === 'self-repay'}
-                onClick={() => setRewardDestination('self-repay')}
-              >
+              <button type="button" className={rewardDestination === 'self-repay' ? 'preference-option active' : 'preference-option'} role="radio" aria-checked={rewardDestination === 'self-repay'} onClick={() => setRewardDestination('self-repay')}>
                 <strong>Self-repay</strong>
                 <span>Use eligible future rewards to repay supported debt.</span>
               </button>
@@ -476,23 +406,11 @@ function RewardsContent() {
           <div className="preference-group">
             <span className="preference-title">Claim cadence</span>
             <div className="preference-options compact" role="radiogroup" aria-label="Claim cadence">
-              <button
-                type="button"
-                className={claimFrequency === 'epoch' ? 'preference-option active' : 'preference-option'}
-                role="radio"
-                aria-checked={claimFrequency === 'epoch'}
-                onClick={() => setClaimFrequency('epoch')}
-              >
+              <button type="button" className={claimFrequency === 'epoch' ? 'preference-option active' : 'preference-option'} role="radio" aria-checked={claimFrequency === 'epoch'} onClick={() => setClaimFrequency('epoch')}>
                 <strong>Every reward epoch</strong>
                 <span>Review and claim when a new allocation is live.</span>
               </button>
-              <button
-                type="button"
-                className={claimFrequency === 'weekly' ? 'preference-option active' : 'preference-option'}
-                role="radio"
-                aria-checked={claimFrequency === 'weekly'}
-                onClick={() => setClaimFrequency('weekly')}
-              >
+              <button type="button" className={claimFrequency === 'weekly' ? 'preference-option active' : 'preference-option'} role="radio" aria-checked={claimFrequency === 'weekly'} onClick={() => setClaimFrequency('weekly')}>
                 <strong>Weekly</strong>
                 <span>Keep this as your preferred review cadence for now.</span>
               </button>
@@ -541,23 +459,8 @@ function RewardsContent() {
                   </div>
 
                   <div className="reward-position-actions">
-                    <button
-                      type="button"
-                      className="primary-btn"
-                      disabled={!canClaim || claiming || configuring}
-                      onClick={() => claimPosition(position, index)}
-                    >
-                      {selfRepayEnabled
-                        ? 'Self-repay active'
-                        : claimed
-                          ? 'Claimed'
-                          : claiming
-                            ? 'Claiming…'
-                            : rewardDestination === 'self-repay'
-                              ? 'Self-repay selected'
-                              : active
-                                ? 'Claim reward'
-                                : 'Not claimable yet'}
+                    <button type="button" className="primary-btn" disabled={!canClaim || claiming || configuring} onClick={() => claimPosition(position, index)}>
+                      {selfRepayEnabled ? 'Self-repay active' : claimed ? 'Claimed' : claiming ? 'Claiming…' : rewardDestination === 'self-repay' ? 'Self-repay selected' : active ? 'Claim reward' : 'Not claimable yet'}
                     </button>
                   </div>
                 </article>
@@ -605,16 +508,11 @@ function RewardsContent() {
                       <strong>veCENT #{position.tokenId}</strong>
                       <span>{formatCENT(position.amount)} CENT current reward allocation</span>
                     </div>
-                    <div className={\`self-repay-state\${selfRepayEnabled ? ' active' : ''}\`}>
+                    <div className={`self-repay-state${selfRepayEnabled ? ' active' : ''}`}>
                       <span className="self-repay-state-dot" />
                       {selfRepayEnabled ? 'Active' : 'Off'}
                     </div>
-                    <button
-                      type="button"
-                      className={selfRepayEnabled ? 'secondary-btn' : 'primary-btn'}
-                      disabled={configuring || isPending}
-                      onClick={() => configureSelfRepay(position, index)}
-                    >
+                    <button type="button" className={selfRepayEnabled ? 'secondary-btn' : 'primary-btn'} disabled={configuring || isPending} onClick={() => configureSelfRepay(position, index)}>
                       {configuring ? 'Updating…' : selfRepayEnabled ? 'Disable self-repay' : 'Enable self-repay'}
                     </button>
                   </div>
@@ -636,18 +534,15 @@ function RewardsContent() {
           <div><span>Timelock</span><strong>{pendingForManifest ? formatCountdown(pendingCountdown) : active ? 'Complete' : '—'}</strong></div>
         </div>
         <div className="reward-progress">
-          <div className="reward-progress-head"><span>Epoch activation</span><strong>{epochFullyDistributed ? 'Complete' : active ? 'Live' : pendingForManifest ? \`\${progressPercent.toFixed(0)}%\` : 'Waiting'}</strong></div>
+          <div className="reward-progress-head"><span>Epoch activation</span><strong>{epochFullyDistributed ? 'Complete' : active ? 'Live' : pendingForManifest ? `${progressPercent.toFixed(0)}%` : 'Waiting'}</strong></div>
           <div className="reward-progress-track">
-            <div
-              className={\`reward-progress-fill \${epochFullyDistributed ? 'complete' : active ? 'complete' : pendingForManifest ? 'running' : ''}\`}
-              style={{ width: \`\${progressPercent}%\` }}
-            />
+            <div className={`reward-progress-fill ${epochFullyDistributed ? 'complete' : active ? 'complete' : pendingForManifest ? 'running' : ''}`} style={{ width: `${progressPercent}%` }} />
           </div>
           <p>{pendingForManifest ? 'The epoch has been queued and is moving through its safety delay before activation.' : epochFullyDistributed ? 'This epoch is fully distributed. The next epoch will appear after a new reward allocation is published and activated.' : active ? 'The epoch is active and rewards can be claimed.' : 'The protocol is waiting for the next distribution to be queued.'}</p>
         </div>
       </details>
 
-      <style jsx global>{\`
+      <style jsx global>{`
         .rewards-page{scroll-margin-top:20px}
         .reward-section-header{align-items:flex-start}
         .reward-header-status{display:inline-flex;align-items:center;gap:9px;align-self:flex-start;padding:11px 14px;border:1px solid #30353b;border-radius:12px;background:#101216;color:#b6bdc6;font-size:12px;font-weight:600}
@@ -751,7 +646,7 @@ function RewardsContent() {
           .reward-progress{margin:0 18px 18px}
           .distribution-detail-grid{padding:0 18px 14px}
         }
-      \`}</style>
+      `}</style>
     </div>
   );
 }
