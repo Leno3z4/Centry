@@ -80,7 +80,9 @@ export default function CreateAgentPage() {
       await apiJson(`${API_BASE}/api/v1/agents/${agentId}/config`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...configAuth, owner: address, autonomy: { ...config.autonomy, provider: config.provider }, policy: config.policy }) });
       setCreatedAccount(account);
       setSetupComplete(true);
-      setStatus('Agent created and configured. Its smart account starts OFF.');
+      setStatus(config.provider && config.model && config.providerKey
+        ? 'Agent created and configured. Its smart account starts OFF.'
+        : 'Agent created. AI provider details can be added later. Its smart account starts OFF.');
     } catch (e) {
       if (createdAccountForRecovery) setCreatedAccount(createdAccountForRecovery);
       setStatus('');
