@@ -77,7 +77,7 @@ function ConfigureContent() {
     try {
       let targetAgent = agent;
 
-      if (agent.type === 'unregistered') {
+      if (agent.registered === false) {
         if (!RUNNER_ADDRESS) {
           throw new Error('Hosted runner address is not configured, so this smart account cannot be registered yet.');
         }
@@ -208,7 +208,7 @@ function ConfigureContent() {
       <header className={styles.header}>
         <div>
           <Link className={styles.backButton} href={`/app/agents/${agent.account}`}>← Agent dashboard</Link>
-          <h1>Configure {agent.name}</h1>
+          <h1>Configure {agent.registered === false ? 'agent' : agent.name}</h1>
           <p>Set the AI provider, behavior and permissions for this existing smart account.</p>
         </div>
       </header>
