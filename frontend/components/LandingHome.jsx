@@ -18,18 +18,6 @@ const PRODUCTS = [
     },
     {
         number: '03',
-        title: 'Rewards',
-        text: 'See what your veCENT positions earned and choose where rewards should go.',
-        href: '/app/rewards',
-    },
-    {
-        number: '04',
-        title: 'Governance',
-        text: 'Lock CENT into veCENT, manage voting power, and shape the protocol.',
-        href: '/app/governance',
-    },
-    {
-        number: '05',
         title: 'Automation',
         text: 'Create controlled agents with explicit permissions and wallet-owned smart accounts.',
         href: '/app/agents',
@@ -58,9 +46,9 @@ export default function LandingHome() {
 
             <section className="landing-home-hero">
                 <div className="landing-home-kicker">CENTRY PROTOCOL</div>
-                <h1>Trade, lend,<br />earn, govern.</h1>
+                <h1>Trade, lend,<br />automate.</h1>
                 <p>
-                    Centry brings markets, rewards, governance, and controlled automation into one system.
+                    Centry brings markets, liquidity, swaps, and controlled automation into one system.
                 </p>
                 <div className="landing-home-actions">
                     <Link href="/app" className="landing-home-primary">Enter Centry</Link>
@@ -108,7 +96,7 @@ export default function LandingHome() {
                 <div>
                     <span>READY WHEN YOU ARE</span>
                     <h2>Start with what you need.</h2>
-                    <p>Trade, manage liquidity, earn through veCENT, govern with your locked position, or build controlled automation.</p>
+                    <p>Trade, manage liquidity, or build controlled automation from one place.</p>
                 </div>
                 <Link href="/app" className="landing-home-primary">Launch app</Link>
             </section>
