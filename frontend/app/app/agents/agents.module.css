@@ -626,6 +626,37 @@
   line-height: 1.2;
 }
 
+.agentBalanceGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.agentBalanceCard {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #202020;
+  border-radius: 14px;
+  background: #111111;
+}
+
+.agentBalanceCard span,
+.agentBalanceCard small {
+  display: block;
+  color: rgba(255,255,255,.78);
+  font-size: 12px;
+}
+
+.agentBalanceCard strong {
+  display: block;
+  margin: 10px 0 5px;
+  color: #ffffff;
+  font-size: 22px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
 .analyticsGrid {
   display: grid;
   grid-template-columns: 1.25fr .75fr;
@@ -820,6 +851,10 @@
     grid-template-columns: 1fr 1fr;
   }
 
+  .agentBalanceGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .scopeGrid {
     grid-template-columns: 1fr;
   }
@@ -851,6 +886,10 @@
   }
 
   .statsLarge {
+    grid-template-columns: 1fr;
+  }
+
+  .agentBalanceGrid {
     grid-template-columns: 1fr;
   }
 
