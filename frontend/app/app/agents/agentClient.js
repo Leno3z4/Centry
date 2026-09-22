@@ -115,11 +115,12 @@ export async function loadOwnedAgents({ address, publicClient }) {
 
   const agents = [];
   for (const account of rawAccounts) {
+    let agent;
     try {
-      agents.push(await apiJson(`${API_BASE}/api/v1/agents/account/${account}`));
+      agent = await apiJson(`${API_BASE}/api/v1/agents/account/${account}`);
     } catch (error) {
       if (error?.status !== 404) throw error;
-      agents.push({
+      agent = {
         id: account,
         account,
         owner: address,
@@ -129,8 +130,21 @@ export async function loadOwnedAgents({ address, publicClient }) {
         type: 'unregistered',
         active: false,
         config: null,
-      });
+      };
     }
+
+    // `active` is onchain state. Do not trust the persisted DB copy after an
+    // owner transaction changes the smart account.
+    const liveActive = await publicClient.readContract({
+      address: account,
+      abi: ACCOUNT_ABI,
+      functionName: 'active',
+    });
+
+    agents.push({
+      ...agent,
+      active: Boolean(liveActive),
+    });
   }
   return agents;
 }
