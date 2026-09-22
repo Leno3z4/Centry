@@ -20,9 +20,9 @@
 
 .docs-sidebar-links a {
   padding: 8px 10px;
-  border: 1px solid #e5e5ea;
+  border: 1px solid var(--line);
   border-radius: 9px;
-  color: #6e6e73;
+  color: var(--muted-2);
   font-size: 11px;
 }
 
@@ -63,8 +63,8 @@
     padding: 0 14px;
     border: 1px solid #34373c;
     border-radius: 13px;
-    background: #111214;
-    color: #fff;
+    background: var(--panel-2);
+    color: var(--text);
     box-shadow: 0 10px 28px rgba(0,0,0,.35);
     font-size: 12px;
     font-weight: 600;
@@ -124,8 +124,8 @@
     height: 38px;
     border: 1px solid #34373c;
     border-radius: 10px;
-    background: #15171a;
-    color: #fff;
+    background: #161616;
+    color: var(--text);
     font-size: 24px;
     line-height: 1;
   }
@@ -143,7 +143,7 @@
     padding: 0 13px;
     border: 1px solid #24272b;
     border-radius: 11px;
-    background: #111214;
+    background: var(--panel-2);
     color: #e6e7e9;
     font-size: 13px;
   }
