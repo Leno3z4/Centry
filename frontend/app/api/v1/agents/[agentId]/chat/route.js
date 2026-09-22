@@ -50,7 +50,7 @@ export async function POST(request, { params }) {
   if (!message) return Response.json({ error: "message_required" }, { status: 400 });
 
   try {
-    await verifyOwnerAuthorization({
+    const authorization = await verifyOwnerAuthorization({
       rpcUrl: process.env.CENTRY_AGENT_RPC_URL,
       challengeToken: body.challengeToken,
       signature: body.signature,
