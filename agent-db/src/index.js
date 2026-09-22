@@ -80,9 +80,8 @@ async function runOperation(db, operation, args) {
         `INSERT INTO centry_agents
           (id, owner, account, type, template_id, name, description, operator, metadata_uri, config_json, price_usd_cents, active, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT(id) DO UPDATE SET
+          ON CONFLICT(account) DO UPDATE SET
             owner=excluded.owner,
-            account=excluded.account,
             type=excluded.type,
             template_id=excluded.template_id,
             name=excluded.name,
@@ -109,8 +108,8 @@ async function runOperation(db, operation, args) {
         agent.createdAt || now,
         now,
       ).run().then(() => db.prepare(
-        "SELECT * FROM centry_agents WHERE id = ? LIMIT 1"
-      ).bind(agent.id).first());
+        "SELECT * FROM centry_agents WHERE lower(account) = lower(?) LIMIT 1"
+      ).bind(agent.account).first());
     }
 
     case "set_agent_active": {
