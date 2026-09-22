@@ -433,3 +433,45 @@ main, section, article, aside, nav, header, footer { border-color: #2a2a2a; }
     padding-right: 8px !important;
   }
 }
+
+
+/* Accessibility pass — keep the black/visible-grey visual system while improving keyboard and mobile use. */
+:focus-visible {
+  outline: 3px solid #0a84ff !important;
+  outline-offset: 3px !important;
+}
+
+/* Keep secondary/technical copy visibly grey instead of low-contrast near-black text. */
+.protocol-stat > span,
+.protocol-stat > em,
+.network-card small,
+.chain-id,
+.sidebar-footer span,
+.wallet-empty-state span,
+.form-card p,
+.form-meta,
+.landing-home-product-number,
+.protocol-stat > strong small,
+.protocol-stats-live,
+.protocol-stats-live i {
+  color: rgba(255,255,255,.72) !important;
+}
+
+/* The green status indicator itself remains green; the label text gets readable contrast. */
+.protocol-stats-live i {
+  background: #34c759 !important;
+  box-shadow: none !important;
+}
+
+@media (max-width: 760px) {
+  /* Ensure compact controls and icon buttons meet a comfortable touch size. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .market-list-item {
+    min-height: 44px;
+  }
+}
