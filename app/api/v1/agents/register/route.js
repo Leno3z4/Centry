@@ -55,8 +55,12 @@ export async function POST(request) {
       account: getAddress(account),
       type: ["custom", "standard", "purchased"].includes(body.type) ? body.type : "purchased",
       templateId: body.templateId || templateId,
-      name: body.name || "Centry Agent",
-      description: body.description || "",
+      name: !body.name || /^unregistered agent$/i.test(String(body.name).trim())
+        ? "Centry Agent"
+        : String(body.name).trim(),
+      description: !body.description || /^agent account created onchain; finish registration to configure it\.?$/i.test(String(body.description).trim())
+        ? "Configurable Centry onchain agent."
+        : String(body.description).trim(),
       operator: body.operator && isAddress(body.operator) ? getAddress(body.operator) : null,
       metadataURI: body.metadataURI || metadataURI || "",
       config: body.config && typeof body.config === "object" ? body.config : {},
