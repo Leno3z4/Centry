@@ -169,9 +169,6 @@ export default function LandingHome() {
                     .landing-home-explore-grid { grid-template-columns: 1fr; }
                     .landing-home-cta { grid-template-columns: 1fr; padding: 28px 22px; }
                     .landing-home-cta .landing-home-primary { justify-self: stretch; }
-                    .landing-home-footer { grid-template-columns: 1fr; gap: 30px; }
-                    .landing-home-footer-links { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-bottom: 0; }
-                    .landing-home-footer-bottom { align-items: flex-start; flex-direction: column; }
                 }
 
                 /* Unified Centry / Apple flagship palette. */
