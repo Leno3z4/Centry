@@ -138,9 +138,9 @@ export default function Page() {
                     ['Earn', 'Revenue → CENT rewards'],
                     ['Repay', 'Rewards can repay debt'],
                   ].map(([title, text]) => (
-                    <div key={title} style={{ padding: 14, border: '1px solid #e5e5ea', borderRadius: 11, background: '#fbfbfd' }}>
+                    <div key={title} style={{ padding: 14, border: '1px solid var(--line)', borderRadius: 11, background: 'var(--panel-2)' }}>
                       <strong style={{ display: 'block', fontSize: 12 }}>{title}</strong>
-                      <span style={{ display: 'block', marginTop: 6, color: '#6e6e73', fontSize: 10, lineHeight: 1.5 }}>{text}</span>
+                      <span style={{ display: 'block', marginTop: 6, color: 'var(--muted-2)', fontSize: 10, lineHeight: 1.5 }}>{text}</span>
                     </div>
                   ))}
                 </div>
@@ -156,20 +156,20 @@ export default function Page() {
                   grow over time without storing a fixed balance per account.
                 </p>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginTop: 16 }}>
-                  <div style={{ padding: 14, border: '1px solid #e5e5ea', borderRadius: 11 }}>
+                  <div style={{ padding: 14, border: '1px solid var(--line)', borderRadius: 11 }}>
                     <strong style={{ fontSize: 11 }}>Supply</strong>
                     <p className="panel-copy" style={{ marginBottom: 0 }}>Deposit an active reserve and receive an interest-bearing scaled position.</p>
                   </div>
-                  <div style={{ padding: 14, border: '1px solid #e5e5ea', borderRadius: 11 }}>
+                  <div style={{ padding: 14, border: '1px solid var(--line)', borderRadius: 11 }}>
                     <strong style={{ fontSize: 11 }}>Borrow</strong>
                     <p className="panel-copy" style={{ marginBottom: 0 }}>Borrow supported debt only when the account remains within its collateral limits.</p>
                   </div>
-                  <div style={{ padding: 14, border: '1px solid #e5e5ea', borderRadius: 11 }}>
+                  <div style={{ padding: 14, border: '1px solid var(--line)', borderRadius: 11 }}>
                     <strong style={{ fontSize: 11 }}>Liquidation</strong>
                     <p className="panel-copy" style={{ marginBottom: 0 }}>Unhealthy accounts can be liquidated, repaying debt and seizing collateral with the configured bonus.</p>
                   </div>
                 </div>
-                <div style={{ marginTop: 16, padding: 14, border: '1px solid #e5e5ea', borderRadius: 11, background: '#fbfbfd' }}>
+                <div style={{ marginTop: 16, padding: 14, border: '1px solid var(--line)', borderRadius: 11, background: 'var(--panel-2)' }}>
                   <div className="section-kicker">CURRENT ARC MAINNET CONFIGURATION</div>
                   <p className="panel-copy" style={{ marginBottom: 0 }}>
                     Arc mainnet chain ID: <code>5042</code>. The live USDC reserve uses the Arc native USDC ERC-20 interface.
@@ -187,16 +187,16 @@ export default function Page() {
                   The position can be increased or extended while it is active.
                 </p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 16 }}>
-                  <div style={{ padding: 14, border: '1px solid #e5e5ea', borderRadius: 11 }}>
+                  <div style={{ padding: 14, border: '1px solid var(--line)', borderRadius: 11 }}>
                     <strong style={{ fontSize: 11 }}>Lock</strong>
                     <p className="panel-copy" style={{ marginBottom: 0 }}>CENT is escrowed in the veCENT contract and the position receives voting-power accounting over time.</p>
                   </div>
-                  <div style={{ padding: 14, border: '1px solid #e5e5ea', borderRadius: 11 }}>
+                  <div style={{ padding: 14, border: '1px solid var(--line)', borderRadius: 11 }}>
                     <strong style={{ fontSize: 11 }}>Withdraw</strong>
                     <p className="panel-copy" style={{ marginBottom: 0 }}>A mature position can withdraw its full amount. Early withdrawal applies the protocol&apos;s configured 25% fee split.</p>
                   </div>
                 </div>
-                <div style={{ marginTop: 16, padding: 14, border: '1px solid #d2d2d7', borderRadius: 11, background: '#fff4e5' }}>
+                <div style={{ marginTop: 16, padding: 14, border: '1px solid var(--line)', borderRadius: 11, background: 'var(--panel-2)' }}>
                   <strong style={{ fontSize: 11 }}>Early withdrawal economics</strong>
                   <p className="panel-copy" style={{ margin: '7px 0 0' }}>
                     Early withdrawal returns 75% of the locked amount. Of the 25% fee, 60% is routed to the rewards controller
@@ -221,10 +221,10 @@ export default function Page() {
                     ['4', 'Queue', 'The root and reward budget are queued with a 2-day activation delay.'],
                     ['5', 'Claim', 'Position owners claim by tokenId using the published amount and Merkle proof.'],
                   ].map(([n, title, text]) => (
-                    <div key={n} style={{ display: 'grid', gridTemplateColumns: '34px 110px minmax(0, 1fr)', gap: 10, alignItems: 'start', padding: 12, border: '1px solid #e5e5ea', borderRadius: 10 }}>
+                    <div key={n} style={{ display: 'grid', gridTemplateColumns: '34px 110px minmax(0, 1fr)', gap: 10, alignItems: 'start', padding: 12, border: '1px solid var(--line)', borderRadius: 10 }}>
                       <span style={{ color: '#0071e3', font: '10px DM Mono, monospace' }}>{n}</span>
                       <strong style={{ fontSize: 11 }}>{title}</strong>
-                      <span style={{ color: '#6e6e73', fontSize: 10, lineHeight: 1.6 }}>{text}</span>
+                      <span style={{ color: 'var(--muted-2)', fontSize: 10, lineHeight: 1.6 }}>{text}</span>
                     </div>
                   ))}
                 </div>
@@ -245,8 +245,8 @@ export default function Page() {
                 </p>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 9, marginTop: 16 }}>
                   {['Reward claim', 'Swap CENT', 'Repay debt', 'Return leftover'].map((step, index) => (
-                    <div key={step} style={{ padding: 14, border: '1px solid #e5e5ea', borderRadius: 11 }}>
-                      <span style={{ color: '#6e6e73', font: '9px DM Mono, monospace' }}>0{index + 1}</span>
+                    <div key={step} style={{ padding: 14, border: '1px solid var(--line)', borderRadius: 11 }}>
+                      <span style={{ color: 'var(--muted-2)', font: '9px DM Mono, monospace' }}>0{index + 1}</span>
                       <strong style={{ display: 'block', marginTop: 7, fontSize: 11 }}>{step}</strong>
                     </div>
                   ))}
@@ -284,13 +284,13 @@ export default function Page() {
                 <p className="panel-copy">These are the protocol addresses currently configured by the frontend.</p>
                 <div style={{ display: 'grid', gap: 7, marginTop: 14 }}>
                   {addressRows.map(([label, address]) => (
-                    <div key={label} style={{ display: 'grid', gridTemplateColumns: '190px minmax(0, 1fr)', gap: 12, alignItems: 'center', padding: '10px 12px', border: '1px solid #e5e5ea', borderRadius: 9, background: '#fbfbfd' }}>
+                    <div key={label} style={{ display: 'grid', gridTemplateColumns: '190px minmax(0, 1fr)', gap: 12, alignItems: 'center', padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 9, background: 'var(--panel-2)' }}>
                       <strong style={{ fontSize: 10 }}>{label}</strong>
-                      <code style={{ color: '#1d1d1f', fontSize: 10, overflowWrap: 'anywhere' }}>{address || 'Not configured'}</code>
+                      <code style={{ color: 'var(--text)', fontSize: 10, overflowWrap: 'anywhere' }}>{address || 'Not configured'}</code>
                     </div>
                   ))}
                 </div>
-                <div style={{ marginTop: 14, padding: 12, border: '1px solid #e5e5ea', borderRadius: 9 }}>
+                <div style={{ marginTop: 14, padding: 12, border: '1px solid var(--line)', borderRadius: 9 }}>
                   <div className="section-kicker">ASSETS</div>
                   <p className="panel-copy" style={{ marginBottom: 0 }}>
                     Arc native USDC: <code>{CONTRACT_ADDRESSES.USDC}</code> · EURC: <code>{CONTRACT_ADDRESSES.EURC}</code> ·
@@ -307,19 +307,19 @@ export default function Page() {
                   live mainnet infrastructure. Review current onchain configuration before relying on these values.
                 </p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 16 }}>
-                  <div style={{ padding: 14, border: '1px solid #e5e5ea', borderRadius: 11 }}>
+                  <div style={{ padding: 14, border: '1px solid var(--line)', borderRadius: 11 }}>
                     <strong style={{ fontSize: 11 }}>Oracles</strong>
                     <p className="panel-copy" style={{ marginBottom: 0 }}>Borrowing and liquidation safety depend on fresh, correctly normalized price data.</p>
                   </div>
-                  <div style={{ padding: 14, border: '1px solid #e5e5ea', borderRadius: 11 }}>
+                  <div style={{ padding: 14, border: '1px solid var(--line)', borderRadius: 11 }}>
                     <strong style={{ fontSize: 11 }}>Smart contracts</strong>
                     <p className="panel-copy" style={{ marginBottom: 0 }}>Independent security review is required before any production/mainnet use.</p>
                   </div>
-                  <div style={{ padding: 14, border: '1px solid #e5e5ea', borderRadius: 11 }}>
+                  <div style={{ padding: 14, border: '1px solid var(--line)', borderRadius: 11 }}>
                     <strong style={{ fontSize: 11 }}>Mainnet parameters</strong>
                     <p className="panel-copy" style={{ marginBottom: 0 }}>USDC limits and risk settings are development values and can change as the system is tested.</p>
                   </div>
-                  <div style={{ padding: 14, border: '1px solid #e5e5ea', borderRadius: 11 }}>
+                  <div style={{ padding: 14, border: '1px solid var(--line)', borderRadius: 11 }}>
                     <strong style={{ fontSize: 11 }}>Automation</strong>
                     <p className="panel-copy" style={{ marginBottom: 0 }}>Keepers coordinate execution, but the contracts verify proofs, permissions, outputs, and repayments on-chain.</p>
                   </div>
