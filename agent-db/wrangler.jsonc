@@ -3,6 +3,9 @@
   "name": "centry-agent-db",
   "main": "src/index.js",
   "compatibility_date": "2026-09-19",
+  "secrets": {
+    "required": ["CENTRY_AGENT_DB_SECRET"]
+  },
   "d1_databases": [
     {
       "binding": "DB",
