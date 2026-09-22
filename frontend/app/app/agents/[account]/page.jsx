@@ -62,12 +62,29 @@ function DashboardContent() {
 
   async function toggleActive() {
     setError(''); setStatus('');
+    const nextActive = !agent.active;
     try {
-      setStatus(agent.active ? 'Pausing agent…' : 'Activating agent…');
-      const hash = await writeContractAsync({ address: agent.account, abi: ACCOUNT_ABI, functionName: 'setActive', args: [!agent.active] });
-      await publicClient.waitForTransactionReceipt({ hash }); await refresh();
-      setStatus(agent.active ? 'Agent paused.' : 'Agent activated.');
-    } catch (e) { setError(e?.shortMessage || e?.message || 'Agent state change failed.'); setStatus(''); }
+      setStatus(nextActive ? 'Activating agent…' : 'Pausing agent…');
+      const hash = await writeContractAsync({
+        address: agent.account,
+        abi: ACCOUNT_ABI,
+        functionName: 'setActive',
+        args: [nextActive],
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+
+      const liveActive = await publicClient.readContract({
+        address: agent.account,
+        abi: ACCOUNT_ABI,
+        functionName: 'active',
+      });
+
+      await refresh();
+      setStatus(liveActive ? 'Agent activated.' : 'Agent paused.');
+    } catch (e) {
+      setError(e?.shortMessage || e?.message || 'Agent state change failed.');
+      setStatus('');
+    }
   }
 
   async function loadActivity() {
