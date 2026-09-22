@@ -11,7 +11,7 @@ import { useGatewayFunding } from '../../../hooks/useGatewayFunding';
 import BalanceSourceSelector from '../../../components/BalanceSourceSelector';
 import styles from './swap.module.css';
 
-const LIVE_MARKETS = SWAP_MARKETS.filter((market) => market.status === 'live' && market.address);
+const LIVE_MARKETS = SWAP_MARKETS.filter((market) => market.status === 'live' && market.address && market.id !== 'cent');
 const ARC_CHAIN_ID = 5042;
 function safeNumber(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
 
