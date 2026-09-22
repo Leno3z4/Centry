@@ -1,28 +1,17 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useEffect, useMemo, useState } from 'react';
-import { useAccount, useReadContract, useReadContracts } from 'wagmi';
-import { formatUnits } from 'viem';
+import { useMemo } from 'react';
+import { useAccount, useReadContracts } from 'wagmi';
 import { Providers } from '../../components/Providers';
 import { AppShell } from '../../components/AppShell';
 import { ACTIVE_MARKETS } from '../../constants/markets';
 import { CONTRACT_ADDRESSES } from '../../constants/contracts';
-import { LENDING_POOL_ABI, VE_CENTRY_ABI } from '../../constants/abis';
+import { LENDING_POOL_ABI } from '../../constants/abis';
 import { useMultiMarketLending } from '../../hooks/useMultiMarketLending';
-import { useVeGovernance } from '../../hooks/useVeGovernance';
 
 const AeroShards = dynamic(() => import('../../components/AeroShards'), { ssr: false, loading: () => null });
 
-const ARC_CHAIN_ID = 5042;
-const ZERO_ROOT = `0x${'0'.repeat(64)}`;
-const REWARDS_ABI = [
-  { type: 'function', name: 'latestEpoch', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
-  { type: 'function', name: 'epochRoots', stateMutability: 'view', inputs: [{ name: 'epoch', type: 'uint256' }], outputs: [{ type: 'bytes32' }] },
-  { type: 'function', name: 'epochRewardBudget', stateMutability: 'view', inputs: [{ name: 'epoch', type: 'uint256' }], outputs: [{ type: 'uint256' }] },
-  { type: 'function', name: 'epochClaimed', stateMutability: 'view', inputs: [{ name: 'epoch', type: 'uint256' }], outputs: [{ type: 'uint256' }] },
-  { type: 'function', name: 'pendingEpochs', stateMutability: 'view', inputs: [{ name: 'epoch', type: 'uint256' }], outputs: [{ name: 'root', type: 'bytes32' }, { name: 'rewardBudget', type: 'uint256' }, { name: 'readyAt', type: 'uint40' }] },
-];
 
 function formatNumber(value, digits = 1) {
   const number = Number(value || 0);
@@ -31,21 +20,6 @@ function formatNumber(value, digits = 1) {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
-}
-
-function formatCENT(value) {
-  try {
-    return formatNumber(Number(formatUnits(BigInt(String(value ?? 0)), 18)), 1);
-  } catch {
-    return '0.0';
-  }
-}
-
-function formatCountdown(seconds) {
-  if (seconds <= 0) return 'Ready soon';
-  const days = Math.floor(seconds / 86400);
-  const hours = Math.floor((seconds % 86400) / 3600);
-  return `${days}d ${hours}h`;
 }
 
 function HealthMeter({ percent, factor }) {
@@ -66,10 +40,9 @@ function HealthMeter({ percent, factor }) {
 }
 
 function OverviewContent() {
-  const { address, isConnected } = useAccount();
+  const { isConnected } = useAccount();
   const firstMarket = useMemo(() => ACTIVE_MARKETS[0], []);
   const lending = useMultiMarketLending(firstMarket?.address, firstMarket?.decimals);
-  const governance = useVeGovernance();
   const marketConfigContracts = useMemo(
     () => ACTIVE_MARKETS.map((market) => ({
       address: CONTRACT_ADDRESSES.lendingPool,
@@ -83,85 +56,6 @@ function OverviewContent() {
     contracts: marketConfigContracts,
     query: { enabled: Boolean(CONTRACT_ADDRESSES.lendingPool) },
   });
-  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Math.floor(Date.now() / 1000)), 60000);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  const rewardEpochGuess = useReadContract({
-    address: CONTRACT_ADDRESSES.veCentryRewards,
-    abi: REWARDS_ABI,
-    functionName: 'latestEpoch',
-    query: { enabled: true },
-  });
-  const latestEpoch = rewardEpochGuess.data ?? 0n;
-  const { data: latestRewardRoot } = useReadContract({
-    address: CONTRACT_ADDRESSES.veCentryRewards,
-    abi: REWARDS_ABI,
-    functionName: 'epochRoots',
-    args: [latestEpoch],
-    query: { enabled: latestEpoch > 0n },
-  });
-  const { data: latestRewardBudget } = useReadContract({
-    address: CONTRACT_ADDRESSES.veCentryRewards,
-    abi: REWARDS_ABI,
-    functionName: 'epochRewardBudget',
-    args: [latestEpoch],
-    query: { enabled: latestEpoch > 0n },
-  });
-  const { data: latestRewardClaimed } = useReadContract({
-    address: CONTRACT_ADDRESSES.veCentryRewards,
-    abi: REWARDS_ABI,
-    functionName: 'epochClaimed',
-    args: [latestEpoch],
-    query: { enabled: latestEpoch > 0n },
-  });
-  const nextEpoch = latestEpoch + 1n;
-  const pendingEpoch = useReadContract({
-    address: CONTRACT_ADDRESSES.veCentryRewards,
-    abi: REWARDS_ABI,
-    functionName: 'pendingEpochs',
-    args: [nextEpoch],
-    query: { enabled: nextEpoch > 0n },
-  });
-
-  const pendingRoot = pendingEpoch.data?.[0] || ZERO_ROOT;
-  const readyAt = Number(pendingEpoch.data?.[2] || 0n);
-  const rewardPending = pendingRoot !== ZERO_ROOT && readyAt > 0;
-  const pendingCountdown = rewardPending ? Math.max(0, readyAt - now) : 0;
-  const hasLatestRewardRoot = latestRewardRoot && String(latestRewardRoot).toLowerCase() !== ZERO_ROOT.toLowerCase();
-  const latestRewardBudgetValue = BigInt(latestRewardBudget || 0n);
-  const latestRewardClaimedValue = BigInt(latestRewardClaimed || 0n);
-  const rewardFullyClaimed = Boolean(
-    hasLatestRewardRoot &&
-    latestRewardBudgetValue > 0n &&
-    latestRewardClaimedValue >= latestRewardBudgetValue,
-  );
-  const rewardActive = Boolean(
-    hasLatestRewardRoot &&
-    latestRewardBudgetValue > 0n &&
-    latestRewardClaimedValue < latestRewardBudgetValue,
-  );
-  const rewardStatus = rewardActive
-    ? 'ACTIVE'
-    : rewardFullyClaimed
-      ? 'FULLY CLAIMED'
-      : rewardPending
-        ? 'PREPARING'
-        : 'AWAITING';
-  const rewardStatusHint = rewardActive
-    ? 'Claims available'
-    : rewardFullyClaimed
-      ? 'Current epoch fully claimed'
-      : rewardPending
-        ? formatCountdown(pendingCountdown)
-        : 'No active reward epoch';
-  const rewardEpochLabel = rewardPending ? 'Next allocation' : rewardActive ? 'Current epoch' : 'Next allocation';
-  const rewardEpochValue = rewardPending ? nextEpoch : latestEpoch;
-  const walletVotingPower = governance.votingPower;
-
   return (
     <div className="page-stack">
       <div className="overview-aero-background" aria-hidden="true">
@@ -252,25 +146,6 @@ function OverviewContent() {
           <div className="panel-head"><div><h2>Your position</h2></div></div>
           {isConnected ? <HealthMeter percent={lending.healthFactorPercent} factor={lending.healthFactor} /> : <div className="connect-prompt">Connect your wallet to see account health and position details.</div>}
           <a className="secondary-btn full-btn" href="/app/portfolio">View portfolio</a>
-        </div>
-      </section>
-
-      <section className="content-grid overview-bottom-grid">
-        <div className="panel">
-          <div className="panel-head"><div><h2>Voting power</h2></div><a className="text-link" href="/app/governance">Manage →</a></div>
-          <div className="overview-feature-number">{isConnected ? formatNumber(walletVotingPower, 1) : '—'}</div>
-          <div className="overview-feature-label">Voting power</div>
-          <div className="overview-inline-stats">
-            <span>Locked <strong>{isConnected ? formatNumber(governance.lockedAmount, 1) + ' CENT' : '—'}</strong></span>
-            <span>veCENT positions <strong>{isConnected ? governance.veBalance : '—'}</strong></span>
-          </div>
-          <p className="panel-copy overview-card-copy">Lock CENT to get voting power and share in protocol rewards.</p>
-        </div>
-        <div className="panel">
-          <div className="panel-head"><div><h2>Rewards</h2></div><a className="text-link" href="/app/rewards">Open →</a></div>
-          <div className="overview-reward-row"><div><span className="overview-feature-label">{rewardEpochLabel}</span><strong className="overview-reward-value">{rewardEpochValue.toString()}</strong></div><div className="overview-reward-right"><span className={`reward-mini-status ${rewardActive ? 'live' : rewardPending ? 'pending' : 'idle'}`}>{rewardStatus}</span><small>{rewardStatusHint}</small></div></div>
-          <div className="overview-reward-line"><span>Voting power</span><strong>{isConnected ? formatNumber(walletVotingPower, 1) : '—'}</strong></div>
-          <div className="overview-reward-line"><span>Reward destination</span><strong>Wallet or self-repay</strong></div>
         </div>
       </section>
 
