@@ -229,6 +229,7 @@ function OverviewContent() {
                 : reserveActive
                   ? 'Active'
                   : 'Inactive';
+              const marketIcon = market.symbol === 'cirBTC' ? '₿' : market.symbol === 'EURC' ? '€' : '$';
               return (
                 <a
                   key={market.id}
@@ -236,7 +237,14 @@ function OverviewContent() {
                   className="market-list-item"
                 >
                   <div className="asset">
-                    <span className="token usdc">{market.symbol === 'cirBTC' ? '₿' : market.symbol === 'EURC' ? '€' : '
+                    <span className="token usdc">{marketIcon}</span>
+                    <div><strong>{market.symbol}</strong><small>{market.name}</small></div>
+                  </div>
+                  <div><span>Status</span><strong className={reserveActive ? 'status-live' : ''}>{reserveStatus}</strong></div>
+                  <span className="market-arrow">Open</span>
+                </a>
+              );
+            })}
           </div>
         </div>
 
