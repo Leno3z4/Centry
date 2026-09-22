@@ -63,7 +63,12 @@ export async function POST(request, { params }) {
     if (!config) return Response.json({ error: "provider_not_configured" }, { status: 400 });
 
     const history = await listAgentChatMessages(agentId, 24);
-    const activity = await getAgentActivity(agent.account, process.env.CENTRY_AGENT_RPC_URL);
+    let activity = [];
+    try {
+      activity = await getAgentActivity(agent.account, process.env.CENTRY_AGENT_RPC_URL);
+    } catch (activityError) {
+      console.warn("[agent-chat] activity lookup unavailable", activityError);
+    }
     const agentContext = [
       `You are ${agent.name}, a user-owned Centry agent.`,
       `Account: ${agent.account}`,
