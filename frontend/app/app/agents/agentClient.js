@@ -96,7 +96,11 @@ export function defaultAgentConfig() {
 export async function apiJson(url, init) {
   const response = await fetch(url, init);
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body?.error || `Request failed (${response.status})`);
+  if (!response.ok) {
+    const error = new Error(body?.error || `Request failed (${response.status})`);
+    error.status = response.status;
+    throw error;
+  }
   return body;
 }
 
@@ -113,7 +117,8 @@ export async function loadOwnedAgents({ address, publicClient }) {
   for (const account of rawAccounts) {
     try {
       agents.push(await apiJson(`${API_BASE}/api/v1/agents/account/${account}`));
-    } catch {
+    } catch (error) {
+      if (error?.status !== 404) throw error;
       agents.push({
         id: account,
         account,
