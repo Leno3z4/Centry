@@ -143,7 +143,213 @@ export default function LandingHome() {
                 .landing-home-nav,
                 .landing-home-hero,
                 .landing-home-section,
-                .landing-home-cta,
+                .landing-home-cta {
+                    position: relative;
+                    z-index: 1;
+                    width: var(--landing-home-content);
+                    margin-inline: auto;
+                }
+
+                .landing-home-nav {
+                    min-height: 76px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 24px;
+                    border: 1px solid rgba(255,255,255,.09);
+                    border-top-color: rgba(255,255,255,.15);
+                    border-radius: 0 0 18px 18px;
+                    padding: 0 18px;
+                    background: rgba(13,13,13,.62);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 18px 45px rgba(0,0,0,.22);
+                    backdrop-filter: blur(18px) saturate(135%);
+                    -webkit-backdrop-filter: blur(18px) saturate(135%);
+                }
+
+                .landing-home-brand {
+                    font-family: var(--display-font, Georgia, serif);
+                    font-size: 25px;
+                    letter-spacing: -.5px;
+                }
+
+                .landing-home-nav-links {
+                    display: flex;
+                    align-items: center;
+                    gap: 24px;
+                    color: #91869f;
+                    font-size: 11px;
+                }
+
+                .landing-home-nav-links a:hover { color: #fff; }
+
+                .landing-home-open {
+                    padding: 9px 14px;
+                    border: 1px solid #2a2a2a;
+                    border-radius: 999px;
+                    color: #ffffff !important;
+                    background: #111111;
+                    font-weight: 600;
+                }
+
+                .landing-home-hero {
+                    padding: 130px 0 120px;
+                    text-align: center;
+                }
+
+                .landing-home-kicker,
+                .landing-home-section-heading > span,
+                .landing-home-cta > div > span {
+                    color: rgba(255,255,255,.60);
+                    font: 9px/1.5 'DM Mono', monospace;
+                    letter-spacing: 1.8px;
+                }
+
+                .landing-home-hero h1 {
+                    margin: 18px 0 20px;
+                    font-family: var(--display-font, Georgia, serif);
+                    font-size: clamp(64px, 10vw, 116px);
+                    line-height: .9;
+                    letter-spacing: -5px;
+                    font-weight: 400;
+                    color: #ffffff;
+                }
+
+                .landing-home-hero p {
+                    max-width: 610px;
+                    margin: 0 auto;
+                    color: rgba(255,255,255,.78);
+                    font-size: 14px;
+                    line-height: 1.8;
+                }
+
+                .landing-home-actions {
+                    display: flex;
+                    justify-content: center;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                    margin-top: 30px;
+                }
+
+                .landing-home-primary,
+                .landing-home-secondary {
+                    min-height: 46px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 0 18px;
+                    border-radius: 10px;
+                    font-size: 11px;
+                }
+
+                .landing-home-primary {
+                    border: 1px solid #0a84ff;
+                    background: #0a84ff;
+                    color: #ffffff;
+                    font-weight: 600;
+                }
+
+                .landing-home-primary:hover { background: #0077ee; }
+
+                .landing-home-secondary {
+                    border: 1px solid #2a2a2a;
+                    background: #111111;
+                    color: #ffffff;
+                }
+
+                .landing-home-secondary:hover { border-color: #574463; }
+
+                .landing-home-section { padding: 90px 0 110px; }
+
+                .landing-home-section-heading { max-width: 640px; margin-bottom: 42px; }
+
+                .landing-home-section-heading h2,
+                .landing-home-cta h2 {
+                    margin: 10px 0 12px;
+                    font-family: var(--display-font, Georgia, serif);
+                    font-size: clamp(38px, 5vw, 62px);
+                    line-height: .98;
+                    letter-spacing: -2.5px;
+                    font-weight: 400;
+                }
+
+                .landing-home-section-heading p,
+                .landing-home-cta p {
+                    margin: 0;
+                    color: #847a8d;
+                    font-size: 12px;
+                    line-height: 1.7;
+                }
+
+                .landing-home-products {
+                    display: grid;
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                    border-top: 1px solid rgba(139, 113, 171, .18);
+                    border-left: 1px solid rgba(139, 113, 171, .18);
+                }
+
+                .landing-home-product {
+                    min-height: 220px;
+                    position: relative;
+                    display: grid;
+                    grid-template-columns: 42px minmax(0, 1fr) auto;
+                    gap: 20px;
+                    padding: 30px;
+                    border-right: 1px solid #232323;
+                    border-bottom: 1px solid #232323;
+                    background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(13,13,13,.98) 42%);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,.035), 0 22px 55px rgba(0,0,0,.2);
+                    transition: background .18s ease, border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+                }
+
+                .landing-home-product:hover {
+                    background: #111418;
+                    border-color: #444a52;
+                }
+
+                .landing-home-product-number { color: #6f5b82; font: 10px 'DM Mono', monospace; }
+                .landing-home-product h3 { margin: -5px 0 10px; font-family: var(--display-font, Georgia, serif); font-size: 32px; font-weight: 400; letter-spacing: -1px; }
+                .landing-home-product p { max-width: 330px; margin: 0; color: #81778b; font-size: 11px; line-height: 1.7; }
+                .landing-home-arrow { color: #a27ab8; font-size: 18px; }
+
+                .landing-home-explore { padding-top: 70px; }
+
+                .landing-home-explore-grid {
+                    display: grid;
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
+                    gap: 10px;
+                }
+
+                .landing-home-explore-card {
+                    min-height: 175px;
+                    position: relative;
+                    padding: 24px;
+                    border: 1px solid #252525;
+                    border-radius: 16px;
+                    background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(13,13,13,.96) 48%);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,.035), 0 18px 45px rgba(0,0,0,.22);
+                }
+
+                .landing-home-explore-card:hover { border-color: #4b3858; background: rgba(24, 17, 32, .8); }
+                .landing-home-explore-card h3 { margin: 0 0 9px; font-family: var(--display-font, Georgia, serif); font-size: 25px; font-weight: 400; }
+                .landing-home-explore-card p { margin: 0; color: #7d7386; font-size: 10px; line-height: 1.65; }
+                .landing-home-explore-card > span { position: absolute; right: 20px; bottom: 18px; color: #8e709e; }
+
+                .landing-home-cta {
+                    margin-top: 10px;
+                    margin-bottom: 34px;
+                    padding: 38px 40px;
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) auto;
+                    align-items: center;
+                    gap: 30px;
+                    border: 1px solid #292929;
+                    border-radius: 20px;
+                    background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(13,13,13,.98) 52%);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 25px 65px rgba(0,0,0,.26);
+                }
+
+                .landing-home-cta .landing-home-primary { justify-self: end; white-space: nowrap; }
+
                 @media (max-width: 900px) {
                     .landing-home { --landing-home-content: min(720px, calc(100vw - 36px)); padding-inline: 18px; }
                     .landing-home-hero { padding: 100px 0 90px; }
