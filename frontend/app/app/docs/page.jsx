@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { Providers } from '../../../components/Providers';
 import { AppShell } from '../../../components/AppShell';
 import { CONTRACT_ADDRESSES } from '../../../constants/contracts';
@@ -26,6 +27,15 @@ const addressRows = [
 ];
 
 export default function Page() {
+  const [mobileDocsNavOpen, setMobileDocsNavOpen] = useState(false);
+
+  const scrollToSection = (id) => {
+    setMobileDocsNavOpen(false);
+    requestAnimationFrame(() => {
+      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
   return (
     <Providers>
       <AppShell>
@@ -43,21 +53,15 @@ export default function Page() {
             <a className="secondary-btn" href="/app">Open app</a>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '210px minmax(0, 1fr)', gap: 18, alignItems: 'start' }}>
-            <aside className="panel" style={{ position: 'sticky', top: 20 }}>
+          <div className="docs-layout">
+            <aside className="panel docs-sidebar" aria-label="Documentation sections">
               <div className="section-kicker">ON THIS PAGE</div>
-              <div style={{ display: 'grid', gap: 7, marginTop: 14 }}>
+              <div className="docs-sidebar-links">
                 {docsSections.map(([id, label]) => (
                   <a
                     key={id}
                     href={`#${id}`}
-                    style={{
-                      padding: '8px 10px',
-                      border: '1px solid #e5e5ea',
-                      borderRadius: 9,
-                      color: '#6e6e73',
-                      fontSize: 11,
-                    }}
+                    onClick={() => setMobileDocsNavOpen(false)}
                   >
                     {label}
                   </a>
@@ -65,7 +69,59 @@ export default function Page() {
               </div>
             </aside>
 
-            <main style={{ display: 'grid', gap: 16, minWidth: 0 }}>
+            <button
+              type="button"
+              className="docs-mobile-menu-button"
+              aria-label="Open documentation sections"
+              aria-expanded={mobileDocsNavOpen}
+              onClick={() => setMobileDocsNavOpen(true)}
+            >
+              <span aria-hidden="true">☰</span>
+              <span>Sections</span>
+            </button>
+
+            {mobileDocsNavOpen && (
+              <div className="docs-mobile-menu-layer">
+                <button
+                  type="button"
+                  className="docs-mobile-menu-backdrop"
+                  aria-label="Close documentation sections"
+                  onClick={() => setMobileDocsNavOpen(false)}
+                />
+                <aside className="docs-mobile-menu" aria-label="Documentation sections">
+                  <div className="docs-mobile-menu-header">
+                    <div>
+                      <div className="section-kicker">ON THIS PAGE</div>
+                      <strong>Documentation</strong>
+                    </div>
+                    <button
+                      type="button"
+                      className="docs-mobile-menu-close"
+                      aria-label="Close documentation sections"
+                      onClick={() => setMobileDocsNavOpen(false)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <nav className="docs-mobile-menu-links">
+                    {docsSections.map(([id, label]) => (
+                      <a
+                        key={id}
+                        href={`#${id}`}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          scrollToSection(id);
+                        }}
+                      >
+                        {label}
+                      </a>
+                    ))}
+                  </nav>
+                </aside>
+              </div>
+            )}
+
+            <main className="docs-content">
               <section id="overview" className="panel">
                 <div className="section-kicker">01 / OVERVIEW</div>
                 <h2>Centry in one flow</h2>
