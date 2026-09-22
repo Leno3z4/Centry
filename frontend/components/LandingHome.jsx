@@ -261,26 +261,6 @@ export default function LandingHome() {
                     background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(13,13,13,.98) 55%) !important;
                 }
 
-                .landing-home-footer {
-                    border-top-color: var(--landing-line) !important;
-                    color: var(--landing-muted-2) !important;
-                }
-
-                .landing-home-footer strong,
-                .landing-home-footer-heading {
-                    color: var(--landing-text) !important;
-                }
-
-                .landing-home-footer-brand p,
-                .landing-home-footer-links a,
-                .landing-home-footer-bottom {
-                    color: var(--landing-muted-2) !important;
-                }
-
-                .landing-home-footer a:hover {
-                    color: var(--landing-text) !important;
-                }
-
                 @media (prefers-reduced-motion: reduce) {
                     .landing-home *,
                     .landing-home *::before,
