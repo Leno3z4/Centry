@@ -9,6 +9,25 @@
   overflow: hidden;
 }
 
+/* Dropdowns/selectors must be able to extend beyond glossy cards and scroll internally. */
+.surfaceRoot :global(.panel) {
+  overflow: visible;
+}
+
+.surfaceRoot :global(.duration-picker-open) {
+  z-index: 100;
+}
+
+.surfaceRoot :global(.duration-menu) {
+  z-index: 101;
+  max-height: min(280px, 42vh);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
 .surfaceRoot :global(.panel)::before,
 .surfaceRoot :global(.metric)::before,
 .surfaceRoot :global(.form-card)::before,
