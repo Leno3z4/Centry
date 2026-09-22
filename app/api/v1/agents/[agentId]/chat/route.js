@@ -50,7 +50,7 @@ export async function POST(request, { params }) {
   if (!message) return Response.json({ error: "message_required" }, { status: 400 });
 
   try {
-    await verifyOwnerAuthorization({
+    const authorization = await verifyOwnerAuthorization({
       rpcUrl: process.env.CENTRY_AGENT_RPC_URL,
       challengeToken: body.challengeToken,
       signature: body.signature,
@@ -69,12 +69,16 @@ export async function POST(request, { params }) {
     } catch (activityError) {
       console.warn("[agent-chat] activity lookup unavailable", activityError);
     }
+    const liveActive = Boolean(authorization.active);
     const agentContext = [
       `You are ${agent.name}, a user-owned Centry agent.`,
       `Account: ${agent.account}`,
-      `Status: ${agent.active ? "on" : "off"}`,
-      "Never claim an action happened unless it appears in the supplied activity.",
-      "Explain what you did, why, and what is pending using only verified activity and the user's conversation.",
+      `Verified onchain status: ${liveActive ? "on" : "off"}`,
+      "The smart account contract is the authority for whether this agent is on or off. Do not use the stored database active flag for status.",
+      "This chat does not initiate or execute blockchain transactions.",
+      "Never claim that a transaction was initiated, executed, confirmed, or is pending unless that exact state is supported by the supplied verified activity.",
+      "A user request or conversation message is not evidence that a transaction was submitted.",
+      "Explain what happened and what is pending using only verified activity and the user's conversation.",
       `Recent verified activity: ${JSON.stringify(activity.slice(0, 25))}`,
     ].join("\n");
 
