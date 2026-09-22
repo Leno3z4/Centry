@@ -306,3 +306,130 @@ select option { background: #111111 !important; color: #ffffff !important; }
 .landing-aero-background > * { filter: grayscale(1) !important; }
 
 main, section, article, aside, nav, header, footer { border-color: #2a2a2a; }
+
+/*
+ * Final mobile layout guardrails.
+ *
+ * Keep this block at the end of the cascade: apple-skin.css and page-specific
+ * styles are intentionally allowed to style the desktop shell, but they must
+ * not reintroduce the desktop sidebar offset on phones.
+ *
+ * This is layout-only. It does not change navigation, wallet state, data
+ * fetching, transactions, or any page behavior.
+ */
+@media (max-width: 760px) {
+  html,
+  body {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  .app-shell {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: clip;
+  }
+
+  .app-shell .sidebar {
+    width: 0 !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+  }
+
+  .app-shell .main-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+
+  .app-shell .page-view,
+  .app-shell .page-stack {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  .app-shell .page-stack {
+    padding-top: 18px;
+  }
+
+  .app-shell .topbar {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .app-shell .page-view > *,
+  .app-shell .page-stack > *,
+  .app-shell .content-grid > *,
+  .app-shell .workspace-grid > *,
+  .app-shell .governance-hero-grid > *,
+  .app-shell .portfolio-grid > *,
+  .app-shell .stats-grid > *,
+  .app-shell .feature-grid > *,
+  .app-shell .docs-grid > * {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .app-shell .content-grid,
+  .app-shell .workspace-grid,
+  .app-shell .governance-hero-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .app-shell .hero,
+  .app-shell .panel,
+  .app-shell .form-card,
+  .app-shell .metric,
+  .app-shell .risk-card,
+  .app-shell .action-card,
+  .app-shell .feature-card,
+  .app-shell .doc-card {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .app-shell img,
+  .app-shell svg,
+  .app-shell video,
+  .app-shell canvas {
+    max-width: 100%;
+  }
+
+  .app-shell table {
+    max-width: 100%;
+  }
+
+  .app-shell .table-wrap,
+  .app-shell .tableContainer,
+  .app-shell .scroll-area,
+  .app-shell .activity-list {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 430px) {
+  .app-shell .main-content {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .app-shell .main-content {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+}
