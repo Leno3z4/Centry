@@ -114,9 +114,46 @@ export default function LandingHome() {
             </section>
 
             <footer className="landing-home-footer">
-                <strong>Centry</strong>
-                <span>Experimental software</span>
-                <Link href="/app/docs">Docs</Link>
+                <div className="landing-home-footer-brand">
+                    <strong>Centry</strong>
+                    <p>Arc-native financial infrastructure.</p>
+                    <div className="landing-home-socials" aria-label="Centry social links">
+                        <a href="https://x.com/centry_xyz" target="_blank" rel="noreferrer" aria-label="Centry on X">
+                            <span aria-hidden="true">𝕏</span>
+                            <span>X</span>
+                        </a>
+                        <a href="https://github.com/Leno3z4/Centry" target="_blank" rel="noreferrer" aria-label="Centry on GitHub">
+                            <span aria-hidden="true">GH</span>
+                            <span>GitHub</span>
+                        </a>
+                    </div>
+                </div>
+
+                <div className="landing-home-footer-links">
+                    <div>
+                        <span className="landing-home-footer-heading">Platform</span>
+                        <Link href="/app/swap">Swap</Link>
+                        <Link href="/app/markets">Markets</Link>
+                        <Link href="/app/rewards">Rewards</Link>
+                    </div>
+                    <div>
+                        <span className="landing-home-footer-heading">Protocol</span>
+                        <Link href="/app/governance">Governance</Link>
+                        <Link href="/app/agents">Automation</Link>
+                        <Link href="/app/analytics">Analytics</Link>
+                    </div>
+                    <div>
+                        <span className="landing-home-footer-heading">Resources</span>
+                        <Link href="/app/docs">Docs</Link>
+                        <Link href="/app/portfolio">Portfolio</Link>
+                        <Link href="/app/bridge">Bridge</Link>
+                    </div>
+                </div>
+
+                <div className="landing-home-footer-bottom">
+                    <span>© 2026 Centry. Experimental software.</span>
+                    <span>Built on Arc</span>
+                </div>
             </footer>
 
             <style jsx global>{`
@@ -126,7 +163,9 @@ export default function LandingHome() {
                     min-height: 100vh;
                     overflow: hidden;
                     padding: 0 24px 36px;
-                    background: #07080a;
+                    background:
+                        radial-gradient(circle at 50% -12%, rgba(255,255,255,.065), transparent 31%),
+                        linear-gradient(180deg, #0b0b0b 0%, #080808 28%, #080808 100%);
                     color: var(--text);
                     isolation: isolate;
                 }
@@ -160,7 +199,14 @@ export default function LandingHome() {
                     align-items: center;
                     justify-content: space-between;
                     gap: 24px;
-                    border-bottom: 1px solid rgba(139, 113, 171, .16);
+                    border: 1px solid rgba(255,255,255,.09);
+                    border-top-color: rgba(255,255,255,.15);
+                    border-radius: 0 0 18px 18px;
+                    padding: 0 18px;
+                    background: rgba(13,13,13,.62);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 18px 45px rgba(0,0,0,.22);
+                    backdrop-filter: blur(18px) saturate(135%);
+                    -webkit-backdrop-filter: blur(18px) saturate(135%);
                 }
 
                 .landing-home-brand {
@@ -291,10 +337,11 @@ export default function LandingHome() {
                     grid-template-columns: 42px minmax(0, 1fr) auto;
                     gap: 20px;
                     padding: 30px;
-                    border-right: 1px solid #23282d;
-                    border-bottom: 1px solid #23282d;
-                    background: #0c0f12;
-                    transition: background .18s ease, border-color .18s ease, transform .18s ease;
+                    border-right: 1px solid #232323;
+                    border-bottom: 1px solid #232323;
+                    background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(13,13,13,.98) 42%);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,.035), 0 22px 55px rgba(0,0,0,.2);
+                    transition: background .18s ease, border-color .18s ease, transform .18s ease, box-shadow .18s ease;
                 }
 
                 .landing-home-product:hover {
@@ -319,9 +366,10 @@ export default function LandingHome() {
                     min-height: 175px;
                     position: relative;
                     padding: 24px;
-                    border: 1px solid #28202f;
-                    border-radius: 14px;
-                    background: rgba(15, 11, 21, .7);
+                    border: 1px solid #252525;
+                    border-radius: 16px;
+                    background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(13,13,13,.96) 48%);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,.035), 0 18px 45px rgba(0,0,0,.22);
                 }
 
                 .landing-home-explore-card:hover { border-color: #4b3858; background: rgba(24, 17, 32, .8); }
@@ -337,26 +385,122 @@ export default function LandingHome() {
                     grid-template-columns: minmax(0, 1fr) auto;
                     align-items: center;
                     gap: 30px;
-                    border: 1px solid #2c2239;
-                    border-radius: 18px;
-                    background: #0d1013;
+                    border: 1px solid #292929;
+                    border-radius: 20px;
+                    background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(13,13,13,.98) 52%);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 25px 65px rgba(0,0,0,.26);
                 }
 
                 .landing-home-cta .landing-home-primary { justify-self: end; white-space: nowrap; }
 
                 .landing-home-footer {
-                    padding-top: 25px;
+                    position: relative;
+                    display: grid;
+                    grid-template-columns: minmax(240px, .85fr) minmax(440px, 1fr);
+                    gap: 56px;
+                    padding: 42px 0 0;
+                    border-top: 1px solid #2a2a2a;
+                    color: rgba(255,255,255,.72);
+                    font-size: 12px;
+                }
+
+                .landing-home-footer::before {
+                    content: '';
+                    position: absolute;
+                    left: 0;
+                    right: 0;
+                    top: -1px;
+                    height: 1px;
+                    background: linear-gradient(90deg, rgba(255,255,255,.18), rgba(255,255,255,.05), rgba(255,255,255,.18));
+                    opacity: .7;
+                }
+
+                .landing-home-footer-brand strong {
+                    display: block;
+                    color: #ffffff;
+                    font-family: var(--display-font, Georgia, serif);
+                    font-size: 22px;
+                    font-weight: 500;
+                    letter-spacing: -.5px;
+                }
+
+                .landing-home-footer-brand p {
+                    max-width: 270px;
+                    margin: 8px 0 22px;
+                    color: rgba(255,255,255,.60);
+                    line-height: 1.65;
+                }
+
+                .landing-home-socials {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                }
+
+                .landing-home-socials a {
+                    min-width: 44px;
+                    min-height: 44px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 8px;
+                    padding: 0 13px;
+                    border: 1px solid #2c2c2c;
+                    border-radius: 12px;
+                    background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(17,17,17,.98));
+                    color: rgba(255,255,255,.78);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 10px 24px rgba(0,0,0,.18);
+                    transition: border-color .18s ease, background .18s ease, color .18s ease, transform .18s ease;
+                }
+
+                .landing-home-socials a span:first-child { font-size: 12px; font-weight: 700; }
+                .landing-home-socials a span:last-child { font-size: 11px; }
+                .landing-home-socials a:hover {
+                    border-color: rgba(255,255,255,.34);
+                    background: #161616;
+                    color: #ffffff;
+                    transform: translateY(-1px);
+                }
+
+                .landing-home-footer-links {
+                    display: grid;
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
+                    gap: 32px;
+                    padding-bottom: 34px;
+                }
+
+                .landing-home-footer-links > div {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 12px;
+                    min-width: 0;
+                }
+
+                .landing-home-footer-heading {
+                    margin-bottom: 3px;
+                    color: #ffffff;
+                    font-size: 11px;
+                    font-weight: 650;
+                }
+
+                .landing-home-footer-links a {
+                    color: rgba(255,255,255,.60);
+                    font-size: 12px;
+                }
+
+                .landing-home-footer-links a:hover { color: #ffffff; }
+
+                .landing-home-footer-bottom {
+                    grid-column: 1 / -1;
                     display: flex;
                     align-items: center;
                     justify-content: space-between;
                     gap: 16px;
-                    border-top: 1px solid rgba(139, 113, 171, .14);
-                    color: #645b6d;
-                    font-size: 10px;
+                    padding: 18px 0 4px;
+                    border-top: 1px solid #202020;
+                    color: rgba(255,255,255,.48);
+                    font-size: 11px;
                 }
-
-                .landing-home-footer strong { color: #c7bed0; font-family: var(--display-font, Georgia, serif); font-size: 16px; font-weight: 400; }
-                .landing-home-footer a:hover { color: #fff; }
 
                 @media (max-width: 900px) {
                     .landing-home { --landing-home-content: min(720px, calc(100vw - 36px)); padding-inline: 18px; }
@@ -367,6 +511,7 @@ export default function LandingHome() {
 
                 @media (max-width: 620px) {
                     .landing-home { --landing-home-content: calc(100vw - 28px); padding-inline: 14px; }
+                    .landing-home-nav { padding-inline: 12px; }
                     .landing-home-nav { min-height: 64px; }
                     .landing-home-nav-links { gap: 14px; font-size: 10px; }
                     .landing-home-nav-links > a:not(.landing-home-open) { display: none; }
@@ -382,7 +527,9 @@ export default function LandingHome() {
                     .landing-home-explore-grid { grid-template-columns: 1fr; }
                     .landing-home-cta { grid-template-columns: 1fr; padding: 28px 22px; }
                     .landing-home-cta .landing-home-primary { justify-self: stretch; }
-                    .landing-home-footer { align-items: flex-start; flex-direction: column; }
+                    .landing-home-footer { grid-template-columns: 1fr; gap: 30px; }
+                    .landing-home-footer-links { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-bottom: 0; }
+                    .landing-home-footer-bottom { align-items: flex-start; flex-direction: column; }
                 }
 
                 /* Unified Centry / Apple flagship palette. */
@@ -433,9 +580,9 @@ export default function LandingHome() {
                 .landing-home-product,
                 .landing-home-explore-card {
                     border-color: var(--landing-line) !important;
-                    background: var(--landing-card) !important;
+                    background: linear-gradient(180deg, rgba(255,255,255,.025), rgba(13,13,13,.98) 46%) !important;
                     color: var(--landing-text) !important;
-                    box-shadow: 0 2px 10px rgba(0,0,0,.025);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,.035), 0 18px 46px rgba(0,0,0,.22);
                 }
 
                 .landing-home-secondary:hover,
@@ -469,7 +616,7 @@ export default function LandingHome() {
 
                 .landing-home-cta {
                     border-color: var(--landing-line) !important;
-                    background: #0d0d0d !important;
+                    background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(13,13,13,.98) 55%) !important;
                 }
 
                 .landing-home-footer {
@@ -477,8 +624,15 @@ export default function LandingHome() {
                     color: var(--landing-muted-2) !important;
                 }
 
-                .landing-home-footer strong {
+                .landing-home-footer strong,
+                .landing-home-footer-heading {
                     color: var(--landing-text) !important;
+                }
+
+                .landing-home-footer-brand p,
+                .landing-home-footer-links a,
+                .landing-home-footer-bottom {
+                    color: var(--landing-muted-2) !important;
                 }
 
                 .landing-home-footer a:hover {
