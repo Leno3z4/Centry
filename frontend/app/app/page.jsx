@@ -230,8 +230,13 @@ function OverviewContent() {
                   ? 'Active'
                   : 'Inactive';
               return (
-                <a key={market.id} href={`/app/markets/${market.id}`} className="market-list-item">
-                  <div className="asset"><span className="token usdc">{market.symbol === 'cirBTC' ? '₿' : market.symbol === 'EURC' ? '€' : '
+                <a
+                  key={market.id}
+                  href={'/app/markets/' + market.id}
+                  className="market-list-item"
+                >
+                  <div className="asset">
+                    <span className="token usdc">{market.symbol === 'cirBTC' ? '₿' : market.symbol === 'EURC' ? '€' : '
           </div>
         </div>
 
@@ -460,7 +465,9 @@ function OverviewContent() {
 export default function Page() {
   return <Providers><AppShell><OverviewContent /></AppShell></Providers>;
 }
-}</span><div><strong>{market.symbol}</strong><small>{market.name}</small></div></div>
+}</span>
+                    <div><strong>{market.symbol}</strong><small>{market.name}</small></div>
+                  </div>
                   <div><span>Status</span><strong className={reserveActive ? 'status-live' : ''}>{reserveStatus}</strong></div>
                   <span className="market-arrow">Open</span>
                 </a>
