@@ -745,3 +745,39 @@ footer {
   background-color: #111111 !important;
   background-image: none !important;
 }
+
+
+/* Temporarily disabled protocol areas. Keep them visible, but make their state explicit. */
+.nav-group-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.nav-group-status {
+  padding: 3px 7px;
+  border: 1px solid #2d2d2d;
+  border-radius: 999px;
+  background: #111111;
+  color: rgba(255,255,255,.52);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.nav-item-disabled {
+  cursor: not-allowed;
+  opacity: .48;
+}
+
+.nav-item-disabled:hover,
+.nav-item-disabled.active {
+  border-color: transparent !important;
+  background: transparent !important;
+  color: inherit !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
