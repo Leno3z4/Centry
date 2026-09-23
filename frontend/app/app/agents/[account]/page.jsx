@@ -17,6 +17,7 @@ import {
   WITHDRAWABLE_ASSETS,
   apiJson,
   loadOwnedAgents,
+  ensureOwnerSession,
   shortAddress,
 } from '../agentClient';
 
@@ -58,14 +59,6 @@ function DashboardContent() {
     loadBalances();
   }, [publicClient, account]);
 
-  async function ownerAuth(action) {
-    const challenge = await apiJson(`${API_BASE}/api/v1/agent-admin/challenge`, {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ owner: address, account: agent.account, action }),
-    });
-    const signature = await signMessageAsync({ message: challenge.message });
-    return { challengeToken: challenge.token, signature };
-  }
-
   async function toggleActive() {
     setError(''); setStatus('');
     const nextActive = !agent.active;
@@ -96,8 +89,8 @@ function DashboardContent() {
   async function loadActivity() {
     setError('');
     try {
-      const auth = await ownerAuth('agent-analytics');
-      const result = await apiJson(`${API_BASE}/api/v1/agents/${agent.id}/activity`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(auth) });
+      await ensureOwnerSession({ address, account: agent.account, signMessageAsync });
+      const result = await apiJson(`${API_BASE}/api/v1/agents/${agent.id}/activity`, { method: 'POST', headers: { 'content-type': 'application/json' } });
       setActivity(result.activity || []);
     } catch (e) { setError(e.message); }
   }
