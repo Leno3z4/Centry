@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useAccount, usePublicClient, useSignMessage, useSendTransaction, useWriteContract } from 'wagmi';
+import { useAccount, usePublicClient, useSendTransaction, useWriteContract } from 'wagmi';
 import { formatUnits, parseUnits } from 'viem';
 import { Providers } from '../../../../components/Providers';
 import { AppShell } from '../../../../components/AppShell';
@@ -17,6 +17,7 @@ import {
   WITHDRAWABLE_ASSETS,
   apiJson,
   loadOwnedAgents,
+  ensureOwnerSession,
   shortAddress,
 } from '../agentClient';
 
@@ -25,7 +26,6 @@ function DashboardContent() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
   const publicClient = usePublicClient();
-  const { signMessageAsync } = useSignMessage();
   const { writeContractAsync, isPending } = useWriteContract();
   const { sendTransactionAsync } = useSendTransaction();
 
@@ -58,14 +58,6 @@ function DashboardContent() {
     loadBalances();
   }, [publicClient, account]);
 
-  async function ownerAuth(action) {
-    const challenge = await apiJson(`${API_BASE}/api/v1/agent-admin/challenge`, {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ owner: address, account: agent.account, action }),
-    });
-    const signature = await signMessageAsync({ message: challenge.message });
-    return { challengeToken: challenge.token, signature };
-  }
-
   async function toggleActive() {
     setError(''); setStatus('');
     const nextActive = !agent.active;
@@ -96,8 +88,8 @@ function DashboardContent() {
   async function loadActivity() {
     setError('');
     try {
-      const auth = await ownerAuth('agent-analytics');
-      const result = await apiJson(`${API_BASE}/api/v1/agents/${agent.id}/activity`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(auth) });
+      await ensureOwnerSession({ address, account: agent.account, signMessageAsync });
+      const result = await apiJson(`${API_BASE}/api/v1/agents/${agent.id}/activity`, { method: 'POST', headers: { 'content-type': 'application/json' } });
       setActivity(result.activity || []);
     } catch (e) { setError(e.message); }
   }
