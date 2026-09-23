@@ -260,5 +260,4 @@ Connection credentials, wallet addresses, balances, transaction payloads, and AP
 | `frontend/constants/contracts.js` | Network-specific frontend addresses |
 
 ## Status
-
-The repository currently contains the next-generation agent account/connection infrastructure alongside the established lending protocol. Mainnet deployment of newer governance/agent components is being staged separately from existing deployments.
+Live on Mainnet
