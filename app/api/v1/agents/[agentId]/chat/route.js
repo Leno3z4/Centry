@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { getAddress } from "ethers";
-import { verifyOwnerAuthorization } from "../../../../../../lib/agentOwnerAuth";
+import { verifyOwnerSession } from "../../../../../../lib/agentOwnerAuth";
 import { getAgentById, getProviderConfig, listAgentChatMessages, addAgentChatMessage } from "../../../../../../lib/agentStore";
 import { decryptSecret } from "../../../../../../lib/agentSecrets";
 import { getAgentActivity } from "../../../../../../lib/agentActivity";
@@ -50,13 +50,10 @@ export async function POST(request, { params }) {
   if (!message) return Response.json({ error: "message_required" }, { status: 400 });
 
   try {
-    const authorization = await verifyOwnerAuthorization({
+    const authorization = await verifyOwnerSession({
+      request,
       rpcUrl: process.env.CENTRY_AGENT_RPC_URL,
-      challengeToken: body.challengeToken,
-      signature: body.signature,
-      owner: getAddress(agent.owner),
       account: getAddress(agent.account),
-      action: "agent-chat",
     });
 
     const config = await getProviderConfig(agentId, provider);
