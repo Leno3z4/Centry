@@ -7,6 +7,53 @@ export const API_BASE = (process.env.NEXT_PUBLIC_CENTRY_AGENT_API_URL || (typeof
 export const PAYWALL_ENABLED = process.env.NEXT_PUBLIC_CENTRY_AGENT_PAYWALL === 'true';
 export const AGENT_PRICE_RAW = 2500000n;
 
+
+let ownerSessionOwner = "";
+let ownerSessionPromise = null;
+
+export async function ensureOwnerSession({ address, account, signMessageAsync }) {
+  const owner = String(address || "").trim();
+  const agentAccount = String(account || "").trim();
+  if (!owner || !agentAccount || typeof signMessageAsync !== "function") {
+    throw new Error("owner_session_wallet_required");
+  }
+
+  const ownerKey = owner.toLowerCase();
+  if (ownerSessionOwner !== ownerKey) {
+    ownerSessionOwner = ownerKey;
+    ownerSessionPromise = null;
+  }
+  if (ownerSessionPromise) return ownerSessionPromise;
+
+  ownerSessionPromise = (async () => {
+    try {
+      const current = await apiJson(`${API_BASE}/api/v1/agent-admin/session`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+      if (String(current?.owner || '').toLowerCase() === ownerKey) return current;
+    } catch (error) {
+      if (error?.status !== 401) throw error;
+    }
+
+    const challenge = await apiJson(`${API_BASE}/api/v1/agent-admin/challenge`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ owner, account: agentAccount, action: 'agent-session' }),
+    });
+    const signature = await signMessageAsync({ message: challenge.message });
+    return apiJson(`${API_BASE}/api/v1/agent-admin/session`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ owner, account: agentAccount, challengeToken: challenge.token, signature }),
+    });
+  })().finally(() => { ownerSessionPromise = null; });
+
+  return ownerSessionPromise;
+}
+
 export const FACTORY_ABI = [
   { type: 'function', name: 'getAgentAccounts', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }], outputs: [{ name: 'accounts', type: 'address[]' }] },
   { type: 'function', name: 'createAgentAccount', stateMutability: 'nonpayable', inputs: [{ name: 'templateId', type: 'bytes32' }, { name: 'configHash', type: 'bytes32' }, { name: 'metadataURI', type: 'string' }, { name: 'initialOperator', type: 'address' }], outputs: [{ name: 'agentAccount', type: 'address' }] },
@@ -94,7 +141,7 @@ export function defaultAgentConfig() {
 }
 
 export async function apiJson(url, init) {
-  const response = await fetch(url, init);
+  const response = await fetch(url, { credentials: 'include', ...init });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     const error = new Error(body?.error || `Request failed (${response.status})`);

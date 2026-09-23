@@ -1,5 +1,5 @@
-import { getAddress, isAddress } from "ethers";
-import { verifyOwnerAuthorization } from "../../../../../../lib/agentOwnerAuth";
+import { getAddress } from "ethers";
+import { verifyOwnerSession } from "../../../../../../lib/agentOwnerAuth";
 import { getAgentById, updateAgentConfig } from "../../../../../../lib/agentStore";
 
 export async function POST(request, { params }) {
@@ -12,15 +12,11 @@ export async function POST(request, { params }) {
   try {
     const agent = await getAgentById(agentId);
     if (!agent) return Response.json({ error: "agent_not_found" }, { status: 404 });
-    if (!isAddress(body?.owner || "")) return Response.json({ error: "invalid_owner" }, { status: 400 });
 
-    await verifyOwnerAuthorization({
+    await verifyOwnerSession({
+      request,
       rpcUrl: process.env.CENTRY_AGENT_RPC_URL,
-      challengeToken: body.challengeToken,
-      signature: body.signature,
-      owner: getAddress(body.owner),
       account: getAddress(agent.account),
-      action: "configure-agent",
     });
 
     const existing = JSON.parse(agent.config_json || "{}");

@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 import { useAccount, usePublicClient, useSignMessage } from 'wagmi';
 import { Providers } from '../../../../../components/Providers';
 import { AppShell } from '../../../../../components/AppShell';
-import { loadOwnedAgents, API_BASE, apiJson, providerOptions } from '../../agentClient';
+import { loadOwnedAgents, API_BASE, apiJson, ensureOwnerSession, providerOptions } from '../../agentClient';
 import styles from '../../agents.module.css';
 
 function ChatContent() {
@@ -38,16 +38,11 @@ function ChatContent() {
     setSending(true);
     setError('');
     try {
-      const challenge = await apiJson(`${API_BASE}/api/v1/agent-admin/challenge`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ owner: address, account: agent.account, action: 'agent-chat' }),
-      });
-      const signature = await signMessageAsync({ message: challenge.message });
+      await ensureOwnerSession({ address, account: agent.account, signMessageAsync });
       const result = await apiJson(`${API_BASE}/api/v1/agents/${agent.id}/chat`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ challengeToken: challenge.token, signature, message: message.trim(), provider }),
+        body: JSON.stringify({ message: message.trim(), provider }),
       });
       setMessages((current) => [...current, { role: 'user', content: message.trim() }, { role: 'assistant', content: result.answer }]);
       setMessage('');

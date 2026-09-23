@@ -1,5 +1,5 @@
 import { getAddress } from "ethers";
-import { verifyOwnerAuthorization } from "../../../../../../lib/agentOwnerAuth";
+import { verifyOwnerSession } from "../../../../../../lib/agentOwnerAuth";
 import { getAgentById, listProviderConfigs, setProviderConfig } from "../../../../../../lib/agentStore";
 import { encryptSecret } from "../../../../../../lib/agentSecrets";
 
@@ -19,13 +19,10 @@ export async function POST(request, { params }) {
   if (!PROVIDERS.has(provider) || !model || !apiKey) return Response.json({ error: "provider_model_and_api_key_required" }, { status: 400 });
 
   try {
-    await verifyOwnerAuthorization({
+    await verifyOwnerSession({
+      request,
       rpcUrl: process.env.CENTRY_AGENT_RPC_URL,
-      challengeToken: body.challengeToken,
-      signature: body.signature,
-      owner: getAddress(agent.owner),
       account: getAddress(agent.account),
-      action: "configure-ai-provider",
     });
 
     await setProviderConfig({
