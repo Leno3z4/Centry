@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { Contract, JsonRpcProvider, getAddress, isAddress } from "ethers";
-import { verifyOwnerAuthorization } from "../../../../../lib/agentOwnerAuth";
+import { verifyOwnerSession } from "../../../../../lib/agentOwnerAuth";
 import { upsertAgent } from "../../../../../lib/agentStore";
 
 const ACCOUNT_ABI = [
@@ -27,13 +27,10 @@ export async function POST(request) {
 
   const rpcUrl = process.env.CENTRY_AGENT_RPC_URL;
   try {
-    await verifyOwnerAuthorization({
+    await verifyOwnerSession({
+      request,
       rpcUrl,
-      challengeToken: body.challengeToken,
-      signature: body.signature,
-      owner: getAddress(owner),
       account: getAddress(account),
-      action: "register-agent",
     });
 
     const contract = new Contract(getAddress(account), ACCOUNT_ABI, new JsonRpcProvider(rpcUrl));
