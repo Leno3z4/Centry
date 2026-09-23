@@ -16,6 +16,7 @@ import {
   AGENT_ASSET_OPTIONS,
   RUNNER_ADDRESS,
   apiJson,
+  ensureOwnerSession,
   loadOwnedAgents,
   shortAddress,
 } from '../../agentClient';
@@ -58,16 +59,6 @@ function ConfigureContent() {
 
   useEffect(() => { loadAgent().catch((e) => setError(e.message)); }, [address, publicClient, account]);
 
-  async function ownerAuth(action) {
-    const challenge = await apiJson(`${API_BASE}/api/v1/agent-admin/challenge`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ owner: address, account: agent.account, action }),
-    });
-    const signature = await signMessageAsync({ message: challenge.message });
-    return { challengeToken: challenge.token, signature };
-  }
-
   async function saveConfiguration(config) {
     if (!agent) return;
     setError('');
@@ -84,12 +75,11 @@ function ConfigureContent() {
 
         setStatus('Registering this smart account…');
         const agentId = crypto.randomUUID();
-        const registerAuth = await ownerAuth('register-agent');
+        await ensureOwnerSession({ address, account: agent.account, signMessageAsync });
         const registered = await apiJson(`${API_BASE}/api/v1/agents/register`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
-            ...registerAuth,
             owner: address,
             account: agent.account,
             agentId,
@@ -107,12 +97,11 @@ function ConfigureContent() {
 
       if (config.providerKey) {
         setStatus('Saving encrypted provider configuration…');
-        const providerAuth = await ownerAuth('configure-ai-provider');
+        await ensureOwnerSession({ address, account: targetAgent.account, signMessageAsync });
         await apiJson(`${API_BASE}/api/v1/agents/${targetAgent.id}/providers`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
-            ...providerAuth,
             provider: config.provider,
             model: config.model,
             apiKey: config.providerKey,
@@ -121,13 +110,11 @@ function ConfigureContent() {
       }
 
       setStatus('Saving agent configuration…');
-      const configAuth = await ownerAuth('configure-agent');
+      await ensureOwnerSession({ address, account: targetAgent.account, signMessageAsync });
       await apiJson(`${API_BASE}/api/v1/agents/${targetAgent.id}/config`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          ...configAuth,
-          owner: address,
           autonomy: { ...config.autonomy, provider: config.provider },
           policy: config.policy,
         }),
