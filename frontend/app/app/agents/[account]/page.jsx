@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useAccount, usePublicClient, useSendTransaction, useWriteContract } from 'wagmi';
+import { useAccount, usePublicClient, useSignMessage, useSendTransaction, useWriteContract } from 'wagmi';
 import { formatUnits, parseUnits } from 'viem';
 import { Providers } from '../../../../components/Providers';
 import { AppShell } from '../../../../components/AppShell';
@@ -26,6 +26,7 @@ function DashboardContent() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
   const publicClient = usePublicClient();
+  const { signMessageAsync } = useSignMessage();
   const { writeContractAsync, isPending } = useWriteContract();
   const { sendTransactionAsync } = useSendTransaction();
 
