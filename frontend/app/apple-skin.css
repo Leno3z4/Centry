@@ -179,7 +179,7 @@ select option {
 .main-content {
   width: calc(100% - 238px);
   margin-left: 238px;
-  padding: 0 0 34px;
+  padding: 0 8px 34px;
 }
 
 .topbar {
