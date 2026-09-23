@@ -15,6 +15,7 @@ import {
   PAYWALL_ENABLED,
   RUNNER_ADDRESS,
   apiJson,
+  ensureOwnerSession,
   normalizeConfigForHash,
 } from '../agentClient';
 import styles from '../agents.module.css';
@@ -31,12 +32,6 @@ export default function CreateAgentPage() {
   const [createdAccount, setCreatedAccount] = useState('');
   const [setupComplete, setSetupComplete] = useState(false);
   const ready = Boolean(isConnected && address && publicClient && FACTORY_ADDRESS && RUNNER_ADDRESS);
-
-  async function ownerAuth(account, action) {
-    const challenge = await apiJson(`${API_BASE}/api/v1/agent-admin/challenge`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ owner: address, account, action }) });
-    const signature = await signMessageAsync({ message: challenge.message });
-    return { challengeToken: challenge.token, signature };
-  }
 
   async function createAgent(config) {
     if (!ready) return setError('Connect your wallet and make sure the Centry agent factory and runner are configured.');
@@ -70,14 +65,14 @@ export default function CreateAgentPage() {
       if (PAYWALL_ENABLED) {
         await apiJson(`${API_BASE}/api/v1/agents/marketplace`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ owner: address, templateId: 'centry-general-agent', onchainTemplateId: templateHash, agentId, account, purchaseTxHash: creationTx }) });
       }
-      const registerAuth = await ownerAuth(account, 'register-agent');
-      await apiJson(`${API_BASE}/api/v1/agents/register`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...registerAuth, owner: address, account, agentId, type: PAYWALL_ENABLED ? 'purchased' : 'standard', name: config.name, description: config.description || 'Configurable Centry onchain agent.', operator: RUNNER_ADDRESS, priceUsdCents: PAYWALL_ENABLED ? 250 : 0 }) });
+      await ensureOwnerSession({ address, account, signMessageAsync });
+      await apiJson(`${API_BASE}/api/v1/agents/register`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ owner: address, account, agentId, type: PAYWALL_ENABLED ? 'purchased' : 'standard', name: config.name, description: config.description || 'Configurable Centry onchain agent.', operator: RUNNER_ADDRESS, priceUsdCents: PAYWALL_ENABLED ? 250 : 0 }) });
       if (config.provider && config.model && config.providerKey) {
-        const providerAuth = await ownerAuth(account, 'configure-ai-provider');
-        await apiJson(`${API_BASE}/api/v1/agents/${agentId}/providers`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...providerAuth, provider: config.provider, model: config.model, apiKey: config.providerKey }) });
+        await ensureOwnerSession({ address, account, signMessageAsync });
+        await apiJson(`${API_BASE}/api/v1/agents/${agentId}/providers`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ provider: config.provider, model: config.model, apiKey: config.providerKey }) });
       }
-      const configAuth = await ownerAuth(account, 'configure-agent');
-      await apiJson(`${API_BASE}/api/v1/agents/${agentId}/config`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...configAuth, owner: address, autonomy: { ...config.autonomy, provider: config.provider }, policy: config.policy }) });
+      await ensureOwnerSession({ address, account, signMessageAsync });
+      await apiJson(`${API_BASE}/api/v1/agents/${agentId}/config`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ autonomy: { ...config.autonomy, provider: config.provider }, policy: config.policy }) });
       setCreatedAccount(account);
       setSetupComplete(true);
       setStatus(config.provider && config.model && config.providerKey
