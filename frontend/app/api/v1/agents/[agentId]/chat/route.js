@@ -15,7 +15,7 @@ const DIRECT_BALANCE_ASSETS = Object.freeze({
 function requestedBalanceAsset(message) {
   const text = String(message || "").toUpperCase();
   for (const symbol of Object.keys(DIRECT_BALANCE_ASSETS)) {
-    if (new RegExp(`\\b${symbol}\\b`).test(text)) return symbol;
+    if (new RegExp(`\b${symbol}\b`).test(text)) return symbol;
   }
   return null;
 }
@@ -23,8 +23,8 @@ function requestedBalanceAsset(message) {
 function isSimpleBalanceRequest(message) {
   const text = String(message || "").trim();
   if (!text) return false;
-  if (!/\\b(?:balance|balances|how much|how many|what(?:'s| is)?)\\b/i.test(text)) return false;
-  if (/\\b(?:supply|deposit|withdraw|borrow|repay|swap|trade|approve|vote|transfer|send|fund)\\b/i.test(text)) return false;
+  if (!/\b(?:balance|balances|how much|how many|what(?:'s| is)?)\b/i.test(text)) return false;
+  if (/\b(?:supply|deposit|withdraw|borrow|repay|swap|trade|approve|vote|transfer|send|fund)\b/i.test(text)) return false;
   return Boolean(requestedBalanceAsset(text));
 }
 
