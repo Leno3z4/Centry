@@ -44,7 +44,6 @@ export default function LandingHome() {
 
       <section className="landing-home-hero">
         <div className="landing-home-hero-copy" data-reveal>
-          <p className="landing-home-kicker">ONCHAIN CAPITAL / CONTROLLED EXECUTION</p>
           <h1>Your wallet.<br />Your agent.<br /><em>Your rules.</em></h1>
           <p className="landing-home-hero-text">
             Centry is a wallet-owned execution layer on Arc Mainnet. Smart accounts keep
@@ -75,7 +74,6 @@ export default function LandingHome() {
       </section>
 
       <section className="landing-home-section" data-reveal>
-        <p className="landing-home-index">01 / THE BOUNDARY</p>
         <h2>The agent never becomes the owner.</h2>
         <p className="landing-home-section-lede">
           Centry separates ownership from execution: your smart account stays yours;
@@ -93,8 +91,7 @@ export default function LandingHome() {
       </section>
 
       <section className="landing-home-section landing-home-capabilities" data-reveal>
-        <p className="landing-home-index">02 / WHAT IT DOES</p>
-        <h2>Capital tools, without the product soup.</h2>
+        <h2>The tools behind the control surface.</h2>
         <div className="landing-home-capability-list">
           {CAPABILITIES.map((item) => (
             <article key={item.number} className="landing-home-capability">
@@ -107,7 +104,6 @@ export default function LandingHome() {
       </section>
 
       <section className="landing-home-final" data-reveal>
-        <p className="landing-home-index">03 / START AT THE CONTROL SURFACE</p>
         <h2>Move capital.<br /><em>Keep control.</em></h2>
         <p>Connect a wallet, define the execution boundary, and enter the application.</p>
         <Link href="/app" className="landing-home-primary">Open app <span aria-hidden="true">↗</span></Link>
