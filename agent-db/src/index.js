@@ -21,6 +21,7 @@ const OPERATIONS = new Set([
   "finish_agent_run",
   "list_agent_runs",
   "enqueue_agent_task",
+  "enqueue_owner_chat",
   "list_pending_agent_tasks",
   "complete_agent_task",
   "get_agent_task",
@@ -302,6 +303,25 @@ async function runOperation(db, operation, args) {
       return { id: run.id };
     }
 
+    case "enqueue_owner_chat": {
+      const id = requireString(args.taskId, "taskId");
+      const agentId = requireString(args.agentId, "agentId");
+      const message = boundedText(args.message, "message", 4000);
+      const assistantMessageId = requireString(args.assistantMessageId, "assistantMessageId");
+      const createdAt = new Date().toISOString();
+      const envelope = JSON.stringify({ kind: "owner_chat", message, assistantMessageId });
+
+      await db.batch([
+        db.prepare(
+          "INSERT INTO centry_agent_tasks (id, from_agent_id, to_agent_id, task, status, result, created_at, updated_at, completed_at) VALUES (?, NULL, ?, ?, 'pending', '', ?, ?, NULL)"
+        ).bind(id, agentId, envelope, createdAt, createdAt),
+        db.prepare(
+          "INSERT INTO centry_agent_chats (id, agent_id, role, content, created_at) VALUES (?, ?, 'user', ?, ?)"
+        ).bind(id, agentId, message, createdAt),
+      ]);
+
+      return { id, status: "pending", createdAt };
+    }
     case "enqueue_agent_task": {
       const task = args.task || {};
       const id = requireString(task.id, "id");
