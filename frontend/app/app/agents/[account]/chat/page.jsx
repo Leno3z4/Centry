@@ -32,18 +32,21 @@ function ChatContent() {
   }, [address, publicClient, account]);
 
   async function waitForTask(taskId) {
-    for (let attempt = 0; attempt < 35; attempt += 1) {
+    for (let attempt = 0; attempt < 25; attempt += 1) {
       const result = await apiJson(`${API_BASE}/api/v1/agent-admin/tasks/${taskId}`, { method: 'GET' });
       if (result.status !== 'pending') {
         const answer = result.result?.answer || result.result?.error || 'The agent finished processing the request.';
         setMessages((current) => [...current, { role: 'assistant', content: answer }]);
         return;
       }
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      const delay = attempt < 6 ? 350 : attempt < 14 ? 750 : 1500;
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
+
     setMessages((current) => [...current, {
       role: 'assistant',
-      content: 'I’m still working on that. The next runtime wake will continue processing it.',
+      content: 'I’m still working on that. The runtime will continue processing it.',
     }]);
   }
 
