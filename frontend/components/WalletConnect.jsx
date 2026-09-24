@@ -119,8 +119,7 @@ export function WalletConnect() {
 
         {pickerOpen && typeof document !== 'undefined'
           ? createPortal(
-        {pickerOpen ? (
-          <div
+              <div
             className="wallet-picker-backdrop"
             role="presentation"
             onMouseDown={(event) => {
@@ -222,13 +221,11 @@ export function WalletConnect() {
               ) : null}
             </section>
           </div>
-        ) : null}
-
             ,
               document.body,
             )
           : null}
-          
+
         <style jsx global>{`
           .wallet-connect-wrap {
             display: flex;
