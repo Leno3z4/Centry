@@ -295,7 +295,10 @@ function ownerChatHasExplicitStateChangeIntent(message) {
   const explicitOwnerCommand =
     /\b(?:i\s+want\s+you\s+to|i\s+need\s+you\s+to|i['’]d\s+like\s+you\s+to|go\s+ahead\s+and|please)\b[\s\S]{0,96}\b(?:supply|deposit|withdraw|borrow|repay|swap|exchange|trade|approve|vote|transfer|send|fund)\b/i.test(text);
 
-  if (!explicitOwnerCommand) return false;
+  const explicitFollowUpCommand =
+    /\b(?:then|and\s+then|and)\b[\s\S]{0,64}\b(?:supply|deposit|withdraw|borrow|repay|swap|exchange|trade|approve|vote|transfer|send|fund)\b[\s\S]{0,48}\b(?:\d+(?:\.\d+)?|all|everything|half|some)\b/i.test(text);
+
+  if (!explicitOwnerCommand && !explicitFollowUpCommand) return false;
   if (informationalPhrase.test(text) && !/\b(?:please|i\s+want\s+you\s+to|i\s+need\s+you\s+to|i['’]d\s+like\s+you\s+to|go\s+ahead\s+and)\b/i.test(text)) {
     return false;
   }
