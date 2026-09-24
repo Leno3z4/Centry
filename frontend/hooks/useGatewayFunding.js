@@ -9,7 +9,7 @@ const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
 const amountRaw = (value) => parseUnits(String(value || '0'), 6);
 const formatRaw = (value) => (Number(value) / 1e6).toFixed(6).replace(/\.?0+$/, '');
 
-export function useGatewayFunding() {
+export function useGatewayFunding({ enabled = true } = {}) {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { data: connectorClient } = useConnectorClient();
@@ -24,6 +24,7 @@ export function useGatewayFunding() {
   }, [connectorClient]);
 
   const refresh = useCallback(async () => {
+    if (!enabled) { setBalances([]); setTotal('0'); setPendingTotal('0'); return []; }
     if (!address) { setBalances([]); setTotal('0'); setPendingTotal('0'); return []; }
     setLoading(true);
     try {
@@ -36,9 +37,12 @@ export function useGatewayFunding() {
       setPendingTotal(result.pendingTotal || '0');
       return nextBalances;
     } finally { setLoading(false); }
-  }, [address]);
+  }, [address, enabled]);
 
-  useEffect(() => { void refresh().catch(() => undefined); }, [refresh]);
+  useEffect(() => {
+    if (!enabled) return;
+    void refresh().catch(() => undefined);
+  }, [enabled, refresh]);
 
   const switchToChain = useCallback(async (target) => {
     if (!connectorClient?.request || !isConnected) throw new Error('Connect your wallet first.');
@@ -60,6 +64,7 @@ export function useGatewayFunding() {
   }, [chainId, connectorClient, isConnected]);
 
   const ensureArcUsdc = useCallback(async (amount, { arcBalance = '0' } = {}) => {
+    if (!enabled) throw new Error('Gateway funding is disabled for this market.');
     if (!address || !isConnected) throw new Error('Connect your wallet first.');
     const requested = amountRaw(amount);
     const local = amountRaw(arcBalance);
@@ -98,7 +103,7 @@ export function useGatewayFunding() {
       await sleep(1500);
     }
     throw new Error('Timed out waiting for the Gateway mint to confirm on Arc Mainnet.');
-  }, [address, isConnected, refresh, request, switchToChain]);
+  }, [address, enabled, isConnected, refresh, request, switchToChain]);
 
   return { balances, total, pendingTotal, loading, refresh, ensureArcUsdc };
 }
