@@ -7,9 +7,12 @@ import {
   useDisconnect,
   useChainId,
   useSwitchChain,
+  useReadContract,
 } from 'wagmi';
 import { arcMainnet } from '../config/multiWagmi';
-import { useLendingPool } from '../hooks/useLendingPool';
+import { formatUnits } from 'viem';
+import { CONTRACT_ADDRESSES } from '../constants/contracts';
+import { ERC20_ABI } from '../constants/abis';
 
 function shortenAddress(address) {
   if (!address) return '';
@@ -35,7 +38,15 @@ export function WalletConnect() {
     isPending: isSwitching,
     error: switchError,
   } = useSwitchChain();
-  const { usdcBalance } = useLendingPool();
+  const { data: usdcBalanceRaw } = useReadContract({
+    address: CONTRACT_ADDRESSES.USDC,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
+    chainId: arcMainnet.id,
+    query: { enabled: Boolean(address && isConnected && chainId === arcMainnet.id) },
+  });
+  const usdcBalance = usdcBalanceRaw == null ? '0' : formatUnits(usdcBalanceRaw, 6);
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const isWrongNetwork =
