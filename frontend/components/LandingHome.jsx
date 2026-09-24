@@ -18,7 +18,7 @@ const CAPABILITIES = [
   {
     number: '02',
     title: 'Swaps',
-    text: 'Swap CENT and USDC through the configured UnitFlow route, with a minimum output set before signing.',
+    text: 'Swap USDC through the configured UnitFlow route, with a minimum output set before signing.',
   },
   {
     number: '03',
@@ -93,7 +93,7 @@ export default function LandingHome() {
         <div className="landing-home-hero-copy" data-reveal>
           <h1>Lending and swaps, from the same account.</h1>
           <p className="landing-home-hero-text">
-            Centry gives you one place to manage lending positions and swaps on Arc. Supply or borrow in a supported market, repay when you need to, withdraw available liquidity, or swap CENT and USDC. Your smart account stays under your control.
+            Centry gives you one place to manage USDC lending and execution on Arc. Supply or borrow USDC, repay when you need to, withdraw available liquidity, or use the configured swap route. Your smart account stays under your control.
           </p>
           <Link href="/app" className="landing-home-primary">Open app</Link>
         </div>
@@ -128,7 +128,7 @@ export default function LandingHome() {
         <div className="landing-home-section-main">
           <h2>Manage the position from the account.</h2>
           <p className="landing-home-section-lede">
-            Supply an asset and see the position build. Borrow against it when you need liquidity. Repay the debt, then withdraw what is available. Swap CENT for USDC without leaving the account.
+            Supply USDC and see the position build. Borrow against it when you need liquidity. Repay the debt, then withdraw what is available. Use the configured execution route without leaving the account.
           </p>
         </div>
         <div className="landing-home-overview-note">
@@ -171,7 +171,7 @@ export default function LandingHome() {
       </section>
 
       <section className="landing-home-final" data-reveal>
-        <h2>Open Centry.</h2>
+        <h2>Open the app.</h2>
         <p>Connect a wallet, choose an account, and start working with your positions on Arc.</p>
         <Link href="/app" className="landing-home-primary">Open app</Link>
       </section>
