@@ -606,19 +606,21 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
     const account = getAddress(agent.account);
     const snapshot = await readAgentSnapshot(publicClient, account, runnerAddress);
 
-    if (!snapshot.active) {
+    if (!snapshot.active && !ownerChatTask) {
       runStatus = "skipped";
       reason = "agent_inactive";
       return { agentId: agent.id, status: runStatus, reason };
     }
 
-    if (!snapshot.operatorAuthorized) {
+    if (!snapshot.operatorAuthorized && !ownerChatTask) {
       runStatus = "skipped";
       reason = "runner_operator_not_authorized";
       return { agentId: agent.id, status: runStatus, reason };
     }
 
     tasks = await getPendingTasks(db, agent.id);
+    const ownerChatTask = tasks.find((task) => parseOwnerChatTask(task));
+    const ownerChatEnvelope = ownerChatTask ? parseOwnerChatTask(ownerChatTask) : null;
     const config = parseJson(agent.config_json || "{}", {});
     const storedAutonomy = config?.autonomy && typeof config.autonomy === "object" ? config.autonomy : {};
     const policy = config?.policy && typeof config.policy === "object" ? config.policy : {};
@@ -626,7 +628,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
     const autonomyEnabled = autonomy.enabled !== false;
     const instructions = String(autonomy.instructions || "").trim();
 
-    if (!autonomyEnabled || (!instructions && tasks.length === 0)) {
+    if (!ownerChatTask && (!autonomyEnabled || (!instructions && tasks.length === 0))) {
       runStatus = "idle";
       reason = autonomyEnabled ? "no_work" : "autonomy_disabled";
       return { agentId: agent.id, status: runStatus, reason };
@@ -636,6 +638,21 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
     if (!provider) {
       runStatus = "waiting_provider";
       reason = "provider_not_configured";
+      if (ownerChatTask && ownerChatEnvelope?.assistantMessageId) {
+        const result = "I could not process the chat request because the agent provider is not configured.";
+        await completeTask(db, ownerChatTask.id, "failed", JSON.stringify({
+          kind: "owner_chat_result",
+          status: "failed",
+          answer: result,
+          error: reason,
+        })).catch(() => {});
+        await addAgentChatMessage(db, {
+          id: ownerChatEnvelope.assistantMessageId,
+          agentId: agent.id,
+          role: "assistant",
+          content: result,
+        }).catch(() => {});
+      }
       return { agentId: agent.id, status: runStatus, reason };
     }
 
