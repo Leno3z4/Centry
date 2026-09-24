@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { createContext, useContext, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WagmiProvider, useAccount, useChainId } from 'wagmi';
 import { config, arcMainnet } from '../config/multiWagmi';
 import { MobileMenuController } from './MobileMenuController';
+
+const ProvidersContext = createContext(false);
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -110,14 +112,19 @@ function AutoSwitchToArc() {
 }
 
 export function Providers({ children }) {
+  const nested = useContext(ProvidersContext);
+  if (nested) return children;
+
   return (
-    <WagmiProvider config={config}>
+    <ProvidersContext.Provider value={true}>
+      <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
         <AutoSwitchToArc />
         <MobileMenuController />
         <PreventInputWheelChanges />
         {children}
       </QueryClientProvider>
-    </WagmiProvider>
+      </WagmiProvider>
+    </ProvidersContext.Provider>
   );
 }
