@@ -571,16 +571,6 @@ body {
   border-bottom: 1px solid rgba(255,255,255,.08);
   background: transparent;
 }
-.landing-home-flow-item::after {
-  content: "→";
-  position: absolute;
-  top: 50%;
-  right: -18px;
-  transform: translateY(-50%);
-  color: rgba(255,255,255,.28);
-  font-size: 18px;
-}
-.landing-home-flow-item:last-child::after { display: none; }
 .landing-home-flow-item > span,
 .landing-home-capability > span {
   color: var(--lh-dim);
