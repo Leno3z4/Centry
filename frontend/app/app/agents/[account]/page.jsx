@@ -68,12 +68,27 @@ function DashboardContent() {
   const [activity, setActivity] = useState([]);
   const [balances, setBalances] = useState([]);
   const [balancesLoading, setBalancesLoading] = useState(false);
+  const [runtime, setRuntime] = useState(null);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [fundOpen, setFundOpen] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [asset, setAsset] = useState('native');
   const [amount, setAmount] = useState('');
+
+  async function loadRuntimeStatus() {
+    if (!address || !agent) return;
+    try {
+      await ensureOwnerSession({ address, account: agent.account, signMessageAsync });
+      const result = await apiJson(`${API_BASE}/api/v1/agents/${agent.id}/runtime`, {
+        method: 'GET',
+      });
+      setRuntime(result);
+    } catch (error) {
+      setRuntime(null);
+      throw error;
+    }
+  }
 
   async function refresh() {
     if (!address || !publicClient) return;
@@ -91,6 +106,11 @@ function DashboardContent() {
   useEffect(() => {
     loadBalances();
   }, [publicClient, account]);
+
+  useEffect(() => {
+    if (!agent) return;
+    loadRuntimeStatus().catch(() => {});
+  }, [agent?.id, address]);
 
   async function toggleActive() {
     setError(''); setStatus('');
@@ -236,7 +256,27 @@ function DashboardContent() {
       {agents.length > 1 ? <div className={styles.agentSwitcher}><span>Agent</span><select className={styles.input} value={agent.account} onChange={(e) => router.push(`/app/agents/${e.target.value}`)}>{agents.map((item) => <option key={item.account} value={item.account}>{item.name} · {shortAddress(item.account)}</option>)}</select></div> : null}
       {status ? <div className={styles.notice}>{status}</div> : null}{error ? <div className={styles.error}>{error}</div> : null}
       <section className={styles.analyticsHero}><div><span className={agent.active ? styles.statusOn : styles.statusOff}>{agent.active ? 'ACTIVE' : 'OFF'}</span><h2>Agent analytics</h2><p>Monitor this agent here. Configuration and conversation live on their own pages so the dashboard stays focused.</p></div><div className={styles.addressPanel}><span>Smart account</span><code>{agent.account}</code><button type="button" className={styles.textButton} onClick={() => navigator.clipboard.writeText(agent.account)}>Copy address</button></div></section>
-      <section className={styles.statsLarge}><div><span>Status</span><strong>{agent.active ? 'Running' : 'Paused'}</strong></div><div><span>Type</span><strong>{agent.registered === false ? 'Unregistered' : 'Centry agent'}</strong></div><div><span>Recent events</span><strong>{activity.length}</strong></div></section>
+      <section className={styles.statsLarge}>
+        <div><span>Status</span><strong>{agent.active ? 'Running' : 'Paused'}</strong></div>
+        <div>
+          <span>Automation</span>
+          <strong>
+            {!runtime ? 'Checking…' :
+              !runtime.runnerConfigured ? 'Runner missing' :
+              runtime.operatorAuthorized === false ? 'Not authorized' :
+              !runtime.providerConfigured ? 'Provider missing' :
+              runtime.autonomyEnabled ? 'Ready' : 'Autonomy off'}
+          </strong>
+        </div>
+        <div><span>Recent events</span><strong>{activity.length}</strong></div>
+      </section>
+      <div className={styles.runtimeMeta}>
+        <span>
+          {runtime?.recentRuns?.[0]
+            ? `Last wake: ${new Date(runtime.recentRuns[0].started_at).toLocaleString()} · ${runtime.recentRuns[0].status}${runtime.recentRuns[0].reason ? ` · ${runtime.recentRuns[0].reason}` : ''}`
+            : runtime ? 'No recorded runner wake is available for this agent yet.' : 'Checking the agent runtime…'}
+        </span>
+      </div>
 
       <section className={styles.analyticsGrid}>
         <section className={styles.card}>

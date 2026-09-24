@@ -19,6 +19,7 @@ const OPERATIONS = new Set([
   "unlock_agent",
   "create_agent_run",
   "finish_agent_run",
+  "list_agent_runs",
   "enqueue_agent_task",
   "list_pending_agent_tasks",
   "complete_agent_task",
@@ -267,6 +268,18 @@ async function runOperation(db, operation, args) {
         run.finishedAt || null,
       ).run();
       return { id: run.id };
+    }
+
+    case "list_agent_runs": {
+      const agentId = requireString(args.agentId, "agentId");
+      const limit = Math.max(1, Math.min(50, Number(args.limit) || 10));
+      return await db.prepare(
+        `SELECT id, agent_id, cycle_key, status, task_count, action_count, tx_hash, reason, error, started_at, finished_at
+         FROM centry_agent_runs
+         WHERE agent_id = ?
+         ORDER BY started_at DESC
+         LIMIT ?`
+      ).bind(agentId, limit).all().then((r) => r.results || []);
     }
 
     case "finish_agent_run": {

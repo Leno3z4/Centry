@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 import { useAccount, usePublicClient, useSignMessage } from 'wagmi';
 import { Providers } from '../../../../../components/Providers';
 import { AppShell } from '../../../../../components/AppShell';
-import { loadOwnedAgents, API_BASE, apiJson, ensureOwnerSession, providerOptions } from '../../agentClient';
+import { loadOwnedAgents, API_BASE, apiJson, ensureOwnerSession } from '../../agentClient';
 import styles from '../../agents.module.css';
 
 function ChatContent() {
@@ -16,7 +16,6 @@ function ChatContent() {
   const { signMessageAsync } = useSignMessage();
 
   const [agent, setAgent] = useState(null);
-  const [provider, setProvider] = useState('gemini');
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState([]);
   const [error, setError] = useState('');
@@ -28,13 +27,29 @@ function ChatContent() {
       .then((agents) => {
         const selected = agents.find((item) => item.account.toLowerCase() === String(account).toLowerCase());
         setAgent(selected || null);
-        if (selected?.config?.autonomy?.provider) setProvider(selected.config.autonomy.provider);
       })
       .catch((e) => setError(e.message));
   }, [address, publicClient, account]);
 
+  async function waitForTask(taskId) {
+    for (let attempt = 0; attempt < 35; attempt += 1) {
+      const result = await apiJson(`${API_BASE}/api/v1/agent-admin/tasks/${taskId}`, { method: 'GET' });
+      if (result.status !== 'pending') {
+        const answer = result.result?.answer || result.result?.error || 'The agent finished processing the request.';
+        setMessages((current) => [...current, { role: 'assistant', content: answer }]);
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+    setMessages((current) => [...current, {
+      role: 'assistant',
+      content: 'The request is still queued. The next agent runtime wake will continue processing it.',
+    }]);
+  }
+
   async function sendChat() {
     if (!agent || !message.trim()) return;
+    const submittedMessage = message.trim();
     setSending(true);
     setError('');
     try {
@@ -42,10 +57,11 @@ function ChatContent() {
       const result = await apiJson(`${API_BASE}/api/v1/agents/${agent.id}/chat`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ message: message.trim(), provider }),
+        body: JSON.stringify({ message: submittedMessage }),
       });
-      setMessages((current) => [...current, { role: 'user', content: message.trim() }, { role: 'assistant', content: result.answer }]);
+      setMessages((current) => [...current, { role: 'user', content: submittedMessage }, { role: 'assistant', content: result.acknowledgement || 'Queued through the agent runtime…' }]);
       setMessage('');
+      if (result.taskId) await waitForTask(result.taskId);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -86,11 +102,8 @@ function ChatContent() {
         </div>
 
         <div className={styles.chatComposerLarge}>
-          <select className={styles.input} value={provider} onChange={(e) => setProvider(e.target.value)}>
-            {providerOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </select>
-          <input className={styles.input} value={message} onChange={(e) => setMessage(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) sendChat(); }} placeholder="Ask your agent…" />
-          <button className={styles.primaryButton} disabled={sending || !message.trim()} onClick={sendChat}>{sending ? 'Sending…' : 'Send'}</button>
+          <input className={styles.input} value={message} onChange={(e) => setMessage(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) sendChat(); }} placeholder="Ask or command your agent…" />
+          <button className={styles.primaryButton} disabled={sending || !message.trim()} onClick={sendChat}>{sending ? 'Processing…' : 'Send'}</button>
         </div>
       </section>
     </main>
