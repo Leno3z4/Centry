@@ -31,27 +31,38 @@ function ChatContent() {
       .catch((e) => setError(e.message));
   }, [address, publicClient, account]);
 
-  async function waitForTask(taskId) {
-    for (let attempt = 0; attempt < 25; attempt += 1) {
-      const result = await apiJson(`${API_BASE}/api/v1/agent-admin/tasks/${taskId}`, { method: 'GET' });
-      if (result.status !== 'pending') {
-        const answer = result.result?.answer || result.result?.error || 'The agent finished processing the request.';
-        setMessages((current) => [...current, { role: 'assistant', content: answer }]);
-        return;
+  function updateMessage(messageId, patch) {
+    setMessages((current) => current.map((item) => (
+      item.id === messageId ? { ...item, ...patch } : item
+    )));
+  }
+
+  async function waitForTask(taskId, messageId) {
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      try {
+        const result = await apiJson(`${API_BASE}/api/v1/agent-admin/tasks/${taskId}`, { method: 'GET' });
+        if (result.status !== 'pending') {
+          const answer = result.result?.answer || result.result?.error || 'The agent finished processing the request.';
+          updateMessage(messageId, { content: answer, pending: false });
+          return;
+        }
+      } catch {
+        // Keep polling through transient API/RPC failures.
       }
 
-      const delay = attempt < 6 ? 350 : attempt < 14 ? 750 : 1500;
+      const delay = attempt < 6 ? 500 : attempt < 16 ? 1000 : 2000;
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
 
-    setMessages((current) => [...current, {
-      role: 'assistant',
-      content: 'I’m still working on that. The runtime will continue processing it.',
-    }]);
+    updateMessage(messageId, {
+      content: 'Still processing. The request remains queued with the agent runtime.',
+      pending: true,
+      delayed: true,
+    });
   }
 
   async function sendChat() {
-    if (!agent || !message.trim()) return;
+    if (!agent || !message.trim() || sending) return;
     const submittedMessage = message.trim();
     setSending(true);
     setError('');
@@ -62,9 +73,32 @@ function ChatContent() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ message: submittedMessage }),
       });
-      setMessages((current) => [...current, { role: 'user', content: submittedMessage }]);
+
+      const localUserId = `user-${result.taskId || crypto.randomUUID()}`;
+      setMessages((current) => [...current, { role: 'user', content: submittedMessage, id: localUserId }]);
       setMessage('');
-      if (result.taskId) await waitForTask(result.taskId);
+
+      if (result.mode === 'direct') {
+        setMessages((current) => [...current, {
+          role: 'assistant',
+          content: result.result?.answer || 'The balance read completed.',
+          id: crypto.randomUUID(),
+        }]);
+        return;
+      }
+
+      if (result.taskId) {
+        const messageId = `assistant-${result.taskId}`;
+        setMessages((current) => [...current, {
+          role: 'assistant',
+          content: result.runnerConfigured === false
+            ? 'Queued. The agent runtime is not configured for an immediate wake.'
+            : 'Thinking…',
+          id: messageId,
+          pending: true,
+        }]);
+        void waitForTask(result.taskId, messageId);
+      }
     } catch (e) {
       setError(e.message);
     } finally {
@@ -91,9 +125,9 @@ function ChatContent() {
         <div className={styles.chat}>
           <div className={styles.chatHistory}>
             {messages.length ? messages.map((item, index) => (
-              <div key={index} className={item.role === 'user' ? styles.chatUser : styles.chatAgent}>
+              <div key={item.id || index} className={item.role === 'user' ? styles.chatUser : styles.chatAgent}>
                 <span>{item.role === 'user' ? 'You' : agent.name}</span>
-                <p>{item.content}</p>
+                <p>{item.content}</p>{item.pending ? <small className={styles.chatPending}>{item.delayed ? 'Runner still processing' : 'Processing…'}</small> : null}
               </div>
             )) : (
               <div className={styles.chatWelcome}>
