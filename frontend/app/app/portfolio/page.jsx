@@ -215,40 +215,40 @@ function PortfolioContent() {
       </div>
 
       <TransactionHistory />
+    <style jsx global>{`
+      .risk-overview-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:14px}
+      .risk-summary-panel,.collateral-panel,.market-risk-panel{padding:20px}
+      .risk-summary-panel .panel-head p,.collateral-panel .panel-head p{margin:6px 0 0;color:rgba(255,255,255,.56);font-size:12px;line-height:1.5}
+      .risk-state-chip{display:inline-flex;align-items:center;padding:6px 9px;border:1px solid #2a2a2a;border-radius:999px;background:#111;color:rgba(255,255,255,.72);font-size:10px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+      .risk-summary-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:16px}
+      .risk-summary-metrics>div{padding:13px;border:1px solid #202020;border-radius:12px;background:#0d0d0d}
+      .risk-summary-metrics span,.risk-summary-metrics small{display:block;color:rgba(255,255,255,.5);font-size:10px}
+      .risk-summary-metrics strong{display:block;margin:6px 0 4px;color:#fff;font-size:17px}
+      .risk-distance-track{height:6px;margin-top:15px;overflow:hidden;border-radius:999px;background:#202020}
+      .risk-distance-track>div{height:100%;border-radius:inherit;background:#0a84ff}
+      .collateral-list{display:grid;gap:12px;margin-top:16px}
+      .collateral-row{display:grid;gap:7px;padding:11px 0;border-bottom:1px solid #202020}
+      .collateral-row:last-child{border-bottom:0}
+      .collateral-row>div:first-child{display:flex;justify-content:space-between;gap:12px}
+      .collateral-row strong{color:#fff;font-size:12px}
+      .collateral-row span{color:rgba(255,255,255,.52);font-size:11px}
+      .collateral-share{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:10px}
+      .collateral-share>div{height:4px;border-radius:999px;background:#202020;overflow:hidden}
+      .collateral-share>div>span{display:block;height:100%;border-radius:inherit;background:#0a84ff}
+      .market-risk-panel{margin-top:14px}
+      .market-risk-table{margin-top:15px;border:1px solid #202020;border-radius:13px;overflow:auto}
+      .market-risk-table-head,.market-risk-row{display:grid;grid-template-columns:1.2fr .85fr .85fr .85fr 1fr 1.25fr;min-width:760px;gap:12px;align-items:center}
+      .market-risk-table-head{padding:10px 12px;background:#111;border-bottom:1px solid #202020;color:rgba(255,255,255,.43);font-size:10px;text-transform:uppercase;letter-spacing:.05em}
+      .market-risk-row{padding:13px 12px;border-bottom:1px solid #202020;background:#0d0d0d}
+      .market-risk-row:last-child{border-bottom:0}
+      .market-risk-row strong,.market-risk-row small{display:block}
+      .market-risk-row strong{color:#fff;font-size:12px}
+      .market-risk-row small{margin-top:3px;color:rgba(255,255,255,.45);font-size:10px}
+      .risk-footnote{margin-top:11px;color:rgba(255,255,255,.42);font-size:10px;line-height:1.5}
+      .risk-empty{padding:18px 0;color:rgba(255,255,255,.5);font-size:12px}
+      @media (max-width:900px){.risk-overview-grid{grid-template-columns:1fr}}
+      @media (max-width:640px){.risk-summary-metrics{grid-template-columns:1fr}}
+    `}</style>
     </div>
   );
 }
-<style jsx global>{`
-  .risk-overview-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:14px}
-  .risk-summary-panel,.collateral-panel,.market-risk-panel{padding:20px}
-  .risk-summary-panel .panel-head p,.collateral-panel .panel-head p{margin:6px 0 0;color:rgba(255,255,255,.56);font-size:12px;line-height:1.5}
-  .risk-state-chip{display:inline-flex;align-items:center;padding:6px 9px;border:1px solid #2a2a2a;border-radius:999px;background:#111;color:rgba(255,255,255,.72);font-size:10px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
-  .risk-summary-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:16px}
-  .risk-summary-metrics>div{padding:13px;border:1px solid #202020;border-radius:12px;background:#0d0d0d}
-  .risk-summary-metrics span,.risk-summary-metrics small{display:block;color:rgba(255,255,255,.5);font-size:10px}
-  .risk-summary-metrics strong{display:block;margin:6px 0 4px;color:#fff;font-size:17px}
-  .risk-distance-track{height:6px;margin-top:15px;overflow:hidden;border-radius:999px;background:#202020}
-  .risk-distance-track>div{height:100%;border-radius:inherit;background:#0a84ff}
-  .collateral-list{display:grid;gap:12px;margin-top:16px}
-  .collateral-row{display:grid;gap:7px;padding:11px 0;border-bottom:1px solid #202020}
-  .collateral-row:last-child{border-bottom:0}
-  .collateral-row>div:first-child{display:flex;justify-content:space-between;gap:12px}
-  .collateral-row strong{color:#fff;font-size:12px}
-  .collateral-row span{color:rgba(255,255,255,.52);font-size:11px}
-  .collateral-share{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:10px}
-  .collateral-share>div{height:4px;border-radius:999px;background:#202020;overflow:hidden}
-  .collateral-share>div>span{display:block;height:100%;border-radius:inherit;background:#0a84ff}
-  .market-risk-panel{margin-top:14px}
-  .market-risk-table{margin-top:15px;border:1px solid #202020;border-radius:13px;overflow:auto}
-  .market-risk-table-head,.market-risk-row{display:grid;grid-template-columns:1.2fr .85fr .85fr .85fr 1fr 1.25fr;min-width:760px;gap:12px;align-items:center}
-  .market-risk-table-head{padding:10px 12px;background:#111;border-bottom:1px solid #202020;color:rgba(255,255,255,.43);font-size:10px;text-transform:uppercase;letter-spacing:.05em}
-  .market-risk-row{padding:13px 12px;border-bottom:1px solid #202020;background:#0d0d0d}
-  .market-risk-row:last-child{border-bottom:0}
-  .market-risk-row strong,.market-risk-row small{display:block}
-  .market-risk-row strong{color:#fff;font-size:12px}
-  .market-risk-row small{margin-top:3px;color:rgba(255,255,255,.45);font-size:10px}
-  .risk-footnote{margin-top:11px;color:rgba(255,255,255,.42);font-size:10px;line-height:1.5}
-  .risk-empty{padding:18px 0;color:rgba(255,255,255,.5);font-size:12px}
-  @media (max-width:900px){.risk-overview-grid{grid-template-columns:1fr}}
-  @media (max-width:640px){.risk-summary-metrics{grid-template-columns:1fr}}
-`}</style>
