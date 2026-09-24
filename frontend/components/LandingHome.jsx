@@ -119,5 +119,6 @@ export default function LandingHome() {
         <span>Onchain capital / controlled execution</span>
         <span>Arc Mainnet</span>
       </footer>
+    </main>
   );
 }
