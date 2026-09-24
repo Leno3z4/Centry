@@ -273,7 +273,7 @@ function DashboardContent() {
       <div className={styles.runtimeMeta}>
         <span>
           {runtime?.recentRuns?.[0]
-            ? `Last wake: ${new Date(runtime.recentRuns[0].started_at).toLocaleString()} · ${runtime.recentRuns[0].status}${runtime.recentRuns[0].reason ? ` · ${runtime.recentRuns[0].reason}` : ''}`
+            ? `Last wake: ${new Date(runtime.recentRuns[0].started_at).toLocaleString()} · ${runtime.recentRuns[0].status}${runtime.recentRuns[0].reason ? ` · ${runtime.recentRuns[0].reason}` : ''}${runtime.recentRuns[0].error ? ` · ${runtime.recentRuns[0].error}` : ''}`
             : runtime ? 'No recorded runner wake is available for this agent yet.' : 'Checking the agent runtime…'}
         </span>
       </div>
