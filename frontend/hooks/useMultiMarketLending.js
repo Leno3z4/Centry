@@ -51,22 +51,6 @@ export function useMultiMarketLending(asset, decimals = 18) {
     query: commonQuery,
   });
 
-  const { data: supplyBalanceRaw, refetch: refetchUserSupply } = useReadContract({
-    address: CONTRACT_ADDRESSES.lendingPool,
-    abi: LENDING_POOL_ABI,
-    functionName: 'supplyBalance',
-    args: [address, asset],
-    query: walletQuery,
-  });
-
-  const { data: borrowBalanceRaw, refetch: refetchUserBorrow } = useReadContract({
-    address: CONTRACT_ADDRESSES.lendingPool,
-    abi: LENDING_POOL_ABI,
-    functionName: 'borrowBalance',
-    args: [address, asset],
-    query: walletQuery,
-  });
-
   const { data: currentSupplyRaw, refetch: refetchSupply } = useReadContract({
     address: CONTRACT_ADDRESSES.lendingPool,
     abi: LENDING_POOL_ABI,
@@ -144,22 +128,20 @@ export function useMultiMarketLending(asset, decimals = 18) {
     query: walletQuery,
   });
 
-  const selectedMarket = ACTIVE_MARKETS.find(
+  const selectedMarketIndex = ACTIVE_MARKETS.findIndex(
     (market) => market.address?.toLowerCase() === asset?.toLowerCase(),
   );
-
-  const {
-    data: selectedPriceResult,
-    refetch: refetchSelectedPrice,
-  } = useReadContract({
-    address: CONTRACT_ADDRESSES.oracle,
-    abi: ORACLE_ABI,
-    functionName: 'getPrice',
-    args: [asset],
-    query: {
-      enabled: configured && correctNetwork && Boolean(selectedMarket),
-    },
-  });
+  const selectedSupplyResult = selectedMarketIndex >= 0 && Array.isArray(globalPositionResults)
+    ? globalPositionResults[selectedMarketIndex * 3]
+    : null;
+  const selectedBorrowResult = selectedMarketIndex >= 0 && Array.isArray(globalPositionResults)
+    ? globalPositionResults[selectedMarketIndex * 3 + 1]
+    : null;
+  const selectedPriceResult = selectedMarketIndex >= 0 && Array.isArray(globalPositionResults)
+    ? globalPositionResults[selectedMarketIndex * 3 + 2]
+    : null;
+  const supplyBalanceRaw = selectedSupplyResult?.status === 'success' ? selectedSupplyResult.result : undefined;
+  const borrowBalanceRaw = selectedBorrowResult?.status === 'success' ? selectedBorrowResult.result : undefined;
 
   const { data: walletBalanceRaw, refetch: refetchBalance } = useReadContract({
     address: asset,
@@ -269,12 +251,9 @@ export function useMultiMarketLending(asset, decimals = 18) {
       refetchBorrow(),
       refetchUtilization(),
       refetchPoolCash(),
-      refetchUserSupply(),
-      refetchUserBorrow(),
       refetchHealth(),
       refetchBorrowPower(),
       refetchGlobalPosition(),
-      refetchSelectedPrice(),
       refetchBalance(),
       refetchAllowance(),
     ]);
@@ -376,8 +355,8 @@ export function useMultiMarketLending(asset, decimals = 18) {
       ? Number(formatUnits(remainingBorrowPowerRaw, 18))
       : 0;
 
-  const selectedPriceRaw = Array.isArray(selectedPriceResult)
-    ? selectedPriceResult[0]
+  const selectedPriceRaw = selectedPriceResult?.status === 'success'
+    ? (Array.isArray(selectedPriceResult.result) ? selectedPriceResult.result[0] : ZERO)
     : ZERO;
 
   const riskLimitedBorrowRaw =
