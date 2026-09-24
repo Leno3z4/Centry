@@ -74,7 +74,7 @@ function WalletAssetDropdown({ value, assets, onChange, disabled = false }) {
         disabled={disabled}
       >
         <span className={styles.walletAssetSelected}>
-          <span className={`${styles.walletAssetIcon} ${styles[`walletAssetIcon_${selected?.key || 'native'}`]} `}>
+          <span className={`${styles.walletAssetIcon} ${styles[`walletAssetIcon_${selected?.key || 'native'}`]}`}>
             {selected?.key === 'cirbtc' ? '₿' : selected?.key === 'eurc' ? '€' : selected?.key === 'cent' ? 'C' : '
   const { account } = useParams();
   const router = useRouter();
@@ -378,7 +378,7 @@ export default function AgentDashboardPage() { return <Providers><AppShell><Dash
                 setOpen(false);
               }}
             >
-              <span className={`${styles.walletAssetIcon} ${styles[`walletAssetIcon_${item.key}`]} `}>
+              <span className={`${styles.walletAssetIcon} ${styles[`walletAssetIcon_${item.key}`]}`}>
                 {item.key === 'cirbtc' ? '₿' : item.key === 'eurc' ? '€' : item.key === 'cent' ? 'C' : '
   const { account } = useParams();
   const router = useRouter();
@@ -674,7 +674,6 @@ export default function AgentDashboardPage() { return <Providers><AppShell><Dash
     </div>
   );
 }
-
 function DashboardContent() {
   const { account } = useParams();
   const router = useRouter();
