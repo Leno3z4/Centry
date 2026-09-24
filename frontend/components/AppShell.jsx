@@ -82,7 +82,7 @@ export function AppShell({ children }) {
                     <span>{item.label}</span>
                   </div>
                 ) : (
-                  <Link key={item.href} href={item.href} className={`nav-item ${active === item.href ? 'active' : ''}`} aria-current={active === item.href ? 'page' : undefined}>
+                  <Link key={item.href} href={item.href} className={`nav-item ${active === item.href ? 'active' : ''}`} aria-current={active === item.href ? 'page' : undefined} prefetch={false}>
                     <span className="nav-icon">{item.icon}</span>
                     <span>{item.label}</span>
                   </Link>
