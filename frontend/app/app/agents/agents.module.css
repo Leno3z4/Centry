@@ -1156,7 +1156,7 @@
 
 .chatComposerLarge {
   display: grid;
-  grid-template-columns: 150px 1fr auto;
+  grid-template-columns: 1fr auto;
   gap: 9px;
 }
 
