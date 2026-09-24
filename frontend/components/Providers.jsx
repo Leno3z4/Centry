@@ -12,8 +12,10 @@ const ProvidersContext = createContext(false);
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 15_000,
-      gcTime: 5 * 60_000,
+      // Most protocol reads do not need sub-second freshness. Keeping them warm
+      // across route changes cuts duplicate RPC traffic without changing writes.
+      staleTime: 30_000,
+      gcTime: 10 * 60_000,
       refetchOnWindowFocus: false,
       refetchOnReconnect: true,
       retry: 1,
