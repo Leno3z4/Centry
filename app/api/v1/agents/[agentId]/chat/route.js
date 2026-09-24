@@ -62,7 +62,7 @@ export async function POST(request, { params }) {
       mode: "queued",
       taskId,
       status: queued?.status || "pending",
-      acknowledgement: "Queued through the same agent runtime used for autonomous execution.",
+      acknowledgement: "Thinking…",
     }, { status: 202, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "agent_chat_failed" }, { status: 400 });
