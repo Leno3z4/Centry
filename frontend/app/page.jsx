@@ -14,9 +14,9 @@ export default function Page() {
         <main className="landing-aero-shell">
             <div className="landing-aero-background" aria-hidden="true">
                 <AeroShards
-                    backgroundColor="#090a0c"
-                    shardColor="#4a4f58"
-                    accentColor="#a79bdb"
+                    backgroundColor="#080808"
+                    shardColor="#73787d"
+                    accentColor="#0a84ff"
                     placement="full"
                     flow="stream"
                     material="pearl"
@@ -25,22 +25,22 @@ export default function Page() {
                     scale={1}
                     spread={1}
                     depth={1}
-                    speed={1}
-                    spin={1}
+                    speed={0.7}
+                    spin={0.8}
                     interaction="repel"
-                    density={1.5}
-                    shardSize={1.1}
+                    density={1.05}
+                    shardSize={1.05}
                     stretch={1}
-                    turbulence={1}
-                    glow={1}
+                    turbulence={0.75}
+                    glow={0.7}
                     edgeSoftness={2}
-                    bloom={0.5}
-                    grain={0.05}
-                    chromaticAberration={0.0075}
+                    bloom={0.25}
+                    grain={0.035}
+                    chromaticAberration={0.004}
                     transitionDuration={1}
                     interactionRadius={1.5}
-                    interactionStrength={0.5}
-                    rippleIntensity={1}
+                    interactionStrength={0.35}
+                    rippleIntensity={0.65}
                     holdToGather={true}
                 />
             </div>
@@ -50,7 +50,7 @@ export default function Page() {
                     position: relative;
                     min-height: 100vh;
                     isolation: isolate;
-                    background: #090a0c;
+                    background: #080808;
                     overflow: hidden;
                 }
 
@@ -59,9 +59,11 @@ export default function Page() {
                     inset: 0;
                     z-index: 0;
                     height: 100vh;
-                    opacity: .035;
+                    opacity: .12;
                     pointer-events: none;
                     overflow: hidden;
+                    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 30%, rgba(0,0,0,.72) 52%, transparent 82%);
+                    mask-image: linear-gradient(to bottom, #000 0%, #000 30%, rgba(0,0,0,.72) 52%, transparent 82%);
                 }
 
                 .landing-aero-background > * {
