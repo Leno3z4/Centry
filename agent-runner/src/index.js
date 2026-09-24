@@ -673,11 +673,24 @@ async function readAgentSnapshot(publicClient, account, runnerAddress, rpcUrl) {
       operatorAuthorized: Boolean(operatorAuthorized),
       nativeUsdcBalance: nativeUsdcBalance == null ? null : nativeUsdcBalance.toString(),
       balances,
+      balancesDisplay: Object.fromEntries(
+        ["USDC", "EURC", "CIRBTC"].map((symbol) => [symbol, formatTokenAmount(balances[symbol], symbol)]),
+      ),
       lending: {
         healthFactor: value("healthFactor") == null ? null : value("healthFactor").toString(),
         borrowPower: value("borrowPower") == null ? null : value("borrowPower").toString(),
         supply,
         borrow,
+      },
+      lendingDisplay: {
+        healthFactor: value("healthFactor") == null ? null : formatUnits(value("healthFactor"), 18),
+        borrowPower: value("borrowPower") == null ? null : formatUnits(value("borrowPower"), 6),
+        supply: Object.fromEntries(
+          ["USDC", "EURC", "CIRBTC"].map((symbol) => [symbol, formatTokenAmount(supply[symbol], symbol)]),
+        ),
+        borrow: Object.fromEntries(
+          ["USDC", "EURC", "CIRBTC"].map((symbol) => [symbol, formatTokenAmount(borrow[symbol], symbol)]),
+        ),
       },
     };
   } catch (error) {
@@ -789,11 +802,24 @@ async function readAgentSnapshotFallback(publicClient, account, runnerAddress) {
     operatorAuthorized: Boolean(operatorAuthorized),
     nativeUsdcBalance: nativeUsdcBalance == null ? null : nativeUsdcBalance.toString(),
     balances,
+    balancesDisplay: Object.fromEntries(
+      ["USDC", "EURC", "CIRBTC"].map((symbol) => [symbol, formatTokenAmount(balances[symbol], symbol)]),
+    ),
     lending: {
       healthFactor: healthFactor == null ? null : healthFactor.toString(),
       borrowPower: borrowPower == null ? null : borrowPower.toString(),
       supply,
       borrow,
+    },
+    lendingDisplay: {
+      healthFactor: healthFactor == null ? null : formatUnits(healthFactor, 18),
+      borrowPower: borrowPower == null ? null : formatUnits(borrowPower, 6),
+      supply: Object.fromEntries(
+        ["USDC", "EURC", "CIRBTC"].map((symbol) => [symbol, formatTokenAmount(supply[symbol], symbol)]),
+      ),
+      borrow: Object.fromEntries(
+        ["USDC", "EURC", "CIRBTC"].map((symbol) => [symbol, formatTokenAmount(borrow[symbol], symbol)]),
+      ),
     },
   };
 }
