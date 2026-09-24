@@ -411,9 +411,9 @@ body {
   --section-progress: 0;
   opacity: calc(.35 + (var(--section-progress) * .65));
   transform: translate3d(0, calc((1 - var(--section-progress)) * 28px), 0);
-  filter: blur(calc((1 - var(--section-progress)) * 6px));
-  will-change: opacity, transform, filter;
-  transition: opacity .16s linear, transform .16s linear, filter .16s linear;
+  filter: none;
+  will-change: opacity, transform;
+  transition: opacity .16s linear, transform .16s linear;
 }
 [data-reveal].is-visible {
   opacity: 1;
