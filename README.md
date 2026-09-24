@@ -93,7 +93,7 @@ Users do **not** deploy an individual implementation manually. The factory deplo
 
 `CentryOnchainAgentAccount.sol` supports bounded single calls and batch calls, two-step ownership, operator authorization, per-target/function permissions, and execution checks through `canExecute()`.
 
-## Agent connection model
+## Agent connection model (coming soon)
 
 Centry uses a Skill-first connection flow.
 
