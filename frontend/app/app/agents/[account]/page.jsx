@@ -286,16 +286,46 @@ function DashboardContent() {
           <div className={styles.portfolioMeta}>
             <span>Pie share uses only assets with an available USD price feed.</span>
           </div>
-
-          <div className={styles.walletActions}>
-            <button className={styles.primaryButton} onClick={() => { setFundOpen((value) => !value); setWithdrawOpen(false); }}>Fund</button>
-            <button className={styles.secondaryButton} onClick={() => { setWithdrawOpen((value) => !value); setFundOpen(false); }}>Withdraw</button>
-          </div>
-          {fundOpen || withdrawOpen ? <div className={styles.inlineAction}><select className={styles.input} value={asset} onChange={(e) => setAsset(e.target.value)}>{WITHDRAWABLE_ASSETS.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select><input className={styles.input} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" /><button className={styles.primaryButton} onClick={fundOpen ? fundAgent : withdrawAgent}>{fundOpen ? 'Fund' : 'Withdraw'}</button></div> : null}
         </section>
       </section>
 
-      <section className={styles.quickLinks}><Link href={`/app/agents/${agent.account}/configure`} className={styles.quickCard}><strong>Configure</strong><span>AI provider, autonomy, permissions and external access.</span></Link><Link href={`/app/agents/${agent.account}/chat`} className={styles.quickCard}><strong>Chat with agent</strong><span>Talk to the agent and ask what it has done.</span></Link></section>
+      <section className={styles.quickLinks}>
+        <button
+          type="button"
+          className={styles.quickCard}
+          onClick={() => { setFundOpen((value) => !value); setWithdrawOpen(false); }}
+          aria-expanded={fundOpen}
+        >
+          <strong>Fund agent</strong>
+          <span>Add supported assets to the agent smart account.</span>
+        </button>
+        <button
+          type="button"
+          className={styles.quickCard}
+          onClick={() => { setWithdrawOpen((value) => !value); setFundOpen(false); }}
+          aria-expanded={withdrawOpen}
+        >
+          <strong>Withdraw</strong>
+          <span>Move supported assets from the agent back to your wallet.</span>
+        </button>
+        {fundOpen || withdrawOpen ? (
+          <div className={styles.inlineAction}>
+            <select className={styles.input} value={asset} onChange={(e) => setAsset(e.target.value)}>
+              {WITHDRAWABLE_ASSETS.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
+            </select>
+            <input
+              className={styles.input}
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="0.00"
+            />
+            <button className={styles.primaryButton} onClick={fundOpen ? fundAgent : withdrawAgent}>
+              {fundOpen ? 'Fund agent' : 'Withdraw'}
+            </button>
+          </div>
+        ) : null}
+      </section>
     </main>
   );
 }
