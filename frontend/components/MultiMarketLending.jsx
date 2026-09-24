@@ -38,7 +38,7 @@ export default function MultiMarketLending() {
   const refreshTimerRef = useRef(null);
   const market = supportedMarkets.find((item) => item.id === marketId) || supportedMarkets[0];
   const lending = useMultiMarketLending(market?.address, market?.decimals);
-  const gateway = useGatewayFunding();
+  const gateway = useGatewayFunding({ enabled: market?.symbol === 'USDC' });
   const busy = lending.isPending || lending.isConfirming || gateway.loading;
   const numericAmount = Number(amount || 0);
   const debt = Number(lending.borrowBalance || 0);
