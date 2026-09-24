@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   useAccount,
   useConnect,
@@ -116,6 +117,8 @@ export function WalletConnect() {
           </button>
         </div>
 
+        {pickerOpen && typeof document !== 'undefined'
+          ? createPortal(
         {pickerOpen ? (
           <div
             className="wallet-picker-backdrop"
@@ -221,6 +224,11 @@ export function WalletConnect() {
           </div>
         ) : null}
 
+            ,
+              document.body,
+            )
+          : null}
+          
         <style jsx global>{`
           .wallet-connect-wrap {
             display: flex;
