@@ -1018,7 +1018,9 @@ async function buildCalls(publicClient, agent, actions, autonomy, db, options = 
       case "borrow":
       case "repay": {
         const asset = assetAddress(action.asset);
-        const amount = assetAmountToBaseUnits(action.amount, asset);
+        const amount = humanReadableAmounts
+          ? assetAmountToBaseUnits(action.amount, asset)
+          : positiveUint(action.amount, "amount");
         if (type === "repay") {
           const approval = encodeFunctionData({ abi: ERC20_ABI, functionName: "approve", args: [LENDING_POOL, amount] });
           calls.push(makeCall(asset, approval));
@@ -1081,7 +1083,9 @@ async function buildCalls(publicClient, agent, actions, autonomy, db, options = 
         if (!target) throw new Error("transfer_target_agent_not_found");
         if (String(target.owner).toLowerCase() !== String(agent.owner).toLowerCase()) throw new Error("external_agent_transfer_prohibited");
         const asset = assetAddress(action.asset);
-        const amount = assetAmountToBaseUnits(action.amount, asset);
+        const amount = humanReadableAmounts
+          ? assetAmountToBaseUnits(action.amount, asset)
+          : positiveUint(action.amount, "amount");
         const data = encodeFunctionData({ abi: ACCOUNT_ABI, functionName: "transferToAgent", args: [asset, getAddress(target.account), amount] });
         calls.push(makeCall(account, data));
         break;
