@@ -781,3 +781,21 @@ footer {
   transform: none !important;
   box-shadow: none !important;
 }
+
+/* Landing overhaul: let the hero aero field read as a deliberate chrome material. */
+.landing-aero-background {
+  opacity: .42 !important;
+  mix-blend-mode: screen;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 72%, transparent 100%) !important;
+  mask-image: linear-gradient(to bottom, #000 0%, #000 72%, transparent 100%) !important;
+}
+.landing-aero-background > * {
+  filter: none !important;
+}
+
+/* The landing page is editorial, not a dashboard: no generic product-card skin. */
+.landing-home-flow-item,
+.landing-home-capability,
+.landing-home-final {
+  box-shadow: none;
+}

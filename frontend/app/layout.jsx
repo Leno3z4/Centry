@@ -10,6 +10,7 @@ import './eyebrow-reset.css';
 import './apple-skin.css';
 import './docs-mobile-nav.css';
 import './unified-grey-theme.css';
+import './centry-design-system.css';
 import { Providers } from '../components/Providers';
 
 export const metadata = {
