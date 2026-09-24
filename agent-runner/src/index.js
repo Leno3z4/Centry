@@ -986,7 +986,7 @@ async function buildCalls(publicClient, agent, actions, autonomy, db) {
       case "borrow":
       case "repay": {
         const asset = assetAddress(action.asset);
-        const amount = positiveUint(action.amount, "amount");
+        const amount = assetAmountToBaseUnits(action.amount, asset);
         if (type === "repay") {
           const approval = encodeFunctionData({ abi: ERC20_ABI, functionName: "approve", args: [LENDING_POOL, amount] });
           calls.push(makeCall(asset, approval));
@@ -1043,7 +1043,7 @@ async function buildCalls(publicClient, agent, actions, autonomy, db) {
         if (!target) throw new Error("transfer_target_agent_not_found");
         if (String(target.owner).toLowerCase() !== String(agent.owner).toLowerCase()) throw new Error("external_agent_transfer_prohibited");
         const asset = assetAddress(action.asset);
-        const amount = positiveUint(action.amount, "amount");
+        const amount = assetAmountToBaseUnits(action.amount, asset);
         const data = encodeFunctionData({ abi: ACCOUNT_ABI, functionName: "transferToAgent", args: [asset, getAddress(target.account), amount] });
         calls.push(makeCall(account, data));
         break;
@@ -1552,6 +1552,32 @@ async function withConcurrency(items, concurrency, fn) {
   return results;
 }
 
+async function runSingleAgent(env, agentId, taskId) {
+  const agent = await getAgentById(env.DB, agentId);
+  if (!agent) throw new Error("agent_not_found");
+
+  const rpcUrl = String(env.CENTRY_AGENT_RPC_URL || ARC_RPC);
+  const runnerAccount = getRunnerAccount(env);
+  const runnerAddress = getAddress(runnerAccount.address);
+  const publicClient = publicClientFor(rpcUrl);
+  const walletClient = createWalletClient({
+    account: runnerAccount,
+    chain: { ...ARC_CHAIN, rpcUrls: { default: { http: [rpcUrl] } } },
+    transport: http(rpcUrl),
+  });
+
+  return runAgent(
+    env.DB,
+    publicClient,
+    walletClient,
+    runnerAddress,
+    agent,
+    new Date().toISOString(),
+    env,
+    taskId,
+  );
+}
+
 async function runScheduler(env, scheduledAt) {
   const rpcUrl = String(env.CENTRY_AGENT_RPC_URL || ARC_RPC);
   const runnerAccount = getRunnerAccount(env);
@@ -1606,7 +1632,7 @@ export default {
     );
   },
 
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname === "/health") {
       try {
@@ -1617,11 +1643,46 @@ export default {
       }
     }
 
-    if (url.pathname === "/run" && request.method === "POST") {
+    if ((url.pathname === "/run" || url.pathname === "/chat") && request.method === "POST") {
       const secret = env.CENTRY_AGENT_RUNNER_HTTP_SECRET || "";
       if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
         return new Response("Unauthorized", { status: 401 });
       }
+
+      if (url.pathname === "/chat") {
+        let body;
+        try {
+          body = await request.json();
+        } catch {
+          return Response.json({ error: "invalid_json" }, { status: 400 });
+        }
+
+        const agentId = String(body?.agentId || "").trim();
+        const taskId = String(body?.taskId || "").trim();
+        if (!agentId || !taskId) {
+          return Response.json({ error: "agent_id_and_task_id_required" }, { status: 400 });
+        }
+
+        if (!ctx?.waitUntil) {
+          return Response.json({ error: "runner_background_execution_unavailable" }, { status: 503 });
+        }
+
+        ctx.waitUntil(
+          runSingleAgent(env, agentId, taskId)
+            .then((result) => console.log("centry_agent_chat_run_completed", result))
+            .catch((error) => console.error("centry_agent_chat_run_failed", {
+              agentId,
+              taskId,
+              error: error instanceof Error ? error.message : String(error),
+            })),
+        );
+
+        return Response.json(
+          { ok: true, mode: "accepted", agentId, taskId },
+          { status: 202, headers: { "Cache-Control": "no-store" } },
+        );
+      }
+
       const result = await runScheduler(env, new Date().toISOString());
       return Response.json(result, { headers: { "Cache-Control": "no-store" } });
     }
