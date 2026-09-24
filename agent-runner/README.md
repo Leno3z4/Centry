@@ -19,7 +19,6 @@ Cloudflare Cron
 There is one scheduler, not one cron per user.
 
 Interactive owner chat does not wait for the next cron tick. The Next.js API can call the authenticated `/chat` endpoint with an `agentId` and `taskId`; the Worker accepts the request and runs only that pending owner-chat task in the background. The Next.js runtime should set `CENTRY_AGENT_RUNNER_URL` to this Worker URL and `CENTRY_AGENT_RUNNER_HTTP_SECRET` to the same secret configured on the Worker.
-There is one scheduler, not one cron per user.
 
 ## Setup
 
