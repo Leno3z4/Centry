@@ -517,15 +517,15 @@ body {
 }
 .landing-home-shard-fallback i {
   position: absolute;
-  left: calc(10% + (var(--i) * 3.2%));
-  top: calc(12% + ((var(--i) * 17) % 72) * 1%);
-  width: calc(70px + (var(--i) % 5) * 28px);
+  left: var(--x);
+  top: var(--y);
+  width: var(--w);
   height: 2px;
   border-radius: 99px;
   background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), rgba(255,255,255,.08), transparent);
-  transform: rotate(calc(-32deg + (var(--i) % 7) * 4deg));
-  animation: centry-shard-drift calc(5.5s + (var(--i) % 5) * .65s) ease-in-out infinite alternate;
-  animation-delay: calc(var(--i) * -0.18s);
+  transform: rotate(var(--r));
+  animation: centry-shard-drift var(--dur) ease-in-out infinite alternate;
+  animation-delay: var(--d);
 }
 
 .landing-home-proof {
