@@ -286,15 +286,21 @@ function ownerChatHasExplicitStateChangeIntent(message) {
   const text = String(message || "").trim();
   if (!text) return false;
 
-  const directImperative = /^(?:please\\s+|can\\s+you\\s+|could\\s+you\\s+|would\\s+you\\s+|go\\s+ahead\\s+and\\s+|i\\s+want\\s+you\\s+to\\s+)?(?:supply|deposit|withdraw|borrow|repay|swap|exchange|trade|approve|vote|transfer|send|fund)\\b/i.test(text);
+  const mutationVerb = /\b(?:supply|deposit|withdraw|borrow|repay|swap|exchange|trade|approve|vote|transfer|send|fund)\b/i;
+  const informationalPhrase = /\b(?:what is|what's|how much|how many|show me|tell me|explain|what happens|what if|how does|why|status|balance|balances|portfolio|position|activity|history|did you|have you)\b/i;
+
+  const directImperative = /^(?:please\s+|can\s+you\s+|could\s+you\s+|would\s+you\s+|go\s+ahead\s+and\s+|just\s+|do\s+|execute\s+|make\s+)?(?:supply|deposit|withdraw|borrow|repay|swap|exchange|trade|approve|vote|transfer|send|fund)\b/i.test(text);
   if (directImperative) return true;
 
-  const lendingActionWithAmount = /\\b(?:supply|deposit|withdraw|borrow|repay)\\b[\\s\\S]{0,48}\\b(?:\\d+(?:\\.\\d+)?|all|everything|half|some|it|this|that)\\b/i.test(text);
-  const swapAction = /\\b(?:swap|exchange|trade)\\b[\\s\\S]{0,96}\\b(?:to|for)\\b/i.test(text);
-  const transferAction = /\\b(?:transfer|send|fund)\\b[\\s\\S]{0,96}\\b(?:to|into)\\b/i.test(text);
-  const voteAction = /\\bvote\\b[\\s\\S]{0,96}\\b(?:for|against|proposal|\\d+)\\b/i.test(text);
+  const explicitOwnerCommand =
+    /\b(?:i\s+want\s+you\s+to|i\s+need\s+you\s+to|i['’]d\s+like\s+you\s+to|go\s+ahead\s+and|please)\b[\\s\\S]{0,96}\b(?:supply|deposit|withdraw|borrow|repay|swap|exchange|trade|approve|vote|transfer|send|fund)\b/i.test(text);
 
-  return lendingActionWithAmount || swapAction || transferAction || voteAction;
+  if (!explicitOwnerCommand) return false;
+  if (informationalPhrase.test(text) && !/\b(?:please|i\s+want\s+you\s+to|i\s+need\s+you\s+to|i['’]d\s+like\s+you\s+to|go\s+ahead\s+and)\b/i.test(text)) {
+    return false;
+  }
+
+  return mutationVerb.test(text);
 }
 
 function emptyAgentSnapshot(account, runnerAddress) {
