@@ -680,14 +680,16 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
   let txHash = null;
   let actionCount = 0;
   let tasks = [];
+  let ownerChatTask = null;
+  let ownerChatEnvelope = null;
 
   try {
     const account = getAddress(agent.account);
     const snapshot = await readAgentSnapshot(publicClient, account, runnerAddress);
 
     tasks = await getPendingTasks(db, agent.id);
-    const ownerChatTask = tasks.find((task) => parseOwnerChatTask(task));
-    const ownerChatEnvelope = ownerChatTask ? parseOwnerChatTask(ownerChatTask) : null;
+    ownerChatTask = tasks.find((task) => parseOwnerChatTask(task));
+    ownerChatEnvelope = ownerChatTask ? parseOwnerChatTask(ownerChatTask) : null;
 
     if (!snapshot.active && !ownerChatTask) {
       runStatus = "skipped";
