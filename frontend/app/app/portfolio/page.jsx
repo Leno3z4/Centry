@@ -159,7 +159,7 @@ function PortfolioContent() {
 
         <div className="market-risk-table">
           <div className="market-risk-table-head">
-            <span>Market</span><span>Utilization</span><span>Supply APY</span><span>Borrow APY</span><span>Liquidity</span><span>Liquidation price</span>
+            <span>Market</span><span>Utilization</span><span>Supply APY</span><span>Borrow APY</span><span>LTV / LT</span><span>Liquidity</span><span>Liquidation price</span>
           </div>
           {risk.markets.map((market) => (
             <div className="market-risk-row" key={market.id}>
@@ -167,6 +167,7 @@ function PortfolioContent() {
               <div><strong>{formatPercent(market.utilizationPct)}</strong></div>
               <div><strong>{formatApy(market.supplyApy)}</strong></div>
               <div><strong>{formatApy(market.borrowApy)}</strong></div>
+              <div><strong>{formatPercent(market.ltvBps / 100)}</strong><small>LT {formatPercent(market.liquidationThresholdBps / 100)}</small></div>
               <div><strong>{formatUsd(market.cashUsd)}</strong></div>
               <div>
                 <strong>{market.suppliedUsd > 0 && market.liquidationPriceUsd != null ? formatUsd(market.liquidationPriceUsd) : '—'}</strong>
@@ -237,7 +238,7 @@ function PortfolioContent() {
       .collateral-share>div>span{display:block;height:100%;border-radius:inherit;background:#0a84ff}
       .market-risk-panel{margin-top:14px}
       .market-risk-table{margin-top:15px;border:1px solid #202020;border-radius:13px;overflow:auto}
-      .market-risk-table-head,.market-risk-row{display:grid;grid-template-columns:1.2fr .85fr .85fr .85fr 1fr 1.25fr;min-width:760px;gap:12px;align-items:center}
+      .market-risk-table-head,.market-risk-row{display:grid;grid-template-columns:1.15fr .8fr .8fr .8fr .95fr 1fr 1.25fr;min-width:860px;gap:12px;align-items:center}
       .market-risk-table-head{padding:10px 12px;background:#111;border-bottom:1px solid #202020;color:rgba(255,255,255,.43);font-size:10px;text-transform:uppercase;letter-spacing:.05em}
       .market-risk-row{padding:13px 12px;border-bottom:1px solid #202020;background:#0d0d0d}
       .market-risk-row:last-child{border-bottom:0}
