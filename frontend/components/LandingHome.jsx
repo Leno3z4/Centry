@@ -87,7 +87,6 @@ export default function LandingHome() {
               <span>{item.number}</span>
               <strong>{item.title}</strong>
               <p>{item.text}</p>
-              {index < SYSTEM_POINTS.length - 1 ? <i aria-hidden="true" /> : null}
             </div>
           ))}
         </div>
