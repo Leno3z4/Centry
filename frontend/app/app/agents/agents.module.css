@@ -847,12 +847,17 @@
 
 .quickCard {
   display: grid;
+  width: 100%;
   gap: 7px;
   padding: 18px;
   border: 1px solid #2a2a2a;
   border-radius: 14px;
   background: #0d0d0d;
+  color: #ffffff;
+  font: inherit;
+  text-align: left;
   text-decoration: none;
+  cursor: pointer;
 }
 
 .quickCard:hover {
@@ -869,6 +874,11 @@
   color: rgba(255,255,255,.78);
   font-size: 12px;
   line-height: 1.5;
+}
+
+.quickLinks .inlineAction {
+  grid-column: 1 / -1;
+  margin-top: 0;
 }
 
 .chatPage {
