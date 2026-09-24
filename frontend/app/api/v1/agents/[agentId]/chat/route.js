@@ -85,7 +85,6 @@ export async function POST(request, { params }) {
       console.warn("[agent-chat] activity lookup unavailable", activityError);
     }
     const liveActive = Boolean(authorization.active);
-    const liveActive = Boolean(authorization.active);
     const agentContext = [
       `You are ${agent.name}, a user-owned Centry agent.`,
       `Account: ${agent.account}`,
