@@ -606,6 +606,10 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
     const account = getAddress(agent.account);
     const snapshot = await readAgentSnapshot(publicClient, account, runnerAddress);
 
+    tasks = await getPendingTasks(db, agent.id);
+    const ownerChatTask = tasks.find((task) => parseOwnerChatTask(task));
+    const ownerChatEnvelope = ownerChatTask ? parseOwnerChatTask(ownerChatTask) : null;
+
     if (!snapshot.active && !ownerChatTask) {
       runStatus = "skipped";
       reason = "agent_inactive";
@@ -617,10 +621,6 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
       reason = "runner_operator_not_authorized";
       return { agentId: agent.id, status: runStatus, reason };
     }
-
-    tasks = await getPendingTasks(db, agent.id);
-    const ownerChatTask = tasks.find((task) => parseOwnerChatTask(task));
-    const ownerChatEnvelope = ownerChatTask ? parseOwnerChatTask(ownerChatTask) : null;
     // Keep an authenticated owner command isolated from queued A2A work so the
     // model cannot mix two unrelated task sources into one execution plan.
     if (ownerChatTask) tasks = [ownerChatTask];
