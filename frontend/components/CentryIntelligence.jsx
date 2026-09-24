@@ -51,7 +51,6 @@ export default function CentryIntelligence({ market, lending, gateway, compact: 
     setPlan(null);
     setLoading(true);
     try {
-      await gateway?.refresh?.();
       const response = await fetch('/api/assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -62,7 +61,6 @@ export default function CentryIntelligence({ market, lending, gateway, compact: 
       setAnswer(result.answer || '');
       setPlan(result.plan || null);
       setQuestion('');
-      await lending?.refetchAll?.();
       requestAnimationFrame(() => { if (inputRef.current) inputRef.current.style.height = '30px'; });
     } catch (error) {
       setAnswer(error?.message || 'Unable to analyze the request right now.');
@@ -87,7 +85,16 @@ export default function CentryIntelligence({ market, lending, gateway, compact: 
       <div className={styles.chips}>{SUGGESTED.map((item) => <button key={item} type="button" onClick={() => ask(item)} disabled={loading}>{item}</button>)}</div>
       {answer ? <div className={styles.answer} aria-live="polite"><span>Centrion</span><p>{answer}</p></div> : null}
       {plan ? <CentryTransactionPreview plan={plan} context={context} /> : null}
-      {plan ? <CentryExecutionPanel plan={plan} onDone={() => setPlan(null)} /> : null}
+      {plan ? (
+        <CentryExecutionPanel
+          plan={plan}
+          onDone={() => {
+            setPlan(null);
+            void lending?.refetchAll?.();
+            void gateway?.refresh?.();
+          }}
+        />
+      ) : null}
     </div>
 
     <form className={styles.form} onSubmit={(event) => { event.preventDefault(); void ask(question); }}>
