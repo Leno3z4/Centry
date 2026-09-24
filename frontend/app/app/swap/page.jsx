@@ -70,7 +70,7 @@ function SwapContent() {
   const chainId = useChainId();
   const { data: connectorClient } = useConnectorClient();
   const { sendTransactionAsync, isPending: walletPending } = useSendTransaction();
-  const gateway = useGatewayFunding();
+  const gateway = useGatewayFunding({ enabled: gatewayEnabled });
   const [fromId, setFromId] = useState('usdc');
   const [toId, setToId] = useState('eurc');
   const [amount, setAmount] = useState('');
