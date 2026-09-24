@@ -7,7 +7,17 @@ import { WagmiProvider, useAccount, useChainId } from 'wagmi';
 import { config, arcMainnet } from '../config/multiWagmi';
 import { MobileMenuController } from './MobileMenuController';
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 15_000,
+      gcTime: 5 * 60_000,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
+      retry: 1,
+    },
+  },
+});
 const ARC_CHAIN_HEX = `0x${arcMainnet.id.toString(16)}`;
 const ARC_ADD_CHAIN_PARAMS = {
   chainId: ARC_CHAIN_HEX,
