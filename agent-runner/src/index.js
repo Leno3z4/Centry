@@ -262,6 +262,30 @@ async function getPendingTasks(db, agentId) {
   ).bind(agentId).all().then((result) => result.results || []);
 }
 
+function parseOwnerChatTask(task) {
+  try {
+    const envelope = JSON.parse(String(task?.task || ""));
+    if (envelope?.kind !== "owner_chat") return null;
+    if (typeof envelope.message !== "string" || !envelope.message.trim()) return null;
+    return envelope;
+  } catch {
+    return null;
+  }
+}
+
+async function addAgentChatMessage(db, { id, agentId, role, content }) {
+  await db.prepare(
+    `INSERT INTO centry_agent_chats (id, agent_id, role, content, created_at)
+     VALUES (?, ?, ?, ?, ?)`
+  ).bind(
+    id,
+    agentId,
+    role,
+    String(content || "").slice(0, 8000),
+    new Date().toISOString(),
+  ).run();
+}
+
 async function completeTask(db, id, status, result) {
   const now = new Date().toISOString();
   await db.prepare(
