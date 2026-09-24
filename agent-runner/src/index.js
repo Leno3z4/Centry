@@ -6,6 +6,7 @@ import {
   getAddress,
   http,
   parseAbi,
+  decodeFunctionResult,
   parseUnits,
   zeroAddress,
 } from "viem";
@@ -248,7 +249,7 @@ async function unlock(db, agentId) {
 
 async function getAgents(db) {
   return await db.prepare(
-    "SELECT * FROM centry_agents ORDER BY created_at ASC"
+    "SELECT id, owner, account, name, operator, config_json, created_at FROM centry_agents ORDER BY created_at ASC"
   ).all().then((result) => result.results || []);
 }
 
@@ -405,7 +406,172 @@ async function readOptionalContract(publicClient, request) {
   return null;
 }
 
-async function readAgentSnapshot(publicClient, account, runnerAddress) {
+async function readRpcBatch(rpcUrl, requests) {
+  let lastError = null;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const payload = requests.map((item, index) => item.kind === "balance"
+        ? {
+            jsonrpc: "2.0",
+            id: index + 1,
+            method: "eth_getBalance",
+            params: [item.address, "latest"],
+          }
+        : {
+            jsonrpc: "2.0",
+            id: index + 1,
+            method: "eth_call",
+            params: [{
+              to: item.request.address,
+              data: encodeFunctionData(item.request),
+            }, "latest"],
+          });
+
+      const response = await fetch(rpcUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) throw new Error(`rpc_http_${response.status}`);
+
+      const body = await response.json();
+      if (!Array.isArray(body)) throw new Error("rpc_batch_response_invalid");
+
+      const values = requests.map((item, index) => {
+        const result = body.find((entry) => Number(entry?.id) === index + 1);
+        if (!result) return { ok: false, error: "rpc_batch_result_missing", value: null };
+        if (result.error) return { ok: false, error: result.error?.message || "rpc_call_failed", value: null };
+
+        if (item.kind === "balance") {
+          try {
+            return { ok: true, error: null, value: BigInt(String(result.result || "0x0")) };
+          } catch {
+            return { ok: false, error: "rpc_balance_result_invalid", value: null };
+          }
+        }
+
+        try {
+          return {
+            ok: true,
+            error: null,
+            value: decodeFunctionResult({
+              abi: item.request.abi,
+              functionName: item.request.functionName,
+              data: result.result,
+            }),
+          };
+        } catch (error) {
+          return {
+            ok: false,
+            error: error instanceof Error ? error.message : "rpc_decode_failed",
+            value: null,
+          };
+        }
+      });
+
+      const transientFailure = values.find((item) => !item.ok && isTransientRpcLimit(item.error));
+      if (transientFailure && attempt < 2) {
+        await sleep(300 * (attempt + 1));
+        continue;
+      }
+
+      return values;
+    } catch (error) {
+      lastError = error;
+      if (!isTransientRpcLimit(error) || attempt === 2) break;
+      await sleep(300 * (attempt + 1));
+    }
+  }
+
+  throw lastError || new Error("rpc_batch_failed");
+}
+
+async function readAgentSnapshot(publicClient, account, runnerAddress, rpcUrl) {
+  const requests = [
+    { id: "active", required: true, request: { address: account, abi: ACCOUNT_ABI, functionName: "active" } },
+    { id: "operatorAuthorized", required: true, request: { address: account, abi: ACCOUNT_ABI, functionName: "agentOperators", args: [runnerAddress] } },
+    ...[
+      ["cent", "CENT"],
+      ["usdc", "USDC"],
+      ["eurc", "EURC"],
+      ["cirbtc", "CIRBTC"],
+    ].map(([id, symbol]) => ({
+      id,
+      request: { address: TOKENS[symbol], abi: ERC20_ABI, functionName: "balanceOf", args: [account] },
+    })),
+    { id: "healthFactor", request: { address: LENDING_POOL, abi: LENDING_POOL_ABI, functionName: "healthFactor", args: [account] } },
+    { id: "borrowPower", request: { address: LENDING_POOL, abi: LENDING_POOL_ABI, functionName: "borrowPower", args: [account] } },
+    ...Object.entries(TOKENS)
+      .filter(([symbol]) => symbol !== "CENT")
+      .map(([symbol, asset]) => ({
+        id: `supply_${symbol}`,
+        request: { address: LENDING_POOL, abi: LENDING_POOL_ABI, functionName: "supplyBalance", args: [account, asset] },
+      })),
+    ...Object.entries(TOKENS)
+      .filter(([symbol]) => symbol !== "CENT")
+      .map(([symbol, asset]) => ({
+        id: `borrow_${symbol}`,
+        request: { address: LENDING_POOL, abi: LENDING_POOL_ABI, functionName: "borrowBalance", args: [account, asset] },
+      })),
+    { id: "nativeUsdcBalance", kind: "balance", address: account },
+  ];
+
+  try {
+    const results = await readRpcBatch(rpcUrl, requests);
+    const valueById = new Map(requests.map((item, index) => [item.id, results[index]]));
+
+    for (const item of requests) {
+      if (!item.required) continue;
+      const result = valueById.get(item.id);
+      if (!result?.ok) {
+        throw new Error(`agent_rpc_read_failed_${item.id}:${result?.error || "rpc_batch_failed"}`);
+      }
+    }
+
+    const value = (id) => valueById.get(id)?.ok ? valueById.get(id).value : null;
+    const active = value("active");
+    const operatorAuthorized = value("operatorAuthorized");
+
+    const balances = {
+      CENT: value("cent") == null ? null : value("cent").toString(),
+      USDC: value("usdc") == null ? null : value("usdc").toString(),
+      EURC: value("eurc") == null ? null : value("eurc").toString(),
+      CIRBTC: value("cirbtc") == null ? null : value("cirbtc").toString(),
+    };
+
+    const supply = {};
+    const borrow = {};
+    for (const [symbol] of Object.entries(TOKENS).filter(([name]) => name !== "CENT")) {
+      const supplyValue = value(`supply_${symbol}`);
+      const borrowValue = value(`borrow_${symbol}`);
+      supply[symbol] = supplyValue == null ? null : supplyValue.toString();
+      borrow[symbol] = borrowValue == null ? null : borrowValue.toString();
+    }
+
+    const nativeUsdcBalance = value("nativeUsdcBalance");
+
+    return {
+      chainId: 5042,
+      account,
+      runner: runnerAddress,
+      active: Boolean(active),
+      operatorAuthorized: Boolean(operatorAuthorized),
+      nativeUsdcBalance: nativeUsdcBalance == null ? null : nativeUsdcBalance.toString(),
+      balances,
+      lending: {
+        healthFactor: value("healthFactor") == null ? null : value("healthFactor").toString(),
+        borrowPower: value("borrowPower") == null ? null : value("borrowPower").toString(),
+        supply,
+        borrow,
+      },
+    };
+  } catch (error) {
+    return readAgentSnapshotFallback(publicClient, account, runnerAddress);
+  }
+}
+
+async function readAgentSnapshotFallback(publicClient, account, runnerAddress) {
   const active = await readRequiredContract(
     publicClient,
     { address: account, abi: ACCOUNT_ABI, functionName: "active" },
@@ -517,6 +683,7 @@ async function readAgentSnapshot(publicClient, account, runnerAddress) {
     },
   };
 }
+
 
 async function quoteCentToUsdc(publicClient, amountIn, slippageBps = 50, fromAddress) {
   let best = null;
@@ -709,30 +876,14 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
 
   try {
     const account = getAddress(agent.account);
+    const rpcUrl = String(env.CENTRY_AGENT_RPC_URL || ARC_RPC);
 
-    // Load queued work before touching the RPC. If Arc rate-limits a state read,
-    // an owner chat request must still be known to the error path so it can be
-    // completed as failed instead of remaining stuck in "pending" forever.
     tasks = await getPendingTasks(db, agent.id);
     ownerChatTask = tasks.find((task) => parseOwnerChatTask(task));
     ownerChatEnvelope = ownerChatTask ? parseOwnerChatTask(ownerChatTask) : null;
 
-    const snapshot = await readAgentSnapshot(publicClient, account, runnerAddress);
-
-    if (!snapshot.active && !ownerChatTask) {
-      runStatus = "skipped";
-      reason = "agent_inactive";
-      return { agentId: agent.id, status: runStatus, reason };
-    }
-
-    if (!snapshot.operatorAuthorized && !ownerChatTask) {
-      runStatus = "skipped";
-      reason = "runner_operator_not_authorized";
-      return { agentId: agent.id, status: runStatus, reason };
-    }
-    // Keep an authenticated owner command isolated from queued A2A work so the
-    // model cannot mix two unrelated task sources into one execution plan.
     if (ownerChatTask) tasks = [ownerChatTask];
+
     const config = parseJson(agent.config_json || "{}", {});
     const storedAutonomy = config?.autonomy && typeof config.autonomy === "object" ? config.autonomy : {};
     const policy = config?.policy && typeof config.policy === "object" ? config.policy : {};
@@ -746,6 +897,22 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
       return { agentId: agent.id, status: runStatus, reason };
     }
 
+    const snapshot = await readAgentSnapshot(publicClient, account, runnerAddress, rpcUrl);
+
+    if (!snapshot.active && !ownerChatTask) {
+      runStatus = "skipped";
+      reason = "agent_inactive";
+      return { agentId: agent.id, status: runStatus, reason };
+    }
+
+    if (!snapshot.operatorAuthorized && !ownerChatTask) {
+      runStatus = "skipped";
+      reason = "runner_operator_not_authorized";
+      return { agentId: agent.id, status: runStatus, reason };
+    }
+
+    // Keep authenticated owner chat isolated from queued A2A work so the model
+    // cannot mix unrelated task sources into one execution plan.
     const provider = await providerFor(db, agent, autonomy);
     if (!provider) {
       runStatus = "waiting_provider";
@@ -848,7 +1015,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
       if (!txLocked) throw new Error("agent_transaction_mutex_busy");
 
       try {
-        const latest = await readAgentSnapshot(publicClient, account, runnerAddress);
+        const latest = await readAgentSnapshot(publicClient, account, runnerAddress, rpcUrl);
         if (!latest.active || !latest.operatorAuthorized) throw new Error("agent_not_live_before_submit");
         await assertPermissions(publicClient, account, runnerAddress, calls);
 
