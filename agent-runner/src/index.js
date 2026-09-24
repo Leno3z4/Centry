@@ -688,9 +688,13 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
       "You may send A2A messages only when needed for the strategy or a task. Never treat an outbound message as execution authority.",
       "Owner chat tasks may be processed even when persistent autonomy is disabled; state-changing actions still require the live agent and authorized runner.",
       "For USDC amounts, use the ERC-20 six-decimal value in snapshot.balances.USDC for lending actions, not snapshot.nativeUsdcBalance, which is the 18-decimal native representation of the same Arc USDC balance.",
-      instructions ? `Persistent strategy/instructions:\n${instructions}` : "No persistent strategy is configured. Only process explicit pending A2A tasks and do not originate discretionary financial actions.",
+      ownerChatTask ? "This request came from the authenticated smart-account owner. Treat its natural-language message as the requested command. Answer read-only questions from the snapshot and execute supported state-changing requests through the same permission/simulation pipeline as autonomous work." : (
+        instructions
+          ? `Persistent strategy/instructions:\\n${instructions}`
+          : "No persistent strategy is configured. Only process explicit pending A2A tasks and do not originate discretionary financial actions."
+      ),
       "Return ONLY a JSON object. No markdown, no prose outside JSON.",
-      'Schema: {"reason":"string","actions":[{"action":"approve|supply|withdraw|borrow|repay|swap|castVote","asset":"USDC|EURC|CIRBTC|CENT","toAsset":"USDC|EURC|CIRBTC|CENT","amount":"uint256","minOut":"uint256","fee":100|500|3000|10000,"proposalId":"uint256","support":0|1|2,"slippageBps":number}],"replies":[{"taskId":"string","response":"string"}],"messages":[{"toAgentId":"string","task":"string"}]}',
+      'Schema: {"reason":"string","actions":[{"action":"approve|supply|withdraw|borrow|repay|swap|castVote|transfer","asset":"USDC|EURC|CIRBTC|CENT","toAsset":"USDC|EURC|CIRBTC|CENT","amount":"uint256","minOut":"uint256","fee":100|500|3000|10000,"proposalId":"uint256","support":0|1|2,"slippageBps":number,"toAgentId":"string"}],"replies":[{"taskId":"string","response":"string"}],"messages":[{"toAgentId":"string","task":"string"}]}',
       "Only use supported actions. Keep actions to 4 or fewer.",
     ].join("\n\n");
 
