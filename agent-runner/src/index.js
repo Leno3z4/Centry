@@ -296,6 +296,21 @@ async function completeTask(db, id, status, result) {
   ).bind(status, String(result || "").slice(0, 8000), now, now, id).run();
 }
 
+async function completeOwnerChatTask(db, taskId, assistantMessageId, agentId, status, result) {
+  const now = new Date().toISOString();
+  await db.batch([
+    db.prepare(
+      `UPDATE centry_agent_tasks
+       SET status = ?, result = ?, updated_at = ?, completed_at = ?
+       WHERE id = ? AND status = 'pending'`
+    ).bind(status, String(result || "").slice(0, 8000), now, now, taskId),
+    db.prepare(
+      `INSERT INTO centry_agent_chats (id, agent_id, role, content, created_at)
+       VALUES (?, ?, 'assistant', ?, ?)`
+    ).bind(assistantMessageId, agentId, String(JSON.parse(String(result || "{}")).answer || "").slice(0, 8000), now),
+  ]);
+}
+
 async function providerFor(db, agent, autonomy) {
   const rows = await db.prepare(
     "SELECT provider, model, encrypted_api_key, updated_at FROM centry_agent_providers WHERE agent_id = ? ORDER BY updated_at DESC"
@@ -919,18 +934,19 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
       reason = "provider_not_configured";
       if (ownerChatTask && ownerChatEnvelope?.assistantMessageId) {
         const result = "I could not process the chat request because the agent provider is not configured.";
-        await completeTask(db, ownerChatTask.id, "failed", JSON.stringify({
-          kind: "owner_chat_result",
-          status: "failed",
-          answer: result,
-          error: reason,
-        })).catch(() => {});
-        await addAgentChatMessage(db, {
-          id: ownerChatEnvelope.assistantMessageId,
-          agentId: agent.id,
-          role: "assistant",
-          content: result,
-        }).catch(() => {});
+        await completeOwnerChatTask(
+          db,
+          ownerChatTask.id,
+          ownerChatEnvelope.assistantMessageId,
+          agent.id,
+          "failed",
+          JSON.stringify({
+            kind: "owner_chat_result",
+            status: "failed",
+            answer: result,
+            error: reason,
+          }),
+        ).catch(() => {});
       }
       return { agentId: agent.id, status: runStatus, reason };
     }
@@ -1064,20 +1080,29 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
               ? `${conversationalResponse}\\n\\nTransaction confirmed: ${txHash}`
               : `Executed the requested action. Transaction: ${txHash}`)
           : (conversationalResponse || reply || `The request was processed and no onchain transaction was required.`);
-        await completeTask(db, task.id, "completed", JSON.stringify({
-          kind: "owner_chat_result",
-          status: runStatus === "executed" ? "executed" : "processed",
-          answer: result,
-          txHash,
-          error: null,
-        }));
         if (ownerRequest.assistantMessageId) {
-          await addAgentChatMessage(db, {
-            id: ownerRequest.assistantMessageId,
-            agentId: agent.id,
-            role: "assistant",
-            content: result,
-          }).catch(() => {});
+          await completeOwnerChatTask(
+            db,
+            task.id,
+            ownerRequest.assistantMessageId,
+            agent.id,
+            "completed",
+            JSON.stringify({
+              kind: "owner_chat_result",
+              status: runStatus === "executed" ? "executed" : "processed",
+              answer: result,
+              txHash,
+              error: null,
+            }),
+          );
+        } else {
+          await completeTask(db, task.id, "completed", JSON.stringify({
+            kind: "owner_chat_result",
+            status: runStatus === "executed" ? "executed" : "processed",
+            answer: result,
+            txHash,
+            error: null,
+          }));
         }
         continue;
       }
@@ -1131,20 +1156,29 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
 
     if (ownerChatTask && ownerChatEnvelope) {
       const result = `I could not execute that request: ${errorMessage}`;
-      await completeTask(db, ownerChatTask.id, "failed", JSON.stringify({
-        kind: "owner_chat_result",
-        status: "failed",
-        answer: result,
-        txHash,
-        error: errorMessage,
-      })).catch(() => {});
       if (ownerChatEnvelope.assistantMessageId) {
-        await addAgentChatMessage(db, {
-          id: ownerChatEnvelope.assistantMessageId,
-          agentId: agent.id,
-          role: "assistant",
-          content: result,
-        }).catch(() => {});
+        await completeOwnerChatTask(
+          db,
+          ownerChatTask.id,
+          ownerChatEnvelope.assistantMessageId,
+          agent.id,
+          "failed",
+          JSON.stringify({
+            kind: "owner_chat_result",
+            status: "failed",
+            answer: result,
+            txHash,
+            error: errorMessage,
+          }),
+        ).catch(() => {});
+      } else {
+        await completeTask(db, ownerChatTask.id, "failed", JSON.stringify({
+          kind: "owner_chat_result",
+          status: "failed",
+          answer: result,
+          txHash,
+          error: errorMessage,
+        })).catch(() => {});
       }
     }
 
