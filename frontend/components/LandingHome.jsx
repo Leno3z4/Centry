@@ -117,16 +117,9 @@ export default function LandingHome() {
         </div>
       </section>
 
-      <section className="landing-home-proof" data-reveal>
-        <div><strong>ARC MAINNET</strong><span>Live network</span></div>
-        <div><strong>WALLET-OWNED</strong><span>Account ownership</span></div>
-        <div><strong>LENDING MARKETS</strong><span>Supply, borrow, repay, withdraw</span></div>
-        <div><strong>SMART ACCOUNT</strong><span>Owner control + account rules</span></div>
-      </section>
-
       <section className="landing-home-section landing-home-overview" data-reveal>
         <div className="landing-home-section-main">
-          <h2>Manage the position from the account.</h2>
+          <h2>Manage your positions with USDC and other collateralized assets.</h2>
           <p className="landing-home-section-lede">
             Supply USDC and see the position build. Borrow against it when you need liquidity. Repay the debt, then withdraw what is available. Use the configured execution route without leaving the account.
           </p>
@@ -140,7 +133,7 @@ export default function LandingHome() {
       </section>
 
       <section className="landing-home-section landing-home-capabilities" data-reveal>
-        <h2>Everything starts with the account.</h2>
+        <h2>Everything starts with your account.</h2>
         <div className="landing-home-capability-list">
           {CAPABILITIES.map((item) => (
             <article key={item.number} className="landing-home-capability">
@@ -171,16 +164,11 @@ export default function LandingHome() {
       </section>
 
       <section className="landing-home-final" data-reveal>
-        <h2>Open the app.</h2>
+        <h2>Open Centry.</h2>
         <p>Connect a wallet, choose an account, and start working with your positions on Arc.</p>
         <Link href="/app" className="landing-home-primary">Open app</Link>
       </section>
 
-      <footer className="landing-home-footer">
-        <span>CENTRY</span>
-        <span>Onchain capital / controlled execution</span>
-        <span>Arc Mainnet</span>
-      </footer>
     </main>
   );
 }
