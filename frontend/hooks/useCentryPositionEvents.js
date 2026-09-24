@@ -32,7 +32,7 @@ export function useCentryPositionEvents(onPositionChanged) {
       args: { [key]: address },
       onLogs: () => callbackRef.current?.(name),
       poll: true,
-      pollingInterval: 2000,
+      pollingInterval: 10000,
     }));
 
     return () => {
