@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import { useAccount, useChainId, useReadContracts } from 'wagmi';
-import { formatUnits } from 'viem';
+import { useAccount, useChainId, useReadContract, useReadContracts } from 'wagmi';
+import { formatUnits, maxUint256 } from 'viem';
 import { arcMainnet } from '../config/multiWagmi';
 import { ACTIVE_MARKETS } from '../constants/markets';
 import { CONTRACT_ADDRESSES } from '../constants/contracts';
@@ -61,6 +61,14 @@ export function useDeFiRisk() {
     ]),
     [address],
   );
+
+  const { data: healthFactorRaw, isLoading: healthLoading } = useReadContract({
+    address: CONTRACT_ADDRESSES.lendingPool,
+    abi: LENDING_POOL_ABI,
+    functionName: 'healthFactor',
+    args: [address],
+    query: { enabled: enabled && Boolean(address) },
+  });
 
   const { data: strategyResults, isLoading: strategyLoading } = useReadContracts({
     contracts: strategyContracts,
@@ -123,7 +131,14 @@ export function useDeFiRisk() {
     };
   }), [marketResults, strategy]);
 
-  const summary = useMemo(() => buildRiskSummary(markets), [markets]);
+  const contractHealthFactor = healthFactorRaw === undefined || healthFactorRaw >= maxUint256 - 1000n
+    ? null
+    : safeUnits(healthFactorRaw, 18);
+
+  const summary = useMemo(
+    () => buildRiskSummary(markets, contractHealthFactor),
+    [markets, contractHealthFactor],
+  );
   const marketsWithRisk = useMemo(
     () => markets.map((market) => {
       const liquidationPriceUsd = liquidationPriceForCollateral({
@@ -151,7 +166,7 @@ export function useDeFiRisk() {
   );
 
   return {
-    loading: strategyLoading || marketLoading,
+    loading: strategyLoading || marketLoading || healthLoading,
     enabled,
     address,
     markets: marketsWithRisk,
