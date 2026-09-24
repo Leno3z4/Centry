@@ -732,8 +732,6 @@ body {
   letter-spacing: .06em;
 }
 
-[data-reveal] { opacity: 0; transform: translateY(24px); transition: opacity .7s ease, transform .7s cubic-bezier(.22,1,.36,1); }
-[data-reveal].is-visible { opacity: 1; transform: translateY(0); }
 @keyframes centry-core-float { 0%,100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-10px) rotate(1deg); } }
 @keyframes centry-shard-drift { from { opacity: .18; transform: translate3d(-8px,0,0) rotate(-32deg); } to { opacity: .72; transform: translate3d(18px,-8px,0) rotate(-28deg); } }
 @media (prefers-reduced-motion: reduce) {
