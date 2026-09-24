@@ -70,7 +70,6 @@ function SwapContent() {
   const chainId = useChainId();
   const { data: connectorClient } = useConnectorClient();
   const { sendTransactionAsync, isPending: walletPending } = useSendTransaction();
-  const gateway = useGatewayFunding({ enabled: gatewayEnabled });
   const [fromId, setFromId] = useState('usdc');
   const [toId, setToId] = useState('eurc');
   const [amount, setAmount] = useState('');
@@ -90,6 +89,7 @@ function SwapContent() {
   const toMarket = LIVE_MARKETS.find((market) => market.id === toId) || LIVE_MARKETS[1] || LIVE_MARKETS[0];
   const wrongNetwork = isConnected && chainId !== ARC_CHAIN_ID;
   const gatewayEnabled = fromMarket?.id === 'usdc';
+  const gateway = useGatewayFunding({ enabled: gatewayEnabled });
   const gatewayAmountRaw = useMemo(() => {
     if (!gatewayEnabled || !amount) return 0n;
     try { return parseUnits(amount, 6); } catch { return 0n; }
