@@ -7,19 +7,50 @@ import { useAccount, usePublicClient, useSignMessage, useSendTransaction, useWri
 import { formatUnits, parseUnits } from 'viem';
 import { Providers } from '../../../../components/Providers';
 import { AppShell } from '../../../../components/AppShell';
+import { CONTRACT_ADDRESSES } from '../../../../constants/contracts';
+import { ORACLE_ABI } from '../../../../constants/abis';
 import styles from '../agents.module.css';
 import {
   ACCOUNT_ABI,
   API_BASE,
   FACTORY_ABI,
   FACTORY_ADDRESS,
-  RUNNER_ADDRESS,
   WITHDRAWABLE_ASSETS,
   apiJson,
   loadOwnedAgents,
   ensureOwnerSession,
   shortAddress,
 } from '../agentClient';
+
+const PORTFOLIO_COLORS = Object.freeze({
+  native: '#4f8cff',
+  cent: '#f59e0b',
+  eurc: '#33c3a6',
+  cirbtc: '#f97316',
+});
+
+function formatAssetAmount(raw, decimals) {
+  try {
+    const formatted = formatUnits(BigInt(raw || '0'), decimals);
+    const [whole, fraction = ''] = formatted.split('.');
+    const trimmed = fraction.slice(0, 8).replace(/0+$/, '');
+    return trimmed ? `${whole}.${trimmed}` : whole;
+  } catch {
+    return '0';
+  }
+}
+
+function formatUsd(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return '$0.00';
+  if (number < 0.01) return '<$0.01';
+  return number.toLocaleString(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
 
 function DashboardContent() {
   const { account } = useParams();
@@ -101,18 +132,38 @@ function DashboardContent() {
     try {
       const rows = await Promise.all(
         WITHDRAWABLE_ASSETS.map(async (asset) => {
-          if (!asset.address) {
-            const raw = await publicClient.getBalance({ address: account });
-            return { ...asset, raw: raw.toString() };
-          }
+          const oracleAsset = asset.address || CONTRACT_ADDRESSES.USDC;
+          const [raw, priceResult] = await Promise.all([
+            asset.address
+              ? publicClient.readContract({
+                  address: asset.address,
+                  abi: [{ type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ type: 'uint256' }] }],
+                  functionName: 'balanceOf',
+                  args: [account],
+                })
+              : publicClient.getBalance({ address: account }),
+            publicClient.readContract({
+              address: CONTRACT_ADDRESSES.oracle,
+              abi: ORACLE_ABI,
+              functionName: 'getPrice',
+              args: [oracleAsset],
+            }),
+          ]);
 
-          const raw = await publicClient.readContract({
-            address: asset.address,
-            abi: [{ type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ type: 'uint256' }] }],
-            functionName: 'balanceOf',
-            args: [account],
-          });
-          return { ...asset, raw: raw.toString() };
+          const [priceRaw, updatedAt] = Array.isArray(priceResult) ? priceResult : [priceResult, 0n];
+          const rawBalance = BigInt(raw || 0n);
+          const usdRaw = (rawBalance * BigInt(priceRaw || 0n)) / (10n ** BigInt(asset.decimals));
+          const usdValue = Number(formatUnits(usdRaw, 18));
+
+          return {
+            ...asset,
+            raw: rawBalance.toString(),
+            priceRaw: String(priceRaw || 0n),
+            updatedAt: String(updatedAt || 0n),
+            usdRaw: usdRaw.toString(),
+            usdValue: Number.isFinite(usdValue) ? usdValue : 0,
+            color: PORTFOLIO_COLORS[asset.key] || '#73767d',
+          };
         }),
       );
       setBalances(rows);
@@ -146,6 +197,28 @@ function DashboardContent() {
   }
 
   const recent = useMemo(() => activity.slice(0, 5), [activity]);
+
+  const portfolio = useMemo(() => {
+    const totalUsd = balances.reduce((sum, item) => sum + (Number(item.usdValue) || 0), 0);
+    const rows = balances.map((item) => ({
+      ...item,
+      percentage: totalUsd > 0 ? ((Number(item.usdValue) || 0) / totalUsd) * 100 : 0,
+    }));
+    const activeRows = rows.filter((item) => item.usdValue > 0);
+    return { totalUsd, rows, activeRows };
+  }, [balances]);
+
+  const portfolioGradient = useMemo(() => {
+    if (!portfolio.activeRows.length) return 'conic-gradient(#2b2d31 0 100%)';
+    let cursor = 0;
+    const segments = portfolio.activeRows.map((item) => {
+      const start = cursor;
+      cursor += item.percentage;
+      return `${item.color} ${start}% ${cursor}%`;
+    });
+    return `conic-gradient(${segments.join(', ')})`;
+  }, [portfolio.activeRows]);
+
   if (!isConnected) return <div className={styles.emptyState}><h1>Connect your wallet</h1><p>Your agent dashboard is tied to the wallet that owns the smart account.</p></div>;
   if (!agent) return <div className={styles.emptyState}><p>Loading agent…</p></div>;
 
@@ -155,36 +228,69 @@ function DashboardContent() {
       {agents.length > 1 ? <div className={styles.agentSwitcher}><span>Agent</span><select className={styles.input} value={agent.account} onChange={(e) => router.push(`/app/agents/${e.target.value}`)}>{agents.map((item) => <option key={item.account} value={item.account}>{item.name} · {shortAddress(item.account)}</option>)}</select></div> : null}
       {status ? <div className={styles.notice}>{status}</div> : null}{error ? <div className={styles.error}>{error}</div> : null}
       <section className={styles.analyticsHero}><div><span className={agent.active ? styles.statusOn : styles.statusOff}>{agent.active ? 'ACTIVE' : 'OFF'}</span><h2>Agent analytics</h2><p>Monitor this agent here. Configuration and conversation live on their own pages so the dashboard stays focused.</p></div><div className={styles.addressPanel}><span>Smart account</span><code>{agent.account}</code><button type="button" className={styles.textButton} onClick={() => navigator.clipboard.writeText(agent.account)}>Copy address</button></div></section>
-      <section className={styles.statsLarge}><div><span>Status</span><strong>{agent.active ? 'Running' : 'Paused'}</strong></div><div><span>Type</span><strong>{agent.registered === false ? 'Unregistered' : 'Centry agent'}</strong></div><div><span>Recent events</span><strong>{activity.length}</strong></div><div><span>Operator</span><strong>{shortAddress(RUNNER_ADDRESS)}</strong></div></section>
-      <section className={styles.card}>
-        <div className={styles.sectionHead}>
-          <div>
-            <h2>Balance</h2>
-            <p>Live balances held by this agent smart account on Arc Mainnet.</p>
+      <section className={styles.statsLarge}><div><span>Status</span><strong>{agent.active ? 'Running' : 'Paused'}</strong></div><div><span>Type</span><strong>{agent.registered === false ? 'Unregistered' : 'Centry agent'}</strong></div><div><span>Recent events</span><strong>{activity.length}</strong></div></section>
+
+      <section className={styles.analyticsGrid}>
+        <section className={styles.card}>
+          <div className={styles.sectionHead}>
+            <div>
+              <h2>Recent activity</h2>
+              <p>Load the verified onchain activity when you want to inspect what this agent has done.</p>
+            </div>
+            <button className={styles.secondaryButton} onClick={loadActivity}>Load activity</button>
           </div>
-          <button className={styles.secondaryButton} type="button" onClick={loadBalances} disabled={balancesLoading}>
-            {balancesLoading ? 'Refreshing…' : 'Refresh'}
-          </button>
-        </div>
-        <div className={styles.agentBalanceGrid}>
-          {balances.length ? balances.map((item) => {
-            const formatted = formatUnits(BigInt(item.raw || '0'), item.decimals);
-            const parts = formatted.split('.');
-            const fraction = (parts[1] || '').slice(0, 6).replace(/0+$/, '');
-            const display = fraction ? parts[0] + '.' + fraction : parts[0];
-            return (
-              <div className={styles.agentBalanceCard} key={item.key}>
-                <span>{item.label}</span>
-                <strong>{display}</strong>
-                <small>{item.key === 'native' ? 'Arc native USDC' : item.label.split(' (')[0]}</small>
+          <div className={styles.activityList}>{recent.length ? recent.map((item, index) => <div className={styles.activity} key={`${item.transactionHash}-${index}`}><div><strong>{item.type}</strong><span>Block {item.blockNumber}</span></div><code>{item.transactionHash}</code></div>) : <div className={styles.empty}>No activity loaded yet.</div>}</div>
+        </section>
+
+        <section className={styles.portfolioCard}>
+          <div className={styles.sectionHead}>
+            <div>
+              <h2>Portfolio</h2>
+              <p>USD-weighted balances held by this agent smart account.</p>
+            </div>
+            <button className={styles.secondaryButton} type="button" onClick={loadBalances} disabled={balancesLoading}>
+              {balancesLoading ? 'Refreshing…' : 'Refresh'}
+            </button>
+          </div>
+
+          <div className={styles.portfolioBody}>
+            <div className={styles.pieWrap}>
+              <div className={styles.portfolioPie} style={{ background: portfolioGradient }} aria-label={`Agent portfolio total ${formatUsd(portfolio.totalUsd)}`}>
+                <div className={styles.pieCenter}>
+                  <strong>{formatUsd(portfolio.totalUsd)}</strong>
+                  <span>Total value</span>
+                </div>
               </div>
-            );
-          }) : (
-            <div className={styles.empty}>{balancesLoading ? 'Loading balances…' : 'No balances loaded.'}</div>
-          )}
-        </div>
+            </div>
+
+            <div className={styles.portfolioLegend}>
+              {portfolio.rows.map((item) => (
+                <div className={styles.portfolioRow} key={item.key}>
+                  <div className={styles.portfolioAsset}>
+                    <span className={styles.portfolioDot} style={{ background: item.color }} />
+                    <div><strong>{item.key === 'native' ? 'USDC' : item.label}</strong><span>{formatAssetAmount(item.raw, item.decimals)}</span></div>
+                  </div>
+                  <div className={styles.portfolioValue}>
+                    <strong>{formatUsd(item.usdValue)}</strong>
+                    <span>{item.percentage > 0 ? `${item.percentage < 10 ? item.percentage.toFixed(1) : item.percentage.toFixed(0)}%` : '0%'}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className={styles.portfolioMeta}>
+            <span>USD values use the live Centry oracle on Arc Mainnet.</span>
+          </div>
+
+          <div className={styles.walletActions}>
+            <button className={styles.primaryButton} onClick={() => { setFundOpen((value) => !value); setWithdrawOpen(false); }}>Fund</button>
+            <button className={styles.secondaryButton} onClick={() => { setWithdrawOpen((value) => !value); setFundOpen(false); }}>Withdraw</button>
+          </div>
+          {fundOpen || withdrawOpen ? <div className={styles.inlineAction}><select className={styles.input} value={asset} onChange={(e) => setAsset(e.target.value)}>{WITHDRAWABLE_ASSETS.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select><input className={styles.input} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" /><button className={styles.primaryButton} onClick={fundOpen ? fundAgent : withdrawAgent}>{fundOpen ? 'Fund' : 'Withdraw'}</button></div> : null}
+        </section>
       </section>
-      <section className={styles.analyticsGrid}><section className={styles.card}><div className={styles.sectionHead}><div><h2>Recent activity</h2><p>Load the verified onchain activity when you want to inspect what this agent has done.</p></div><button className={styles.secondaryButton} onClick={loadActivity}>Load activity</button></div><div className={styles.activityList}>{recent.length ? recent.map((item, index) => <div className={styles.activity} key={`${item.transactionHash}-${index}`}><div><strong>{item.type}</strong><span>Block {item.blockNumber}</span></div><code>{item.transactionHash}</code></div>) : <div className={styles.empty}>No activity loaded yet.</div>}</div></section><section className={styles.card}><div className={styles.sectionHead}><div><h2>Agent wallet</h2><p>Funds are held by the smart account and are available to the permissions you configure.</p></div></div><div className={styles.walletActions}><button className={styles.primaryButton} onClick={() => { setFundOpen((value) => !value); setWithdrawOpen(false); }}>Fund</button><button className={styles.secondaryButton} onClick={() => { setWithdrawOpen((value) => !value); setFundOpen(false); }}>Withdraw</button></div>{fundOpen || withdrawOpen ? <div className={styles.inlineAction}><select className={styles.input} value={asset} onChange={(e) => setAsset(e.target.value)}>{WITHDRAWABLE_ASSETS.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select><input className={styles.input} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" /><button className={styles.primaryButton} onClick={fundOpen ? fundAgent : withdrawAgent}>{fundOpen ? 'Fund' : 'Withdraw'}</button></div> : null}</section></section>
+
       <section className={styles.quickLinks}><Link href={`/app/agents/${agent.account}/configure`} className={styles.quickCard}><strong>Configure</strong><span>AI provider, autonomy, permissions and external access.</span></Link><Link href={`/app/agents/${agent.account}/chat`} className={styles.quickCard}><strong>Chat with agent</strong><span>Talk to the agent and ask what it has done.</span></Link></section>
     </main>
   );
