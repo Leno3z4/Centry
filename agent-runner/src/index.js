@@ -364,56 +364,132 @@ async function callProvider(provider, model, apiKey, system, user) {
   return data?.candidates?.[0]?.content?.parts?.map((part) => part?.text || "").join("") || "";
 }
 
+async function readRequiredContract(publicClient, request, label) {
+  try {
+    return await publicClient.readContract(request);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "rpc_read_failed";
+    throw new Error(`agent_rpc_read_failed_${label}:${message}`);
+  }
+}
+
+async function readOptionalContract(publicClient, request) {
+  try {
+    return await publicClient.readContract(request);
+  } catch {
+    return null;
+  }
+}
+
 async function readAgentSnapshot(publicClient, account, runnerAddress) {
-  const calls = [
+  const active = await readRequiredContract(
+    publicClient,
     { address: account, abi: ACCOUNT_ABI, functionName: "active" },
+    "active",
+  );
+  const operatorAuthorized = await readRequiredContract(
+    publicClient,
     { address: account, abi: ACCOUNT_ABI, functionName: "agentOperators", args: [runnerAddress] },
-    { address: TOKENS.CENT, abi: ERC20_ABI, functionName: "balanceOf", args: [account] },
-    { address: TOKENS.USDC, abi: ERC20_ABI, functionName: "balanceOf", args: [account] },
-    { address: TOKENS.EURC, abi: ERC20_ABI, functionName: "balanceOf", args: [account] },
-    { address: TOKENS.CIRBTC, abi: ERC20_ABI, functionName: "balanceOf", args: [account] },
-    { address: LENDING_POOL, abi: LENDING_POOL_ABI, functionName: "healthFactor", args: [account] },
-    { address: LENDING_POOL, abi: LENDING_POOL_ABI, functionName: "borrowPower", args: [account] },
-    ...Object.entries(TOKENS)
-      .filter(([symbol]) => symbol !== "CENT")
-      .map(([symbol, asset]) => ({ address: LENDING_POOL, abi: LENDING_POOL_ABI, functionName: "supplyBalance", args: [account, asset], __symbol: symbol })),
-    ...Object.entries(TOKENS)
-      .filter(([symbol]) => symbol !== "CENT")
-      .map(([symbol, asset]) => ({ address: LENDING_POOL, abi: LENDING_POOL_ABI, functionName: "borrowBalance", args: [account, asset], __symbol: symbol })),
-  ];
+    "operator_authorized",
+  );
 
-  const result = await publicClient.multicall({ contracts: calls, allowFailure: true });
-  const value = (index, fallback = null) => result[index]?.status === "success" ? result[index].result : fallback;
+  const balanceRequests = [
+    { symbol: "CENT", address: TOKENS.CENT },
+    { symbol: "USDC", address: TOKENS.USDC },
+    { symbol: "EURC", address: TOKENS.EURC },
+    { symbol: "CIRBTC", address: TOKENS.CIRBTC },
+  ].map(({ symbol, address }) => ({
+    symbol,
+    request: {
+      address,
+      abi: ERC20_ABI,
+      functionName: "balanceOf",
+      args: [account],
+    },
+  }));
 
-  const healthFactor = value(6, 0n);
-  const borrowPower = value(7, 0n);
+  const supplyRequests = Object.entries(TOKENS)
+    .filter(([symbol]) => symbol !== "CENT")
+    .map(([symbol, asset]) => ({
+      symbol,
+      request: {
+        address: LENDING_POOL,
+        abi: LENDING_POOL_ABI,
+        functionName: "supplyBalance",
+        args: [account, asset],
+      },
+    }));
+
+  const borrowRequests = Object.entries(TOKENS)
+    .filter(([symbol]) => symbol !== "CENT")
+    .map(([symbol, asset]) => ({
+      symbol,
+      request: {
+        address: LENDING_POOL,
+        abi: LENDING_POOL_ABI,
+        functionName: "borrowBalance",
+        args: [account, asset],
+      },
+    }));
+
+  const optionalReads = await Promise.all([
+    ...balanceRequests.map(({ request }) => readOptionalContract(publicClient, request)),
+    readOptionalContract(publicClient, {
+      address: LENDING_POOL,
+      abi: LENDING_POOL_ABI,
+      functionName: "healthFactor",
+      args: [account],
+    }),
+    readOptionalContract(publicClient, {
+      address: LENDING_POOL,
+      abi: LENDING_POOL_ABI,
+      functionName: "borrowPower",
+      args: [account],
+    }),
+    ...supplyRequests.map(({ request }) => readOptionalContract(publicClient, request)),
+    ...borrowRequests.map(({ request }) => readOptionalContract(publicClient, request)),
+    publicClient.getBalance({ address: account }).catch(() => null),
+  ]);
+
+  const nativeUsdcBalance = optionalReads[optionalReads.length - 1];
+  const healthFactor = optionalReads[4];
+  const borrowPower = optionalReads[5];
+
+  const balances = {
+    CENT: optionalReads[0] == null ? null : optionalReads[0].toString(),
+    USDC: optionalReads[1] == null ? null : optionalReads[1].toString(),
+    EURC: optionalReads[2] == null ? null : optionalReads[2].toString(),
+    CIRBTC: optionalReads[3] == null ? null : optionalReads[3].toString(),
+  };
+
+  const supplyOffset = 6;
+  const borrowOffset = supplyOffset + supplyRequests.length;
+  const supply = Object.fromEntries(
+    supplyRequests.map(({ symbol }, index) => [
+      symbol,
+      optionalReads[supplyOffset + index] == null ? null : optionalReads[supplyOffset + index].toString(),
+    ]),
+  );
+  const borrow = Object.fromEntries(
+    borrowRequests.map(({ symbol }, index) => [
+      symbol,
+      optionalReads[borrowOffset + index] == null ? null : optionalReads[borrowOffset + index].toString(),
+    ]),
+  );
 
   return {
     chainId: 5042,
     account,
     runner: runnerAddress,
-    active: Boolean(value(0, false)),
-    operatorAuthorized: Boolean(value(1, false)),
-    nativeUsdcBalance: (await publicClient.getBalance({ address: account })).toString(),
-    balances: {
-      CENT: String(value(2, 0n)),
-      USDC: String(value(3, 0n)),
-      EURC: String(value(4, 0n)),
-      CIRBTC: String(value(5, 0n)),
-    },
+    active: Boolean(active),
+    operatorAuthorized: Boolean(operatorAuthorized),
+    nativeUsdcBalance: nativeUsdcBalance == null ? null : nativeUsdcBalance.toString(),
+    balances,
     lending: {
-      healthFactor: String(healthFactor),
-      borrowPower: String(borrowPower),
-      supply: {
-        USDC: String(value(8, 0n)),
-        EURC: String(value(9, 0n)),
-        CIRBTC: String(value(10, 0n)),
-      },
-      borrow: {
-        USDC: String(value(11, 0n)),
-        EURC: String(value(12, 0n)),
-        CIRBTC: String(value(13, 0n)),
-      },
+      healthFactor: healthFactor == null ? null : healthFactor.toString(),
+      borrowPower: borrowPower == null ? null : borrowPower.toString(),
+      supply,
+      borrow,
     },
   };
 }
@@ -561,20 +637,23 @@ async function buildCalls(publicClient, agent, actions, autonomy, db) {
 }
 
 async function assertPermissions(publicClient, account, runnerAddress, calls) {
-  const checks = await publicClient.multicall({
-    contracts: calls.map((call) => ({
-      address: account,
-      abi: ACCOUNT_ABI,
-      functionName: "canExecute",
-      args: [runnerAddress, call.target, call.selector, call.value],
-    })),
-    allowFailure: true,
-  });
+  for (const call of calls) {
+    let permitted;
+    try {
+      permitted = await publicClient.readContract({
+        address: account,
+        abi: ACCOUNT_ABI,
+        functionName: "canExecute",
+        args: [runnerAddress, call.target, call.selector, call.value],
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "rpc_permission_read_failed";
+      throw new Error(`agent_permission_check_failed_${call.target}_${call.selector}:${message}`);
+    }
 
-  const denied = checks.findIndex((item) => item.status !== "success" || !item.result);
-  if (denied !== -1) {
-    const call = calls[denied];
-    throw new Error(`agent_permission_denied_${call.target}_${call.selector}`);
+    if (!permitted) {
+      throw new Error(`agent_permission_denied_${call.target}_${call.selector}`);
+    }
   }
 }
 
@@ -942,9 +1021,26 @@ async function runScheduler(env, scheduledAt) {
 
 export default {
   async scheduled(controller, env, ctx) {
+    const scheduledAt = controller.scheduledTime
+      ? new Date(controller.scheduledTime).toISOString()
+      : new Date().toISOString();
+
     ctx.waitUntil(
-      runScheduler(env, controller.scheduledTime ? new Date(controller.scheduledTime).toISOString() : new Date().toISOString())
-        .catch((error) => console.error("centry_agent_scheduler_failed", error)),
+      runScheduler(env, scheduledAt)
+        .then((result) => {
+          console.log("centry_agent_scheduler_completed", {
+            scheduledAt: result.scheduledAt,
+            runner: result.runner,
+            agentCount: result.agentCount,
+            results: result.results,
+          });
+        })
+        .catch((error) => {
+          console.error("centry_agent_scheduler_failed", {
+            scheduledAt,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }),
     );
   },
 
