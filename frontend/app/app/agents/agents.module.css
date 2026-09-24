@@ -601,7 +601,7 @@
 
 .statsLarge {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 12px;
 }
 
@@ -655,6 +655,132 @@
   font-size: 22px;
   line-height: 1.15;
   overflow-wrap: anywhere;
+}
+
+.portfolioCard {
+  display: grid;
+  align-content: start;
+  gap: 17px;
+  min-height: 100%;
+  padding: 20px;
+  border: 1px solid #2a2a2a;
+  border-radius: 18px;
+  background: #101010;
+}
+
+.portfolioBody {
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+}
+
+.pieWrap {
+  display: grid;
+  place-items: center;
+}
+
+.portfolioPie {
+  position: relative;
+  width: 164px;
+  height: 164px;
+  border: 1px solid #2f3135;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.02), 0 12px 28px rgba(0,0,0,.18);
+}
+
+.portfolioPie::after {
+  content: '';
+  position: absolute;
+  inset: 28px;
+  border: 1px solid #26282c;
+  border-radius: 50%;
+  background: #101010;
+}
+
+.pieCenter {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+}
+
+.pieCenter strong {
+  color: #ffffff;
+  font-size: 21px;
+  letter-spacing: -.5px;
+}
+
+.pieCenter span {
+  margin-top: 4px;
+  color: rgba(255,255,255,.55);
+  font-size: 10px;
+}
+
+.portfolioLegend {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.portfolioRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid #202020;
+}
+
+.portfolioRow:last-child {
+  border-bottom: 0;
+}
+
+.portfolioAsset {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.portfolioDot {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.portfolioAsset strong,
+.portfolioValue strong {
+  display: block;
+  color: #ffffff;
+  font-size: 13px;
+}
+
+.portfolioAsset span,
+.portfolioValue span {
+  display: block;
+  margin-top: 3px;
+  color: rgba(255,255,255,.56);
+  font-size: 11px;
+}
+
+.portfolioValue {
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+.portfolioValue span {
+  color: rgba(255,255,255,.45);
+}
+
+.portfolioMeta {
+  padding-top: 2px;
+  color: rgba(255,255,255,.42);
+  font-size: 10px;
+  line-height: 1.45;
 }
 
 .analyticsGrid {
@@ -855,6 +981,19 @@
     grid-template-columns: 1fr 1fr;
   }
 
+  .portfolioBody {
+    grid-template-columns: 1fr;
+  }
+
+  .portfolioPie {
+    width: 150px;
+    height: 150px;
+  }
+
+  .portfolioPie::after {
+    inset: 25px;
+  }
+
   .scopeGrid {
     grid-template-columns: 1fr;
   }
@@ -891,6 +1030,14 @@
 
   .agentBalanceGrid {
     grid-template-columns: 1fr;
+  }
+
+  .portfolioBody {
+    grid-template-columns: 1fr;
+  }
+
+  .portfolioRow {
+    padding: 8px 0;
   }
 
   .configFooter {
