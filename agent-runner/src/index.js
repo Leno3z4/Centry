@@ -274,6 +274,32 @@ function parseOwnerChatTask(task) {
   }
 }
 
+function ownerChatNeedsSnapshot(message) {
+  return /\b(active|balance|balances|portfolio|position|supplied|supply|borrow|borrowed|debt|health|liquidat|capacity|allowance|transaction|tx|withdraw|repay|swap|vote|transfer|send|deposit|fund|lock|reward)\b/i.test(String(message || ""));
+}
+
+function ownerChatNeedsActivity(message) {
+  return /\b(activity|history|transaction history|recent|executed|executions|what did you do|what have you done|runs?)\b/i.test(String(message || ""));
+}
+
+function emptyAgentSnapshot(account, runnerAddress) {
+  return {
+    chainId: 5042,
+    account,
+    runner: runnerAddress,
+    active: null,
+    operatorAuthorized: null,
+    nativeUsdcBalance: null,
+    balances: { CENT: null, USDC: null, EURC: null, CIRBTC: null },
+    lending: {
+      healthFactor: null,
+      borrowPower: null,
+      supply: { USDC: null, EURC: null, CIRBTC: null },
+      borrow: { USDC: null, EURC: null, CIRBTC: null },
+    },
+  };
+}
+
 async function addAgentChatMessage(db, { id, agentId, role, content }) {
   await db.prepare(
     `INSERT INTO centry_agent_chats (id, agent_id, role, content, created_at)
@@ -922,7 +948,11 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
       return { agentId: agent.id, status: runStatus, reason };
     }
 
-    const snapshot = await readAgentSnapshot(publicClient, account, runnerAddress, rpcUrl);
+    const ownerMessage = ownerChatEnvelope?.message || "";
+    const needsSnapshot = !ownerChatTask || ownerChatNeedsSnapshot(ownerMessage);
+    const snapshot = needsSnapshot
+      ? await readAgentSnapshot(publicClient, account, runnerAddress, rpcUrl)
+      : emptyAgentSnapshot(account, runnerAddress);
 
     if (!snapshot.active && !ownerChatTask) {
       runStatus = "skipped";
@@ -1004,7 +1034,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
 
     const conversationRows = ownerChatTask
       ? await db.prepare(
-          "SELECT id, role, content FROM centry_agent_chats WHERE agent_id = ? ORDER BY created_at DESC LIMIT 25"
+          "SELECT id, role, content FROM centry_agent_chats WHERE agent_id = ? ORDER BY created_at DESC LIMIT 12"
         ).bind(agent.id).all().then((result) => [...(result.results || [])].reverse())
       : [];
 
@@ -1015,10 +1045,17 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
         content: String(row.content || ""),
       }));
 
+    const recentRuns = ownerChatTask && ownerChatNeedsActivity(ownerMessage)
+      ? await db.prepare(
+          "SELECT status, reason, error, tx_hash, started_at, finished_at FROM centry_agent_runs WHERE agent_id = ? ORDER BY started_at DESC LIMIT 8"
+        ).bind(agent.id).all().then((result) => result.results || [])
+      : [];
+
     const user = jsonStringify({
       scheduledAt,
       snapshot,
       conversationHistory,
+      recentRuns,
       pendingTasks: taskContext,
     });
 
