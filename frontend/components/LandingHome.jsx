@@ -4,31 +4,31 @@ import Link from 'next/link';
 import { useEffect } from 'react';
 
 const ACCOUNT_FLOW = [
-  { number: '01', title: 'Own', text: 'Your smart account remains under your control.' },
-  { number: '02', title: 'Define', text: 'Choose what can move, where it can act, and how long access lasts.' },
-  { number: '03', title: 'Execute', text: 'Approved actions can run within those boundaries.' },
+  { number: '01', title: 'Own', text: 'Your smart account stays under your control.' },
+  { number: '02', title: 'Define', text: 'Choose the action, the contract, and how long the permission lasts.' },
+  { number: '03', title: 'Execute', text: 'Actions outside those rules are rejected.' },
 ];
 
 const CAPABILITIES = [
   {
     number: '01',
     title: 'Lending',
-    text: 'Supply assets into supported markets, borrow against positions, repay debt, and withdraw when liquidity becomes available.',
+    text: 'Deposit supported assets, borrow against your position, repay debt, or withdraw available liquidity.',
   },
   {
     number: '02',
     title: 'Swaps',
-    text: 'Move between CENT and USDC through the configured UnitFlow route with a defined minimum output.',
+    text: 'Swap CENT and USDC through the configured UnitFlow route. Quotes include a minimum output before you sign.',
   },
   {
     number: '03',
     title: 'Accounts',
-    text: 'Use a smart account where ownership, permissions, and transaction authority are explicit instead of implied.',
+    text: 'Your smart account owns the position. Ownership and transaction authority are kept separate.',
   },
   {
     number: '04',
     title: 'Automation',
-    text: 'Put repeatable actions on defined rails while the account keeps the final say over what can execute.',
+    text: 'Give an operator a defined permission when you want repeatable actions to continue without handing over the account.',
   },
 ];
 
@@ -96,10 +96,9 @@ export default function LandingHome() {
 
       <section className="landing-home-hero">
         <div className="landing-home-hero-copy" data-reveal>
-          <h1>Onchain capital.<br />Without the noise.</h1>
+          <h1>One account for lending and swaps on Arc.</h1>
           <p className="landing-home-hero-text">
-            Centry brings lending, swaps, and programmable account permissions into one
-            focused interface on Arc Mainnet.
+            Centry gives you one place to supply, borrow, repay, withdraw, and swap. Your smart account stays yours, with permissions for actions that need to run on their own.
           </p>
           <Link href="/app" className="landing-home-primary">Open app</Link>
         </div>
@@ -133,29 +132,27 @@ export default function LandingHome() {
       <section className="landing-home-proof" data-reveal>
         <div><strong>ARC MAINNET</strong><span>Live network</span></div>
         <div><strong>WALLET-OWNED</strong><span>Account ownership</span></div>
-        <div><strong>LENDING + SWAPS</strong><span>Core capital flows</span></div>
-        <div><strong>DEFINED PERMISSIONS</strong><span>Bounded execution</span></div>
+        <div><strong>LENDING + SWAPS</strong><span>Supply, borrow, repay, withdraw, swap</span></div>
+        <div><strong>SMART ACCOUNT</strong><span>Ownership + account rules</span></div>
       </section>
 
       <section className="landing-home-section landing-home-overview" data-reveal>
         <div className="landing-home-section-main">
-          <h2>A focused place to lend, borrow, swap, and manage an account onchain.</h2>
+          <h2>Your positions, in one place.</h2>
           <p className="landing-home-section-lede">
-            Centry puts the actions that matter into one interface: market positions,
-            borrowing and repayment, token swaps, and account-level permissions.
+            Supply into a market. Borrow against your position. Repay debt. Withdraw available liquidity. Swap CENT for USDC. Centry keeps those actions behind one wallet-owned account.
           </p>
         </div>
         <div className="landing-home-overview-note">
           <span>ARC</span>
           <p>
-            The product runs around a wallet-owned account. That account remains the authority
-            while permissions determine which actions may be carried out.
+            Ownership stays with the account owner. Permissions decide which actions an operator can carry out.
           </p>
         </div>
       </section>
 
       <section className="landing-home-section landing-home-capabilities" data-reveal>
-        <h2>The pieces fit together.</h2>
+        <h2>The account is the common layer.</h2>
         <div className="landing-home-capability-list">
           {CAPABILITIES.map((item) => (
             <article key={item.number} className="landing-home-capability">
@@ -169,10 +166,9 @@ export default function LandingHome() {
 
       <section className="landing-home-section landing-home-account" data-reveal>
         <div className="landing-home-section-main">
-          <h2>Ownership first. Everything else follows.</h2>
+          <h2>Your account sets the limit.</h2>
           <p className="landing-home-section-lede">
-            Centry separates who owns the account from who is allowed to act through it.
-            Rules can be scoped to the operator, target, function, expiry, and native-value limit.
+            Ownership stays with the account owner. A permission can name the operator, target contract, function, expiry, and native-value limit. Anything outside those rules is rejected.
           </p>
         </div>
         <div className="landing-home-flow">
@@ -187,8 +183,8 @@ export default function LandingHome() {
       </section>
 
       <section className="landing-home-final" data-reveal>
-        <h2>Put your capital to work.</h2>
-        <p>Connect a wallet, configure the account, and open Centry.</p>
+        <h2>Start with the account.</h2>
+        <p>Connect a wallet and open Centry on Arc.</p>
         <Link href="/app" className="landing-home-primary">Open app</Link>
       </section>
 
