@@ -759,6 +759,30 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
 
     for (const task of tasks) {
       const reply = repliesByTask.get(task.id);
+      const ownerRequest = parseOwnerChatTask(task);
+
+      if (ownerRequest) {
+        const result = runStatus === "executed"
+          ? `Executed the requested action. Transaction: ${txHash}`
+          : (reply || `The request was processed and no onchain transaction was required.`);
+        await completeTask(db, task.id, "completed", JSON.stringify({
+          kind: "owner_chat_result",
+          status: runStatus === "executed" ? "executed" : "processed",
+          answer: result,
+          txHash,
+          error: null,
+        }));
+        if (ownerRequest.assistantMessageId) {
+          await addAgentChatMessage(db, {
+            id: ownerRequest.assistantMessageId,
+            agentId: agent.id,
+            role: "assistant",
+            content: result,
+          }).catch(() => {});
+        }
+        continue;
+      }
+
       const result = reply || (
         runStatus === "executed"
           ? `Processed during run ${runId}. Transaction: ${txHash}`
@@ -805,6 +829,26 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
   } catch (error) {
     runStatus = "failed";
     errorMessage = error instanceof Error ? error.message : "agent_run_failed";
+
+    if (ownerChatTask && ownerChatEnvelope) {
+      const result = `I could not execute that request: ${errorMessage}`;
+      await completeTask(db, ownerChatTask.id, "failed", JSON.stringify({
+        kind: "owner_chat_result",
+        status: "failed",
+        answer: result,
+        txHash,
+        error: errorMessage,
+      })).catch(() => {});
+      if (ownerChatEnvelope.assistantMessageId) {
+        await addAgentChatMessage(db, {
+          id: ownerChatEnvelope.assistantMessageId,
+          agentId: agent.id,
+          role: "assistant",
+          content: result,
+        }).catch(() => {});
+      }
+    }
+
     return {
       agentId: agent.id,
       status: runStatus,
