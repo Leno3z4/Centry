@@ -282,6 +282,112 @@ async function getAgentById(db, agentId) {
   ).bind(agentId).first();
 }
 
+async function writeAgentRuntime(db, agentId, patch) {
+  if (!agentId || !patch || typeof patch !== "object") return;
+  await db.prepare(
+    `INSERT INTO centry_agent_runtime
+      (agent_id, last_status, last_reason, last_error, strategy_state_json, updated_at)
+     VALUES (?, 'idle', '', '', '{}', ?)
+     ON CONFLICT(agent_id) DO NOTHING`
+  ).bind(agentId, new Date().toISOString()).run();
+
+  const allowed = {
+    heartbeatAt: "heartbeat_at",
+    lastEvaluationAt: "last_evaluation_at",
+    lastActionAt: "last_action_at",
+    lastSuccessAt: "last_success_at",
+    lastFailureAt: "last_failure_at",
+    lastStatus: "last_status",
+    lastReason: "last_reason",
+    lastError: "last_error",
+    lastTxHash: "last_tx_hash",
+    lastRunId: "last_run_id",
+    operatorAuthorized: "operator_authorized",
+    accountActive: "account_active",
+    strategyState: "strategy_state_json",
+  };
+
+  const sets = [];
+  const values = [];
+  for (const [key, column] of Object.entries(allowed)) {
+    if (!(key in patch)) continue;
+    sets.push(`${column} = ?`);
+    if (key === "operatorAuthorized" || key === "accountActive") {
+      values.push(patch[key] == null ? null : (patch[key] ? 1 : 0));
+    } else if (key === "strategyState") {
+      values.push(JSON.stringify(patch[key] && typeof patch[key] === "object" ? patch[key] : {}));
+    } else {
+      values.push(patch[key] ?? null);
+    }
+  }
+  if (!sets.length) return;
+  sets.push("updated_at = ?");
+  values.push(new Date().toISOString(), agentId);
+  await db.prepare(
+    `UPDATE centry_agent_runtime SET ${sets.join(", ")} WHERE agent_id = ?`
+  ).bind(...values).run();
+}
+
+async function createActionReceipts(db, runId, agentId, calls) {
+  const createdAt = new Date().toISOString();
+  const ids = [];
+  for (const call of calls) {
+    const id = crypto.randomUUID();
+    ids.push(id);
+    await db.prepare(
+      `INSERT INTO centry_agent_action_receipts
+        (id, run_id, agent_id, action_index, action_type, target, selector, value, status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'planned', ?)`
+    ).bind(
+      id,
+      runId,
+      agentId,
+      Number(call.actionIndex ?? 0),
+      String(call.actionType || "unknown"),
+      call.target,
+      call.selector,
+      String(call.value ?? 0n),
+      createdAt,
+    ).run();
+  }
+  return ids;
+}
+
+async function updateActionReceipts(db, ids, patch) {
+  const filtered = Array.isArray(ids) ? ids.map(String).filter(Boolean).slice(0, 32) : [];
+  if (!filtered.length) return;
+  const fields = [];
+  const values = [];
+  if (patch.status) { fields.push("status = ?"); values.push(String(patch.status)); }
+  if (patch.simulationAt) { fields.push("simulation_at = ?"); values.push(String(patch.simulationAt)); }
+  if (patch.broadcastAt) { fields.push("broadcast_at = ?"); values.push(String(patch.broadcastAt)); }
+  if (patch.confirmedAt) { fields.push("confirmed_at = ?"); values.push(String(patch.confirmedAt)); }
+  if (patch.txHash !== undefined) { fields.push("tx_hash = ?"); values.push(patch.txHash || null); }
+  if (patch.error !== undefined) { fields.push("error = ?"); values.push(String(patch.error || "").slice(0, 1000)); }
+  if (!fields.length) return;
+  values.push(...filtered);
+  await db.prepare(
+    `UPDATE centry_agent_action_receipts SET ${fields.join(", ")} WHERE id IN (${filtered.map(() => "?").join(", ")})`
+  ).bind(...values).run();
+}
+
+function annotateActionCalls(actions, calls) {
+  let offset = 0;
+  for (let actionIndex = 0; actionIndex < actions.length; actionIndex += 1) {
+    const type = String(actions[actionIndex]?.action || "").trim();
+    const count = ["approve", "supply", "withdraw", "borrow", "transfer", "castVote"].includes(type)
+      ? 1
+      : ["repay", "swap"].includes(type)
+        ? 2
+        : 0;
+    for (let i = 0; i < count && offset + i < calls.length; i += 1) {
+      calls[offset + i].actionIndex = actionIndex;
+      calls[offset + i].actionType = type;
+    }
+    offset += count;
+  }
+}
+
 async function getAgents(db) {
   return await db.prepare(
     "SELECT id, owner, account, name, operator, config_json, created_at FROM centry_agents ORDER BY created_at ASC"
@@ -1155,6 +1261,14 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
      VALUES (?, ?, ?, 'running', 0, 0, NULL, '', '', ?, NULL)`
   ).bind(runId, agent.id, cycleKey, startedAt).run().catch(() => {});
 
+  await writeAgentRuntime(db, agent.id, {
+    heartbeatAt: startedAt,
+    lastStatus: "running",
+    lastReason: "wake",
+    lastError: "",
+    lastRunId: runId,
+  }).catch(() => {});
+
   let runStatus = "idle";
   let reason = "";
   let errorMessage = "";
@@ -1163,6 +1277,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
   let tasks = [];
   let ownerChatTask = null;
   let ownerChatEnvelope = null;
+  let actionReceiptIds = [];
 
   try {
     const account = getAddress(agent.account);
@@ -1240,6 +1355,17 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
       : needsSnapshot
         ? await readOwnerChatSnapshot(publicClient, account, runnerAddress, rpcUrl, ownerMessage)
         : emptyAgentSnapshot(account, runnerAddress);
+
+    await writeAgentRuntime(db, agent.id, {
+      lastEvaluationAt: new Date().toISOString(),
+      accountActive: snapshot.active,
+      operatorAuthorized: snapshot.operatorAuthorized,
+      strategyState: {
+        autonomyEnabled,
+        instructionsConfigured: Boolean(instructions),
+        pendingTaskCount: tasks.length,
+      },
+    }).catch(() => {});
 
     if (!snapshot.active && !ownerChatTask) {
       runStatus = "skipped";
@@ -1385,8 +1511,11 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
     const calls = await buildCalls(publicClient, agent, plannedActions, autonomy, db, {
       humanReadableAmounts: Boolean(ownerChatTask),
     });
+    annotateActionCalls(plannedActions, calls);
     if (calls.length > 0) {
       await assertPermissions(publicClient, account, runnerAddress, calls);
+      actionReceiptIds = await createActionReceipts(db, runId, agent.id, calls).catch(() => []);
+
 
       const txLocked = await tryLock(db, "__centry_tx_mutex__", 300_000);
       if (!txLocked) throw new Error("agent_transaction_mutex_busy");
@@ -1407,13 +1536,39 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
           args: [targets, values, data],
           account: runnerAddress,
         });
+        const simulatedAt = new Date().toISOString();
+        await updateActionReceipts(db, actionReceiptIds, {
+          status: "simulated",
+          simulationAt: simulatedAt,
+        }).catch(() => {});
 
         txHash = await walletClient.writeContract({
           ...simulation.request,
           account: runnerAddress,
         });
+        await updateActionReceipts(db, actionReceiptIds, {
+          status: "broadcast",
+          broadcastAt: new Date().toISOString(),
+          txHash,
+        }).catch(() => {});
+        await writeAgentRuntime(db, agent.id, {
+          lastActionAt: new Date().toISOString(),
+          lastTxHash: txHash,
+        }).catch(() => {});
         const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-        if (receipt.status !== "success") throw new Error("agent_transaction_reverted");
+        if (receipt.status !== "success") {
+          await updateActionReceipts(db, actionReceiptIds, {
+            status: "failed",
+            txHash,
+            error: "agent_transaction_reverted",
+          }).catch(() => {});
+          throw new Error("agent_transaction_reverted");
+        }
+        await updateActionReceipts(db, actionReceiptIds, {
+          status: "confirmed",
+          confirmedAt: new Date().toISOString(),
+          txHash,
+        }).catch(() => {});
       } finally {
         await unlock(db, "__centry_tx_mutex__");
       }
@@ -1514,6 +1669,11 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
   } catch (error) {
     runStatus = "failed";
     errorMessage = error instanceof Error ? error.message : "agent_run_failed";
+    await updateActionReceipts(db, actionReceiptIds, {
+      status: "failed",
+      txHash,
+      error: errorMessage,
+    }).catch(() => {});
 
     if (ownerChatTask && ownerChatEnvelope) {
       const result = `I could not execute that request: ${errorMessage}`;
@@ -1553,6 +1713,18 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
       actionCount,
     };
   } finally {
+    const finishedAt = new Date().toISOString();
+    await writeAgentRuntime(db, agent.id, {
+      lastStatus: runStatus,
+      lastReason: reason,
+      lastError: errorMessage,
+      lastTxHash: txHash,
+      lastRunId: runId,
+      ...(runStatus === "failed"
+        ? { lastFailureAt: finishedAt }
+        : { lastSuccessAt: finishedAt }),
+    }).catch(() => {});
+
     await db.prepare(
       `UPDATE centry_agent_runs
        SET status = ?, task_count = ?, action_count = ?, tx_hash = ?, reason = ?, error = ?, finished_at = ?
@@ -1564,7 +1736,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
       txHash,
       reason,
       errorMessage,
-      new Date().toISOString(),
+      finishedAt,
       runId,
     ).run().catch(() => {});
     await unlock(db, agent.id).catch(() => {});

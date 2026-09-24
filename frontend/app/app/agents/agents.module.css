@@ -792,6 +792,183 @@
   line-height: 1.45;
 }
 
+.executionProof {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+  border: 1px solid #2a2a2a;
+  border-radius: 18px;
+  background: linear-gradient(145deg, #101010, #0b0b0b);
+}
+
+.executionProofHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.executionProofHead h2 {
+  margin: 7px 0 0;
+  color: #ffffff;
+  font-size: 24px;
+  letter-spacing: -.7px;
+}
+
+.executionProofHead p {
+  max-width: 720px;
+  margin: 7px 0 0;
+  color: rgba(255,255,255,.62);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.proofKicker {
+  color: rgba(255,255,255,.48);
+  font-size: 11px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.proofState {
+  min-width: 150px;
+  padding: 12px 14px;
+  border: 1px solid #272727;
+  border-radius: 12px;
+  background: #111111;
+}
+
+.proofState span,
+.executionProofGrid span,
+.receiptHead span {
+  color: rgba(255,255,255,.48);
+  font-size: 11px;
+}
+
+.proofState strong {
+  display: block;
+  margin-top: 5px;
+  color: #ffffff;
+  font-size: 13px;
+}
+
+.executionProofGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.executionProofGrid > div {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #202020;
+  border-radius: 12px;
+  background: #0d0d0d;
+}
+
+.executionProofGrid strong {
+  display: block;
+  margin-top: 7px;
+  color: #ffffff;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.proofMono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.executionProofNote {
+  display: grid;
+  gap: 5px;
+  padding: 11px 13px;
+  border-left: 2px solid #4a4a4a;
+  background: #111111;
+}
+
+.executionProofNote span {
+  color: #ffffff;
+  font-size: 12px;
+}
+
+.executionProofNote code {
+  color: rgba(255,255,255,.52);
+  font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+.receiptList {
+  display: grid;
+  gap: 7px;
+}
+
+.receiptHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 2px;
+}
+
+.receiptRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 12px;
+  border: 1px solid #202020;
+  border-radius: 11px;
+  background: #0d0d0d;
+}
+
+.receiptRow > div:first-child {
+  min-width: 0;
+}
+
+.receiptRow strong,
+.receiptRow span {
+  display: block;
+}
+
+.receiptRow strong {
+  color: #ffffff;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.receiptRow > div:first-child span {
+  margin-top: 4px;
+  color: rgba(255,255,255,.45);
+  font-size: 10px;
+}
+
+.receiptMeta {
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+  min-width: 0;
+}
+
+.receiptMeta code {
+  max-width: 360px;
+  color: rgba(255,255,255,.5);
+  font: 10px/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.receiptStatus {
+  display: inline-flex !important;
+  width: fit-content;
+  padding: 4px 7px;
+  border: 1px solid #303030;
+  border-radius: 999px;
+  background: #141414;
+  color: #ffffff !important;
+  font-size: 9px !important;
+  letter-spacing: .05em;
+}
+
 .analyticsGrid {
   display: grid;
   grid-template-columns: 1.25fr .75fr;
@@ -1192,6 +1369,14 @@
     grid-template-columns: 1fr 1fr;
   }
 
+  .executionProofHead {
+    flex-direction: column;
+  }
+
+  .executionProofGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .agentBalanceGrid {
     grid-template-columns: 1fr 1fr;
   }
@@ -1241,6 +1426,22 @@
 
   .statsLarge {
     grid-template-columns: 1fr;
+  }
+
+  .executionProofGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .receiptRow {
+    grid-template-columns: 1fr;
+  }
+
+  .receiptMeta {
+    justify-items: start;
+  }
+
+  .receiptMeta code {
+    text-align: left;
   }
 
   .agentBalanceGrid {

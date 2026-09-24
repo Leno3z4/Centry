@@ -141,3 +141,12 @@ export async function getAgentTask(id) {
 }
 
 export async function updateAgentConfig(id, config) { return call("update_agent_config", { id, config }); }
+
+
+export async function getAgentRuntime(agentId) {
+  return call("get_agent_runtime", { agentId });
+}
+
+export async function listActionReceipts(agentId, limit = 20) {
+  return call("list_action_receipts", { agentId, limit });
+}

@@ -1,6 +1,6 @@
 import { Contract, JsonRpcProvider, getAddress } from "ethers";
 import { verifyOwnerSession } from "../../../../../../lib/agentOwnerAuth";
-import { getAgentById, getProviderConfig, listAgentRuns } from "../../../../../../lib/agentStore";
+import { getAgentById, getProviderConfig, listAgentRuns, getAgentRuntime, listActionReceipts } from "../../../../../../lib/agentStore";
 
 const ACCOUNT_ABI = [
   "function active() view returns (bool)",
@@ -37,6 +37,8 @@ export async function GET(request, { params }) {
     const providerName = String(autonomy.provider || "").toLowerCase();
     const provider = providerName ? await getProviderConfig(agentId, providerName) : null;
     const runs = await listAgentRuns(agentId, 10).catch(() => []);
+    const executionRuntime = await getAgentRuntime(agentId).catch(() => null);
+    const actionReceipts = await listActionReceipts(agentId, 20).catch(() => []);
 
     return Response.json({
       agentId: agent.id,
@@ -49,6 +51,8 @@ export async function GET(request, { params }) {
       instructionsConfigured: Boolean(String(autonomy.instructions || "").trim()),
       providerConfigured: Boolean(provider),
       recentRuns: runs,
+      executionRuntime,
+      actionReceipts,
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "agent_runtime_status_failed" }, { status: 403 });

@@ -25,6 +25,11 @@ const OPERATIONS = new Set([
   "complete_agent_task",
   "get_agent_task",
   "update_agent_config",
+  "upsert_agent_runtime",
+  "get_agent_runtime",
+  "list_action_receipts",
+  "create_action_receipt",
+  "update_action_receipts",
 ]);
 
 function unauthorized() {
@@ -340,6 +345,116 @@ async function runOperation(db, operation, args) {
          WHERE id = ? AND status = 'pending'`
       ).bind(status, result, now, now, id).run();
       return { id, status };
+    }
+
+    case "upsert_agent_runtime": {
+      const runtime = args.runtime || {};
+      const agentId = requireString(runtime.agentId, "agentId");
+      const now = new Date().toISOString();
+      await db.prepare(
+        `INSERT INTO centry_agent_runtime
+          (agent_id, heartbeat_at, last_evaluation_at, last_action_at, last_success_at, last_failure_at,
+           last_status, last_reason, last_error, last_tx_hash, last_run_id, operator_authorized, account_active,
+           strategy_state_json, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(agent_id) DO UPDATE SET
+           heartbeat_at=excluded.heartbeat_at,
+           last_evaluation_at=excluded.last_evaluation_at,
+           last_action_at=excluded.last_action_at,
+           last_success_at=excluded.last_success_at,
+           last_failure_at=excluded.last_failure_at,
+           last_status=excluded.last_status,
+           last_reason=excluded.last_reason,
+           last_error=excluded.last_error,
+           last_tx_hash=excluded.last_tx_hash,
+           last_run_id=excluded.last_run_id,
+           operator_authorized=excluded.operator_authorized,
+           account_active=excluded.account_active,
+           strategy_state_json=excluded.strategy_state_json,
+           updated_at=excluded.updated_at`
+      ).bind(
+        agentId,
+        runtime.heartbeatAt || null,
+        runtime.lastEvaluationAt || null,
+        runtime.lastActionAt || null,
+        runtime.lastSuccessAt || null,
+        runtime.lastFailureAt || null,
+        runtime.lastStatus || "idle",
+        String(runtime.lastReason || "").slice(0, 500),
+        String(runtime.lastError || "").slice(0, 1000),
+        runtime.lastTxHash || null,
+        runtime.lastRunId || null,
+        runtime.operatorAuthorized == null ? null : (runtime.operatorAuthorized ? 1 : 0),
+        runtime.accountActive == null ? null : (runtime.accountActive ? 1 : 0),
+        JSON.stringify(runtime.strategyState && typeof runtime.strategyState === "object" ? runtime.strategyState : {}),
+        runtime.updatedAt || now,
+      ).run();
+      return await db.prepare("SELECT * FROM centry_agent_runtime WHERE agent_id = ? LIMIT 1").bind(agentId).first();
+    }
+
+    case "get_agent_runtime":
+      return await db.prepare("SELECT * FROM centry_agent_runtime WHERE agent_id = ? LIMIT 1")
+        .bind(requireString(args.agentId, "agentId")).first();
+
+    case "list_action_receipts": {
+      const agentId = requireString(args.agentId, "agentId");
+      const limit = Math.max(1, Math.min(100, Number(args.limit) || 20));
+      return await db.prepare(
+        `SELECT id, run_id, agent_id, action_index, action_type, target, selector, value, status,
+                simulation_at, broadcast_at, confirmed_at, tx_hash, error, created_at
+         FROM centry_agent_action_receipts
+         WHERE agent_id = ?
+         ORDER BY created_at DESC, action_index DESC
+         LIMIT ?`
+      ).bind(agentId, limit).all().then((r) => r.results || []);
+    }
+
+    case "create_action_receipt": {
+      const receipt = args.receipt || {};
+      const now = new Date().toISOString();
+      await db.prepare(
+        `INSERT INTO centry_agent_action_receipts
+          (id, run_id, agent_id, action_index, action_type, target, selector, value, status,
+           simulation_at, broadcast_at, confirmed_at, tx_hash, error, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        requireString(receipt.id, "id"),
+        requireString(receipt.runId, "runId"),
+        requireString(receipt.agentId, "agentId"),
+        Number(receipt.actionIndex || 0),
+        requireString(receipt.actionType, "actionType"),
+        requireString(receipt.target, "target"),
+        requireString(receipt.selector, "selector"),
+        String(receipt.value ?? "0"),
+        requireString(receipt.status || "planned", "status"),
+        receipt.simulationAt || null,
+        receipt.broadcastAt || null,
+        receipt.confirmedAt || null,
+        receipt.txHash || null,
+        String(receipt.error || "").slice(0, 1000),
+        receipt.createdAt || now,
+      ).run();
+      return { id: receipt.id };
+    }
+
+    case "update_action_receipts": {
+      const ids = Array.isArray(args.ids) ? args.ids.map(String).filter(Boolean).slice(0, 32) : [];
+      if (!ids.length) return { updated: 0 };
+      const fields = [];
+      const values = [];
+      if (args.status) { fields.push("status = ?"); values.push(String(args.status)); }
+      if (args.simulationAt) { fields.push("simulation_at = ?"); values.push(String(args.simulationAt)); }
+      if (args.broadcastAt) { fields.push("broadcast_at = ?"); values.push(String(args.broadcastAt)); }
+      if (args.confirmedAt) { fields.push("confirmed_at = ?"); values.push(String(args.confirmedAt)); }
+      if (args.txHash !== undefined) { fields.push("tx_hash = ?"); values.push(args.txHash || null); }
+      if (args.error !== undefined) { fields.push("error = ?"); values.push(String(args.error || "").slice(0, 1000)); }
+      if (!fields.length) return { updated: 0 };
+      values.push(...ids);
+      const placeholders = ids.map(() => "?").join(", ");
+      const result = await db.prepare(
+        `UPDATE centry_agent_action_receipts SET ${fields.join(", ")} WHERE id IN (${placeholders})`
+      ).bind(...values).run();
+      return { updated: Number(result?.meta?.changes || 0) };
     }
 
     case "update_agent_config": {
