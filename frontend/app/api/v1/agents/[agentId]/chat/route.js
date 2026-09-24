@@ -1,7 +1,38 @@
 import crypto from "node:crypto";
-import { getAddress } from "ethers";
+import { Contract, JsonRpcProvider, getAddress } from "ethers";
 import { verifyOwnerSession } from "../../../../../../lib/agentOwnerAuth";
 import { getAgentById, enqueueAgentTask, addAgentChatMessage } from "../../../../../../lib/agentStore";
+import { CONTRACT_ADDRESSES } from "../../../../../../constants/contracts";
+
+const BALANCE_ABI = ["function balanceOf(address account) view returns (uint256)"];
+
+const DIRECT_BALANCE_ASSETS = Object.freeze({
+  USDC: { address: CONTRACT_ADDRESSES.USDC, decimals: 6 },
+  EURC: { address: CONTRACT_ADDRESSES.EURC, decimals: 6 },
+  CIRBTC: { address: CONTRACT_ADDRESSES.CIRBTC, decimals: 8 },
+});
+
+function requestedBalanceAsset(message) {
+  const text = String(message || "").toUpperCase();
+  for (const symbol of Object.keys(DIRECT_BALANCE_ASSETS)) {
+    if (new RegExp(`\\b${symbol}\\b`).test(text)) return symbol;
+  }
+  return null;
+}
+
+function isSimpleBalanceRequest(message) {
+  const text = String(message || "").trim();
+  if (!text) return false;
+  if (!/\\b(?:balance|balances|how much|how many|what(?:'s| is)?)\\b/i.test(text)) return false;
+  if (/\\b(?:supply|deposit|withdraw|borrow|repay|swap|trade|approve|vote|transfer|send|fund)\\b/i.test(text)) return false;
+  return Boolean(requestedBalanceAsset(text));
+}
+
+function formatTokenBalance(raw, decimals) {
+  const value = Number(raw) / (10 ** decimals);
+  if (!Number.isFinite(value)) return "0";
+  return value.toLocaleString(undefined, { maximumFractionDigits: Math.min(8, decimals) });
+}
 
 export async function POST(request, { params }) {
   const { agentId } = await params;
@@ -21,6 +52,33 @@ export async function POST(request, { params }) {
       account: getAddress(agent.account),
     });
 
+    await addAgentChatMessage({
+      id: crypto.randomUUID(),
+      agentId: agent.id,
+      role: "user",
+      content: message,
+    });
+
+    if (isSimpleBalanceRequest(message)) {
+      const symbol = requestedBalanceAsset(message);
+      const asset = DIRECT_BALANCE_ASSETS[symbol];
+      const provider = new JsonRpcProvider(process.env.CENTRY_AGENT_RPC_URL || "https://rpc.mainnet.arc.io");
+      const contract = new Contract(getAddress(asset.address), BALANCE_ABI, provider);
+      const rawBalance = await contract.balanceOf(getAddress(agent.account));
+      const answer = `Your Centry agent has ${formatTokenBalance(rawBalance, asset.decimals)} ${symbol}.`;
+      await addAgentChatMessage({
+        id: crypto.randomUUID(),
+        agentId: agent.id,
+        role: "assistant",
+        content: answer,
+      });
+      return Response.json({
+        mode: "direct",
+        status: "completed",
+        result: { answer, txHash: null, error: null },
+      }, { headers: { "Cache-Control": "no-store" } });
+    }
+
     const taskId = crypto.randomUUID();
     const assistantMessageId = crypto.randomUUID();
     const envelope = JSON.stringify({
@@ -36,12 +94,6 @@ export async function POST(request, { params }) {
       task: envelope,
     });
 
-    await addAgentChatMessage({
-      id: taskId,
-      agentId: agent.id,
-      role: "user",
-      content: message,
-    });
 
     const runnerUrl = String(process.env.CENTRY_AGENT_RUNNER_URL || "").replace(/\/$/, "");
     const runnerSecret = String(process.env.CENTRY_AGENT_RUNNER_HTTP_SECRET || "");
@@ -77,7 +129,10 @@ export async function POST(request, { params }) {
       mode: runnerUrl && runnerSecret ? "accepted" : "queued",
       taskId,
       status: queued?.status || "pending",
-      acknowledgement: "Thinking…",
+      runnerConfigured: Boolean(runnerUrl && runnerSecret),
+      acknowledgement: runnerUrl && runnerSecret
+        ? "Queued with the agent runtime."
+        : "Queued. The agent runtime is not configured for an immediate wake.",
     }, { status: 202, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "agent_chat_failed" }, { status: 400 });
