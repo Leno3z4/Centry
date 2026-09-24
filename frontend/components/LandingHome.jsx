@@ -39,7 +39,7 @@ export default function LandingHome() {
     <main className="landing-home">
       <nav className="landing-home-nav">
         <Link href="/" className="landing-home-brand" aria-label="Centry home">CENTRY</Link>
-        <Link href="/app" className="landing-home-open">Open app <span aria-hidden="true">↗</span></Link>
+        <Link href="/app" className="landing-home-open">Open app</Link>
       </nav>
 
       <section className="landing-home-hero">
