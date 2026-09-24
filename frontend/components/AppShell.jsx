@@ -1,10 +1,15 @@
 'use client';
 
+import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { WalletConnect } from './WalletConnect';
-import CentryAssistantBubble from './CentryAssistantBubble';
+const CentryAssistantBubble = dynamic(() => import('./CentryAssistantBubble'), {
+  ssr: false,
+  loading: () => null,
+});
 import styles from './AppShell.module.css';
 import surfaceStyles from './DesignSurface.module.css';
 
@@ -77,10 +82,10 @@ export function AppShell({ children }) {
                     <span>{item.label}</span>
                   </div>
                 ) : (
-                  <a key={item.href} href={item.href} className={`nav-item ${active === item.href ? 'active' : ''}`} aria-current={active === item.href ? 'page' : undefined}>
+                  <Link key={item.href} href={item.href} className={`nav-item ${active === item.href ? 'active' : ''}`} aria-current={active === item.href ? 'page' : undefined}>
                     <span className="nav-icon">{item.icon}</span>
                     <span>{item.label}</span>
-                  </a>
+                  </Link>
                 )
               ))}
             </div>
