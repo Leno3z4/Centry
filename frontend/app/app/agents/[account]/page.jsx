@@ -13,8 +13,6 @@ import styles from '../agents.module.css';
 import {
   ACCOUNT_ABI,
   API_BASE,
-  FACTORY_ABI,
-  FACTORY_ADDRESS,
   WITHDRAWABLE_ASSETS,
   apiJson,
   loadOwnedAgents,
@@ -133,35 +131,41 @@ function DashboardContent() {
       const rows = await Promise.all(
         WITHDRAWABLE_ASSETS.map(async (asset) => {
           const oracleAsset = asset.address || CONTRACT_ADDRESSES.USDC;
-          const [raw, priceResult] = await Promise.all([
-            asset.address
-              ? publicClient.readContract({
-                  address: asset.address,
-                  abi: [{ type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ type: 'uint256' }] }],
-                  functionName: 'balanceOf',
-                  args: [account],
-                })
-              : publicClient.getBalance({ address: account }),
-            publicClient.readContract({
+          const raw = asset.address
+            ? await publicClient.readContract({
+                address: asset.address,
+                abi: [{ type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ type: 'uint256' }] }],
+                functionName: 'balanceOf',
+                args: [account],
+              })
+            : await publicClient.getBalance({ address: account });
+
+          const rawBalance = BigInt(raw || 0n);
+          let priceRaw = 0n;
+          let updatedAt = 0n;
+
+          try {
+            const priceResult = await publicClient.readContract({
               address: CONTRACT_ADDRESSES.oracle,
               abi: ORACLE_ABI,
               functionName: 'getPrice',
               args: [oracleAsset],
-            }),
-          ]);
+            });
+            [priceRaw, updatedAt] = Array.isArray(priceResult) ? priceResult : [priceResult, 0n];
+          } catch {
+            // Some supported assets may not have a USD feed in the deployed oracle yet.
+          }
 
-          const [priceRaw, updatedAt] = Array.isArray(priceResult) ? priceResult : [priceResult, 0n];
-          const rawBalance = BigInt(raw || 0n);
-          const usdRaw = (rawBalance * BigInt(priceRaw || 0n)) / (10n ** BigInt(asset.decimals));
-          const usdValue = Number(formatUnits(usdRaw, 18));
+          const usdRaw = priceRaw > 0n ? (rawBalance * BigInt(priceRaw)) / (10n ** BigInt(asset.decimals)) : null;
+          const usdValue = usdRaw == null ? null : Number(formatUnits(usdRaw, 18));
 
           return {
             ...asset,
             raw: rawBalance.toString(),
-            priceRaw: String(priceRaw || 0n),
+            priceRaw: String(priceRaw),
             updatedAt: String(updatedAt || 0n),
-            usdRaw: usdRaw.toString(),
-            usdValue: Number.isFinite(usdValue) ? usdValue : 0,
+            usdRaw: usdRaw == null ? null : usdRaw.toString(),
+            usdValue: Number.isFinite(usdValue) ? usdValue : null,
             color: PORTFOLIO_COLORS[asset.key] || '#73767d',
           };
         }),
@@ -199,12 +203,12 @@ function DashboardContent() {
   const recent = useMemo(() => activity.slice(0, 5), [activity]);
 
   const portfolio = useMemo(() => {
-    const totalUsd = balances.reduce((sum, item) => sum + (Number(item.usdValue) || 0), 0);
+    const totalUsd = balances.reduce((sum, item) => sum + (Number.isFinite(item.usdValue) ? item.usdValue : 0), 0);
     const rows = balances.map((item) => ({
       ...item,
-      percentage: totalUsd > 0 ? ((Number(item.usdValue) || 0) / totalUsd) * 100 : 0,
+      percentage: totalUsd > 0 && Number.isFinite(item.usdValue) ? (item.usdValue / totalUsd) * 100 : 0,
     }));
-    const activeRows = rows.filter((item) => item.usdValue > 0);
+    const activeRows = rows.filter((item) => Number.isFinite(item.usdValue) && item.usdValue > 0);
     return { totalUsd, rows, activeRows };
   }, [balances]);
 
@@ -272,7 +276,7 @@ function DashboardContent() {
                   </div>
                   <div className={styles.portfolioValue}>
                     <strong>{formatUsd(item.usdValue)}</strong>
-                    <span>{item.percentage > 0 ? `${item.percentage < 10 ? item.percentage.toFixed(1) : item.percentage.toFixed(0)}%` : '0%'}</span>
+                    <span>{item.usdValue == null ? 'No USD feed' : item.percentage > 0 ? `${item.percentage < 10 ? item.percentage.toFixed(1) : item.percentage.toFixed(0)}%` : '0%'}</span>
                   </div>
                 </div>
               ))}
@@ -280,7 +284,7 @@ function DashboardContent() {
           </div>
 
           <div className={styles.portfolioMeta}>
-            <span>USD values use the live Centry oracle on Arc Mainnet.</span>
+            <span>Pie share uses only assets with an available USD price feed.</span>
           </div>
 
           <div className={styles.walletActions}>
