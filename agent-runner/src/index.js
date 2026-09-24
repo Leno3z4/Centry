@@ -200,9 +200,7 @@ function assertActionPolicy(policy, action, options = {}) {
     if (cap !== undefined && String(cap).trim() !== "") {
       let maxRaw;
       try {
-        maxRaw = humanReadableAmounts
-          ? assetAmountToBaseUnits(cap, asset, "agent_max_amount")
-          : positiveUint(cap, "agent_max_amount");
+        maxRaw = assetAmountToBaseUnits(cap, asset, "agent_max_amount");
       } catch {
         throw new Error(`invalid_agent_max_amount_${asset || "empty"}`);
       }
