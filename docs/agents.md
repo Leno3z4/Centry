@@ -362,6 +362,12 @@ Onchain agent analytics are reconstructed from `AgentExecuted`, `AgentBatchExecu
 
 Centry exposes a lightweight A2A message endpoint and an agent card. Agent-to-agent communication is message-level only. Receiving a message does not grant execution authority; any action still passes through the recipient agent's owner-defined operator and permission policy.
 
+### Interactive owner chat
+
+Owner chat is handled separately from the one-minute autonomous scheduler. The Next.js chat route queues the authenticated owner message and, when `CENTRY_AGENT_RUNNER_URL` plus `CENTRY_AGENT_RUNNER_HTTP_SECRET` are configured, immediately wakes the runner's `/chat` endpoint for that specific agent/task. The runner responds to the HTTP request immediately and completes the task in the Worker background.
+
+Owner-chat balance reads use targeted RPC calls. Token amounts are read and displayed in normal token units; action amounts supplied by the AI are human-readable decimals and the runner converts them to base units using the configured asset decimals before contract encoding.
+
 ## Global autonomous scheduler
 
 Centry's hosted onchain agents now use one global Cloudflare Worker Cron Trigger rather than one scheduler per agent.
