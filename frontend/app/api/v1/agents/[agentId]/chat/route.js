@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { getAddress } from "ethers";
 import { verifyOwnerSession } from "../../../../../../lib/agentOwnerAuth";
-import { getAgentById, enqueueOwnerChatTask } from "../../../../../../lib/agentStore";
+import { getAgentById, enqueueAgentTask, addAgentChatMessage } from "../../../../../../lib/agentStore";
 
 export async function POST(request, { params }) {
   const { agentId } = await params;
@@ -23,11 +23,24 @@ export async function POST(request, { params }) {
 
     const taskId = crypto.randomUUID();
     const assistantMessageId = crypto.randomUUID();
-    const queued = await enqueueOwnerChatTask({
-      taskId,
-      agentId: agent.id,
+    const envelope = JSON.stringify({
+      kind: "owner_chat",
       message,
       assistantMessageId,
+    });
+
+    const queued = await enqueueAgentTask({
+      id: taskId,
+      fromAgentId: null,
+      toAgentId: agent.id,
+      task: envelope,
+    });
+
+    await addAgentChatMessage({
+      id: taskId,
+      agentId: agent.id,
+      role: "user",
+      content: message,
     });
     return Response.json({
       mode: "queued",
