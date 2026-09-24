@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { getAddress } from "ethers";
+import { getAddress, JsonRpcProvider, Contract, formatUnits } from "ethers";
 import { verifyOwnerSession } from "../../../../../../lib/agentOwnerAuth";
 import { getAgentById, getProviderConfig, listAgentChatMessages, addAgentChatMessage } from "../../../../../../lib/agentStore";
 import { decryptSecret } from "../../../../../../lib/agentSecrets";
@@ -56,6 +56,24 @@ export async function POST(request, { params }) {
       account: getAddress(agent.account),
     });
 
+    const rpcProvider = new JsonRpcProvider(process.env.CENTRY_AGENT_RPC_URL || "https://rpc.mainnet.arc.io");
+    const liveAccount = getAddress(agent.account);
+    const erc20Abi = ["function balanceOf(address account) view returns (uint256)"];
+    const tokenAddresses = {
+      EURC: "0xbEf5f6d51CB62b58e6A8f77868681825C6fe21c1",
+      cirBTC: "0x171A4217b86A807A64eB94757Db6849fb4bDbAA0",
+    };
+    const [liveNativeUsdcRaw, eurcRaw, cirbtcRaw] = await Promise.all([
+      rpcProvider.getBalance(liveAccount),
+      new Contract(tokenAddresses.EURC, erc20Abi, rpcProvider).balanceOf(liveAccount),
+      new Contract(tokenAddresses.cirBTC, erc20Abi, rpcProvider).balanceOf(liveAccount),
+    ]);
+    const liveBalances = {
+      USDC: formatUnits(liveNativeUsdcRaw, 18),
+      EURC: formatUnits(eurcRaw, 6),
+      cirBTC: formatUnits(cirbtcRaw, 8),
+    };
+
     const config = await getProviderConfig(agentId, provider);
     if (!config) return Response.json({ error: "provider_not_configured" }, { status: 400 });
 
@@ -67,15 +85,20 @@ export async function POST(request, { params }) {
       console.warn("[agent-chat] activity lookup unavailable", activityError);
     }
     const liveActive = Boolean(authorization.active);
+    const liveActive = Boolean(authorization.active);
     const agentContext = [
       `You are ${agent.name}, a user-owned Centry agent.`,
       `Account: ${agent.account}`,
       `Verified onchain status: ${liveActive ? "on" : "off"}`,
-      "The smart account contract is the authority for whether this agent is on or off. Do not use the stored database active flag for status.",
+      "The smart account contract is the authority for the agent's status. Never use the stored database active flag for status.",
       "This chat does not initiate or execute blockchain transactions.",
-      "Never claim that a transaction was initiated, executed, confirmed, or is pending unless that exact state is supported by the supplied verified activity.",
+      "Never claim that a transaction was initiated, executed, confirmed, or is pending unless the supplied verified activity supports that exact state.",
       "A user request or conversation message is not evidence that a transaction was submitted.",
-      "Explain what happened and what is pending using only verified activity and the user's conversation.",
+      `Verified live balances for this agent smart account: ${JSON.stringify(liveBalances)}`,
+      "When asked for a balance, answer directly from the verified live balances above. They belong to the agent smart account, not the connected owner's wallet.",
+      "Do not describe a user request as pending. Only call something pending when verified activity explicitly establishes a pending transaction state. Otherwise state that no verified transaction is pending.",
+      "Never claim an action happened unless it appears in the supplied verified activity.",
+      "Explain what happened using only verified balances, verified activity, and the user's conversation.",
       `Recent verified activity: ${JSON.stringify(activity.slice(0, 25))}`,
     ].join("\n");
 
