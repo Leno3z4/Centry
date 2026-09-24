@@ -7,6 +7,7 @@ import { useAccount, usePublicClient, useSignMessage, useSendTransaction, useWri
 import { formatUnits, parseUnits } from 'viem';
 import { Providers } from '../../../../components/Providers';
 import { AppShell } from '../../../../components/AppShell';
+import WalletAssetDropdown from '../WalletAssetDropdown';
 import { CONTRACT_ADDRESSES } from '../../../../constants/contracts';
 import { ORACLE_ABI } from '../../../../constants/abis';
 import styles from '../agents.module.css';
@@ -310,9 +311,7 @@ function DashboardContent() {
         </button>
         {fundOpen || withdrawOpen ? (
           <div className={styles.inlineAction}>
-            <select className={styles.input} value={asset} onChange={(e) => setAsset(e.target.value)}>
-              {WITHDRAWABLE_ASSETS.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
-            </select>
+            <WalletAssetDropdown value={asset} assets={WITHDRAWABLE_ASSETS} onChange={setAsset} />
             <input
               className={styles.input}
               inputMode="decimal"
