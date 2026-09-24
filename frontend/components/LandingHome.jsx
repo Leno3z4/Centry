@@ -99,13 +99,6 @@ export default function LandingHome() {
         </div>
 
         <div className="landing-home-hero-visual" aria-hidden="true">
-          <div className="landing-home-visual-core">
-            <div className="landing-home-core-ring ring-a" />
-            <div className="landing-home-core-ring ring-b" />
-            <div className="landing-home-core-ring ring-c" />
-            <div className="landing-home-core-light" />
-            <div className="landing-home-core-mark">C</div>
-          </div>
           <div className="landing-home-shard-fallback">
             {Array.from({ length: 28 }, (_, index) => (
               <i
