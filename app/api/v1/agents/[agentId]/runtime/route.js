@@ -19,7 +19,12 @@ export async function GET(request, { params }) {
       rpcUrl,
       account: getAddress(agent.account),
     });
-    const runnerAddress = String(process.env.CENTRY_AGENT_RUNNER_ADDRESS || "").trim();
+    const runnerAddress = String(
+      process.env.CENTRY_AGENT_RUNNER_ADDRESS
+      || process.env.NEXT_PUBLIC_CENTRY_AGENT_RUNNER_ADDRESS
+      || agent.operator
+      || ""
+    ).trim();
 
     let operatorAuthorized = null;
     if (runnerAddress) {
