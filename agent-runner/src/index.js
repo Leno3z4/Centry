@@ -364,21 +364,45 @@ async function callProvider(provider, model, apiKey, system, user) {
   return data?.candidates?.[0]?.content?.parts?.map((part) => part?.text || "").join("") || "";
 }
 
+function isTransientRpcLimit(error) {
+  const message = String(error instanceof Error ? error.message : error || "").toLowerCase();
+  return (
+    message.includes("request exceeds defined limit") ||
+    message.includes("rate limit") ||
+    message.includes("too many requests") ||
+    message.includes("429")
+  );
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function readRequiredContract(publicClient, request, label) {
-  try {
-    return await publicClient.readContract(request);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "rpc_read_failed";
-    throw new Error(`agent_rpc_read_failed_${label}:${message}`);
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await publicClient.readContract(request);
+    } catch (error) {
+      lastError = error;
+      if (!isTransientRpcLimit(error) || attempt === 2) break;
+      await sleep(250 * (attempt + 1));
+    }
   }
+  const message = lastError instanceof Error ? lastError.message : "rpc_read_failed";
+  throw new Error(`agent_rpc_read_failed_${label}:${message}`);
 }
 
 async function readOptionalContract(publicClient, request) {
-  try {
-    return await publicClient.readContract(request);
-  } catch {
-    return null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await publicClient.readContract(request);
+    } catch (error) {
+      if (!isTransientRpcLimit(error) || attempt === 1) return null;
+      await sleep(250);
+    }
   }
+  return null;
 }
 
 async function readAgentSnapshot(publicClient, account, runnerAddress) {
@@ -685,11 +709,15 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
 
   try {
     const account = getAddress(agent.account);
-    const snapshot = await readAgentSnapshot(publicClient, account, runnerAddress);
 
+    // Load queued work before touching the RPC. If Arc rate-limits a state read,
+    // an owner chat request must still be known to the error path so it can be
+    // completed as failed instead of remaining stuck in "pending" forever.
     tasks = await getPendingTasks(db, agent.id);
     ownerChatTask = tasks.find((task) => parseOwnerChatTask(task));
     ownerChatEnvelope = ownerChatTask ? parseOwnerChatTask(ownerChatTask) : null;
+
+    const snapshot = await readAgentSnapshot(publicClient, account, runnerAddress);
 
     if (!snapshot.active && !ownerChatTask) {
       runStatus = "skipped";
