@@ -91,7 +91,7 @@ export default function LandingHome() {
 
       <section className="landing-home-hero">
         <div className="landing-home-hero-copy" data-reveal>
-          <h1>Lending and swaps, from the same account.</h1>
+          <h1>Lend. Swap. Yield. Automate.</h1>
           <p className="landing-home-hero-text">
             Centry gives you one place to manage USDC lending and execution on Arc. Supply or borrow USDC, repay when you need to, withdraw available liquidity, or use the configured swap route. Your smart account stays under your control.
           </p>
