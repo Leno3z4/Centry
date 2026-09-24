@@ -62,7 +62,7 @@ export default function LandingHome() {
             <div className="landing-home-core-mark">C</div>
           </div>
           <div className="landing-home-shard-fallback">
-            {Array.from({ length: 28 }, (_, index) => <i key={index} style={{ '--i': index }} />)}
+            {Array.from({ length: 28 }, (_, index) => <i key={index} style={{ '--x': `${10 + index * 3.2}%`, '--y': `${12 + ((index * 17) % 72)}%`, '--w': `${70 + (index % 5) * 28}px`, '--r': `${-32 + (index % 7) * 4}deg`, '--d': `${index * -0.18}s`, '--dur': `${5.5 + (index % 5) * 0.65}s` }} />)}
           </div>
         </div>
       </section>
