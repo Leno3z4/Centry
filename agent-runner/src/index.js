@@ -896,11 +896,13 @@ async function withConcurrency(items, concurrency, fn) {
       try {
         results[index] = await fn(items[index], index);
       } catch (error) {
-        results[index] = {
+        const failure = {
           status: "failed",
           error: error instanceof Error ? error.message : "agent_worker_failed",
           item: items[index]?.id || null,
         };
+        console.error("centry_agent_worker_failed", JSON.stringify(failure));
+        results[index] = failure;
       }
     }
   }
@@ -931,6 +933,21 @@ async function runScheduler(env, scheduledAt) {
     clampInt(env.CENTRY_AGENT_RUNNER_CONCURRENCY, 1, 6, 6),
     (agent) => runAgent(env.DB, publicClient, walletClient, runnerAddress, agent, scheduledAt, env),
   );
+
+  const summary = results.map((item) => ({
+    agentId: item?.agentId || null,
+    status: item?.status || null,
+    reason: item?.reason || null,
+    error: item?.error || null,
+    txHash: item?.txHash || null,
+  }));
+
+  console.log("centry_agent_scheduler_completed", JSON.stringify({
+    scheduledAt,
+    runner: runnerAddress,
+    agentCount: agents.length,
+    results: summary,
+  }));
 
   return {
     scheduledAt,
