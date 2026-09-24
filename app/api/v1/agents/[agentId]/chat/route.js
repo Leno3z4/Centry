@@ -42,8 +42,39 @@ export async function POST(request, { params }) {
       role: "user",
       content: message,
     });
+
+    const runnerUrl = String(process.env.CENTRY_AGENT_RUNNER_URL || "").replace(/\/$/, "");
+    const runnerSecret = String(process.env.CENTRY_AGENT_RUNNER_HTTP_SECRET || "");
+    if (runnerUrl && runnerSecret) {
+      try {
+        const wake = await fetch(`${runnerUrl}/chat`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${runnerSecret}`,
+          },
+          body: JSON.stringify({ agentId: agent.id, taskId }),
+          cache: "no-store",
+          signal: AbortSignal.timeout(1500),
+        });
+        if (!wake.ok) {
+          console.warn("centry_agent_chat_runner_wake_failed", {
+            agentId: agent.id,
+            taskId,
+            status: wake.status,
+          });
+        }
+      } catch (wakeError) {
+        console.warn("centry_agent_chat_runner_wake_unavailable", {
+          agentId: agent.id,
+          taskId,
+          error: wakeError instanceof Error ? wakeError.message : String(wakeError),
+        });
+      }
+    }
+
     return Response.json({
-      mode: "queued",
+      mode: runnerUrl && runnerSecret ? "accepted" : "queued",
       taskId,
       status: queued?.status || "pending",
       acknowledgement: "Thinking…",
