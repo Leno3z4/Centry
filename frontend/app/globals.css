@@ -351,7 +351,99 @@ body {
 }
 
 
-/* Landing homepage editorial system */
+/* Landing homepage editorial system *//* Landing homepage editorial system */
+
+.landing-home-scroll-line {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 20;
+  width: 100%;
+  height: 2px;
+  background: rgba(255,255,255,.06);
+  pointer-events: none;
+}
+.landing-home-scroll-line span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: scaleX(var(--landing-scroll, 0));
+  transform-origin: left center;
+  background: rgba(255,255,255,.82);
+  box-shadow: 0 0 16px rgba(255,255,255,.28);
+}
+
+.landing-home-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, .65fr);
+  gap: 84px;
+  align-items: end;
+  border-top: 1px solid var(--lh-line);
+}
+.landing-home-section-main { min-width: 0; }
+.landing-home-overview-note {
+  padding: 0 0 5px 28px;
+  border-left: 1px solid var(--lh-line);
+}
+.landing-home-overview-note span {
+  display: block;
+  margin-bottom: 14px;
+  color: var(--lh-dim);
+  font: 11px "DM Mono", monospace;
+  letter-spacing: .08em;
+}
+.landing-home-overview-note p {
+  max-width: 320px;
+  margin: 0;
+  color: var(--lh-muted);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.landing-home-account {
+  border-top: 1px solid var(--lh-line);
+}
+.landing-home-account .landing-home-flow {
+  margin-top: 56px;
+}
+
+[data-reveal] {
+  --section-progress: 0;
+  opacity: calc(.35 + (var(--section-progress) * .65));
+  transform: translate3d(0, calc((1 - var(--section-progress)) * 28px), 0);
+  filter: blur(calc((1 - var(--section-progress)) * 6px));
+  will-change: opacity, transform, filter;
+  transition: opacity .16s linear, transform .16s linear, filter .16s linear;
+}
+[data-reveal].is-visible {
+  opacity: 1;
+}
+
+@media (max-width: 900px) {
+  .landing-home-overview {
+    grid-template-columns: 1fr;
+    gap: 48px;
+  }
+  .landing-home-overview-note {
+    padding: 22px 0 0;
+    border-top: 1px solid var(--lh-line);
+    border-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-home-scroll-line span {
+    transform: none;
+  }
+  [data-reveal],
+  [data-reveal].is-visible {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    transition: none;
+  }
+}
+
 .landing-home {
   --lh-bg: #050505;
   --lh-surface: rgba(15,15,15,.72);
