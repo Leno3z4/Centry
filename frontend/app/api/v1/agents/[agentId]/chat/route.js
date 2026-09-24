@@ -1,9 +1,7 @@
 import crypto from "node:crypto";
 import { getAddress } from "ethers";
 import { verifyOwnerSession } from "../../../../../../lib/agentOwnerAuth";
-import { getAgentById, enqueueAgentTask, addAgentChatMessage } from "../../../../../../lib/agentStore";
-import { getAgentPortfolio } from "../../../../../../lib/agentReadRuntime";
-import { getAgentActivity } from "../../../../../../lib/agentActivity";
+import { getAgentById, enqueueOwnerChatTask } from "../../../../../../lib/agentStore";
 
 export async function POST(request, { params }) {
   const { agentId } = await params;
@@ -23,41 +21,14 @@ export async function POST(request, { params }) {
       account: getAddress(agent.account),
     });
 
-    const rpcUrl = process.env.CENTRY_AGENT_RPC_URL || "https://rpc.mainnet.arc.io";
-    const portfolio = await getAgentPortfolio({ rpcUrl, account: getAddress(agent.account) }).catch(() => null);
-    let activity = [];
-    try {
-      activity = await getAgentActivity(agent.account, rpcUrl);
-    } catch (activityError) {
-      console.warn("[agent-chat] activity lookup unavailable", activityError);
-    }
-
     const taskId = crypto.randomUUID();
     const assistantMessageId = crypto.randomUUID();
-    const envelope = JSON.stringify({
-      kind: "owner_chat",
+    const queued = await enqueueOwnerChatTask({
+      taskId,
+      agentId: agent.id,
       message,
       assistantMessageId,
-      context: {
-        portfolio,
-        activity: activity.slice(0, 25),
-      },
     });
-
-    const queued = await enqueueAgentTask({
-      id: taskId,
-      fromAgentId: null,
-      toAgentId: agent.id,
-      task: envelope,
-    });
-
-    await addAgentChatMessage({
-      id: taskId,
-      agentId: agent.id,
-      role: "user",
-      content: message,
-    });
-
     return Response.json({
       mode: "queued",
       taskId,
