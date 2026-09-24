@@ -21,9 +21,12 @@ import {
   shortAddress,
 } from '../agentClient';
 
+const AGENT_WALLET_ASSETS = Object.freeze(
+  WITHDRAWABLE_ASSETS.filter((item) => item.key !== 'cent'),
+);
+
 const PORTFOLIO_COLORS = Object.freeze({
   native: '#4f8cff',
-  cent: '#f59e0b',
   eurc: '#33c3a6',
   cirbtc: '#f97316',
 });
@@ -130,7 +133,7 @@ function DashboardContent() {
     setBalancesLoading(true);
     try {
       const rows = await Promise.all(
-        WITHDRAWABLE_ASSETS.map(async (asset) => {
+        AGENT_WALLET_ASSETS.map(async (asset) => {
           const oracleAsset = asset.address || CONTRACT_ADDRESSES.USDC;
           const raw = asset.address
             ? await publicClient.readContract({
@@ -180,7 +183,7 @@ function DashboardContent() {
   }
 
   async function fundAgent() {
-    const selected = WITHDRAWABLE_ASSETS.find((item) => item.key === asset);
+    const selected = AGENT_WALLET_ASSETS.find((item) => item.key === asset);
     if (!selected || !amount || Number(amount) <= 0) return setError('Enter a valid funding amount.');
     try {
       setStatus('Preparing funding… Approve the wallet transaction.');
@@ -191,7 +194,7 @@ function DashboardContent() {
   }
 
   async function withdrawAgent() {
-    const selected = WITHDRAWABLE_ASSETS.find((item) => item.key === asset);
+    const selected = AGENT_WALLET_ASSETS.find((item) => item.key === asset);
     if (!selected || !amount || Number(amount) <= 0) return setError('Enter a valid withdrawal amount.');
     try {
       setStatus('Preparing withdrawal… Approve the wallet transaction.');
@@ -311,7 +314,7 @@ function DashboardContent() {
         </button>
         {fundOpen || withdrawOpen ? (
           <div className={styles.inlineAction}>
-            <WalletAssetDropdown value={asset} assets={WITHDRAWABLE_ASSETS} onChange={setAsset} />
+            <WalletAssetDropdown value={asset} assets={AGENT_WALLET_ASSETS} onChange={setAsset} />
             <input
               className={styles.input}
               inputMode="decimal"
