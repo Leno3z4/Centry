@@ -4,15 +4,15 @@ import Link from 'next/link';
 import { useEffect } from 'react';
 
 const SYSTEM_POINTS = [
-  { number: '01', title: 'Owner', text: 'Your smart account remains the authority. Ownership never moves to the agent.' },
-  { number: '02', title: 'Policy', text: 'Permissions are scoped by target, function, expiry, and native-value limits.' },
-  { number: '03', title: 'Executor', text: 'An authorized operator can prepare bounded actions without receiving the keys.' },
+  { number: '01', title: 'Own', text: 'Your smart account remains under your control.' },
+  { number: '02', title: 'Define', text: 'Set what can move, where it can act, and for how long.' },
+  { number: '03', title: 'Execute', text: 'Approved actions can run without extending owner authority.' },
 ];
 
 const CAPABILITIES = [
   { number: '01', title: 'Lending', text: 'Supply, withdraw, borrow and repay against Centry markets with explicit transaction state.' },
   { number: '02', title: 'Swap', text: 'Use the configured CENT / USDC UnitFlow route with minimum-output protection.' },
-  { number: '03', title: 'Agents', text: 'Connect an external agent to one Centry account while the smart-account policy stays final.' },
+  { number: '03', title: 'Automation', text: 'Put repeatable onchain actions on defined rails without changing who controls the account.' },
 ];
 
 export default function LandingHome() {
@@ -44,12 +44,12 @@ export default function LandingHome() {
 
       <section className="landing-home-hero">
         <div className="landing-home-hero-copy" data-reveal>
-          <h1>Your wallet.<br />Your agent.<br /><em>Your rules.</em></h1>
+          <h1>Onchain capital.<br />Without the noise.</h1>
           <p className="landing-home-hero-text">
-            Centry is a wallet-owned execution layer on Arc Mainnet. Smart accounts keep
-            ownership with you while scoped operators handle only the actions you authorize.
+            Centry brings lending, swaps, and programmable account permissions into one
+            focused interface on Arc Mainnet.
           </p>
-          <Link href="/app" className="landing-home-primary">Open app <span aria-hidden="true">↗</span></Link>
+          <Link href="/app" className="landing-home-primary">Open app</Link>
         </div>
 
         <div className="landing-home-hero-visual" aria-hidden="true">
@@ -74,10 +74,10 @@ export default function LandingHome() {
       </section>
 
       <section className="landing-home-section" data-reveal>
-        <h2>The agent never becomes the owner.</h2>
+        <h2>Capital moves. Your account stays yours.</h2>
         <p className="landing-home-section-lede">
-          Centry separates ownership from execution: your smart account stays yours;
-          an operator receives only the policy you deliberately put onchain.
+          Centry separates ownership from execution. Your smart account remains the final
+          authority while defined permissions determine what can happen onchain.
         </p>
         <div className="landing-home-flow">
           {SYSTEM_POINTS.map((item, index) => (
@@ -91,7 +91,7 @@ export default function LandingHome() {
       </section>
 
       <section className="landing-home-section landing-home-capabilities" data-reveal>
-        <h2>The tools behind the control surface.</h2>
+        <h2>Lend. Swap. Put routine actions on rails.</h2>
         <div className="landing-home-capability-list">
           {CAPABILITIES.map((item) => (
             <article key={item.number} className="landing-home-capability">
@@ -104,9 +104,9 @@ export default function LandingHome() {
       </section>
 
       <section className="landing-home-final" data-reveal>
-        <h2>Move capital.<br /><em>Keep control.</em></h2>
-        <p>Connect a wallet, define the execution boundary, and enter the application.</p>
-        <Link href="/app" className="landing-home-primary">Open app <span aria-hidden="true">↗</span></Link>
+        <h2>Put your capital to work.</h2>
+        <p>Connect a wallet, configure the account, and open Centry.</p>
+        <Link href="/app" className="landing-home-primary">Open app</Link>
       </section>
 
       <footer className="landing-home-footer">
