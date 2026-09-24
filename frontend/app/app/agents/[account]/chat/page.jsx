@@ -43,7 +43,7 @@ function ChatContent() {
     }
     setMessages((current) => [...current, {
       role: 'assistant',
-      content: 'The request is still queued. The next agent runtime wake will continue processing it.',
+      content: 'I’m still working on that. The next runtime wake will continue processing it.',
     }]);
   }
 
@@ -59,7 +59,7 @@ function ChatContent() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ message: submittedMessage }),
       });
-      setMessages((current) => [...current, { role: 'user', content: submittedMessage }, { role: 'assistant', content: result.acknowledgement || 'Queued through the agent runtime…' }]);
+      setMessages((current) => [...current, { role: 'user', content: submittedMessage }]);
       setMessage('');
       if (result.taskId) await waitForTask(result.taskId);
     } catch (e) {
@@ -102,8 +102,8 @@ function ChatContent() {
         </div>
 
         <div className={styles.chatComposerLarge}>
-          <input className={styles.input} value={message} onChange={(e) => setMessage(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) sendChat(); }} placeholder="Ask or command your agent…" />
-          <button className={styles.primaryButton} disabled={sending || !message.trim()} onClick={sendChat}>{sending ? 'Processing…' : 'Send'}</button>
+          <input className={styles.input} value={message} onChange={(e) => setMessage(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) sendChat(); }} placeholder="Message your agent…" />
+          <button className={styles.primaryButton} disabled={sending || !message.trim()} onClick={sendChat}>{sending ? 'Replying…' : 'Send'}</button>
         </div>
       </section>
     </main>
