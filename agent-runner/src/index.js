@@ -422,84 +422,94 @@ async function readOptionalContract(publicClient, request) {
 }
 
 async function readRpcBatch(rpcUrl, requests) {
-  let lastError = null;
+  const MAX_BATCH_SIZE = 8;
+  const allValues = [];
 
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      const payload = requests.map((item, index) => item.kind === "balance"
-        ? {
-            jsonrpc: "2.0",
-            id: index + 1,
-            method: "eth_getBalance",
-            params: [item.address, "latest"],
+  for (let offset = 0; offset < requests.length; offset += MAX_BATCH_SIZE) {
+    const chunk = requests.slice(offset, offset + MAX_BATCH_SIZE);
+    let lastError = null;
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const payload = chunk.map((item, index) => item.kind === "balance"
+          ? {
+              jsonrpc: "2.0",
+              id: index + 1,
+              method: "eth_getBalance",
+              params: [item.address, "latest"],
+            }
+          : {
+              jsonrpc: "2.0",
+              id: index + 1,
+              method: "eth_call",
+              params: [{
+                to: item.request.address,
+                data: encodeFunctionData(item.request),
+              }, "latest"],
+            });
+
+        const response = await fetch(rpcUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) throw new Error(`rpc_http_${response.status}`);
+
+        const body = await response.json();
+        if (!Array.isArray(body)) throw new Error("rpc_batch_response_invalid");
+
+        const values = chunk.map((item, index) => {
+          const result = body.find((entry) => Number(entry?.id) === index + 1);
+          if (!result) return { ok: false, error: "rpc_batch_result_missing", value: null };
+          if (result.error) return { ok: false, error: result.error?.message || "rpc_call_failed", value: null };
+
+          if (item.kind === "balance") {
+            try {
+              return { ok: true, error: null, value: BigInt(String(result.result || "0x0")) };
+            } catch {
+              return { ok: false, error: "rpc_balance_result_invalid", value: null };
+            }
           }
-        : {
-            jsonrpc: "2.0",
-            id: index + 1,
-            method: "eth_call",
-            params: [{
-              to: item.request.address,
-              data: encodeFunctionData(item.request),
-            }, "latest"],
-          });
 
-      const response = await fetch(rpcUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!response.ok) throw new Error(`rpc_http_${response.status}`);
-
-      const body = await response.json();
-      if (!Array.isArray(body)) throw new Error("rpc_batch_response_invalid");
-
-      const values = requests.map((item, index) => {
-        const result = body.find((entry) => Number(entry?.id) === index + 1);
-        if (!result) return { ok: false, error: "rpc_batch_result_missing", value: null };
-        if (result.error) return { ok: false, error: result.error?.message || "rpc_call_failed", value: null };
-
-        if (item.kind === "balance") {
           try {
-            return { ok: true, error: null, value: BigInt(String(result.result || "0x0")) };
-          } catch {
-            return { ok: false, error: "rpc_balance_result_invalid", value: null };
+            return {
+              ok: true,
+              error: null,
+              value: decodeFunctionResult({
+                abi: item.request.abi,
+                functionName: item.request.functionName,
+                data: result.result,
+              }),
+            };
+          } catch (error) {
+            return {
+              ok: false,
+              error: error instanceof Error ? error.message : "rpc_decode_failed",
+              value: null,
+            };
           }
+        });
+
+        const transientFailure = values.find((item) => !item.ok && isTransientRpcLimit(item.error));
+        if (transientFailure && attempt < 2) {
+          await sleep(300 * (attempt + 1));
+          continue;
         }
 
-        try {
-          return {
-            ok: true,
-            error: null,
-            value: decodeFunctionResult({
-              abi: item.request.abi,
-              functionName: item.request.functionName,
-              data: result.result,
-            }),
-          };
-        } catch (error) {
-          return {
-            ok: false,
-            error: error instanceof Error ? error.message : "rpc_decode_failed",
-            value: null,
-          };
-        }
-      });
-
-      const transientFailure = values.find((item) => !item.ok && isTransientRpcLimit(item.error));
-      if (transientFailure && attempt < 2) {
+        allValues.push(...values);
+        lastError = null;
+        break;
+      } catch (error) {
+        lastError = error;
+        if (!isTransientRpcLimit(error) || attempt === 2) break;
         await sleep(300 * (attempt + 1));
-        continue;
       }
-
-      return values;
-    } catch (error) {
-      lastError = error;
-      if (!isTransientRpcLimit(error) || attempt === 2) break;
-      await sleep(300 * (attempt + 1));
     }
+
+    if (lastError) throw lastError;
   }
 
-  throw lastError || new Error("rpc_batch_failed");
+  return allValues;
 }
 
 async function readAgentSnapshot(publicClient, account, runnerAddress, rpcUrl) {
@@ -992,15 +1002,18 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
       "The response field is the normal conversational answer. Use replies for queued non-owner tasks. Keep actions to 4 or fewer.",
     ].join("\n\n");
 
-    const conversationRows = await db.prepare(
-      "SELECT role, content, created_at FROM centry_agent_chats WHERE agent_id = ? ORDER BY created_at DESC LIMIT 24"
-    ).bind(agent.id).all().then((result) => [...(result.results || [])].reverse());
+    const conversationRows = ownerChatTask
+      ? await db.prepare(
+          "SELECT id, role, content FROM centry_agent_chats WHERE agent_id = ? ORDER BY created_at DESC LIMIT 25"
+        ).bind(agent.id).all().then((result) => [...(result.results || [])].reverse())
+      : [];
 
-    const conversationHistory = conversationRows.map((row) => ({
-      role: String(row.role || ""),
-      content: String(row.content || ""),
-      createdAt: row.created_at,
-    }));
+    const conversationHistory = conversationRows
+      .filter((row) => !ownerChatTask || row.id !== ownerChatTask.id)
+      .map((row) => ({
+        role: String(row.role || ""),
+        content: String(row.content || ""),
+      }));
 
     const user = jsonStringify({
       scheduledAt,
