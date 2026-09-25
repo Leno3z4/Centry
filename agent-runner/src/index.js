@@ -1868,10 +1868,14 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
       }
 
       runStatus = "executed";
-      reason = String(plan?.reason || "autonomous_action");
+      reason = borrowActionsSuppressed
+        ? "risk_guard_borrow_blocked"
+        : String(resolvedPlan?.reason || "autonomous_action");
     } else {
       runStatus = "processed";
-      reason = String(plan?.reason || "no_action");
+      reason = borrowActionsSuppressed
+        ? "risk_guard_borrow_blocked"
+        : String(resolvedPlan?.reason || "no_action");
     }
 
     const repliesByTask = new Map(
