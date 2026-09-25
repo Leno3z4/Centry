@@ -26,12 +26,6 @@ export async function GET(request, { params }) {
       || ""
     ).trim();
 
-    let operatorAuthorized = null;
-    if (runnerAddress) {
-      const contract = new Contract(getAddress(agent.account), ACCOUNT_ABI, new JsonRpcProvider(rpcUrl));
-      operatorAuthorized = Boolean(await contract.agentOperators(getAddress(runnerAddress)));
-    }
-
     const config = JSON.parse(agent.config_json || "{}");
     const autonomy = config?.autonomy && typeof config.autonomy === "object" ? config.autonomy : {};
     const providerName = String(autonomy.provider || "").toLowerCase();
@@ -40,6 +34,20 @@ export async function GET(request, { params }) {
     const executionRuntime = await getAgentRuntime(agentId).catch(() => null);
     const actionReceipts = await listActionReceipts(agentId, 20).catch(() => []);
 
+    let operatorAuthorized = executionRuntime?.operator_authorized == null
+      ? null
+      : Boolean(executionRuntime.operator_authorized);
+    let rpcStatus = "cached";
+    if (runnerAddress) {
+      try {
+        const contract = new Contract(getAddress(agent.account), ACCOUNT_ABI, new JsonRpcProvider(rpcUrl));
+        operatorAuthorized = Boolean(await contract.agentOperators(getAddress(runnerAddress)));
+        rpcStatus = "live";
+      } catch {
+        rpcStatus = operatorAuthorized == null ? "unavailable" : "stale";
+      }
+    }
+
     return Response.json({
       agentId: agent.id,
       account: getAddress(agent.account),
@@ -47,6 +55,7 @@ export async function GET(request, { params }) {
       runnerConfigured: Boolean(runnerAddress),
       runnerAddress: runnerAddress || null,
       operatorAuthorized,
+      runtimeRpcStatus: rpcStatus,
       autonomyEnabled: autonomy.enabled !== false,
       instructionsConfigured: Boolean(String(autonomy.instructions || "").trim()),
       providerConfigured: Boolean(provider),
