@@ -132,7 +132,7 @@ function DashboardContent() {
     refreshRuntime();
     const timer = window.setInterval(() => {
       if (!cancelled) refreshRuntime();
-    }, 15000);
+    }, 30000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
