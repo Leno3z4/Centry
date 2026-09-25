@@ -131,6 +131,12 @@ export function defaultAgentConfig() {
       instructions: '',
       maxActions: 4,
       slippageBps: 50,
+      riskGuard: {
+        enabled: false,
+        minHealthFactor: '1.50',
+        repayAtHealthFactor: '1.65',
+        stopBorrowAtHealthFactor: '1.80',
+      },
     },
     policy: {
       allowedActions: AGENT_ACTION_OPTIONS.map(([value]) => value),
@@ -212,6 +218,12 @@ export function normalizeConfigForHash(config) {
       instructions: String(config.autonomy?.instructions || '').trim(),
       maxActions: Number(config.autonomy?.maxActions || 4),
       slippageBps: Number(config.autonomy?.slippageBps ?? 50),
+      riskGuard: {
+        enabled: config.autonomy?.riskGuard?.enabled === true,
+        minHealthFactor: String(config.autonomy?.riskGuard?.minHealthFactor || '1.50'),
+        repayAtHealthFactor: String(config.autonomy?.riskGuard?.repayAtHealthFactor || '1.65'),
+        stopBorrowAtHealthFactor: String(config.autonomy?.riskGuard?.stopBorrowAtHealthFactor || '1.80'),
+      },
     },
     policy: {
       allowedActions: [...(config.policy?.allowedActions || [])].sort(),
