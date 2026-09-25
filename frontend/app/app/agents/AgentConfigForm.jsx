@@ -130,7 +130,7 @@ export function AgentConfigForm({ mode = 'create', agent = null, onSubmit, submi
 
     if (!form.policy.allowedActions.length) return setError('Select at least one allowed action.');
     if (!form.policy.allowedAssets.length) return setError('Select at least one allowed asset.');
-    if (!form.name.trim() && mode === 'create') return setError('Give your agent a name.');
+    if (!form.name.trim()) return setError('Give your agent a name.');
     const providerParts = [form.provider.trim(), form.model.trim(), form.providerKey.trim()].filter(Boolean).length;
     if (providerParts > 0 && providerParts < 3) return setError('To configure an AI provider now, enter the provider, model, and API key together. Otherwise leave all three blank.');
 
@@ -182,26 +182,24 @@ export function AgentConfigForm({ mode = 'create', agent = null, onSubmit, submi
 
   return (
     <form className={styles.configForm} onSubmit={submit}>
-      {isCreate ? (
-        <section className={styles.configPanel}>
+      <section className={styles.configPanel}>
           <div className={styles.sectionHead}>
             <div>
-              <h2>Identity</h2>
-              <p>Give the agent a name and tell it what it is responsible for.</p>
+              <h2>{isCreate ? 'Name your agent' : 'Agent identity'}</h2>
+              <p>{isCreate ? 'Give the agent a name before you create the account.' : 'Change the name or description without changing the smart-account address.'}</p>
             </div>
           </div>
           <div className={styles.formGrid}>
             <div>
-              <label className={styles.label}>Agent name</label>
+              <label className={styles.label}>Name</label>
               <input className={styles.input} value={form.name} onChange={(e) => update('name', e.target.value)} placeholder="e.g. Treasury agent" maxLength={64} />
             </div>
             <div>
-              <label className={styles.label}>Description</label>
+              <label className={styles.label}>Description <span className={styles.hint}>optional</span></label>
               <input className={styles.input} value={form.description} onChange={(e) => update('description', e.target.value)} placeholder="What should this agent manage?" maxLength={180} />
             </div>
           </div>
         </section>
-      ) : null}
 
       <section className={styles.configPanel}>
         <div className={styles.sectionHead}>
