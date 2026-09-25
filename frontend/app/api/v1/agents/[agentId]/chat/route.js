@@ -15,11 +15,10 @@ const DIRECT_BALANCE_ASSETS = Object.freeze({
 function requestedBalanceAsset(message) {
   const text = String(message || "").toUpperCase();
   for (const symbol of Object.keys(DIRECT_BALANCE_ASSETS)) {
-    if (new RegExp('\\\\b' + symbol + '\\\\b').test(text)) return symbol;
+    if (new RegExp("\\b" + symbol + "\\b").test(text)) return symbol;
   }
   return null;
 }
-
 function isSimpleBalanceRequest(message) {
   const text = String(message || "").trim();
   if (!text) return false;
