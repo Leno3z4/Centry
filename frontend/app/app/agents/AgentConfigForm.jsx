@@ -134,6 +134,18 @@ export function AgentConfigForm({ mode = 'create', agent = null, onSubmit, submi
     const providerParts = [form.provider.trim(), form.model.trim(), form.providerKey.trim()].filter(Boolean).length;
     if (providerParts > 0 && providerParts < 3) return setError('To configure an AI provider now, enter the provider, model, and API key together. Otherwise leave all three blank.');
 
+    if (form.autonomy.riskGuard?.enabled) {
+      const minHealth = Number(form.autonomy.riskGuard.minHealthFactor);
+      const repayAt = Number(form.autonomy.riskGuard.repayAtHealthFactor);
+      const stopBorrowAt = Number(form.autonomy.riskGuard.stopBorrowAtHealthFactor);
+      if (![minHealth, repayAt, stopBorrowAt].every((value) => Number.isFinite(value) && value > 0)) {
+        return setError('Enter positive health-factor thresholds for position protection.');
+      }
+      if (!(minHealth <= repayAt && repayAt <= stopBorrowAt)) {
+        return setError('Protection thresholds must be ordered: minimum ≤ repay below ≤ block borrow below.');
+      }
+    }
+
     try {
       await onSubmit({
         ...form,
