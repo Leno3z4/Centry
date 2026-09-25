@@ -180,33 +180,11 @@ export default function AgentConnectionPanel({ agentAccount = '' } = {}) {
 
         <div className={styles.section}>
           <div className={styles.sectionTitle}>Agent account</div>
-          {accounts.length ? (
-            <div className={styles.accountList}>
-              {accounts.map((account) => (
-                <button
-                  key={account}
-                  type="button"
-                  className={`${styles.accountOption} ${activeAccount.toLowerCase() === account.toLowerCase() ? styles.selected : ''}`}
-                  onClick={() => { setSelectedAccount(account); setCustomAccount(''); }}
-                >
-                  <span><strong>{short(account)}</strong><small>Cent​ry smart account</small></span>
-                  <span>{activeAccount.toLowerCase() === account.toLowerCase() ? 'Selected' : 'Use'}</span>
-                </button>
-              ))}
-            </div>
-          ) : null}
-
-          <div className={styles.customRow}>
-            <input
-              value={existingAccount}
-              onChange={(event) => { setCustomAccount(event.target.value.trim()); setSelectedAccount(''); }}
-              placeholder="Paste an existing Centry agent account"
-              spellCheck="false"
-            />
+          <div className={styles.notice}>
+            This connection is scoped to <strong>{short(agentAccount)}</strong>.
+            <a className={styles.addressLink} href={explorerAddress(agentAccount)} target="_blank" rel="noreferrer">{agentAccount}</a>
           </div>
-          {activeAccount ? <a className={styles.addressLink} href={explorerAddress(activeAccount)} target="_blank" rel="noreferrer">{activeAccount}</a> : <div className={styles.muted}>Select an existing Centry agent account to continue.</div>}
         </div>
-
         <div className={styles.section}>
           <div className={styles.sectionTitle}>External operator</div>
           <p className={styles.lede}>Enter the wallet address the external agent will use to sign transactions. It must already be authorized on this Centry smart account.</p>
