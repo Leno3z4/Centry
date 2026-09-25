@@ -52,7 +52,7 @@ export function liquidationPriceForCollateral({
   const otherWeightedCollateral = weightedTotal - (supplied * threshold);
   const requiredWeightedContribution = debt - otherWeightedCollateral;
 
-  if (requiredWeightedContribution <= 0) return 0;
+  if (requiredWeightedContribution <= 0) return null;
   return (requiredWeightedContribution * price) / (supplied * threshold);
 }
 
