@@ -462,7 +462,7 @@ async function runOperation(db, operation, args) {
       const days = Math.max(1, Math.min(90, Number(args.days) || 7));
       const to = Math.floor(Date.now() / 1000);
       const from = to - days * 86400;
-      const pointLimit = Math.min(2200, Math.max(48, days * 24 + 24));
+      const pointLimit = Math.min(2500, Math.max(48, days * 24 + 24));
       const eventLimit = Math.min(500, Math.max(100, days * 20));
 
       const [pointsResult, eventResult] = await Promise.all([
@@ -474,7 +474,7 @@ async function runOperation(db, operation, args) {
                   supply_cap_raw, borrow_cap_raw, captured_at
            FROM centry_protocol_hourly
            WHERE bucket_start BETWEEN ? AND ?
-           ORDER BY bucket_start ASC, asset ASC
+           ORDER BY CASE WHEN asset = 'TOTAL' THEN 0 ELSE 1 END, bucket_start ASC, asset ASC
            LIMIT ?`
         ).bind(from, to, pointLimit).all(),
         db.prepare(
