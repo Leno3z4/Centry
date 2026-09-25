@@ -97,6 +97,8 @@ The runner re-checks:
 - `agentOperators(runnerAddress)`
 - `canExecute()` for every generated call
 
-Before broadcasting, the complete batch is simulated against the live smart account. Transactions from the shared runner signer are serialized through a D1 mutex so concurrent agent wakeups cannot race the same EOA nonce.
+Persistent autonomy instructions are treated as standing strategy instructions. The model is prompted to emit the configured action when a verified strategy trigger is satisfied, and an autonomous no-action plan receives one bounded re-planning pass.
+
+Before broadcasting, the complete batch is simulated against the live smart account. Simulation failures are recorded with the decoded revert reason when available. After broadcast, the runner waits for the transaction receipt and independently verifies the mined transaction onchain. Successful receipts are recorded as confirmed; reverted receipts are re-simulated against the pre-inclusion block to recover the failure reason when the RPC exposes it. Transactions from the shared runner signer are serialized through a D1 mutex so concurrent agent wakeups cannot race the same EOA nonce.
 
 Cloudflare Workers Free CPU is intentionally not treated as a production target for the autonomous runtime. The agent loop performs database work, RPC reads, AI HTTPS calls, simulation and signing; use a paid Worker plan for the production scheduler.
