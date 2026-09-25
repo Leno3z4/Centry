@@ -638,21 +638,53 @@ async function getAgents(db) {
   ).all().then((result) => result.results || []);
 }
 
-async function getPendingTask(db, agentId, taskId) {
-  if (!taskId) return null;
-  return await db.prepare(
-    "SELECT id, from_agent_id, to_agent_id, task, created_at FROM centry_agent_tasks WHERE id = ? AND to_agent_id = ? AND status = 'pending' LIMIT 1"
-  ).bind(taskId, agentId).first();
-}
+async function claimAgentTasks(db, agentId, options = {}) {
+  const leaseId = options.leaseId || crypto.randomUUID();
+  const now = Date.now();
+  const leaseMs = clampInt(options.leaseMs, 30_000, 600_000, 300_000);
+  const leaseUntil = now + leaseMs;
+  const taskId = options.taskId ? String(options.taskId).trim() : null;
+  const limit = taskId ? 1 : clampInt(options.limit, 1, 20, 20);
+  const idFilter = taskId ? "AND id = ?" : "";
+  const subqueryBindings = taskId
+    ? [agentId, now, taskId, limit]
+    : [agentId, now, limit];
 
-async function getPendingTasks(db, agentId) {
-  return await db.prepare(
-    `SELECT id, from_agent_id, to_agent_id, task, created_at
+  await db.prepare(
+    `UPDATE centry_agent_tasks
+     SET status = 'processing',
+         lease_id = ?,
+         lease_until = ?,
+         attempts = attempts + 1,
+         updated_at = ?
+     WHERE id IN (
+       SELECT id
+       FROM centry_agent_tasks
+       WHERE to_agent_id = ?
+         AND (status = 'pending' OR (status = 'processing' AND COALESCE(lease_until, 0) < ?))
+         ${idFilter}
+       ORDER BY created_at ASC
+       LIMIT ?
+     )
+       AND to_agent_id = ?
+       AND (status = 'pending' OR (status = 'processing' AND COALESCE(lease_until, 0) < ?))`
+  ).bind(
+    leaseId,
+    leaseUntil,
+    new Date().toISOString(),
+    ...subqueryBindings,
+    agentId,
+    now,
+  ).run();
+
+  const tasks = await db.prepare(
+    `SELECT id, from_agent_id, to_agent_id, task, created_at, lease_id, lease_until, attempts
      FROM centry_agent_tasks
-     WHERE to_agent_id = ? AND status = 'pending'
-     ORDER BY created_at ASC
-     LIMIT 20`
-  ).bind(agentId).all().then((result) => result.results || []);
+     WHERE to_agent_id = ? AND lease_id = ? AND status = 'processing'
+     ORDER BY created_at ASC`
+  ).bind(agentId, leaseId).all().then((result) => result.results || []);
+
+  return { leaseId, leaseUntil, tasks };
 }
 
 function parseOwnerChatTask(task) {
@@ -729,28 +761,58 @@ async function addAgentChatMessage(db, { id, agentId, role, content }) {
   ).run();
 }
 
-async function completeTask(db, id, status, result) {
+async function completeTask(db, id, leaseId, status, result) {
   const now = new Date().toISOString();
-  await db.prepare(
+  const update = await db.prepare(
     `UPDATE centry_agent_tasks
-     SET status = ?, result = ?, updated_at = ?, completed_at = ?
-     WHERE id = ? AND status = 'pending'`
-  ).bind(status, String(result || "").slice(0, 8000), now, now, id).run();
+     SET status = ?, result = ?, last_error = CASE WHEN ? = 'failed' THEN ? ELSE last_error END,
+         updated_at = ?, completed_at = ?, lease_id = NULL, lease_until = NULL
+     WHERE id = ? AND status = 'processing' AND lease_id = ?`
+  ).bind(
+    status,
+    String(result || "").slice(0, 8000),
+    status,
+    status === "failed" ? String(result || "").slice(0, 1000) : "",
+    now,
+    now,
+    id,
+    leaseId,
+  ).run();
+  if (Number(update?.meta?.changes || 0) !== 1) throw new Error("agent_task_lease_lost");
 }
 
-async function completeOwnerChatTask(db, taskId, assistantMessageId, agentId, status, result) {
+async function completeOwnerChatTask(db, taskId, leaseId, assistantMessageId, agentId, status, result) {
   const now = new Date().toISOString();
-  await db.batch([
+  let answer = "";
+  try {
+    answer = String(JSON.parse(String(result || "{}")).answer || "").slice(0, 8000);
+  } catch {
+    answer = "";
+  }
+
+  const update = await db.batch([
     db.prepare(
       `UPDATE centry_agent_tasks
-       SET status = ?, result = ?, updated_at = ?, completed_at = ?
-       WHERE id = ? AND status = 'pending'`
-    ).bind(status, String(result || "").slice(0, 8000), now, now, taskId),
+       SET status = ?, result = ?, last_error = CASE WHEN ? = 'failed' THEN ? ELSE last_error END,
+           updated_at = ?, completed_at = ?, lease_id = NULL, lease_until = NULL
+       WHERE id = ? AND status = 'processing' AND lease_id = ?`
+    ).bind(
+      status,
+      String(result || "").slice(0, 8000),
+      status,
+      status === "failed" ? String(result || "").slice(0, 1000) : "",
+      now,
+      now,
+      taskId,
+      leaseId,
+    ),
     db.prepare(
-      `INSERT INTO centry_agent_chats (id, agent_id, role, content, created_at)
+      `INSERT OR IGNORE INTO centry_agent_chats (id, agent_id, role, content, created_at)
        VALUES (?, ?, 'assistant', ?, ?)`
-    ).bind(assistantMessageId, agentId, String(JSON.parse(String(result || "{}")).answer || "").slice(0, 8000), now),
+    ).bind(assistantMessageId, agentId, answer, now),
   ]);
+
+  if (Number(update?.[0]?.meta?.changes || 0) !== 1) throw new Error("agent_task_lease_lost");
 }
 
 async function providerFor(db, agent, autonomy) {
@@ -773,9 +835,22 @@ function extractJson(text) {
   return JSON.parse(withoutFence.slice(start, end + 1));
 }
 
+async function fetchWithTimeout(url, options = {}, timeoutMs = 25_000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error("agent_external_provider_timeout");
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function callProvider(provider, model, apiKey, system, user) {
   if (provider === "openai") {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetchWithTimeout("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
@@ -790,7 +865,7 @@ async function callProvider(provider, model, apiKey, system, user) {
   }
 
   if (provider === "anthropic") {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({
@@ -805,7 +880,7 @@ async function callProvider(provider, model, apiKey, system, user) {
     return data?.content?.map((part) => part?.text || "").join("") || "";
   }
 
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
     {
       method: "POST",
@@ -1493,7 +1568,7 @@ function jsonStringify(value) {
 }
 
 async function runAgent(db, publicClient, walletClient, runnerAddress, agent, scheduledAt, env, requestedTaskId = null) {
-  const locked = await tryLock(db, agent.id, 55_000);
+  const locked = await tryLock(db, agent.id, 300_000);
   if (!locked) return { agentId: agent.id, status: "locked" };
 
   const runId = crypto.randomUUID();
@@ -1527,17 +1602,31 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
     const account = getAddress(agent.account);
     const rpcUrl = String(env.CENTRY_AGENT_RPC_URL || ARC_RPC);
 
-    const requestedTask = requestedTaskId
-      ? await getPendingTask(db, agent.id, requestedTaskId)
-      : null;
-    tasks = requestedTaskId
-      ? (requestedTask ? [requestedTask] : [])
-      : await getPendingTasks(db, agent.id);
+    const claimed = await claimAgentTasks(db, agent.id, {
+      taskId: requestedTaskId,
+      limit: 20,
+      leaseMs: 300_000,
+    });
+    const taskLeaseId = claimed.leaseId;
+    tasks = claimed.tasks;
     ownerChatTask = tasks.find((task) => parseOwnerChatTask(task));
     ownerChatEnvelope = ownerChatTask ? parseOwnerChatTask(ownerChatTask) : null;
 
     if (requestedTaskId && !ownerChatTask) {
-      return { agentId: agent.id, status: "ignored", reason: "task_not_owner_chat" };
+      await completeTask(
+        db,
+        requestedTaskId,
+        taskLeaseId,
+        "failed",
+        JSON.stringify({
+          kind: "owner_chat_result",
+          status: "failed",
+          error: "task_not_owner_chat",
+        }),
+      );
+      runStatus = "failed";
+      reason = "task_not_owner_chat";
+      return { agentId: agent.id, status: runStatus, reason };
     }
 
     if (ownerChatTask) tasks = [ownerChatTask];
@@ -1575,6 +1664,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
           await completeOwnerChatTask(
             db,
             ownerChatTask.id,
+            taskLeaseId,
             ownerChatEnvelope.assistantMessageId,
             agent.id,
             "completed",
@@ -1587,7 +1677,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
             }),
           );
         } else {
-          await completeTask(db, ownerChatTask.id, "completed", JSON.stringify({
+          await completeTask(db, ownerChatTask.id, taskLeaseId, "completed", JSON.stringify({
             kind: "owner_chat_result",
             status: "processed",
             answer,
@@ -1664,6 +1754,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
         await completeOwnerChatTask(
           db,
           ownerChatTask.id,
+          taskLeaseId,
           ownerChatEnvelope.assistantMessageId,
           agent.id,
           "failed",
@@ -1898,6 +1989,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
           await completeOwnerChatTask(
             db,
             task.id,
+            taskLeaseId,
             ownerRequest.assistantMessageId,
             agent.id,
             "completed",
@@ -1926,7 +2018,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
           ? `Processed during run ${runId}. Transaction: ${txHash}`
           : `Processed during run ${runId}; no onchain transaction was required.`
       );
-      await completeTask(db, task.id, "completed", result);
+      await completeTask(db, task.id, taskLeaseId, "completed", result);
     }
 
     const outboundMessages = messages
@@ -1979,6 +2071,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
         await completeOwnerChatTask(
           db,
           ownerChatTask.id,
+          taskLeaseId,
           ownerChatEnvelope.assistantMessageId,
           agent.id,
           "failed",
@@ -1991,7 +2084,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
           }),
         ).catch(() => {});
       } else {
-        await completeTask(db, ownerChatTask.id, "failed", JSON.stringify({
+        await completeTask(db, ownerChatTask.id, taskLeaseId, "failed", JSON.stringify({
           kind: "owner_chat_result",
           status: "failed",
           answer: result,
