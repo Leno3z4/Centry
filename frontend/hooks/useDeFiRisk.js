@@ -146,10 +146,19 @@ export function useDeFiRisk() {
         totalWeightedCollateralUsd: summary.weightedCollateralUsd,
         totalDebtUsd: summary.totalDebtUsd,
       });
+      const liquidationPriceStatus =
+        market.suppliedUsd <= 0 || summary.totalDebtUsd <= 0
+          ? 'none'
+          : liquidationPriceUsd == null
+            ? 'other-collateral-sufficient'
+            : liquidationPriceUsd >= market.priceUsd
+              ? 'already-breached'
+              : 'price';
+
       const distanceToLiquidationPct =
-        liquidationPriceUsd == null || market.priceUsd <= 0 || liquidationPriceUsd <= 0
-          ? null
-          : ((market.priceUsd - liquidationPriceUsd) / market.priceUsd) * 100;
+        liquidationPriceStatus === 'price' && market.priceUsd > 0
+          ? ((market.priceUsd - liquidationPriceUsd) / market.priceUsd) * 100
+          : null;
 
       return {
         ...market,
@@ -157,6 +166,7 @@ export function useDeFiRisk() {
           ? (market.suppliedUsd / summary.totalCollateralUsd) * 100
           : 0,
         liquidationPriceUsd,
+        liquidationPriceStatus,
         distanceToLiquidationPct,
       };
     }),
