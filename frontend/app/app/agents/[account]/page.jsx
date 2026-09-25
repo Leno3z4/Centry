@@ -60,6 +60,18 @@ function runtimeTime(value) {
   return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString();
 }
 
+function runtimeStatusLabel(value) {
+  const normalized = String(value || '').toLowerCase();
+  if (normalized === 'running') return 'ACTIVE';
+  if (normalized === 'executed') return 'ACTION CONFIRMED';
+  if (normalized === 'failed') return 'FAILED';
+  if (normalized === 'waiting_provider') return 'WAITING FOR PROVIDER';
+  if (normalized === 'skipped') return 'SKIPPED';
+  if (normalized === 'locked') return 'BUSY';
+  if (normalized === 'processed') return 'EVALUATED';
+  return normalized ? normalized.toUpperCase() : 'NO RUN YET';
+}
+
 function DashboardContent() {
   const { account } = useParams();
   const router = useRouter();
