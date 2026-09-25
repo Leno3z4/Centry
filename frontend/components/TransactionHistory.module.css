@@ -9,7 +9,7 @@
 }
 .head { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; }
 .head h2 { margin:0; font-size:18px; letter-spacing:-.02em; }
-.head p { margin:5px 0 0; color:#8f849d; font-size:13px; line-height:1.5; }
+.head p { margin:5px 0 0; color:#8d8d88; font-size:13px; line-height:1.5; }
 .head a { color:#bda9e9; text-decoration:none; font-size:13px; white-space:nowrap; }
 .head a:hover { color:#e2d7ff; }
 .list { display:flex; flex-direction:column; margin-top:16px; }
@@ -27,12 +27,12 @@
 }
 .item:first-child { border-top:0; }
 .item:hover { background:rgba(255,255,255,.022); transform:translateX(2px); }
-.item:focus-visible { outline:2px solid rgba(168,85,247,.38); outline-offset:2px; }
+.item:focus-visible { outline:2px solid rgba(121,169,255,.35); outline-offset:2px; }
 .icon { width:30px; height:30px; border:1px solid rgba(117,221,178,.14); border-radius:9px; display:grid; place-items:center; color:#75ddb2; background:rgba(117,221,178,.045); font-size:12px; flex:0 0 auto; }
 .main { min-width:0; flex:1; }
 .main strong { display:block; font-size:12px; font-weight:650; }
-.main span { display:block; margin-top:3px; color:#8f849d; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.main span { display:block; margin-top:3px; color:#8d8d88; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .arrow { color:#7f738a; font-size:12px; transition:transform .16s ease, color .16s ease; }
 .item:hover .arrow { color:#bda9e9; transform:translateX(2px); }
-.empty { margin-top:14px; padding:18px; border:1px dashed rgba(189,169,233,.12); border-radius:12px; color:#8f849d; font-size:13px; text-align:center; background:rgba(255,255,255,.012); }
+.empty { margin-top:14px; padding:18px; border:1px dashed rgba(189,169,233,.12); border-radius:12px; color:#8d8d88; font-size:13px; text-align:center; background:rgba(255,255,255,.012); }
 @media (max-width:640px){ .panel{padding:16px}.head{flex-direction:column}.head a{white-space:normal}.item{padding-inline:4px} }
