@@ -1596,6 +1596,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
   let tasks = [];
   let ownerChatTask = null;
   let ownerChatEnvelope = null;
+  let taskLeaseId = null;
   let actionReceiptIds = [];
 
   try {
@@ -1607,7 +1608,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
       limit: 20,
       leaseMs: 300_000,
     });
-    const taskLeaseId = claimed.leaseId;
+    taskLeaseId = claimed.leaseId;
     tasks = claimed.tasks;
     ownerChatTask = tasks.find((task) => parseOwnerChatTask(task));
     ownerChatEnvelope = ownerChatTask ? parseOwnerChatTask(ownerChatTask) : null;
