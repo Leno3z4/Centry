@@ -7,6 +7,7 @@ import { useAccount, usePublicClient, useSignMessage, useSendTransaction, useWri
 import { formatUnits, parseUnits } from 'viem';
 import { Providers } from '../../../../components/Providers';
 import { AppShell } from '../../../../components/AppShell';
+import AgentConnectionPanel from '../../../../components/AgentConnectionPanel';
 import WalletAssetDropdown from '../WalletAssetDropdown';
 import { CONTRACT_ADDRESSES } from '../../../../constants/contracts';
 import { ORACLE_ABI } from '../../../../constants/abis';
@@ -297,7 +298,7 @@ function DashboardContent() {
 
   return (
     <main className={styles.page}>
-      <header className={styles.dashboardHeader}><div><div className={styles.kicker}>Agent dashboard</div><h1>{agent.name}</h1><p>{agent.description || 'Configurable Centry onchain agent.'}</p></div><div className={styles.headerActions}><Link className={styles.secondaryButton} href={`/app/agents/${agent.account}/configure`}>Configure</Link><Link className={styles.secondaryButton} href={`/app/agents/${agent.account}/chat`}>Chat</Link><button className={styles.toggleButton} disabled={isPending} onClick={toggleActive}>{agent.active ? 'Pause agent' : 'Activate agent'}</button></div></header>
+      <header className={styles.dashboardHeader}><div><div className={styles.kicker}>Agent dashboard</div><h1>{agent.name}</h1><p>{agent.description || 'Configurable Centry onchain agent.'}</p></div><div className={styles.headerActions}><Link className={styles.secondaryButton} href={'/app/agents/' + agent.account + '/connect'}>Connect</Link><Link className={styles.secondaryButton} href={`/app/agents/${agent.account}/configure`}>Configure</Link><Link className={styles.secondaryButton} href={`/app/agents/${agent.account}/chat`}>Chat</Link><button className={styles.toggleButton} disabled={isPending} onClick={toggleActive}>{agent.active ? 'Pause agent' : 'Activate agent'}</button></div></header>
       {agents.length > 1 ? <div className={styles.agentSwitcher}><span>Agent</span><select className={styles.input} value={agent.account} onChange={(e) => router.push(`/app/agents/${e.target.value}`)}>{agents.map((item) => <option key={item.account} value={item.account}>{item.name} · {shortAddress(item.account)}</option>)}</select></div> : null}
       {status ? <div className={styles.notice}>{status}</div> : null}{error ? <div className={styles.error}>{error}</div> : null}
       <section className={styles.analyticsHero}><div><span className={agent.active ? styles.statusOn : styles.statusOff}>{agent.active ? 'ACTIVE' : 'OFF'}</span><h2>Agent analytics</h2><p>Monitor this agent here. Configuration and conversation live on their own pages so the dashboard stays focused.</p></div><div className={styles.addressPanel}><span>Smart account</span><code>{agent.account}</code><button type="button" className={styles.textButton} onClick={() => navigator.clipboard.writeText(agent.account)}>Copy address</button></div></section>
