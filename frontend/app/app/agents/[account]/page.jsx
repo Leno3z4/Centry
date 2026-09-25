@@ -282,7 +282,7 @@ function DashboardContent() {
       <header className={styles.dashboardHeader}><div><div className={styles.kicker}>Agent dashboard</div><h1>{agent.name}</h1><p>{agent.description || 'Configurable Centry onchain agent.'}</p></div><div className={styles.headerActions}><Link className={styles.secondaryButton} href={`/app/agents/${agent.account}/configure`}>Configure</Link><Link className={styles.secondaryButton} href={`/app/agents/${agent.account}/chat`}>Chat</Link><button className={styles.toggleButton} disabled={isPending} onClick={toggleActive}>{agent.active ? 'Pause agent' : 'Activate agent'}</button></div></header>
       {agents.length > 1 ? <div className={styles.agentSwitcher}><span>Agent</span><select className={styles.input} value={agent.account} onChange={(e) => router.push(`/app/agents/${e.target.value}`)}>{agents.map((item) => <option key={item.account} value={item.account}>{item.name} · {shortAddress(item.account)}</option>)}</select></div> : null}
       {status ? <div className={styles.notice}>{status}</div> : null}{error ? <div className={styles.error}>{error}</div> : null}
-      <section className={styles.analyticsHero}><div><span className={agent.active ? styles.statusOn : styles.statusOff}>{agent.active ? 'ACTIVE' : 'OFF'}</span><h2>Agent analytics</h2><p>Monitor this agent here. Configuration and conversation live on their own pages so the dashboard stays focused.</p></div><div className={styles.addressPanel}><span>Smart account</span><code>{agent.account}</code><button type="button" className={styles.textButton} onClick={() => navigator.clipboard.writeText(agent.account)}>Copy address</button></div></section>
+      <section className={styles.analyticsHero}><div><span className={agent.active ? styles.statusOn : styles.statusOff}>{agent.active ? 'ACTIVE' : 'OFF'}</span><h2>{agent.name || 'Name your agent'}</h2><p>{agent.description || 'Configure this smart-account agent with a strategy, permissions and execution controls.'}</p></div><div className={styles.addressPanel}><span>Smart account</span><code>{agent.account}</code><button type="button" className={styles.textButton} onClick={() => navigator.clipboard.writeText(agent.account)}>Copy address</button></div></section>
       <section className={styles.statsLarge}>
         <div><span>Status</span><strong>{agent.active ? 'Running' : 'Paused'}</strong></div>
         <div>
@@ -308,9 +308,9 @@ function DashboardContent() {
       <section className={styles.executionProof}>
         <div className={styles.executionProofHead}>
           <div>
-            <span className={styles.proofKicker}>Execution proof</span>
+            <span className={styles.proofKicker}>Execution</span>
             <h2>{runtimeStatusLabel(runtime?.executionRuntime?.last_status)}</h2>
-            <p>Compact runtime evidence from the agent runner.</p>
+            <p>Simulation, broadcast and confirmation evidence for this agent.</p>
           </div>
         </div>
 
@@ -340,7 +340,7 @@ function DashboardContent() {
           <div className={styles.sectionHead}>
             <div>
               <h2>Recent activity</h2>
-              <p>Load the verified onchain activity when you want to inspect what this agent has done.</p>
+              <p>Inspect verified onchain actions, transaction hashes and blocks when needed.</p>
             </div>
             <button className={styles.secondaryButton} onClick={loadActivity}>Load activity</button>
           </div>
