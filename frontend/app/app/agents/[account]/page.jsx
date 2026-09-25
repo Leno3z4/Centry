@@ -7,7 +7,6 @@ import { useAccount, usePublicClient, useSignMessage, useSendTransaction, useWri
 import { formatUnits, parseUnits } from 'viem';
 import { Providers } from '../../../../components/Providers';
 import { AppShell } from '../../../../components/AppShell';
-import AgentConnectionPanel from '../../../../components/AgentConnectionPanel';
 import WalletAssetDropdown from '../WalletAssetDropdown';
 import { CONTRACT_ADDRESSES } from '../../../../constants/contracts';
 import { ORACLE_ABI } from '../../../../constants/abis';
