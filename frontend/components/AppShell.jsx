@@ -15,24 +15,23 @@ import surfaceStyles from './DesignSurface.module.css';
 
 const NAV_ITEMS = [
   { href: '/app', label: 'Overview', icon: '⌂', group: 'overview' },
-  { href: '/app/swap', label: 'Swap', icon: '⇄', group: 'use' },
-  { href: '/app/markets', label: 'Markets', icon: '◈', group: 'use' },
-  { href: '/app/gateway', label: 'Gateway', icon: '◉', group: 'use' },
-  { href: '/app/rewards', label: 'Rewards', icon: '✦', group: 'earn', disabled: true },
-  { href: '/app/governance', label: 'Governance', icon: '♢', group: 'earn', disabled: true },
+  { href: '/app/swap', label: 'Swap', icon: '⇄', group: 'money' },
+  { href: '/app/markets', label: 'Markets', icon: '◈', group: 'money' },
+  { href: '/app/gateway', label: 'Gateway', icon: '◉', group: 'money' },
+  { href: '/app/rewards', label: 'Rewards', icon: '✦', group: 'protocol', disabled: true },
+  { href: '/app/governance', label: 'Governance', icon: '♢', group: 'protocol', disabled: true },
   { href: '/app/agents', label: 'Agents', icon: '✧', group: 'automation' },
-  { href: '/app/bridge', label: 'Bridge', icon: '↗', group: 'explore' },
-  { href: '/app/portfolio', label: 'Portfolio', icon: '◐', group: 'explore' },
-  { href: '/app/analytics', label: 'Analytics', icon: '⌁', group: 'explore' },
+  { href: '/app/bridge', label: 'Bridge', icon: '↗', group: 'money' },
+  { href: '/app/portfolio', label: 'Portfolio', icon: '◐', group: 'money' },
+  { href: '/app/analytics', label: 'Analytics', icon: '⌁', group: 'money' },
   { href: '/app/docs', label: 'Docs', icon: '□', group: 'docs' },
 ];
 
 const NAV_GROUPS = [
   { key: 'overview', label: null },
-  { key: 'use', label: 'Use Centry' },
-  { key: 'earn', label: 'Earn & Govern' },
+  { key: 'money', label: 'Money' },
   { key: 'automation', label: 'Automation' },
-  { key: 'explore', label: 'Explore' },
+  { key: 'protocol', label: 'Protocol' },
   { key: 'docs', label: null },
 ];
 
@@ -91,7 +90,7 @@ export function AppShell({ children }) {
             </div>
           ))}
         </nav>
-        <div className="sidebar-footer"><strong>Centry Protocol</strong><span>Arc-native liquidity</span></div>
+        <div className="sidebar-footer"><strong>Centry</strong><span>Arc-native financial workspace</span></div>
       </aside>
 
       <main className="main-content">
@@ -101,7 +100,7 @@ export function AppShell({ children }) {
         </header>
         <div className="page-view">{children}</div>
         <footer className="page-footer">
-          <span>Centry Protocol</span>
+          <span>Centry · Arc Mainnet</span>
           <span>{address ? `${address.slice(0, 6)}…${address.slice(-4)}` : 'Wallet not connected'}</span>
         </footer>
       </main>
