@@ -60,6 +60,15 @@ function runtimeTime(value) {
   return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString();
 }
 
+function parseRuntimeStrategyState(value) {
+  try {
+    const parsed = JSON.parse(value || '{}');
+    return parsed?.riskGuard && typeof parsed.riskGuard === 'object' ? parsed.riskGuard : null;
+  } catch {
+    return null;
+  }
+}
+
 function runtimeStatusLabel(value) {
   const normalized = String(value || '').toLowerCase();
   if (normalized === 'running') return 'ACTIVE';
@@ -324,6 +333,12 @@ function DashboardContent() {
           <div className={styles.proofState}>
             <span>Operator</span>
             <strong>{runtime?.executionRuntime?.operator_authorized ? 'AUTHORIZED' : runtime?.executionRuntime?.operator_authorized === false ? 'NOT AUTHORIZED' : 'UNKNOWN'}</strong>
+          </div>
+          <div className={styles.proofState}>
+            <span>Protection</span>
+            <strong>{parseRuntimeStrategyState(runtime?.executionRuntime?.strategy_state_json)?.enabled
+              ? parseRuntimeStrategyState(runtime.executionRuntime.strategy_state_json).state.toUpperCase()
+              : 'DISABLED'}</strong>
           </div>
         </div>
 
