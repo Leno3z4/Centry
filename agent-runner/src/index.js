@@ -1548,11 +1548,18 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
     const autonomy = { ...storedAutonomy, policy };
     const autonomyEnabled = autonomy.enabled !== false;
     const instructions = String(autonomy.instructions || "").trim();
+    const configuredRiskGuard = riskGuardConfig(autonomy);
     let riskDecision = null;
 
-    if (!ownerChatTask && (!autonomyEnabled || (!instructions && tasks.length === 0))) {
+    if (!ownerChatTask && !autonomyEnabled) {
       runStatus = "idle";
-      reason = autonomyEnabled ? "no_work" : "autonomy_disabled";
+      reason = "autonomy_disabled";
+      return { agentId: agent.id, status: runStatus, reason };
+    }
+
+    if (!ownerChatTask && !instructions && tasks.length === 0 && !configuredRiskGuard.enabled) {
+      runStatus = "idle";
+      reason = "no_work";
       return { agentId: agent.id, status: runStatus, reason };
     }
 
@@ -1671,8 +1678,8 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
       return { agentId: agent.id, status: runStatus, reason };
     }
 
-    const encryptionKey = String(env.CENTRY_AGENT_ENCRYPTION_KEY || "");
-    const apiKey = await decryptSecret(provider.encrypted_api_key, encryptionKey);
+    const encryptionKey = provider ? String(env.CENTRY_AGENT_ENCRYPTION_KEY || "") : "";
+    const apiKey = provider ? await decryptSecret(provider.encrypted_api_key, encryptionKey) : null;
 
     const taskContext = tasks.length
       ? tasks.map((task) => {
