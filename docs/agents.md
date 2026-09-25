@@ -354,6 +354,23 @@ The Cloudflare Worker needs the same `CENTRY_AGENT_DB_SECRET` as a Worker secret
 
 AI providers are configured per agent, not globally. Supported provider adapters are Gemini, OpenAI and Anthropic; the model identifier is user-selected. Provider credentials are never returned to the browser after they are stored.
 
+## Autonomous position protection
+
+Agent autonomy may include a deterministic `riskGuard` alongside the AI strategy:
+
+```json
+{
+  "riskGuard": {
+    "enabled": false,
+    "minHealthFactor": "1.50",
+    "repayAtHealthFactor": "1.65",
+    "stopBorrowAtHealthFactor": "1.80"
+  }
+}
+```
+
+The runner evaluates the live lending-pool health factor before asking the model to plan. Below `stopBorrowAtHealthFactor`, new borrow actions are rejected by the runtime. Below `repayAtHealthFactor`, the runtime may construct bounded repay actions from matching debt assets currently held by the agent, subject to the saved asset/action permissions and per-asset limits. The model is not the source of truth for these thresholds.
+
 ## Agent analytics and chat
 
 Onchain agent analytics are reconstructed from `AgentExecuted`, `AgentBatchExecuted`, operator/permission and activation events emitted by the agent account. Each agent also has a chat surface that is grounded in its verified activity.
