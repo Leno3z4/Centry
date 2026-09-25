@@ -36,8 +36,15 @@ function formatUnitsSafe(value, decimals) {
 }
 
 function formatUsdFromPrice(amount, priceE18, decimals) {
-  if (amount === 0 || priceE18 === 0n) return 0;
-  return (amount * Number(priceE18)) / (10 ** decimals) / 1e18;
+  if (!amount || !priceE18) return 0;
+  try {
+    const tokenAmount = Number(formatUnits(amount, decimals));
+    const usdPrice = Number(formatUnits(priceE18, 18));
+    if (!Number.isFinite(tokenAmount) || !Number.isFinite(usdPrice)) return 0;
+    return tokenAmount * usdPrice;
+  } catch {
+    return 0;
+  }
 }
 
 function projectedBorrowRate(utilization, strategy) {
