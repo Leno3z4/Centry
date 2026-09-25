@@ -30,6 +30,7 @@ const OPERATIONS = new Set([
   "list_action_receipts",
   "create_action_receipt",
   "update_action_receipts",
+  "get_protocol_analytics",
 ]);
 
 function unauthorized() {
@@ -455,6 +456,67 @@ async function runOperation(db, operation, args) {
         `UPDATE centry_agent_action_receipts SET ${fields.join(", ")} WHERE id IN (${placeholders})`
       ).bind(...values).run();
       return { updated: Number(result?.meta?.changes || 0) };
+    }
+
+    case "get_protocol_analytics": {
+      const days = Math.max(1, Math.min(90, Number(args.days) || 7));
+      const to = Math.floor(Date.now() / 1000);
+      const from = to - days * 86400;
+      const pointLimit = Math.min(2200, Math.max(48, days * 24 + 24));
+      const eventLimit = Math.min(500, Math.max(100, days * 20));
+
+      const [pointsResult, eventResult] = await Promise.all([
+        db.prepare(
+          `SELECT bucket_start, asset, symbol, decimals, supply_raw, borrow_raw, cash_raw,
+                  price_e18, utilization_e18, borrow_rate_e18, supply_rate_e18,
+                  supply_usd_e18, borrow_usd_e18, cash_usd_e18,
+                  ltv_bps, liquidation_threshold_bps, liquidation_bonus_bps, reserve_factor_bps,
+                  supply_cap_raw, borrow_cap_raw, captured_at
+           FROM centry_protocol_hourly
+           WHERE bucket_start BETWEEN ? AND ?
+           ORDER BY bucket_start ASC, asset ASC
+           LIMIT ?`
+        ).bind(from, to, pointLimit).all(),
+        db.prepare(
+          `SELECT id, block_number, block_hash, transaction_hash, log_index, timestamp,
+                  event_name, asset, asset2, actor, amount_raw, amount2_raw, metadata_json
+           FROM centry_protocol_events
+           WHERE timestamp BETWEEN ? AND ?
+           ORDER BY timestamp DESC, block_number DESC, log_index DESC
+           LIMIT ?`
+        ).bind(from, to, eventLimit).all(),
+      ]);
+
+      const points = (pointsResult.results || []).map((row) => ({
+        bucketStart: Number(row.bucket_start),
+        asset: row.asset,
+        symbol: row.symbol,
+        decimals: Number(row.decimals),
+        supplyRaw: row.supply_raw,
+        borrowRaw: row.borrow_raw,
+        cashRaw: row.cash_raw,
+        priceE18: row.price_e18,
+        utilizationE18: row.utilization_e18,
+        borrowRateE18: row.borrow_rate_e18,
+        supplyRateE18: row.supply_rate_e18,
+        supplyUsdE18: row.supply_usd_e18,
+        borrowUsdE18: row.borrow_usd_e18,
+        cashUsdE18: row.cash_usd_e18,
+        ltvBps: Number(row.ltv_bps),
+        liquidationThresholdBps: Number(row.liquidation_threshold_bps),
+        liquidationBonusBps: Number(row.liquidation_bonus_bps),
+        reserveFactorBps: Number(row.reserve_factor_bps),
+        supplyCapRaw: row.supply_cap_raw,
+        borrowCapRaw: row.borrow_cap_raw,
+        capturedAt: row.captured_at,
+      }));
+
+      return {
+        from,
+        to,
+        points,
+        events: eventResult.results || [],
+      };
     }
 
     case "update_agent_config": {
