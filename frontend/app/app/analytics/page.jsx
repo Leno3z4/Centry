@@ -378,9 +378,14 @@ function AnalyticsContent() {
           {history?.events?.length ? history.events.slice(0, 12).map((event) => {
             let metadata = {};
             try { metadata = event.metadata_json ? JSON.parse(event.metadata_json) : {}; } catch {}
-            const symbol = Object.keys(metadata).length
-              ? (event.asset === CONTRACT_ADDRESSES.USDC ? 'USDC' : event.asset === CONTRACT_ADDRESSES.EURC ? 'EURC' : event.asset === CONTRACT_ADDRESSES.CIRBTC ? 'CIRBTC' : '')
-              : '';
+            const normalizedAsset = String(event.asset || '').toLowerCase();
+            const symbol = normalizedAsset === CONTRACT_ADDRESSES.USDC.toLowerCase()
+              ? 'USDC'
+              : normalizedAsset === CONTRACT_ADDRESSES.EURC.toLowerCase()
+                ? 'EURC'
+                : normalizedAsset === CONTRACT_ADDRESSES.CIRBTC.toLowerCase()
+                  ? 'CIRBTC'
+                  : '';
             const amount = event.amount_raw
               ? Number(event.amount_raw) / (10 ** tokenDecimals(symbol))
               : null;
