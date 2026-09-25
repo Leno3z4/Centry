@@ -52,10 +52,10 @@
   flex: 0 0 auto;
   min-height: 36px;
   padding: 8px 11px;
-  border: 1px solid #362945;
+  border: 1px solid #3a3a38;
   border-radius: 9px;
-  background: #0d0916;
-  color: #b9afc8;
+  background: #101010;
+  color: #a4a4a0;
   font-size: 11px;
   font-weight: 600;
 }
@@ -96,10 +96,10 @@
   width: 42px;
   height: 42px;
   place-items: center;
-  border: 1px solid #49315f;
+  border: 1px solid #454541;
   border-radius: 12px;
-  background: #171024;
-  color: #c59cff;
+  background: #171717;
+  color: #d7d7d2;
   font-size: 16px;
   font-weight: 700;
 }
