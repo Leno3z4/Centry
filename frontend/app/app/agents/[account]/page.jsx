@@ -60,36 +60,6 @@ function runtimeTime(value) {
   return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString();
 }
 
-function parseRuntimeStrategyState(value) {
-  try {
-    const parsed = JSON.parse(value || '{}');
-    return parsed?.riskGuard && typeof parsed.riskGuard === 'object' ? parsed.riskGuard : null;
-  } catch {
-    return null;
-  }
-}
-
-function runtimeStatusLabel(value) {
-  const normalized = String(value || '').toLowerCase();
-  if (normalized === 'running') return 'ACTIVE';
-  if (normalized === 'executed') return 'ACTION CONFIRMED';
-  if (normalized === 'failed') return 'FAILED';
-  if (normalized === 'waiting_provider') return 'WAITING FOR PROVIDER';
-  if (normalized === 'skipped') return 'SKIPPED';
-  if (normalized === 'locked') return 'BUSY';
-  if (normalized === 'processed') return 'EVALUATED';
-  return normalized ? normalized.toUpperCase() : 'NO RUN YET';
-}
-
-function receiptStatusLabel(value) {
-  const normalized = String(value || '').toLowerCase();
-  if (normalized === 'confirmed') return 'CONFIRMED';
-  if (normalized === 'broadcast') return 'BROADCAST';
-  if (normalized === 'simulated') return 'SIMULATED';
-  if (normalized === 'failed') return 'FAILED';
-  return normalized ? normalized.toUpperCase() : 'PLANNED';
-}
-
 function DashboardContent() {
   const { account } = useParams();
   const router = useRouter();
@@ -326,57 +296,30 @@ function DashboardContent() {
       <section className={styles.executionProof}>
         <div className={styles.executionProofHead}>
           <div>
-            <span className={styles.proofKicker}>Runtime proof</span>
+            <span className={styles.proofKicker}>Execution proof</span>
             <h2>{runtimeStatusLabel(runtime?.executionRuntime?.last_status)}</h2>
-            <p>The runner records each wake, evaluation, permissioned action, transaction broadcast, and confirmed receipt for this smart account.</p>
-          </div>
-          <div className={styles.proofState}>
-            <span>Operator</span>
-            <strong>{runtime?.executionRuntime?.operator_authorized ? 'AUTHORIZED' : runtime?.executionRuntime?.operator_authorized === false ? 'NOT AUTHORIZED' : 'UNKNOWN'}</strong>
-          </div>
-          <div className={styles.proofState}>
-            <span>Protection</span>
-            <strong>{parseRuntimeStrategyState(runtime?.executionRuntime?.strategy_state_json)?.enabled
-              ? parseRuntimeStrategyState(runtime.executionRuntime.strategy_state_json).state.toUpperCase()
-              : 'DISABLED'}</strong>
+            <p>Compact runtime evidence from the agent runner.</p>
           </div>
         </div>
 
         <div className={styles.executionProofGrid}>
-          <div><span>Last heartbeat</span><strong>{runtimeTime(runtime?.executionRuntime?.heartbeat_at)}</strong></div>
-          <div><span>Last evaluation</span><strong>{runtimeTime(runtime?.executionRuntime?.last_evaluation_at)}</strong></div>
-          <div><span>Last action</span><strong>{runtimeTime(runtime?.executionRuntime?.last_action_at)}</strong></div>
-          <div><span>Last success</span><strong>{runtimeTime(runtime?.executionRuntime?.last_success_at)}</strong></div>
-          <div><span>Last failure</span><strong>{runtimeTime(runtime?.executionRuntime?.last_failure_at)}</strong></div>
-          <div><span>Last transaction</span><strong className={styles.proofMono}>{runtime?.executionRuntime?.last_tx_hash || '—'}</strong></div>
-        </div>
-
-        {runtime?.executionRuntime?.last_reason || runtime?.executionRuntime?.last_error ? (
-          <div className={styles.executionProofNote}>
-            <span>{runtime.executionRuntime.last_reason || 'Runtime error'}</span>
-            {runtime.executionRuntime.last_error ? <code>{runtime.executionRuntime.last_error}</code> : null}
+          <div>
+            <span>Heartbeat</span>
+            <strong>{runtimeTime(runtime?.executionRuntime?.heartbeat_at)}</strong>
           </div>
-        ) : null}
-
-        <div className={styles.receiptList}>
-          <div className={styles.receiptHead}>
-            <span>Action receipts</span>
-            <span>{runtime?.actionReceipts?.length || 0} recorded</span>
+          <div>
+            <span>Evaluation</span>
+            <strong>{runtimeTime(runtime?.executionRuntime?.last_evaluation_at)}</strong>
           </div>
-          {runtime?.actionReceipts?.length ? runtime.actionReceipts.slice(0, 6).map((receipt) => (
-            <div className={styles.receiptRow} key={receipt.id}>
-              <div>
-                <strong>{receipt.action_type}</strong>
-                <span>Action {Number(receipt.action_index) + 1} · {receipt.selector}</span>
-              </div>
-              <div className={styles.receiptMeta}>
-                <span className={styles.receiptStatus}>{receiptStatusLabel(receipt.status)}</span>
-                <code>{receipt.tx_hash || receipt.target}</code>
-              </div>
-            </div>
-          )) : (
-            <div className={styles.empty}>No permissioned action has produced a receipt yet.</div>
-          )}
+          <div>
+            <span>Result</span>
+            <strong>{runtimeStatusLabel(runtime?.executionRuntime?.last_status)}</strong>
+            {runtime?.executionRuntime?.last_reason ? <span>{runtime.executionRuntime.last_reason}</span> : null}
+          </div>
+          <div>
+            <span>Transaction</span>
+            <strong className={styles.proofMono}>{runtime?.executionRuntime?.last_tx_hash || '—'}</strong>
+          </div>
         </div>
       </section>
 
