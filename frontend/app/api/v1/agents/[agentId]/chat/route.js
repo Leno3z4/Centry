@@ -15,11 +15,10 @@ const DIRECT_BALANCE_ASSETS = Object.freeze({
 function requestedBalanceAsset(message) {
   const text = String(message || "").toUpperCase();
   for (const symbol of Object.keys(DIRECT_BALANCE_ASSETS)) {
-    if (new RegExp(`\b${symbol}\b`).test(text)) return symbol;
+    if (new RegExp("\\b" + symbol + "\\b").test(text)) return symbol;
   }
   return null;
 }
-
 function isSimpleBalanceRequest(message) {
   const text = String(message || "").trim();
   if (!text) return false;
@@ -29,9 +28,15 @@ function isSimpleBalanceRequest(message) {
 }
 
 function formatTokenBalance(raw, decimals) {
-  const value = Number(raw) / (10 ** decimals);
-  if (!Number.isFinite(value)) return "0";
-  return value.toLocaleString(undefined, { maximumFractionDigits: Math.min(8, decimals) });
+  try {
+    const value = BigInt(raw || 0n);
+    const base = 10n ** BigInt(decimals);
+    const whole = value / base;
+    const fraction = (value % base).toString().padStart(decimals, "0").slice(0, Math.min(8, decimals)).replace(/0+$/, "");
+    return fraction ? `${whole.toString()}.${fraction}` : whole.toString();
+  } catch {
+    return "0";
+  }
 }
 
 export async function POST(request, { params }) {
