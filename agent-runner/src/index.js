@@ -2003,7 +2003,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
             }),
           );
         } else {
-          await completeTask(db, task.id, "completed", JSON.stringify({
+          await completeTask(db, task.id, taskLeaseId, "completed", JSON.stringify({
             kind: "owner_chat_result",
             status: runStatus === "executed" ? "executed" : "processed",
             answer: result,
