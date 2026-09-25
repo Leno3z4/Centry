@@ -10,7 +10,7 @@ export default function Page() {
     <main className="landing-aero-shell">
       <div className="landing-aero-background" aria-hidden="true">
         <AeroShards
-          backgroundColor="#050505"
+          backgroundColor="#080808"
           shardColor="#d7d9dc"
           accentColor="#ffffff"
           placement="right"
@@ -47,7 +47,7 @@ export default function Page() {
           min-height: 100vh;
           isolation: isolate;
           overflow: hidden;
-          background: #050505;
+          background: #080808;
         }
         .landing-aero-background {
           position: fixed;
@@ -55,7 +55,7 @@ export default function Page() {
           z-index: 0;
           pointer-events: none;
           overflow: hidden;
-          opacity: .48;
+          opacity: .18;
           mix-blend-mode: screen;
         }
         .landing-aero-background > * { width: 100%; height: 100%; }
