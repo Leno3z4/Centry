@@ -108,11 +108,11 @@ export function useDeFiRisk() {
       reserveFactorBps,
       supplyCap: safeUnits(config?.[6] || 0n, market.decimals),
       borrowCap: safeUnits(config?.[7] || 0n, market.decimals),
-      supplyCapUtilizationPct: Number(config?.[6] || 0n) > 0
-        ? (Number(supplyRaw) / Number(config[6])) * 100
+      supplyCapUtilizationPct: safeUnits(config?.[6] || 0n, market.decimals) > 0
+        ? (safeUnits(supplyRaw, market.decimals) / safeUnits(config[6], market.decimals)) * 100
         : 0,
-      borrowCapUtilizationPct: Number(config?.[7] || 0n) > 0
-        ? (Number(borrowRaw) / Number(config[7])) * 100
+      borrowCapUtilizationPct: safeUnits(config?.[7] || 0n, market.decimals) > 0
+        ? (safeUnits(borrowRaw, market.decimals) / safeUnits(config[7], market.decimals)) * 100
         : 0,
       currentSupply: safeUnits(supplyRaw, market.decimals),
       currentBorrow: safeUnits(borrowRaw, market.decimals),
