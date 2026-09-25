@@ -21,6 +21,7 @@ const OPERATIONS = new Set([
   "finish_agent_run",
   "list_agent_runs",
   "enqueue_agent_task",
+  "claim_agent_tasks",
   "list_pending_agent_tasks",
   "complete_agent_task",
   "get_agent_task",
@@ -316,11 +317,63 @@ async function runOperation(db, operation, args) {
       const body = boundedText(task.task, "task", 4000);
       const createdAt = new Date().toISOString();
       await db.prepare(
-        `INSERT INTO centry_agent_tasks
-          (id, from_agent_id, to_agent_id, task, status, result, created_at, updated_at, completed_at)
-         VALUES (?, ?, ?, ?, 'pending', '', ?, ?, NULL)`
+        `INSERT OR IGNORE INTO centry_agent_tasks
+          (id, from_agent_id, to_agent_id, task, status, result, created_at, updated_at, completed_at,
+           lease_id, lease_until, attempts, last_error)
+         VALUES (?, ?, ?, ?, 'pending', '', ?, ?, NULL, NULL, NULL, 0, '')`
       ).bind(id, fromAgentId, toAgentId, body, createdAt, createdAt).run();
-      return { id, status: "pending", createdAt };
+      return await db.prepare(
+        "SELECT id, from_agent_id, to_agent_id, task, status, result, created_at, updated_at, completed_at, attempts, last_error FROM centry_agent_tasks WHERE id = ? LIMIT 1"
+      ).bind(id).first();
+    }
+
+    case "claim_agent_tasks": {
+      const agentId = requireString(args.agentId, "agentId");
+      const leaseId = requireString(args.leaseId, "leaseId");
+      const now = Date.now();
+      const leaseMs = Math.max(30_000, Math.min(600_000, Number(args.leaseMs) || 300_000));
+      const leaseUntil = now + leaseMs;
+      const taskId = args.taskId ? String(args.taskId).trim() : null;
+      const limit = taskId ? 1 : Math.max(1, Math.min(20, Number(args.limit) || 20));
+      const idFilter = taskId ? "AND id = ?" : "";
+      const bindings = taskId
+        ? [agentId, now, taskId, limit]
+        : [agentId, now, limit];
+
+      await db.prepare(
+        `UPDATE centry_agent_tasks
+         SET status = 'processing',
+             lease_id = ?,
+             lease_until = ?,
+             attempts = attempts + 1,
+             updated_at = ?
+         WHERE id IN (
+           SELECT id
+           FROM centry_agent_tasks
+           WHERE to_agent_id = ?
+             AND (status = 'pending' OR (status = 'processing' AND COALESCE(lease_until, 0) < ?))
+             ${idFilter}
+           ORDER BY created_at ASC
+           LIMIT ?
+         )
+           AND to_agent_id = ?
+           AND (status = 'pending' OR (status = 'processing' AND COALESCE(lease_until, 0) < ?))`
+      ).bind(
+        leaseId,
+        leaseUntil,
+        new Date().toISOString(),
+        ...bindings,
+        agentId,
+        now,
+      ).run();
+
+      return await db.prepare(
+        `SELECT id, from_agent_id, to_agent_id, task, status, result, created_at, updated_at, completed_at,
+                lease_id, lease_until, attempts, last_error
+         FROM centry_agent_tasks
+         WHERE to_agent_id = ? AND lease_id = ? AND status = 'processing'
+         ORDER BY created_at ASC`
+      ).bind(agentId, leaseId).all().then((r) => r.results || []);
     }
 
     case "list_pending_agent_tasks": {
@@ -336,15 +389,17 @@ async function runOperation(db, operation, args) {
 
     case "complete_agent_task": {
       const id = requireString(args.id, "id");
+      const leaseId = requireString(args.leaseId, "leaseId");
       const status = requireString(args.status, "status");
       if (!["completed", "failed"].includes(status)) throw new Error("invalid_task_status");
       const result = typeof args.result === "string" ? args.result.slice(0, 8000) : JSON.stringify(args.result || "");
       const now = new Date().toISOString();
-      await db.prepare(
+      const update = await db.prepare(
         `UPDATE centry_agent_tasks
-         SET status = ?, result = ?, updated_at = ?, completed_at = ?
-         WHERE id = ? AND status = 'pending'`
-      ).bind(status, result, now, now, id).run();
+         SET status = ?, result = ?, updated_at = ?, completed_at = ?, lease_id = NULL, lease_until = NULL
+         WHERE id = ? AND status = 'processing' AND lease_id = ?`
+      ).bind(status, result, now, now, id, leaseId).run();
+      if (Number(update?.meta?.changes || 0) !== 1) throw new Error("agent_task_lease_lost");
       return { id, status };
     }
 
