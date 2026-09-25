@@ -274,6 +274,142 @@ const ASSET_DECIMALS = Object.freeze({
   CENT: 18,
 });
 
+const DEFAULT_RISK_GUARD = Object.freeze({
+  enabled: false,
+  minHealthFactor: "1.50",
+  repayAtHealthFactor: "1.65",
+  stopBorrowAtHealthFactor: "1.80",
+});
+
+function decimalWad(value, field, fallback) {
+  const raw = String(value ?? fallback).trim();
+  try {
+    const parsed = parseUnits(raw, 18);
+    if (parsed <= 0n) throw new Error("non_positive");
+    return parsed;
+  } catch {
+    throw new Error(`invalid_risk_guard_${field}`);
+  }
+}
+
+function riskGuardConfig(autonomy) {
+  const incoming = autonomy?.riskGuard && typeof autonomy.riskGuard === "object" ? autonomy.riskGuard : {};
+  const minHealthFactor = decimalWad(incoming.minHealthFactor, "min_health_factor", DEFAULT_RISK_GUARD.minHealthFactor);
+  const repayAtHealthFactor = decimalWad(incoming.repayAtHealthFactor, "repay_at_health_factor", DEFAULT_RISK_GUARD.repayAtHealthFactor);
+  const stopBorrowAtHealthFactor = decimalWad(incoming.stopBorrowAtHealthFactor, "stop_borrow_at_health_factor", DEFAULT_RISK_GUARD.stopBorrowAtHealthFactor);
+
+  if (!(minHealthFactor <= repayAtHealthFactor && repayAtHealthFactor <= stopBorrowAtHealthFactor)) {
+    throw new Error("invalid_risk_guard_threshold_order");
+  }
+
+  return {
+    enabled: incoming.enabled === true,
+    minHealthFactor,
+    repayAtHealthFactor,
+    stopBorrowAtHealthFactor,
+  };
+}
+
+function maxPolicyAmountRaw(policy, asset) {
+  const cap = policy?.maxAmountByAsset?.[asset];
+  if (cap == null || String(cap).trim() === "") return null;
+  try {
+    return assetAmountToBaseUnits(cap, asset, "agent_max_amount");
+  } catch {
+    return null;
+  }
+}
+
+function evaluateRiskGuard(snapshot, autonomy, policy) {
+  const config = riskGuardConfig(autonomy);
+  const rawHealth = snapshot?.lending?.healthFactor;
+  if (!config.enabled || rawHealth == null) {
+    return {
+      ...config,
+      healthFactor: rawHealth ? BigInt(rawHealth) : null,
+      state: "inactive",
+      borrowBlocked: false,
+      actions: [],
+      reason: config.enabled ? "health_factor_unavailable" : "risk_guard_disabled",
+    };
+  }
+
+  let healthFactor;
+  try {
+    healthFactor = BigInt(rawHealth);
+  } catch {
+    return {
+      ...config,
+      healthFactor: null,
+      state: "unknown",
+      borrowBlocked: false,
+      actions: [],
+      reason: "health_factor_invalid",
+    };
+  }
+
+  if (healthFactor >= config.stopBorrowAtHealthFactor) {
+    return {
+      ...config,
+      healthFactor,
+      state: "normal",
+      borrowBlocked: false,
+      actions: [],
+      reason: "health_factor_above_guard",
+    };
+  }
+
+  const borrowBlocked = healthFactor < config.stopBorrowAtHealthFactor;
+  const actions = [];
+  const policyAllowsRepay = policy.allowedActions.has("repay");
+
+  if (healthFactor < config.repayAtHealthFactor && policyAllowsRepay) {
+    for (const asset of ["USDC", "EURC", "CIRBTC"]) {
+      const debt = BigInt(snapshot?.lending?.borrow?.[asset] || "0");
+      const balance = BigInt(snapshot?.balances?.[asset] || "0");
+      if (debt <= 0n || balance <= 0n) continue;
+
+      const cap = maxPolicyAmountRaw(policy, asset);
+      let amount = debt < balance ? debt : balance;
+      if (cap != null && cap > 0n && amount > cap) amount = cap;
+      if (amount <= 0n) continue;
+
+      actions.push({
+        action: "repay",
+        asset,
+        amount: amount.toString(),
+      });
+      if (actions.length >= 2) break;
+    }
+  }
+
+  const state = healthFactor < config.minHealthFactor
+    ? "critical"
+    : healthFactor < config.repayAtHealthFactor
+      ? "protection"
+      : "borrow_restricted";
+
+  return {
+    ...config,
+    healthFactor,
+    state,
+    borrowBlocked,
+    actions,
+    reason: actions.length
+      ? "deterministic_repay_required"
+      : policyAllowsRepay
+        ? "repay_liquidity_unavailable"
+        : "repay_not_allowed_by_policy",
+  };
+}
+
+function filterRiskGuardActions(actions, riskDecision) {
+  if (!riskDecision?.enabled) return Array.isArray(actions) ? actions : [];
+  const input = Array.isArray(actions) ? actions : [];
+  if (!riskDecision.borrowBlocked) return input;
+  return input.filter((action) => String(action?.action || "").trim() !== "borrow");
+}
+
 function agentPolicy(autonomy) {
   const policy = autonomy && typeof autonomy.policy === "object" ? autonomy.policy : {};
   const allowedActions = Array.isArray(policy.allowedActions) && policy.allowedActions.length
@@ -1412,6 +1548,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
     const autonomy = { ...storedAutonomy, policy };
     const autonomyEnabled = autonomy.enabled !== false;
     const instructions = String(autonomy.instructions || "").trim();
+    let riskDecision = null;
 
     if (!ownerChatTask && (!autonomyEnabled || (!instructions && tasks.length === 0))) {
       runStatus = "idle";
@@ -1464,6 +1601,8 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
         ? await readOwnerChatSnapshot(publicClient, account, runnerAddress, rpcUrl, ownerMessage)
         : emptyAgentSnapshot(account, runnerAddress);
 
+    riskDecision = evaluateRiskGuard(snapshot, autonomy, agentPolicy(autonomy));
+
     await writeAgentRuntime(db, agent.id, {
       lastEvaluationAt: new Date().toISOString(),
       accountActive: snapshot.active,
@@ -1472,6 +1611,17 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
         autonomyEnabled,
         instructionsConfigured: Boolean(instructions),
         pendingTaskCount: tasks.length,
+        riskGuard: {
+          enabled: riskDecision.enabled,
+          state: riskDecision.state,
+          healthFactor: riskDecision.healthFactor == null ? null : riskDecision.healthFactor.toString(),
+          reason: riskDecision.reason,
+          borrowBlocked: riskDecision.borrowBlocked,
+          repayActionCount: riskDecision.actions.length,
+          minHealthFactor: riskDecision.minHealthFactor.toString(),
+          repayAtHealthFactor: riskDecision.repayAtHealthFactor.toString(),
+          stopBorrowAtHealthFactor: riskDecision.stopBorrowAtHealthFactor.toString(),
+        },
       },
     }).catch(() => {});
 
@@ -1489,8 +1639,17 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
 
     // Keep authenticated owner chat isolated from queued A2A work so the model
     // cannot mix unrelated task sources into one execution plan.
-    const provider = await providerFor(db, agent, autonomy);
-    if (!provider) {
+    const forcedRiskActions = !ownerChatTask && riskDecision?.enabled && riskDecision.actions.length
+      ? riskDecision.actions
+      : [];
+
+    if (forcedRiskActions.length) {
+      // Skip the AI provider entirely for deterministic protection.
+      // The normal build/permission/simulation/receipt pipeline below still applies.
+    }
+
+    const provider = forcedRiskActions.length ? null : await providerFor(db, agent, autonomy);
+    if (!provider && !forcedRiskActions.length) {
       runStatus = "waiting_provider";
       reason = "provider_not_configured";
       if (ownerChatTask && ownerChatEnvelope?.assistantMessageId) {
@@ -1586,21 +1745,34 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
       pendingTasks: taskContext,
     });
 
-    const responseText = await callProvider(
+    const plan = forcedRiskActions.length
+      ? {
+          response: "",
+          reason: riskDecision.reason,
+          actions: forcedRiskActions,
+          replies: [],
+          messages: [],
+        }
+      : (() => {
+          if (!provider) throw new Error("agent_provider_not_configured");
+          return null;
+        })();
+
+    const resolvedPlan = plan || extractJson(await callProvider(
       String(provider.provider).toLowerCase(),
       String(provider.model),
       apiKey,
       system,
       user,
-    );
-    const plan = extractJson(responseText);
-    const modelActions = Array.isArray(plan?.actions) ? plan.actions : [];
+    ));
+    const modelActions = Array.isArray(resolvedPlan?.actions) ? resolvedPlan.actions : [];
     const ownerChatAllowsStateChange = ownerChatTask
       ? ownerChatHasExplicitStateChangeIntent(ownerMessage)
       : true;
     const plannedActions = ownerChatTask && !ownerChatAllowsStateChange
       ? []
       : modelActions;
+    const guardedActions = !ownerChatTask ? filterRiskGuardActions(plannedActions, riskDecision) : plannedActions;
 
     if (ownerChatTask && modelActions.length > 0 && plannedActions.length === 0) {
       console.warn("centry_agent_owner_chat_action_suppressed", {
@@ -1611,12 +1783,12 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
       });
     }
 
-    const replies = Array.isArray(plan?.replies) ? plan.replies : [];
-    const messages = Array.isArray(plan?.messages) ? plan.messages : [];
-    const conversationalResponse = String(plan?.response || "").trim();
-    actionCount = plannedActions.length;
+    const replies = Array.isArray(resolvedPlan?.replies) ? resolvedPlan.replies : [];
+    const messages = Array.isArray(resolvedPlan?.messages) ? resolvedPlan.messages : [];
+    const conversationalResponse = String(resolvedPlan?.response || "").trim();
+    actionCount = guardedActions.length;
 
-    const calls = await buildCalls(publicClient, agent, plannedActions, autonomy, db, {
+    const calls = await buildCalls(publicClient, agent, guardedActions, autonomy, db, {
       humanReadableAmounts: Boolean(ownerChatTask),
     });
     annotateActionCalls(plannedActions, calls);
