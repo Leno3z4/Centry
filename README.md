@@ -11,7 +11,7 @@ Centry combines four pieces:
 - **Lending:** supply, withdraw, borrow, repay, liquidation, reserve caps, oracle-backed pricing, and interest-rate management.
 - **Protocol governance:** veCENT voting power, Governor + Timelock governance, proposal voting, quorum, and timelocked execution.
 - **Onchain agents:** user-owned smart accounts with explicit operator permissions, bounded native-value limits, batch execution, metadata, and optional ERC-8004 identity registration.
-- **Agent connectivity:** a Skill-first connection flow that lets an external AI agent connect to a specific Centry account and use only the capabilities authorized by the user and enforced onchain (coming soon).
+- **Agent connectivity:** a Skill-first connection flow that lets an external AI agent connect to a specific Centry account and use only the capabilities authorized by the user and enforced onchain.
 
 Self-repay and keeper functionality is treated as background protocol infrastructure rather than a user-facing requirement.
 
