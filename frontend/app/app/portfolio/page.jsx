@@ -163,12 +163,12 @@ function PortfolioContent() {
           </div>
           {risk.markets.map((market) => (
             <div className="market-risk-row" key={market.id}>
-              <div><strong>{market.symbol}</strong><small>{market.name}</small></div>
+              <div><strong>{market.symbol}</strong><small>{market.name} · Oracle {formatUsd(market.priceUsd)}</small></div>
               <div><strong>{formatPercent(market.utilizationPct)}</strong></div>
               <div><strong>{formatApy(market.supplyApy)}</strong></div>
               <div><strong>{formatApy(market.borrowApy)}</strong></div>
               <div><strong>{formatPercent(market.ltvBps / 100)}</strong><small>LT {formatPercent(market.liquidationThresholdBps / 100)}</small></div>
-              <div><strong>{formatUsd(market.cashUsd)}</strong></div>
+              <div><strong>{formatUsd(market.cashUsd)}</strong><small>Supply cap {formatPercent(market.supplyCapUtilizationPct)} · Borrow cap {formatPercent(market.borrowCapUtilizationPct)}</small></div>
               <div>
                 <strong>{market.suppliedUsd > 0 && market.liquidationPriceUsd != null ? formatUsd(market.liquidationPriceUsd) : '—'}</strong>
                 <small>{market.suppliedUsd > 0 && market.distanceToLiquidationPct != null ? formatPercent(market.distanceToLiquidationPct) + ' price distance' : 'No active collateral'}</small>
