@@ -21,6 +21,10 @@ export async function POST(request) {
 
   const owner = body?.owner;
   const account = body?.account;
+  const requestedName = String(body?.name || "").trim().slice(0, 64);
+  if (!requestedName) {
+    return Response.json({ error: "agent_name_required" }, { status: 400 });
+  }
   if (!isAddress(owner || "") || !isAddress(account || "")) {
     return Response.json({ error: "invalid_owner_or_account" }, { status: 400 });
   }
@@ -52,9 +56,7 @@ export async function POST(request) {
       account: getAddress(account),
       type: ["custom", "standard", "purchased"].includes(body.type) ? body.type : "purchased",
       templateId: body.templateId || templateId,
-      name: !body.name || /^unregistered agent$/i.test(String(body.name).trim())
-        ? "Centry Agent"
-        : String(body.name).trim(),
+      name: requestedName,
       description: !body.description || /^agent account created onchain; finish registration to configure it\.?$/i.test(String(body.description).trim())
         ? "Configurable Centry onchain agent."
         : String(body.description).trim(),
