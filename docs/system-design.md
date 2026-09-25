@@ -12,7 +12,7 @@ Centry is a non-custodial lending and onchain-agent protocol built around user-o
 6. **Observability** — every run and action has durable status/proof data in D1.
 7. **Iterative design** — reliability improvements land as small migrations while deployed protocol contracts remain unchanged.
 
-The attached system-design material emphasizes modularization, layering, scalability, performance, security, fault tolerance, queues, databases, documentation, and iterative validation. fileciteturn401file1L29-L51 fileciteturn401file1L78-L108 fileciteturn401file1L258-L287
+The attached system-design material emphasizes modularization, layering, scalability, performance, security, fault tolerance, queues, databases, documentation, and iterative validation.
 
 ## Current architecture
 
@@ -148,7 +148,7 @@ The current architecture is intentionally compact and does not require a fleet o
 5. Add caching for non-authoritative market reads when repeated RPC access becomes a measured cost.
 6. Keep authorization and final execution checks at the smart-account boundary.
 
-The system-design reference describes load balancing, queues, and caching as tools for distributed traffic, asynchronous decoupling, and lower latency; Centry should adopt them when workload measurements justify the added complexity. fileciteturn401file1L60-L70 fileciteturn401file1L78-L93
+The system-design reference describes load balancing, queues, and caching as tools for distributed traffic, asynchronous decoupling, and lower latency; Centry should adopt them when workload measurements justify the added complexity.
 
 ## API reliability rules
 
@@ -162,7 +162,7 @@ Never treat an AI response, browser request, stored configuration, bearer token,
 
 The live smart-account policy remains the final authority.
 
-The Web3 reference also distinguishes the architectural goals of decentralized applications from practical security risks such as compromised wallets and immutable records; Centry therefore keeps final execution authority onchain while treating API/session state as sensitive infrastructure state. fileciteturn401file0L54-L66 fileciteturn401file0L195-L207
+The Web3 reference also distinguishes the architectural goals of decentralized applications from practical security risks such as compromised wallets and immutable records; Centry therefore keeps final execution authority onchain while treating API/session state as sensitive infrastructure state.
 
 ## New-feature checklist
 
