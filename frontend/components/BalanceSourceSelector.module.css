@@ -21,16 +21,16 @@
   box-shadow: none;
 }
 .trigger:hover:not(:disabled) { transform: translateY(-1px); }
-.trigger:focus-visible { outline: none; border-color: #8d5ac2; box-shadow: 0 0 0 3px rgba(168,85,247,.12); }
+.trigger:focus-visible { outline: none; border-color: #6f6f6a; box-shadow: 0 0 0 3px rgba(121,169,255,.10); }
 .trigger:disabled { cursor: not-allowed; opacity: .58; }
-.icon, .optionIcon { display: grid; width: 29px; height: 29px; place-items: center; border: 1px solid #4d3670; border-radius: 9px; background: #1a102b; color: #c59cff; font-size: 14px; }
+.icon, .optionIcon { display: grid; width: 29px; height: 29px; place-items: center; border: 1px solid #3a3a38; border-radius: 9px; background: #171717; color: #d7d7d2; font-size: 14px; }
 .copy { display: grid; min-width: 0; gap: 3px; }
 .copy small { color: #756d83; font: 11px 'DM Mono', monospace; letter-spacing: 1px; text-transform: uppercase; }
 .copy strong { overflow: hidden; color: #eee7fa; font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .amount { color: #d9cff0; font: 11px 'DM Mono', monospace; white-space: nowrap; }
 .amount em { color: #756d83; font-style: normal; }
-.chevron { color: #8f7fa0; font-size: 15px; transform: translateY(-1px); transition: transform .16s ease, color .16s ease; }
-.trigger.open .chevron { color: #c59cff; transform: translateY(-1px) rotate(180deg); }
+.chevron { color: #888883; font-size: 15px; transform: translateY(-1px); transition: transform .16s ease, color .16s ease; }
+.trigger.open .chevron { color: #d7d7d2; transform: translateY(-1px) rotate(180deg); }
 .menu {
   position: absolute;
   z-index: 30;
