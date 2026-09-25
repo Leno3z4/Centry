@@ -131,8 +131,8 @@ function ChatContent() {
               </div>
             )) : (
               <div className={styles.chatWelcome}>
-                <strong>What do you want to know?</strong>
-                <p>Ask about activity, strategy, balances, or what the agent is configured to do.</p>
+                <strong>Talk to {agent.name || 'your agent'}.</strong>
+                <p>Ask about balances, positions, strategy, activity, or request a supported action.</p>
               </div>
             )}
           </div>
