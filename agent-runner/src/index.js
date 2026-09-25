@@ -6,6 +6,7 @@ import {
   getAddress,
   http,
   parseAbi,
+  parseAbiItem,
   decodeFunctionResult,
   formatUnits,
   parseUnits,
@@ -33,9 +34,116 @@ const ACCOUNT_ABI = parseAbi([
 const ERC20_ABI = parseAbi([
   "function approve(address spender,uint256 amount) returns (bool)",
   "function balanceOf(address account) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+  "function symbol() view returns (string)",
 ]);
 
+const ANALYTICS_RATE_ABI = parseAbi([
+  "function getBorrowRate(uint256 utilization) view returns (uint256)",
+]);
+
+const ANALYTICS_ORACLE_ABI = parseAbi([
+  "function getPrice(address asset) view returns (uint256 priceE18,uint256 updatedAt)",
+]);
+
+const ANALYTICS_EVENTS = [
+  {
+    name: "Supplied",
+    event: parseAbiItem("event Supplied(address indexed asset,address indexed user,uint256 amount,uint256 scaledAmount)"),
+    map: (args) => ({
+      asset: args.asset,
+      actor: args.user,
+      amountRaw: args.amount,
+      amount2Raw: args.scaledAmount,
+      metadata: {},
+    }),
+  },
+  {
+    name: "Withdrawn",
+    event: parseAbiItem("event Withdrawn(address indexed asset,address indexed user,uint256 amount,uint256 scaledAmount)"),
+    map: (args) => ({
+      asset: args.asset,
+      actor: args.user,
+      amountRaw: args.amount,
+      amount2Raw: args.scaledAmount,
+      metadata: {},
+    }),
+  },
+  {
+    name: "Borrowed",
+    event: parseAbiItem("event Borrowed(address indexed asset,address indexed user,uint256 amount,uint256 scaledAmount)"),
+    map: (args) => ({
+      asset: args.asset,
+      actor: args.user,
+      amountRaw: args.amount,
+      amount2Raw: args.scaledAmount,
+      metadata: {},
+    }),
+  },
+  {
+    name: "Repaid",
+    event: parseAbiItem("event Repaid(address indexed asset,address indexed payer,address indexed borrower,uint256 amount,uint256 scaledAmount)"),
+    map: (args) => ({
+      asset: args.asset,
+      actor: args.borrower,
+      amountRaw: args.amount,
+      amount2Raw: args.scaledAmount,
+      metadata: { payer: args.payer },
+    }),
+  },
+  {
+    name: "Liquidated",
+    event: parseAbiItem("event Liquidated(address indexed collateralAsset,address indexed debtAsset,address indexed borrower,address liquidator,uint256 repaidDebt,uint256 seizedCollateral)"),
+    map: (args) => ({
+      asset: args.collateralAsset,
+      asset2: args.debtAsset,
+      actor: args.borrower,
+      amountRaw: args.seizedCollateral,
+      amount2Raw: args.repaidDebt,
+      metadata: { liquidator: args.liquidator },
+    }),
+  },
+  {
+    name: "InterestAccrued",
+    event: parseAbiItem("event InterestAccrued(address indexed asset,uint256 liquidityIndex,uint256 borrowIndex,uint256 borrowRatePerYear,uint256 utilization)"),
+    map: (args) => ({
+      asset: args.asset,
+      actor: null,
+      amountRaw: null,
+      amount2Raw: null,
+      metadata: {
+        liquidityIndex: args.liquidityIndex,
+        borrowIndex: args.borrowIndex,
+        borrowRatePerYear: args.borrowRatePerYear,
+        utilization: args.utilization,
+      },
+    }),
+  },
+  {
+    name: "ProtocolFeesSwept",
+    event: parseAbiItem("event ProtocolFeesSwept(address indexed asset,address indexed treasury,uint256 amount)"),
+    map: (args) => ({
+      asset: args.asset,
+      actor: args.treasury,
+      amountRaw: args.amount,
+      amount2Raw: null,
+      metadata: {},
+    }),
+  },
+];
+
+const ANALYTICS_STATE_ID = "arc-mainnet-lending";
+const ANALYTICS_MAX_BLOCKS = 2000n;
+const ANALYTICS_DEFAULT_LOOKBACK = 20000n;
+const ANALYTICS_MAX_RESERVES = 16;
+
+
 const LENDING_POOL_ABI = parseAbi([
+  "function reserveList(uint256) view returns (address)",
+  "function getReserveConfig(address asset) view returns (bool active,uint8 decimals,uint16 ltvBps,uint16 liquidationThresholdBps,uint16 liquidationBonusBps,uint16 reserveFactorBps,uint128 supplyCap,uint128 borrowCap)",
+  "function currentSupply(address asset) view returns (uint256)",
+  "function currentBorrow(address asset) view returns (uint256)",
+  "function utilization(address asset) view returns (uint256)",
   "function supply(address asset,uint256 amount)",
   "function withdraw(address asset,uint256 amount)",
   "function borrow(address asset,uint256 amount)",
@@ -1743,6 +1851,326 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
   }
 }
 
+function analyticsAssetSymbol(asset) {
+  const normalized = String(asset || "").toLowerCase();
+  for (const [symbol, address] of Object.entries(TOKENS)) {
+    if (String(address).toLowerCase() === normalized) return symbol;
+  }
+  return null;
+}
+
+function toUsdE18(amountRaw, priceE18, decimals) {
+  if (amountRaw == null || priceE18 == null) return 0n;
+  return (BigInt(amountRaw) * BigInt(priceE18)) / (10n ** BigInt(decimals));
+}
+
+async function indexProtocolEvents(db, publicClient, fromBlock, toBlock) {
+  if (fromBlock > toBlock) return 0;
+  const logsByEvent = await Promise.all(
+    ANALYTICS_EVENTS.map(async (definition) => {
+      const logs = await publicClient.getLogs({
+        address: LENDING_POOL,
+        event: definition.event,
+        fromBlock,
+        toBlock,
+      });
+      return { definition, logs };
+    }),
+  );
+
+  const blockTimestamps = new Map();
+  const createdAt = new Date().toISOString();
+  let inserted = 0;
+
+  const rows = logsByEvent
+    .flatMap(({ definition, logs }) => logs.map((log) => ({ definition, log })))
+    .sort((a, b) => Number(a.log.blockNumber || 0n) - Number(b.log.blockNumber || 0n) || Number(a.log.logIndex || 0n) - Number(b.log.logIndex || 0n));
+
+  for (const { definition, log } of rows) {
+    const txHash = log.transactionHash;
+    if (!txHash || log.blockNumber == null || log.logIndex == null) continue;
+
+    const blockNumber = BigInt(log.blockNumber);
+    let timestamp = blockTimestamps.get(blockNumber);
+    if (timestamp == null) {
+      const block = await publicClient.getBlock({ blockNumber });
+      timestamp = Number(block.timestamp);
+      blockTimestamps.set(blockNumber, timestamp);
+    }
+
+    const mapped = definition.map(log.args || {});
+    const id = `${txHash}:${String(log.logIndex)}`;
+    const metadata = Object.fromEntries(
+      Object.entries(mapped.metadata || {}).map(([key, value]) => [key, value == null ? null : String(value)]),
+    );
+
+    const result = await db.prepare(
+      `INSERT OR IGNORE INTO centry_protocol_events
+        (id, block_number, block_hash, transaction_hash, log_index, timestamp, event_name,
+         asset, asset2, actor, amount_raw, amount2_raw, metadata_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      id,
+      Number(blockNumber),
+      log.blockHash || null,
+      txHash,
+      Number(log.logIndex),
+      timestamp,
+      definition.name,
+      mapped.asset ? getAddress(mapped.asset) : null,
+      mapped.asset2 ? getAddress(mapped.asset2) : null,
+      mapped.actor ? getAddress(mapped.actor) : null,
+      mapped.amountRaw == null ? null : String(mapped.amountRaw),
+      mapped.amount2Raw == null ? null : String(mapped.amount2Raw),
+      JSON.stringify(metadata),
+      createdAt,
+    ).run();
+
+    inserted += Number(result?.meta?.changes || 0);
+  }
+
+  return inserted;
+}
+
+async function snapshotProtocolHourly(db, publicClient, bucketStart) {
+  const rows = [];
+  let totalSupplyUsdE18 = 0n;
+  let totalBorrowUsdE18 = 0n;
+  let totalCashUsdE18 = 0n;
+  let weightedBorrowRateNumerator = 0n;
+  let weightedBorrowRateDenominator = 0n;
+  let weightedSupplyRateNumerator = 0n;
+  let weightedSupplyRateDenominator = 0n;
+
+  for (let index = 0; index < ANALYTICS_MAX_RESERVES; index += 1) {
+    const asset = await publicClient.readContract({
+      address: LENDING_POOL,
+      abi: LENDING_POOL_ABI,
+      functionName: "reserveList",
+      args: [BigInt(index)],
+    }).catch(() => zeroAddress);
+
+    if (!asset || asset.toLowerCase() === zeroAddress) break;
+
+    const [config, supplyRaw, borrowRaw, utilizationRaw, priceResult, cashRaw] = await Promise.all([
+      publicClient.readContract({ address: LENDING_POOL, abi: LENDING_POOL_ABI, functionName: "getReserveConfig", args: [asset] }),
+      publicClient.readContract({ address: LENDING_POOL, abi: LENDING_POOL_ABI, functionName: "currentSupply", args: [asset] }),
+      publicClient.readContract({ address: LENDING_POOL, abi: LENDING_POOL_ABI, functionName: "currentBorrow", args: [asset] }),
+      publicClient.readContract({ address: LENDING_POOL, abi: LENDING_POOL_ABI, functionName: "utilization", args: [asset] }),
+      publicClient.readContract({ address: getAddress("0x00C6d554BD44859349c4aeEA0E8216AE94FC3f84"), abi: ANALYTICS_ORACLE_ABI, functionName: "getPrice", args: [asset] }).catch(() => [0n, 0n]),
+      publicClient.readContract({ address: asset, abi: ERC20_ABI, functionName: "balanceOf", args: [LENDING_POOL] }),
+    ]);
+
+    if (!config?.[0]) continue;
+
+    const decimals = Number(config[1]);
+    const priceE18 = Array.isArray(priceResult) ? BigInt(priceResult[0] || 0n) : 0n;
+    const utilizationE18 = BigInt(utilizationRaw || 0n);
+    const borrowRateE18 = await publicClient.readContract({
+      address: getAddress("0x7d2d0096Dc5D77A68B821a2308f2A65179c04B76"),
+      abi: ANALYTICS_RATE_ABI,
+      functionName: "getBorrowRate",
+      args: [utilizationE18],
+    });
+    const reserveFactorBps = Number(config[5] || 0);
+    const supplyRateE18 = (
+      BigInt(borrowRateE18) *
+      utilizationE18 *
+      BigInt(10000 - reserveFactorBps)
+    ) / (1000000000000000000n * 10000n);
+
+    const supplyUsdE18 = toUsdE18(supplyRaw, priceE18, decimals);
+    const borrowUsdE18 = toUsdE18(borrowRaw, priceE18, decimals);
+    const cashUsdE18 = toUsdE18(cashRaw, priceE18, decimals);
+
+    totalSupplyUsdE18 += supplyUsdE18;
+    totalBorrowUsdE18 += borrowUsdE18;
+    totalCashUsdE18 += cashUsdE18;
+    weightedBorrowRateNumerator += borrowUsdE18 * BigInt(borrowRateE18);
+    weightedBorrowRateDenominator += borrowUsdE18;
+    weightedSupplyRateNumerator += supplyUsdE18 * BigInt(supplyRateE18);
+    weightedSupplyRateDenominator += supplyUsdE18;
+
+    let symbol = analyticsAssetSymbol(asset);
+    if (!symbol) {
+      symbol = await publicClient.readContract({
+        address: asset,
+        abi: ERC20_ABI,
+        functionName: "symbol",
+      }).catch(() => asset.slice(0, 8));
+    }
+
+    rows.push({
+      asset: getAddress(asset),
+      symbol,
+      decimals,
+      supplyRaw,
+      borrowRaw,
+      cashRaw,
+      priceE18,
+      utilizationE18,
+      borrowRateE18,
+      supplyRateE18,
+      supplyUsdE18,
+      borrowUsdE18,
+      cashUsdE18,
+      ltvBps: Number(config[2] || 0),
+      liquidationThresholdBps: Number(config[3] || 0),
+      liquidationBonusBps: Number(config[4] || 0),
+      reserveFactorBps,
+      supplyCapRaw: config[6],
+      borrowCapRaw: config[7],
+    });
+  }
+
+  const totalBorrowRateE18 = weightedBorrowRateDenominator > 0n
+    ? weightedBorrowRateNumerator / weightedBorrowRateDenominator
+    : 0n;
+  const totalSupplyRateE18 = weightedSupplyRateDenominator > 0n
+    ? weightedSupplyRateNumerator / weightedSupplyRateDenominator
+    : 0n;
+  const totalUtilizationE18 = totalBorrowUsdE18 + totalCashUsdE18 > 0n
+    ? (totalBorrowUsdE18 * 1000000000000000000n) / (totalBorrowUsdE18 + totalCashUsdE18)
+    : 0n;
+
+  rows.push({
+    asset: "TOTAL",
+    symbol: "ALL",
+    decimals: 18,
+    supplyRaw: 0n,
+    borrowRaw: 0n,
+    cashRaw: 0n,
+    priceE18: 0n,
+    utilizationE18: totalUtilizationE18,
+    borrowRateE18: totalBorrowRateE18,
+    supplyRateE18: totalSupplyRateE18,
+    supplyUsdE18: totalSupplyUsdE18,
+    borrowUsdE18: totalBorrowUsdE18,
+    cashUsdE18: totalCashUsdE18,
+    ltvBps: 0,
+    liquidationThresholdBps: 0,
+    liquidationBonusBps: 0,
+    reserveFactorBps: 0,
+    supplyCapRaw: 0n,
+    borrowCapRaw: 0n,
+  });
+
+  const capturedAt = new Date().toISOString();
+  for (const row of rows) {
+    await db.prepare(
+      `INSERT INTO centry_protocol_hourly
+        (bucket_start, asset, symbol, decimals, supply_raw, borrow_raw, cash_raw,
+         price_e18, utilization_e18, borrow_rate_e18, supply_rate_e18,
+         supply_usd_e18, borrow_usd_e18, cash_usd_e18,
+         ltv_bps, liquidation_threshold_bps, liquidation_bonus_bps, reserve_factor_bps,
+         supply_cap_raw, borrow_cap_raw, captured_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(bucket_start, asset) DO UPDATE SET
+         symbol=excluded.symbol,
+         decimals=excluded.decimals,
+         supply_raw=excluded.supply_raw,
+         borrow_raw=excluded.borrow_raw,
+         cash_raw=excluded.cash_raw,
+         price_e18=excluded.price_e18,
+         utilization_e18=excluded.utilization_e18,
+         borrow_rate_e18=excluded.borrow_rate_e18,
+         supply_rate_e18=excluded.supply_rate_e18,
+         supply_usd_e18=excluded.supply_usd_e18,
+         borrow_usd_e18=excluded.borrow_usd_e18,
+         cash_usd_e18=excluded.cash_usd_e18,
+         ltv_bps=excluded.ltv_bps,
+         liquidation_threshold_bps=excluded.liquidation_threshold_bps,
+         liquidation_bonus_bps=excluded.liquidation_bonus_bps,
+         reserve_factor_bps=excluded.reserve_factor_bps,
+         supply_cap_raw=excluded.supply_cap_raw,
+         borrow_cap_raw=excluded.borrow_cap_raw,
+         captured_at=excluded.captured_at`
+    ).bind(
+      bucketStart,
+      row.asset,
+      row.symbol,
+      row.decimals,
+      String(row.supplyRaw),
+      String(row.borrowRaw),
+      String(row.cashRaw),
+      String(row.priceE18),
+      String(row.utilizationE18),
+      String(row.borrowRateE18),
+      String(row.supplyRateE18),
+      String(row.supplyUsdE18),
+      String(row.borrowUsdE18),
+      String(row.cashUsdE18),
+      row.ltvBps,
+      row.liquidationThresholdBps,
+      row.liquidationBonusBps,
+      row.reserveFactorBps,
+      String(row.supplyCapRaw),
+      String(row.borrowCapRaw),
+      capturedAt,
+    ).run();
+  }
+
+  return rows.length;
+}
+
+async function runProtocolAnalyticsIndexer(env, scheduledAt) {
+  const rpcUrl = String(env.CENTRY_AGENT_RPC_URL || ARC_RPC);
+  const publicClient = publicClientFor(rpcUrl);
+  const latestBlock = BigInt(await publicClient.getBlockNumber());
+
+  const state = await env.DB.prepare(
+    "SELECT cursor_block FROM centry_analytics_indexer_state WHERE id = ? LIMIT 1"
+  ).bind(ANALYTICS_STATE_ID).first();
+
+  let cursor = state?.cursor_block == null ? null : BigInt(state.cursor_block);
+  if (cursor == null) {
+    const configuredStart = String(env.CENTRY_ANALYTICS_START_BLOCK || "").trim();
+    const startBlock = configuredStart && /^\\d+$/.test(configuredStart)
+      ? BigInt(configuredStart)
+      : latestBlock > ANALYTICS_DEFAULT_LOOKBACK
+        ? latestBlock - ANALYTICS_DEFAULT_LOOKBACK
+        : 0n;
+    cursor = startBlock - 1n;
+  }
+
+  const fromBlock = cursor + 1n;
+  const toBlock = fromBlock > latestBlock
+    ? latestBlock
+    : (() => {
+        const candidate = fromBlock + ANALYTICS_MAX_BLOCKS - 1n;
+        return candidate < latestBlock ? candidate : latestBlock;
+      })();
+
+  let indexedBlocks = 0;
+  let indexedEvents = 0;
+  if (fromBlock <= toBlock) {
+    indexedEvents = await indexProtocolEvents(env.DB, publicClient, fromBlock, toBlock);
+    indexedBlocks = Number(toBlock - fromBlock + 1n);
+    await env.DB.prepare(
+      `INSERT INTO centry_analytics_indexer_state (id, cursor_block, updated_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET cursor_block=excluded.cursor_block, updated_at=excluded.updated_at`
+    ).bind(ANALYTICS_STATE_ID, Number(toBlock), scheduledAt).run();
+  } else if (!state) {
+    await env.DB.prepare(
+      "INSERT OR REPLACE INTO centry_analytics_indexer_state (id, cursor_block, updated_at) VALUES (?, ?, ?)"
+    ).bind(ANALYTICS_STATE_ID, Number(latestBlock), scheduledAt).run();
+  }
+
+  const bucketStart = Math.floor(new Date(scheduledAt).getTime() / 3600000) * 3600;
+  const metrics = await snapshotProtocolHourly(env.DB, publicClient, bucketStart);
+
+  return {
+    latestBlock: Number(latestBlock),
+    indexedFrom: fromBlock <= toBlock ? Number(fromBlock) : null,
+    indexedTo: fromBlock <= toBlock ? Number(toBlock) : null,
+    indexedBlocks,
+    indexedEvents,
+    hourlyMetrics: metrics,
+    caughtUp: toBlock >= latestBlock,
+  };
+}
+
 async function withConcurrency(items, concurrency, fn) {
   const results = new Array(items.length);
   let cursor = 0;
@@ -1830,6 +2258,15 @@ export default {
     const scheduledAt = controller.scheduledTime
       ? new Date(controller.scheduledTime).toISOString()
       : new Date().toISOString();
+
+    ctx.waitUntil(
+      runProtocolAnalyticsIndexer(env, scheduledAt)
+        .then((result) => console.log("centry_protocol_analytics_indexed", result))
+        .catch((error) => console.error("centry_protocol_analytics_indexer_failed", {
+          scheduledAt,
+          error: error instanceof Error ? error.message : String(error),
+        })),
+    );
 
     ctx.waitUntil(
       runScheduler(env, scheduledAt)
