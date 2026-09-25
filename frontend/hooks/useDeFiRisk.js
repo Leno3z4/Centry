@@ -8,10 +8,8 @@ import { ERC20_ABI, LENDING_POOL_ABI, ORACLE_ABI } from '../constants/abis';
 import { buildRiskSummary, projectedBorrowRate, supplyApyFromBorrowRate, liquidationPriceForCollateral } from '../lib/defiRisk';
 
 const STRATEGY_ABI = [
-  { type: 'function', name: 'baseRatePerYear', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
-  { type: 'function', name: 'slope1PerYear', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
-  { type: 'function', name: 'slope2PerYear', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'kink', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'getBorrowRate', stateMutability: 'view', inputs: [{ name: 'utilization', type: 'uint256' }], outputs: [{ type: 'uint256' }] },
 ];
 
 const BALANCE_ABI = ERC20_ABI;
@@ -38,15 +36,8 @@ export function useDeFiRisk() {
   const enabled = chainId === arcMainnet.id;
 
   const strategyContracts = [
-    'baseRatePerYear',
-    'slope1PerYear',
-    'slope2PerYear',
-    'kink',
-  ].map((functionName) => ({
-    address: CONTRACT_ADDRESSES.interestRateModel,
-    abi: STRATEGY_ABI,
-    functionName,
-  }));
+    { address: CONTRACT_ADDRESSES.interestRateModel, abi: STRATEGY_ABI, functionName: 'kink' },
+  ];
 
   const marketContracts = useMemo(
     () => ACTIVE_MARKETS.flatMap((market) => [
@@ -80,13 +71,8 @@ export function useDeFiRisk() {
     query: { enabled: enabled && Boolean(address) },
   });
 
-  const strategy = strategyResults?.length === 4
-    ? {
-        base: safeUnits(strategyResults[0]?.result, 18) * 1e18,
-        slope1: safeUnits(strategyResults[1]?.result, 18) * 1e18,
-        slope2: safeUnits(strategyResults[2]?.result, 18) * 1e18,
-        kink: safeUnits(strategyResults[3]?.result, 18),
-      }
+  const strategy = strategyResults?.length === 1
+    ? { kink: safeUnits(strategyResults[0]?.result, 18) }
     : null;
 
   const markets = useMemo(() => ACTIVE_MARKETS.map((market, index) => {
@@ -106,7 +92,10 @@ export function useDeFiRisk() {
     const borrowedUsd = safeUnits(borrowedRaw, market.decimals) * priceUsd;
     const utilization = safeUnits(utilizationRaw, 18);
     const reserveFactorBps = Number(config?.[5] || 0);
-    const borrowApy = projectedBorrowRate(utilization, strategy);
+    const borrowApyRaw = marketResults?.[offset + 8];
+    const borrowApy = borrowApyRaw?.status === 'success'
+      ? safeUnits(borrowApyRaw.result, 18) * 100
+      : 0;
     const supplyApy = supplyApyFromBorrowRate(borrowApy, utilization, reserveFactorBps);
 
     return {
@@ -149,7 +138,7 @@ export function useDeFiRisk() {
         totalDebtUsd: summary.totalDebtUsd,
       });
       const distanceToLiquidationPct =
-        liquidationPriceUsd == null || market.priceUsd <= 0
+        liquidationPriceUsd == null || market.priceUsd <= 0 || liquidationPriceUsd <= 0
           ? null
           : ((market.priceUsd - liquidationPriceUsd) / market.priceUsd) * 100;
 
