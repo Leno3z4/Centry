@@ -84,7 +84,7 @@ function ConfigureContent() {
             account: agent.account,
             agentId,
             type: 'standard',
-            name: config.name.trim() || 'Centry Agent',
+            name: config.name.trim(),
             description: config.description.trim() || 'Configurable Centry onchain agent.',
             operator: RUNNER_ADDRESS,
             priceUsdCents: 0,
