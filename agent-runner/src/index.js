@@ -1780,6 +1780,10 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
       ? []
       : modelActions;
     const guardedActions = !ownerChatTask ? filterRiskGuardActions(plannedActions, riskDecision) : plannedActions;
+    const borrowActionsSuppressed = !ownerChatTask &&
+      riskDecision?.borrowBlocked &&
+      plannedActions.some((action) => String(action?.action || '').trim() === 'borrow') &&
+      guardedActions.length < plannedActions.length;
 
     if (ownerChatTask && modelActions.length > 0 && plannedActions.length === 0) {
       console.warn("centry_agent_owner_chat_action_suppressed", {
@@ -1793,6 +1797,9 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
     const replies = Array.isArray(resolvedPlan?.replies) ? resolvedPlan.replies : [];
     const messages = Array.isArray(resolvedPlan?.messages) ? resolvedPlan.messages : [];
     const conversationalResponse = String(resolvedPlan?.response || "").trim();
+    if (borrowActionsSuppressed && !guardedActions.length) {
+      reason = "risk_guard_borrow_blocked";
+    }
     actionCount = guardedActions.length;
 
     const calls = await buildCalls(publicClient, agent, guardedActions, autonomy, db, {
