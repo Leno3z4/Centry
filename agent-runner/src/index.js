@@ -2416,6 +2416,15 @@ async function snapshotProtocolHourly(db, publicClient, bucketStart) {
 }
 
 async function runProtocolAnalyticsIndexer(env, scheduledAt) {
+  const minute = new Date(scheduledAt).getUTCMinutes();
+  if (minute % 5 !== 0) {
+    return {
+      skipped: true,
+      reason: "analytics_interval",
+      intervalMinutes: 5,
+    };
+  }
+
   const rpcUrl = String(
     env.CENTRY_ANALYTICS_RPC_URL ||
     env.CENTRY_AGENT_RPC_URL ||
