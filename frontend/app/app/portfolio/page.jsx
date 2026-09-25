@@ -167,8 +167,8 @@ function PortfolioContent() {
               <div><strong>{formatPercent(market.utilizationPct)}</strong></div>
               <div><strong>{formatApy(market.supplyApy)}</strong></div>
               <div><strong>{formatApy(market.borrowApy)}</strong></div>
-              <div><strong>{formatPercent(market.ltvBps / 100)}</strong><small>LT {formatPercent(market.liquidationThresholdBps / 100)}</small></div>
-              <div><strong>{formatUsd(market.cashUsd)}</strong><small>Supply cap {formatPercent(market.supplyCapUtilizationPct)} · Borrow cap {formatPercent(market.borrowCapUtilizationPct)}</small></div>
+              <div><strong>{formatPercent(market.ltvBps / 100)}</strong><small>LT {formatPercent(market.liquidationThresholdBps / 100)} · Bonus {formatPercent((market.liquidationBonusBps - 10000) / 100)}</small></div>
+              <div><strong>{formatUsd(market.cashUsd)}</strong><small>Supply cap {formatPercent(market.supplyCapUtilizationPct)} · Borrow cap {formatPercent(market.borrowCapUtilizationPct)} · RF {formatPercent(market.reserveFactorBps / 100)}</small></div>
               <div>
                 <strong>
                   {market.liquidationPriceStatus === 'price'
