@@ -18,7 +18,7 @@ const NAV_ITEMS = [
   { href: '/app/swap', label: 'Swap', icon: '⇄', group: 'use' },
   { href: '/app/markets', label: 'Markets', icon: '◈', group: 'use' },
   { href: '/app/gateway', label: 'Gateway', icon: '◉', group: 'use' },
-  { href: '/app/rewards', label: 'Rewards', icon: '✦', group: 'earn' },
+  { href: '/app/rewards', label: 'Rewards', icon: '✦', group: 'earn', disabled: true },
   { href: '/app/governance', label: 'Governance', icon: '♢', group: 'earn', disabled: true },
   { href: '/app/agents', label: 'Agents', icon: '✧', group: 'automation' },
   { href: '/app/bridge', label: 'Bridge', icon: '↗', group: 'explore' },
@@ -67,7 +67,7 @@ export function AppShell({ children }) {
               {group.label && (
                 <div className="nav-group-label-row">
                   <div className="nav-group-label">{group.label}</div>
-                  {group.key === 'earn' ? <span className="nav-group-status">Governance soon</span> : null}
+                  {group.key === 'earn' ? <span className="nav-group-status">Coming soon</span> : null}
                 </div>
               )}
               {NAV_ITEMS.filter((item) => item.group === group.key).map((item) => (
