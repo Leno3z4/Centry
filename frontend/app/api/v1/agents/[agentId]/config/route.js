@@ -42,11 +42,19 @@ export async function POST(request, { params }) {
       ...existing,
       autonomy: {
         ...existing.autonomy,
-        enabled: requested.enabled !== false,
-        provider: String(requested.provider || existing.autonomy?.provider || ""),
-        instructions: String(requested.instructions || ""),
-        maxActions: Math.max(1, Math.min(4, Number(requested.maxActions) || 4)),
-        slippageBps: Math.max(0, Math.min(5000, Number(requested.slippageBps) || 50)),
+        enabled: requested.enabled === undefined ? existing.autonomy?.enabled !== false : Boolean(requested.enabled),
+        provider: requested.provider === undefined
+          ? String(existing.autonomy?.provider || "")
+          : String(requested.provider || ""),
+        instructions: requested.instructions === undefined
+          ? String(existing.autonomy?.instructions || "")
+          : String(requested.instructions || ""),
+        maxActions: requested.maxActions === undefined
+          ? Math.max(1, Math.min(4, Number(existing.autonomy?.maxActions) || 4))
+          : Math.max(1, Math.min(4, Number(requested.maxActions) || 4)),
+        slippageBps: requested.slippageBps === undefined
+          ? Math.max(0, Math.min(5000, Number(existing.autonomy?.slippageBps) || 50))
+          : Math.max(0, Math.min(5000, Number(requested.slippageBps) || 50)),
       },
       policy: {
         ...(existing.policy || {}),
