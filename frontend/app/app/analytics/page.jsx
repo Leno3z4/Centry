@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useReadContracts } from 'wagmi';
+import { useAccount, useReadContracts } from 'wagmi';
 import { formatUnits } from 'viem';
 import { Providers } from '../../../components/Providers';
 import { AppShell } from '../../../components/AppShell';
@@ -9,6 +9,13 @@ import { ACTIVE_MARKETS } from '../../../constants/markets';
 import { CONTRACT_ADDRESSES } from '../../../constants/contracts';
 import { LENDING_POOL_ABI, ORACLE_ABI } from '../../../constants/abis';
 import { arcMainnet } from '../../../config/multiWagmi';
+
+const STRATEGY_ABI = [
+  { type: 'function', name: 'baseRatePerYear', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'slope1PerYear', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'slope2PerYear', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'kink', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+];
 
 const ERC20_BALANCE_ABI = [
   { type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ type: 'uint256' }] },
@@ -79,7 +86,6 @@ function formatDateTime(timestamp) {
 
 function tokenDecimals(symbol) {
   if (symbol === 'CIRBTC') return 8;
-  if (symbol === 'CENT') return 18;
   return 6;
 }
 
@@ -148,6 +154,7 @@ function HistoryChart({ title, subtitle, points, valueKey, formatter }) {
 }
 
 function AnalyticsContent() {
+  const { address } = useAccount();
   const [days, setDays] = useState(7);
   const [history, setHistory] = useState(null);
   const [historyError, setHistoryError] = useState('');
@@ -178,6 +185,28 @@ function AnalyticsContent() {
       cancelled = true;
     };
   }, [days]);
+
+  const strategyResults = useReadContracts({
+    contracts: [
+      ['baseRatePerYear', 'base'],
+      ['slope1PerYear', 'slope1'],
+      ['slope2PerYear', 'slope2'],
+      ['kink', 'kink'],
+    ].map(([functionName]) => ({
+      address: CONTRACT_ADDRESSES.interestRateModel,
+      abi: STRATEGY_ABI,
+      functionName,
+    })),
+  }).data;
+
+  const strategy = strategyResults?.length === 4
+    ? {
+        base: strategyResults[0]?.result ?? 0n,
+        slope1: strategyResults[1]?.result ?? 0n,
+        slope2: strategyResults[2]?.result ?? 0n,
+        kink: strategyResults[3]?.result ?? 0n,
+      }
+    : null;
 
   const marketContracts = useMemo(() => ACTIVE_MARKETS.flatMap((market) => [
     { address: CONTRACT_ADDRESSES.lendingPool, abi: LENDING_POOL_ABI, functionName: 'getReserveConfig', args: [market.address] },
@@ -382,12 +411,6 @@ function AnalyticsContent() {
           )}
         </div>
       </section>
-
-      <div className="panel analytics-note">
-        <p>
-          History is sampled hourly from the deployed Centry reserves and indexed from lending-pool events. The indexer progresses from its configured start block and records new history continuously; it does not fabricate historical values in the browser.
-        </p>
-      </div>
 
       <style jsx global>{`
         .analytics-page-header{align-items:flex-end}
