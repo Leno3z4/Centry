@@ -6,6 +6,7 @@ import {
   getAddress,
   http,
   parseAbi,
+  parseAbiItem,
   decodeFunctionResult,
   formatUnits,
   parseUnits,
@@ -33,9 +34,116 @@ const ACCOUNT_ABI = parseAbi([
 const ERC20_ABI = parseAbi([
   "function approve(address spender,uint256 amount) returns (bool)",
   "function balanceOf(address account) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+  "function symbol() view returns (string)",
 ]);
 
+const ANALYTICS_RATE_ABI = parseAbi([
+  "function getBorrowRate(uint256 utilization) view returns (uint256)",
+]);
+
+const ANALYTICS_ORACLE_ABI = parseAbi([
+  "function getPrice(address asset) view returns (uint256 priceE18,uint256 updatedAt)",
+]);
+
+const ANALYTICS_EVENTS = [
+  {
+    name: "Supplied",
+    event: parseAbiItem("event Supplied(address indexed asset,address indexed user,uint256 amount,uint256 scaledAmount)"),
+    map: (args) => ({
+      asset: args.asset,
+      actor: args.user,
+      amountRaw: args.amount,
+      amount2Raw: args.scaledAmount,
+      metadata: {},
+    }),
+  },
+  {
+    name: "Withdrawn",
+    event: parseAbiItem("event Withdrawn(address indexed asset,address indexed user,uint256 amount,uint256 scaledAmount)"),
+    map: (args) => ({
+      asset: args.asset,
+      actor: args.user,
+      amountRaw: args.amount,
+      amount2Raw: args.scaledAmount,
+      metadata: {},
+    }),
+  },
+  {
+    name: "Borrowed",
+    event: parseAbiItem("event Borrowed(address indexed asset,address indexed user,uint256 amount,uint256 scaledAmount)"),
+    map: (args) => ({
+      asset: args.asset,
+      actor: args.user,
+      amountRaw: args.amount,
+      amount2Raw: args.scaledAmount,
+      metadata: {},
+    }),
+  },
+  {
+    name: "Repaid",
+    event: parseAbiItem("event Repaid(address indexed asset,address indexed payer,address indexed borrower,uint256 amount,uint256 scaledAmount)"),
+    map: (args) => ({
+      asset: args.asset,
+      actor: args.borrower,
+      amountRaw: args.amount,
+      amount2Raw: args.scaledAmount,
+      metadata: { payer: args.payer },
+    }),
+  },
+  {
+    name: "Liquidated",
+    event: parseAbiItem("event Liquidated(address indexed collateralAsset,address indexed debtAsset,address indexed borrower,address liquidator,uint256 repaidDebt,uint256 seizedCollateral)"),
+    map: (args) => ({
+      asset: args.collateralAsset,
+      asset2: args.debtAsset,
+      actor: args.borrower,
+      amountRaw: args.seizedCollateral,
+      amount2Raw: args.repaidDebt,
+      metadata: { liquidator: args.liquidator },
+    }),
+  },
+  {
+    name: "InterestAccrued",
+    event: parseAbiItem("event InterestAccrued(address indexed asset,uint256 liquidityIndex,uint256 borrowIndex,uint256 borrowRatePerYear,uint256 utilization)"),
+    map: (args) => ({
+      asset: args.asset,
+      actor: null,
+      amountRaw: null,
+      amount2Raw: null,
+      metadata: {
+        liquidityIndex: args.liquidityIndex,
+        borrowIndex: args.borrowIndex,
+        borrowRatePerYear: args.borrowRatePerYear,
+        utilization: args.utilization,
+      },
+    }),
+  },
+  {
+    name: "ProtocolFeesSwept",
+    event: parseAbiItem("event ProtocolFeesSwept(address indexed asset,address indexed treasury,uint256 amount)"),
+    map: (args) => ({
+      asset: args.asset,
+      actor: args.treasury,
+      amountRaw: args.amount,
+      amount2Raw: null,
+      metadata: {},
+    }),
+  },
+];
+
+const ANALYTICS_STATE_ID = "arc-mainnet-lending";
+const ANALYTICS_MAX_BLOCKS = 2000n;
+const ANALYTICS_DEFAULT_LOOKBACK = 20000n;
+const ANALYTICS_MAX_RESERVES = 16;
+
+
 const LENDING_POOL_ABI = parseAbi([
+  "function reserveList(uint256) view returns (address)",
+  "function getReserveConfig(address asset) view returns (bool active,uint8 decimals,uint16 ltvBps,uint16 liquidationThresholdBps,uint16 liquidationBonusBps,uint16 reserveFactorBps,uint128 supplyCap,uint128 borrowCap)",
+  "function currentSupply(address asset) view returns (uint256)",
+  "function currentBorrow(address asset) view returns (uint256)",
+  "function utilization(address asset) view returns (uint256)",
   "function supply(address asset,uint256 amount)",
   "function withdraw(address asset,uint256 amount)",
   "function borrow(address asset,uint256 amount)",
@@ -165,6 +273,142 @@ const ASSET_DECIMALS = Object.freeze({
   CIRBTC: 8,
   CENT: 18,
 });
+
+const DEFAULT_RISK_GUARD = Object.freeze({
+  enabled: false,
+  minHealthFactor: "1.50",
+  repayAtHealthFactor: "1.65",
+  stopBorrowAtHealthFactor: "1.80",
+});
+
+function decimalWad(value, field, fallback) {
+  const raw = String(value ?? fallback).trim();
+  try {
+    const parsed = parseUnits(raw, 18);
+    if (parsed <= 0n) throw new Error("non_positive");
+    return parsed;
+  } catch {
+    throw new Error(`invalid_risk_guard_${field}`);
+  }
+}
+
+function riskGuardConfig(autonomy) {
+  const incoming = autonomy?.riskGuard && typeof autonomy.riskGuard === "object" ? autonomy.riskGuard : {};
+  const minHealthFactor = decimalWad(incoming.minHealthFactor, "min_health_factor", DEFAULT_RISK_GUARD.minHealthFactor);
+  const repayAtHealthFactor = decimalWad(incoming.repayAtHealthFactor, "repay_at_health_factor", DEFAULT_RISK_GUARD.repayAtHealthFactor);
+  const stopBorrowAtHealthFactor = decimalWad(incoming.stopBorrowAtHealthFactor, "stop_borrow_at_health_factor", DEFAULT_RISK_GUARD.stopBorrowAtHealthFactor);
+
+  if (!(minHealthFactor <= repayAtHealthFactor && repayAtHealthFactor <= stopBorrowAtHealthFactor)) {
+    throw new Error("invalid_risk_guard_threshold_order");
+  }
+
+  return {
+    enabled: incoming.enabled === true,
+    minHealthFactor,
+    repayAtHealthFactor,
+    stopBorrowAtHealthFactor,
+  };
+}
+
+function maxPolicyAmountRaw(policy, asset) {
+  const cap = policy?.maxAmountByAsset?.[asset];
+  if (cap == null || String(cap).trim() === "") return null;
+  try {
+    return assetAmountToBaseUnits(cap, asset, "agent_max_amount");
+  } catch {
+    return null;
+  }
+}
+
+function evaluateRiskGuard(snapshot, autonomy, policy) {
+  const config = riskGuardConfig(autonomy);
+  const rawHealth = snapshot?.lending?.healthFactor;
+  if (!config.enabled || rawHealth == null) {
+    return {
+      ...config,
+      healthFactor: rawHealth ? BigInt(rawHealth) : null,
+      state: "inactive",
+      borrowBlocked: false,
+      actions: [],
+      reason: config.enabled ? "health_factor_unavailable" : "risk_guard_disabled",
+    };
+  }
+
+  let healthFactor;
+  try {
+    healthFactor = BigInt(rawHealth);
+  } catch {
+    return {
+      ...config,
+      healthFactor: null,
+      state: "unknown",
+      borrowBlocked: false,
+      actions: [],
+      reason: "health_factor_invalid",
+    };
+  }
+
+  if (healthFactor >= config.stopBorrowAtHealthFactor) {
+    return {
+      ...config,
+      healthFactor,
+      state: "normal",
+      borrowBlocked: false,
+      actions: [],
+      reason: "health_factor_above_guard",
+    };
+  }
+
+  const borrowBlocked = healthFactor < config.stopBorrowAtHealthFactor;
+  const actions = [];
+  const policyAllowsRepay = policy.allowedActions.has("repay");
+
+  if (healthFactor < config.repayAtHealthFactor && policyAllowsRepay) {
+    for (const asset of ["USDC", "EURC", "CIRBTC"]) {
+      const debt = BigInt(snapshot?.lending?.borrow?.[asset] || "0");
+      const balance = BigInt(snapshot?.balances?.[asset] || "0");
+      if (debt <= 0n || balance <= 0n) continue;
+
+      const cap = maxPolicyAmountRaw(policy, asset);
+      let amount = debt < balance ? debt : balance;
+      if (cap != null && cap > 0n && amount > cap) amount = cap;
+      if (amount <= 0n) continue;
+
+      actions.push({
+        action: "repay",
+        asset,
+        amount: amount.toString(),
+      });
+      if (actions.length >= 2) break;
+    }
+  }
+
+  const state = healthFactor < config.minHealthFactor
+    ? "critical"
+    : healthFactor < config.repayAtHealthFactor
+      ? "protection"
+      : "borrow_restricted";
+
+  return {
+    ...config,
+    healthFactor,
+    state,
+    borrowBlocked,
+    actions,
+    reason: actions.length
+      ? "deterministic_repay_required"
+      : policyAllowsRepay
+        ? "repay_liquidity_unavailable"
+        : "repay_not_allowed_by_policy",
+  };
+}
+
+function filterRiskGuardActions(actions, riskDecision) {
+  if (!riskDecision?.enabled) return Array.isArray(actions) ? actions : [];
+  const input = Array.isArray(actions) ? actions : [];
+  if (!riskDecision.borrowBlocked) return input;
+  return input.filter((action) => String(action?.action || "").trim() !== "borrow");
+}
 
 function agentPolicy(autonomy) {
   const policy = autonomy && typeof autonomy.policy === "object" ? autonomy.policy : {};
@@ -394,21 +638,53 @@ async function getAgents(db) {
   ).all().then((result) => result.results || []);
 }
 
-async function getPendingTask(db, agentId, taskId) {
-  if (!taskId) return null;
-  return await db.prepare(
-    "SELECT id, from_agent_id, to_agent_id, task, created_at FROM centry_agent_tasks WHERE id = ? AND to_agent_id = ? AND status = 'pending' LIMIT 1"
-  ).bind(taskId, agentId).first();
-}
+async function claimAgentTasks(db, agentId, options = {}) {
+  const leaseId = options.leaseId || crypto.randomUUID();
+  const now = Date.now();
+  const leaseMs = clampInt(options.leaseMs, 30_000, 600_000, 300_000);
+  const leaseUntil = now + leaseMs;
+  const taskId = options.taskId ? String(options.taskId).trim() : null;
+  const limit = taskId ? 1 : clampInt(options.limit, 1, 20, 20);
+  const idFilter = taskId ? "AND id = ?" : "";
+  const subqueryBindings = taskId
+    ? [agentId, now, taskId, limit]
+    : [agentId, now, limit];
 
-async function getPendingTasks(db, agentId) {
-  return await db.prepare(
-    `SELECT id, from_agent_id, to_agent_id, task, created_at
+  await db.prepare(
+    `UPDATE centry_agent_tasks
+     SET status = 'processing',
+         lease_id = ?,
+         lease_until = ?,
+         attempts = attempts + 1,
+         updated_at = ?
+     WHERE id IN (
+       SELECT id
+       FROM centry_agent_tasks
+       WHERE to_agent_id = ?
+         AND (status = 'pending' OR (status = 'processing' AND COALESCE(lease_until, 0) < ?))
+         ${idFilter}
+       ORDER BY created_at ASC
+       LIMIT ?
+     )
+       AND to_agent_id = ?
+       AND (status = 'pending' OR (status = 'processing' AND COALESCE(lease_until, 0) < ?))`
+  ).bind(
+    leaseId,
+    leaseUntil,
+    new Date().toISOString(),
+    ...subqueryBindings,
+    agentId,
+    now,
+  ).run();
+
+  const tasks = await db.prepare(
+    `SELECT id, from_agent_id, to_agent_id, task, created_at, lease_id, lease_until, attempts
      FROM centry_agent_tasks
-     WHERE to_agent_id = ? AND status = 'pending'
-     ORDER BY created_at ASC
-     LIMIT 20`
-  ).bind(agentId).all().then((result) => result.results || []);
+     WHERE to_agent_id = ? AND lease_id = ? AND status = 'processing'
+     ORDER BY created_at ASC`
+  ).bind(agentId, leaseId).all().then((result) => result.results || []);
+
+  return { leaseId, leaseUntil, tasks };
 }
 
 function parseOwnerChatTask(task) {
@@ -485,28 +761,58 @@ async function addAgentChatMessage(db, { id, agentId, role, content }) {
   ).run();
 }
 
-async function completeTask(db, id, status, result) {
+async function completeTask(db, id, leaseId, status, result) {
   const now = new Date().toISOString();
-  await db.prepare(
+  const update = await db.prepare(
     `UPDATE centry_agent_tasks
-     SET status = ?, result = ?, updated_at = ?, completed_at = ?
-     WHERE id = ? AND status = 'pending'`
-  ).bind(status, String(result || "").slice(0, 8000), now, now, id).run();
+     SET status = ?, result = ?, last_error = CASE WHEN ? = 'failed' THEN ? ELSE last_error END,
+         updated_at = ?, completed_at = ?, lease_id = NULL, lease_until = NULL
+     WHERE id = ? AND status = 'processing' AND lease_id = ?`
+  ).bind(
+    status,
+    String(result || "").slice(0, 8000),
+    status,
+    status === "failed" ? String(result || "").slice(0, 1000) : "",
+    now,
+    now,
+    id,
+    leaseId,
+  ).run();
+  if (Number(update?.meta?.changes || 0) !== 1) throw new Error("agent_task_lease_lost");
 }
 
-async function completeOwnerChatTask(db, taskId, assistantMessageId, agentId, status, result) {
+async function completeOwnerChatTask(db, taskId, leaseId, assistantMessageId, agentId, status, result) {
   const now = new Date().toISOString();
-  await db.batch([
+  let answer = "";
+  try {
+    answer = String(JSON.parse(String(result || "{}")).answer || "").slice(0, 8000);
+  } catch {
+    answer = "";
+  }
+
+  const update = await db.batch([
     db.prepare(
       `UPDATE centry_agent_tasks
-       SET status = ?, result = ?, updated_at = ?, completed_at = ?
-       WHERE id = ? AND status = 'pending'`
-    ).bind(status, String(result || "").slice(0, 8000), now, now, taskId),
+       SET status = ?, result = ?, last_error = CASE WHEN ? = 'failed' THEN ? ELSE last_error END,
+           updated_at = ?, completed_at = ?, lease_id = NULL, lease_until = NULL
+       WHERE id = ? AND status = 'processing' AND lease_id = ?`
+    ).bind(
+      status,
+      String(result || "").slice(0, 8000),
+      status,
+      status === "failed" ? String(result || "").slice(0, 1000) : "",
+      now,
+      now,
+      taskId,
+      leaseId,
+    ),
     db.prepare(
-      `INSERT INTO centry_agent_chats (id, agent_id, role, content, created_at)
+      `INSERT OR IGNORE INTO centry_agent_chats (id, agent_id, role, content, created_at)
        VALUES (?, ?, 'assistant', ?, ?)`
-    ).bind(assistantMessageId, agentId, String(JSON.parse(String(result || "{}")).answer || "").slice(0, 8000), now),
+    ).bind(assistantMessageId, agentId, answer, now),
   ]);
+
+  if (Number(update?.[0]?.meta?.changes || 0) !== 1) throw new Error("agent_task_lease_lost");
 }
 
 async function providerFor(db, agent, autonomy) {
@@ -529,9 +835,22 @@ function extractJson(text) {
   return JSON.parse(withoutFence.slice(start, end + 1));
 }
 
+async function fetchWithTimeout(url, options = {}, timeoutMs = 25_000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error("agent_external_provider_timeout");
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function callProvider(provider, model, apiKey, system, user) {
   if (provider === "openai") {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetchWithTimeout("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
@@ -546,7 +865,7 @@ async function callProvider(provider, model, apiKey, system, user) {
   }
 
   if (provider === "anthropic") {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({
@@ -561,7 +880,7 @@ async function callProvider(provider, model, apiKey, system, user) {
     return data?.content?.map((part) => part?.text || "").join("") || "";
   }
 
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
     {
       method: "POST",
@@ -1249,7 +1568,7 @@ function jsonStringify(value) {
 }
 
 async function runAgent(db, publicClient, walletClient, runnerAddress, agent, scheduledAt, env, requestedTaskId = null) {
-  const locked = await tryLock(db, agent.id, 55_000);
+  const locked = await tryLock(db, agent.id, 300_000);
   if (!locked) return { agentId: agent.id, status: "locked" };
 
   const runId = crypto.randomUUID();
@@ -1277,23 +1596,38 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
   let tasks = [];
   let ownerChatTask = null;
   let ownerChatEnvelope = null;
+  let taskLeaseId = null;
   let actionReceiptIds = [];
 
   try {
     const account = getAddress(agent.account);
     const rpcUrl = String(env.CENTRY_AGENT_RPC_URL || ARC_RPC);
 
-    const requestedTask = requestedTaskId
-      ? await getPendingTask(db, agent.id, requestedTaskId)
-      : null;
-    tasks = requestedTaskId
-      ? (requestedTask ? [requestedTask] : [])
-      : await getPendingTasks(db, agent.id);
+    const claimed = await claimAgentTasks(db, agent.id, {
+      taskId: requestedTaskId,
+      limit: 20,
+      leaseMs: 300_000,
+    });
+    taskLeaseId = claimed.leaseId;
+    tasks = claimed.tasks;
     ownerChatTask = tasks.find((task) => parseOwnerChatTask(task));
     ownerChatEnvelope = ownerChatTask ? parseOwnerChatTask(ownerChatTask) : null;
 
     if (requestedTaskId && !ownerChatTask) {
-      return { agentId: agent.id, status: "ignored", reason: "task_not_owner_chat" };
+      await completeTask(
+        db,
+        requestedTaskId,
+        taskLeaseId,
+        "failed",
+        JSON.stringify({
+          kind: "owner_chat_result",
+          status: "failed",
+          error: "task_not_owner_chat",
+        }),
+      );
+      runStatus = "failed";
+      reason = "task_not_owner_chat";
+      return { agentId: agent.id, status: runStatus, reason };
     }
 
     if (ownerChatTask) tasks = [ownerChatTask];
@@ -1304,10 +1638,18 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
     const autonomy = { ...storedAutonomy, policy };
     const autonomyEnabled = autonomy.enabled !== false;
     const instructions = String(autonomy.instructions || "").trim();
+    const configuredRiskGuard = riskGuardConfig(autonomy);
+    let riskDecision = null;
 
-    if (!ownerChatTask && (!autonomyEnabled || (!instructions && tasks.length === 0))) {
+    if (!ownerChatTask && !autonomyEnabled) {
       runStatus = "idle";
-      reason = autonomyEnabled ? "no_work" : "autonomy_disabled";
+      reason = "autonomy_disabled";
+      return { agentId: agent.id, status: runStatus, reason };
+    }
+
+    if (!ownerChatTask && !instructions && tasks.length === 0 && !configuredRiskGuard.enabled) {
+      runStatus = "idle";
+      reason = "no_work";
       return { agentId: agent.id, status: runStatus, reason };
     }
 
@@ -1323,6 +1665,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
           await completeOwnerChatTask(
             db,
             ownerChatTask.id,
+            taskLeaseId,
             ownerChatEnvelope.assistantMessageId,
             agent.id,
             "completed",
@@ -1335,7 +1678,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
             }),
           );
         } else {
-          await completeTask(db, ownerChatTask.id, "completed", JSON.stringify({
+          await completeTask(db, ownerChatTask.id, taskLeaseId, "completed", JSON.stringify({
             kind: "owner_chat_result",
             status: "processed",
             answer,
@@ -1356,6 +1699,8 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
         ? await readOwnerChatSnapshot(publicClient, account, runnerAddress, rpcUrl, ownerMessage)
         : emptyAgentSnapshot(account, runnerAddress);
 
+    riskDecision = evaluateRiskGuard(snapshot, autonomy, agentPolicy(autonomy));
+
     await writeAgentRuntime(db, agent.id, {
       lastEvaluationAt: new Date().toISOString(),
       accountActive: snapshot.active,
@@ -1364,6 +1709,17 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
         autonomyEnabled,
         instructionsConfigured: Boolean(instructions),
         pendingTaskCount: tasks.length,
+        riskGuard: {
+          enabled: riskDecision.enabled,
+          state: riskDecision.state,
+          healthFactor: riskDecision.healthFactor == null ? null : riskDecision.healthFactor.toString(),
+          reason: riskDecision.reason,
+          borrowBlocked: riskDecision.borrowBlocked,
+          repayActionCount: riskDecision.actions.length,
+          minHealthFactor: riskDecision.minHealthFactor.toString(),
+          repayAtHealthFactor: riskDecision.repayAtHealthFactor.toString(),
+          stopBorrowAtHealthFactor: riskDecision.stopBorrowAtHealthFactor.toString(),
+        },
       },
     }).catch(() => {});
 
@@ -1381,8 +1737,17 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
 
     // Keep authenticated owner chat isolated from queued A2A work so the model
     // cannot mix unrelated task sources into one execution plan.
-    const provider = await providerFor(db, agent, autonomy);
-    if (!provider) {
+    const forcedRiskActions = !ownerChatTask && riskDecision?.enabled && riskDecision.actions.length
+      ? riskDecision.actions
+      : [];
+
+    if (forcedRiskActions.length) {
+      // Skip the AI provider entirely for deterministic protection.
+      // The normal build/permission/simulation/receipt pipeline below still applies.
+    }
+
+    const provider = forcedRiskActions.length ? null : await providerFor(db, agent, autonomy);
+    if (!provider && !forcedRiskActions.length) {
       runStatus = "waiting_provider";
       reason = "provider_not_configured";
       if (ownerChatTask && ownerChatEnvelope?.assistantMessageId) {
@@ -1390,6 +1755,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
         await completeOwnerChatTask(
           db,
           ownerChatTask.id,
+          taskLeaseId,
           ownerChatEnvelope.assistantMessageId,
           agent.id,
           "failed",
@@ -1404,8 +1770,8 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
       return { agentId: agent.id, status: runStatus, reason };
     }
 
-    const encryptionKey = String(env.CENTRY_AGENT_ENCRYPTION_KEY || "");
-    const apiKey = await decryptSecret(provider.encrypted_api_key, encryptionKey);
+    const encryptionKey = provider ? String(env.CENTRY_AGENT_ENCRYPTION_KEY || "") : "";
+    const apiKey = provider ? await decryptSecret(provider.encrypted_api_key, encryptionKey) : null;
 
     const taskContext = tasks.length
       ? tasks.map((task) => {
@@ -1478,21 +1844,38 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
       pendingTasks: taskContext,
     });
 
-    const responseText = await callProvider(
+    const plan = forcedRiskActions.length
+      ? {
+          response: "",
+          reason: riskDecision.reason,
+          actions: forcedRiskActions,
+          replies: [],
+          messages: [],
+        }
+      : (() => {
+          if (!provider) throw new Error("agent_provider_not_configured");
+          return null;
+        })();
+
+    const resolvedPlan = plan || extractJson(await callProvider(
       String(provider.provider).toLowerCase(),
       String(provider.model),
       apiKey,
       system,
       user,
-    );
-    const plan = extractJson(responseText);
-    const modelActions = Array.isArray(plan?.actions) ? plan.actions : [];
+    ));
+    const modelActions = Array.isArray(resolvedPlan?.actions) ? resolvedPlan.actions : [];
     const ownerChatAllowsStateChange = ownerChatTask
       ? ownerChatHasExplicitStateChangeIntent(ownerMessage)
       : true;
     const plannedActions = ownerChatTask && !ownerChatAllowsStateChange
       ? []
       : modelActions;
+    const guardedActions = !ownerChatTask ? filterRiskGuardActions(plannedActions, riskDecision) : plannedActions;
+    const borrowActionsSuppressed = !ownerChatTask &&
+      riskDecision?.borrowBlocked &&
+      plannedActions.some((action) => String(action?.action || '').trim() === 'borrow') &&
+      guardedActions.length < plannedActions.length;
 
     if (ownerChatTask && modelActions.length > 0 && plannedActions.length === 0) {
       console.warn("centry_agent_owner_chat_action_suppressed", {
@@ -1503,12 +1886,15 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
       });
     }
 
-    const replies = Array.isArray(plan?.replies) ? plan.replies : [];
-    const messages = Array.isArray(plan?.messages) ? plan.messages : [];
-    const conversationalResponse = String(plan?.response || "").trim();
-    actionCount = plannedActions.length;
+    const replies = Array.isArray(resolvedPlan?.replies) ? resolvedPlan.replies : [];
+    const messages = Array.isArray(resolvedPlan?.messages) ? resolvedPlan.messages : [];
+    const conversationalResponse = String(resolvedPlan?.response || "").trim();
+    if (borrowActionsSuppressed && !guardedActions.length) {
+      reason = "risk_guard_borrow_blocked";
+    }
+    actionCount = guardedActions.length;
 
-    const calls = await buildCalls(publicClient, agent, plannedActions, autonomy, db, {
+    const calls = await buildCalls(publicClient, agent, guardedActions, autonomy, db, {
       humanReadableAmounts: Boolean(ownerChatTask),
     });
     annotateActionCalls(plannedActions, calls);
@@ -1574,10 +1960,14 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
       }
 
       runStatus = "executed";
-      reason = String(plan?.reason || "autonomous_action");
+      reason = borrowActionsSuppressed
+        ? "risk_guard_borrow_blocked"
+        : String(resolvedPlan?.reason || "autonomous_action");
     } else {
       runStatus = "processed";
-      reason = String(plan?.reason || "no_action");
+      reason = borrowActionsSuppressed
+        ? "risk_guard_borrow_blocked"
+        : String(resolvedPlan?.reason || "no_action");
     }
 
     const repliesByTask = new Map(
@@ -1600,6 +1990,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
           await completeOwnerChatTask(
             db,
             task.id,
+            taskLeaseId,
             ownerRequest.assistantMessageId,
             agent.id,
             "completed",
@@ -1612,7 +2003,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
             }),
           );
         } else {
-          await completeTask(db, task.id, "completed", JSON.stringify({
+          await completeTask(db, task.id, taskLeaseId, "completed", JSON.stringify({
             kind: "owner_chat_result",
             status: runStatus === "executed" ? "executed" : "processed",
             answer: result,
@@ -1628,7 +2019,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
           ? `Processed during run ${runId}. Transaction: ${txHash}`
           : `Processed during run ${runId}; no onchain transaction was required.`
       );
-      await completeTask(db, task.id, "completed", result);
+      await completeTask(db, task.id, taskLeaseId, "completed", result);
     }
 
     const outboundMessages = messages
@@ -1681,6 +2072,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
         await completeOwnerChatTask(
           db,
           ownerChatTask.id,
+          taskLeaseId,
           ownerChatEnvelope.assistantMessageId,
           agent.id,
           "failed",
@@ -1693,7 +2085,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
           }),
         ).catch(() => {});
       } else {
-        await completeTask(db, ownerChatTask.id, "failed", JSON.stringify({
+        await completeTask(db, ownerChatTask.id, taskLeaseId, "failed", JSON.stringify({
           kind: "owner_chat_result",
           status: "failed",
           answer: result,
@@ -1741,6 +2133,326 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
     ).run().catch(() => {});
     await unlock(db, agent.id).catch(() => {});
   }
+}
+
+function analyticsAssetSymbol(asset) {
+  const normalized = String(asset || "").toLowerCase();
+  for (const [symbol, address] of Object.entries(TOKENS)) {
+    if (String(address).toLowerCase() === normalized) return symbol;
+  }
+  return null;
+}
+
+function toUsdE18(amountRaw, priceE18, decimals) {
+  if (amountRaw == null || priceE18 == null) return 0n;
+  return (BigInt(amountRaw) * BigInt(priceE18)) / (10n ** BigInt(decimals));
+}
+
+async function indexProtocolEvents(db, publicClient, fromBlock, toBlock) {
+  if (fromBlock > toBlock) return 0;
+  const logsByEvent = await Promise.all(
+    ANALYTICS_EVENTS.map(async (definition) => {
+      const logs = await publicClient.getLogs({
+        address: LENDING_POOL,
+        event: definition.event,
+        fromBlock,
+        toBlock,
+      });
+      return { definition, logs };
+    }),
+  );
+
+  const blockTimestamps = new Map();
+  const createdAt = new Date().toISOString();
+  let inserted = 0;
+
+  const rows = logsByEvent
+    .flatMap(({ definition, logs }) => logs.map((log) => ({ definition, log })))
+    .sort((a, b) => Number(a.log.blockNumber || 0n) - Number(b.log.blockNumber || 0n) || Number(a.log.logIndex || 0n) - Number(b.log.logIndex || 0n));
+
+  for (const { definition, log } of rows) {
+    const txHash = log.transactionHash;
+    if (!txHash || log.blockNumber == null || log.logIndex == null) continue;
+
+    const blockNumber = BigInt(log.blockNumber);
+    let timestamp = blockTimestamps.get(blockNumber);
+    if (timestamp == null) {
+      const block = await publicClient.getBlock({ blockNumber });
+      timestamp = Number(block.timestamp);
+      blockTimestamps.set(blockNumber, timestamp);
+    }
+
+    const mapped = definition.map(log.args || {});
+    const id = `${txHash}:${String(log.logIndex)}`;
+    const metadata = Object.fromEntries(
+      Object.entries(mapped.metadata || {}).map(([key, value]) => [key, value == null ? null : String(value)]),
+    );
+
+    const result = await db.prepare(
+      `INSERT OR IGNORE INTO centry_protocol_events
+        (id, block_number, block_hash, transaction_hash, log_index, timestamp, event_name,
+         asset, asset2, actor, amount_raw, amount2_raw, metadata_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      id,
+      Number(blockNumber),
+      log.blockHash || null,
+      txHash,
+      Number(log.logIndex),
+      timestamp,
+      definition.name,
+      mapped.asset ? getAddress(mapped.asset) : null,
+      mapped.asset2 ? getAddress(mapped.asset2) : null,
+      mapped.actor ? getAddress(mapped.actor) : null,
+      mapped.amountRaw == null ? null : String(mapped.amountRaw),
+      mapped.amount2Raw == null ? null : String(mapped.amount2Raw),
+      JSON.stringify(metadata),
+      createdAt,
+    ).run();
+
+    inserted += Number(result?.meta?.changes || 0);
+  }
+
+  return inserted;
+}
+
+async function snapshotProtocolHourly(db, publicClient, bucketStart) {
+  const rows = [];
+  let totalSupplyUsdE18 = 0n;
+  let totalBorrowUsdE18 = 0n;
+  let totalCashUsdE18 = 0n;
+  let weightedBorrowRateNumerator = 0n;
+  let weightedBorrowRateDenominator = 0n;
+  let weightedSupplyRateNumerator = 0n;
+  let weightedSupplyRateDenominator = 0n;
+
+  for (let index = 0; index < ANALYTICS_MAX_RESERVES; index += 1) {
+    const asset = await publicClient.readContract({
+      address: LENDING_POOL,
+      abi: LENDING_POOL_ABI,
+      functionName: "reserveList",
+      args: [BigInt(index)],
+    }).catch(() => zeroAddress);
+
+    if (!asset || asset.toLowerCase() === zeroAddress) break;
+
+    const [config, supplyRaw, borrowRaw, utilizationRaw, priceResult, cashRaw] = await Promise.all([
+      publicClient.readContract({ address: LENDING_POOL, abi: LENDING_POOL_ABI, functionName: "getReserveConfig", args: [asset] }),
+      publicClient.readContract({ address: LENDING_POOL, abi: LENDING_POOL_ABI, functionName: "currentSupply", args: [asset] }),
+      publicClient.readContract({ address: LENDING_POOL, abi: LENDING_POOL_ABI, functionName: "currentBorrow", args: [asset] }),
+      publicClient.readContract({ address: LENDING_POOL, abi: LENDING_POOL_ABI, functionName: "utilization", args: [asset] }),
+      publicClient.readContract({ address: getAddress("0x00C6d554BD44859349c4aeEA0E8216AE94FC3f84"), abi: ANALYTICS_ORACLE_ABI, functionName: "getPrice", args: [asset] }).catch(() => [0n, 0n]),
+      publicClient.readContract({ address: asset, abi: ERC20_ABI, functionName: "balanceOf", args: [LENDING_POOL] }),
+    ]);
+
+    if (!config?.[0]) continue;
+
+    const decimals = Number(config[1]);
+    const priceE18 = Array.isArray(priceResult) ? BigInt(priceResult[0] || 0n) : 0n;
+    const utilizationE18 = BigInt(utilizationRaw || 0n);
+    const borrowRateE18 = await publicClient.readContract({
+      address: getAddress("0x7d2d0096Dc5D77A68B821a2308f2A65179c04B76"),
+      abi: ANALYTICS_RATE_ABI,
+      functionName: "getBorrowRate",
+      args: [utilizationE18],
+    });
+    const reserveFactorBps = Number(config[5] || 0);
+    const supplyRateE18 = (
+      BigInt(borrowRateE18) *
+      utilizationE18 *
+      BigInt(10000 - reserveFactorBps)
+    ) / (1000000000000000000n * 10000n);
+
+    const supplyUsdE18 = toUsdE18(supplyRaw, priceE18, decimals);
+    const borrowUsdE18 = toUsdE18(borrowRaw, priceE18, decimals);
+    const cashUsdE18 = toUsdE18(cashRaw, priceE18, decimals);
+
+    totalSupplyUsdE18 += supplyUsdE18;
+    totalBorrowUsdE18 += borrowUsdE18;
+    totalCashUsdE18 += cashUsdE18;
+    weightedBorrowRateNumerator += borrowUsdE18 * BigInt(borrowRateE18);
+    weightedBorrowRateDenominator += borrowUsdE18;
+    weightedSupplyRateNumerator += supplyUsdE18 * BigInt(supplyRateE18);
+    weightedSupplyRateDenominator += supplyUsdE18;
+
+    let symbol = analyticsAssetSymbol(asset);
+    if (!symbol) {
+      symbol = await publicClient.readContract({
+        address: asset,
+        abi: ERC20_ABI,
+        functionName: "symbol",
+      }).catch(() => asset.slice(0, 8));
+    }
+
+    rows.push({
+      asset: getAddress(asset),
+      symbol,
+      decimals,
+      supplyRaw,
+      borrowRaw,
+      cashRaw,
+      priceE18,
+      utilizationE18,
+      borrowRateE18,
+      supplyRateE18,
+      supplyUsdE18,
+      borrowUsdE18,
+      cashUsdE18,
+      ltvBps: Number(config[2] || 0),
+      liquidationThresholdBps: Number(config[3] || 0),
+      liquidationBonusBps: Number(config[4] || 0),
+      reserveFactorBps,
+      supplyCapRaw: config[6],
+      borrowCapRaw: config[7],
+    });
+  }
+
+  const totalBorrowRateE18 = weightedBorrowRateDenominator > 0n
+    ? weightedBorrowRateNumerator / weightedBorrowRateDenominator
+    : 0n;
+  const totalSupplyRateE18 = weightedSupplyRateDenominator > 0n
+    ? weightedSupplyRateNumerator / weightedSupplyRateDenominator
+    : 0n;
+  const totalUtilizationE18 = totalBorrowUsdE18 + totalCashUsdE18 > 0n
+    ? (totalBorrowUsdE18 * 1000000000000000000n) / (totalBorrowUsdE18 + totalCashUsdE18)
+    : 0n;
+
+  rows.push({
+    asset: "TOTAL",
+    symbol: "ALL",
+    decimals: 18,
+    supplyRaw: 0n,
+    borrowRaw: 0n,
+    cashRaw: 0n,
+    priceE18: 0n,
+    utilizationE18: totalUtilizationE18,
+    borrowRateE18: totalBorrowRateE18,
+    supplyRateE18: totalSupplyRateE18,
+    supplyUsdE18: totalSupplyUsdE18,
+    borrowUsdE18: totalBorrowUsdE18,
+    cashUsdE18: totalCashUsdE18,
+    ltvBps: 0,
+    liquidationThresholdBps: 0,
+    liquidationBonusBps: 0,
+    reserveFactorBps: 0,
+    supplyCapRaw: 0n,
+    borrowCapRaw: 0n,
+  });
+
+  const capturedAt = new Date().toISOString();
+  for (const row of rows) {
+    await db.prepare(
+      `INSERT INTO centry_protocol_hourly
+        (bucket_start, asset, symbol, decimals, supply_raw, borrow_raw, cash_raw,
+         price_e18, utilization_e18, borrow_rate_e18, supply_rate_e18,
+         supply_usd_e18, borrow_usd_e18, cash_usd_e18,
+         ltv_bps, liquidation_threshold_bps, liquidation_bonus_bps, reserve_factor_bps,
+         supply_cap_raw, borrow_cap_raw, captured_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(bucket_start, asset) DO UPDATE SET
+         symbol=excluded.symbol,
+         decimals=excluded.decimals,
+         supply_raw=excluded.supply_raw,
+         borrow_raw=excluded.borrow_raw,
+         cash_raw=excluded.cash_raw,
+         price_e18=excluded.price_e18,
+         utilization_e18=excluded.utilization_e18,
+         borrow_rate_e18=excluded.borrow_rate_e18,
+         supply_rate_e18=excluded.supply_rate_e18,
+         supply_usd_e18=excluded.supply_usd_e18,
+         borrow_usd_e18=excluded.borrow_usd_e18,
+         cash_usd_e18=excluded.cash_usd_e18,
+         ltv_bps=excluded.ltv_bps,
+         liquidation_threshold_bps=excluded.liquidation_threshold_bps,
+         liquidation_bonus_bps=excluded.liquidation_bonus_bps,
+         reserve_factor_bps=excluded.reserve_factor_bps,
+         supply_cap_raw=excluded.supply_cap_raw,
+         borrow_cap_raw=excluded.borrow_cap_raw,
+         captured_at=excluded.captured_at`
+    ).bind(
+      bucketStart,
+      row.asset,
+      row.symbol,
+      row.decimals,
+      String(row.supplyRaw),
+      String(row.borrowRaw),
+      String(row.cashRaw),
+      String(row.priceE18),
+      String(row.utilizationE18),
+      String(row.borrowRateE18),
+      String(row.supplyRateE18),
+      String(row.supplyUsdE18),
+      String(row.borrowUsdE18),
+      String(row.cashUsdE18),
+      row.ltvBps,
+      row.liquidationThresholdBps,
+      row.liquidationBonusBps,
+      row.reserveFactorBps,
+      String(row.supplyCapRaw),
+      String(row.borrowCapRaw),
+      capturedAt,
+    ).run();
+  }
+
+  return rows.length;
+}
+
+async function runProtocolAnalyticsIndexer(env, scheduledAt) {
+  const rpcUrl = String(env.CENTRY_AGENT_RPC_URL || ARC_RPC);
+  const publicClient = publicClientFor(rpcUrl);
+  const latestBlock = BigInt(await publicClient.getBlockNumber());
+
+  const state = await env.DB.prepare(
+    "SELECT cursor_block FROM centry_analytics_indexer_state WHERE id = ? LIMIT 1"
+  ).bind(ANALYTICS_STATE_ID).first();
+
+  let cursor = state?.cursor_block == null ? null : BigInt(state.cursor_block);
+  if (cursor == null) {
+    const configuredStart = String(env.CENTRY_ANALYTICS_START_BLOCK || "").trim();
+    const startBlock = configuredStart && /^\\d+$/.test(configuredStart)
+      ? BigInt(configuredStart)
+      : latestBlock > ANALYTICS_DEFAULT_LOOKBACK
+        ? latestBlock - ANALYTICS_DEFAULT_LOOKBACK
+        : 0n;
+    cursor = startBlock - 1n;
+  }
+
+  const fromBlock = cursor + 1n;
+  const toBlock = fromBlock > latestBlock
+    ? latestBlock
+    : (() => {
+        const candidate = fromBlock + ANALYTICS_MAX_BLOCKS - 1n;
+        return candidate < latestBlock ? candidate : latestBlock;
+      })();
+
+  let indexedBlocks = 0;
+  let indexedEvents = 0;
+  if (fromBlock <= toBlock) {
+    indexedEvents = await indexProtocolEvents(env.DB, publicClient, fromBlock, toBlock);
+    indexedBlocks = Number(toBlock - fromBlock + 1n);
+    await env.DB.prepare(
+      `INSERT INTO centry_analytics_indexer_state (id, cursor_block, updated_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET cursor_block=excluded.cursor_block, updated_at=excluded.updated_at`
+    ).bind(ANALYTICS_STATE_ID, Number(toBlock), scheduledAt).run();
+  } else if (!state) {
+    await env.DB.prepare(
+      "INSERT OR REPLACE INTO centry_analytics_indexer_state (id, cursor_block, updated_at) VALUES (?, ?, ?)"
+    ).bind(ANALYTICS_STATE_ID, Number(latestBlock), scheduledAt).run();
+  }
+
+  const bucketStart = Math.floor(new Date(scheduledAt).getTime() / 3600000) * 3600;
+  const metrics = await snapshotProtocolHourly(env.DB, publicClient, bucketStart);
+
+  return {
+    latestBlock: Number(latestBlock),
+    indexedFrom: fromBlock <= toBlock ? Number(fromBlock) : null,
+    indexedTo: fromBlock <= toBlock ? Number(toBlock) : null,
+    indexedBlocks,
+    indexedEvents,
+    hourlyMetrics: metrics,
+    caughtUp: toBlock >= latestBlock,
+  };
 }
 
 async function withConcurrency(items, concurrency, fn) {
@@ -1830,6 +2542,15 @@ export default {
     const scheduledAt = controller.scheduledTime
       ? new Date(controller.scheduledTime).toISOString()
       : new Date().toISOString();
+
+    ctx.waitUntil(
+      runProtocolAnalyticsIndexer(env, scheduledAt)
+        .then((result) => console.log("centry_protocol_analytics_indexed", result))
+        .catch((error) => console.error("centry_protocol_analytics_indexer_failed", {
+          scheduledAt,
+          error: error instanceof Error ? error.message : String(error),
+        })),
+    );
 
     ctx.waitUntil(
       runScheduler(env, scheduledAt)

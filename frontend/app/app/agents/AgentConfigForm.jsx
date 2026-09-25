@@ -24,6 +24,12 @@ function cleanIncomingConfig(agent) {
       instructions: autonomy.instructions || '',
       maxActions: Number(autonomy.maxActions || 4),
       slippageBps: Number(autonomy.slippageBps ?? 50),
+      riskGuard: {
+        enabled: autonomy.riskGuard?.enabled === true,
+        minHealthFactor: String(autonomy.riskGuard?.minHealthFactor || '1.50'),
+        repayAtHealthFactor: String(autonomy.riskGuard?.repayAtHealthFactor || '1.65'),
+        stopBorrowAtHealthFactor: String(autonomy.riskGuard?.stopBorrowAtHealthFactor || '1.80'),
+      },
     },
     policy: {
       allowedActions: Array.isArray(policy.allowedActions) && policy.allowedActions.length ? policy.allowedActions : base.policy.allowedActions,
@@ -75,7 +81,11 @@ export function AgentConfigForm({ mode = 'create', agent = null, onSubmit, submi
       }
       return {
         ...current,
-        autonomy: path.startsWith('autonomy.') ? { ...current.autonomy, [path.slice(9)]: value } : current.autonomy,
+        autonomy: path.startsWith('autonomy.')
+          ? path.startsWith('autonomy.riskGuard.')
+            ? { ...current.autonomy, riskGuard: { ...current.autonomy.riskGuard, [path.slice('autonomy.riskGuard.'.length)]: value } }
+            : { ...current.autonomy, [path.slice(9)]: value }
+          : current.autonomy,
       };
     });
   }
@@ -124,6 +134,18 @@ export function AgentConfigForm({ mode = 'create', agent = null, onSubmit, submi
     const providerParts = [form.provider.trim(), form.model.trim(), form.providerKey.trim()].filter(Boolean).length;
     if (providerParts > 0 && providerParts < 3) return setError('To configure an AI provider now, enter the provider, model, and API key together. Otherwise leave all three blank.');
 
+    if (form.autonomy.riskGuard?.enabled) {
+      const minHealth = Number(form.autonomy.riskGuard.minHealthFactor);
+      const repayAt = Number(form.autonomy.riskGuard.repayAtHealthFactor);
+      const stopBorrowAt = Number(form.autonomy.riskGuard.stopBorrowAtHealthFactor);
+      if (![minHealth, repayAt, stopBorrowAt].every((value) => Number.isFinite(value) && value > 0)) {
+        return setError('Enter positive health-factor thresholds for position protection.');
+      }
+      if (!(minHealth <= repayAt && repayAt <= stopBorrowAt)) {
+        return setError('Protection thresholds must be ordered: minimum ≤ repay below ≤ block borrow below.');
+      }
+    }
+
     try {
       await onSubmit({
         ...form,
@@ -135,6 +157,12 @@ export function AgentConfigForm({ mode = 'create', agent = null, onSubmit, submi
           ...form.autonomy,
           maxActions: Math.min(4, Math.max(1, Number(form.autonomy.maxActions || 4))),
           slippageBps: Math.min(5000, Math.max(0, Number(form.autonomy.slippageBps || 0))),
+          riskGuard: {
+            enabled: form.autonomy.riskGuard?.enabled === true,
+            minHealthFactor: String(form.autonomy.riskGuard?.minHealthFactor || '1.50').trim(),
+            repayAtHealthFactor: String(form.autonomy.riskGuard?.repayAtHealthFactor || '1.65').trim(),
+            stopBorrowAtHealthFactor: String(form.autonomy.riskGuard?.stopBorrowAtHealthFactor || '1.80').trim(),
+          },
         },
         policy: {
           ...form.policy,
@@ -212,6 +240,35 @@ export function AgentConfigForm({ mode = 'create', agent = null, onSubmit, submi
         </label>
         <label className={styles.label}>Strategy / instructions</label>
         <textarea className={styles.textarea} rows={7} value={form.autonomy.instructions} onChange={(e) => update('autonomy.instructions', e.target.value)} placeholder="Example: supply idle USDC, never borrow, preserve enough native USDC for gas, and only swap CENT when the stated condition is met." />
+        <div className={styles.riskGuardPanel}>
+          <div className={styles.sectionHead}>
+            <div>
+              <h3>Position protection</h3>
+              <p>Deterministic guardrails evaluated from the live lending-pool health factor before the AI can execute actions.</p>
+            </div>
+          </div>
+
+          <label className={styles.scope}>
+            <input type="checkbox" checked={form.autonomy.riskGuard?.enabled === true} onChange={(e) => update('autonomy.riskGuard.enabled', e.target.checked)} />
+            <span><strong>Enable health-factor protection</strong><small>Blocks new borrowing below the configured threshold and can repay debt from matching assets held by the agent.</small></span>
+          </label>
+
+          <div className={styles.formGrid}>
+            <div>
+              <label className={styles.label}>Minimum health factor</label>
+              <input className={styles.input} inputMode="decimal" value={form.autonomy.riskGuard?.minHealthFactor || '1.50'} onChange={(e) => update('autonomy.riskGuard.minHealthFactor', e.target.value)} />
+            </div>
+            <div>
+              <label className={styles.label}>Repay below</label>
+              <input className={styles.input} inputMode="decimal" value={form.autonomy.riskGuard?.repayAtHealthFactor || '1.65'} onChange={(e) => update('autonomy.riskGuard.repayAtHealthFactor', e.target.value)} />
+            </div>
+            <div>
+              <label className={styles.label}>Block borrow below</label>
+              <input className={styles.input} inputMode="decimal" value={form.autonomy.riskGuard?.stopBorrowAtHealthFactor || '1.80'} onChange={(e) => update('autonomy.riskGuard.stopBorrowAtHealthFactor', e.target.value)} />
+            </div>
+          </div>
+        </div>
+
         <div className={styles.formGrid}>
           <div>
             <label className={styles.label}>Max actions per run</label>

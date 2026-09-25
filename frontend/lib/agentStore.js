@@ -1,12 +1,25 @@
 const dbUrl = () => (process.env.CENTRY_AGENT_DB_URL || "").replace(/\/$/, "");
 const dbSecret = () => process.env.CENTRY_AGENT_DB_SECRET || "";
 
+async function fetchWithTimeout(url, options = {}, timeoutMs = 8_000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error("agent_store_timeout");
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function call(operation, args = {}) {
   const url = dbUrl();
   const secret = dbSecret();
   if (!url || !secret) throw new Error("agent_store_not_configured");
 
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -149,4 +162,9 @@ export async function getAgentRuntime(agentId) {
 
 export async function listActionReceipts(agentId, limit = 20) {
   return call("list_action_receipts", { agentId, limit });
+}
+
+
+export async function getProtocolAnalytics(days = 7) {
+  return call("get_protocol_analytics", { days });
 }

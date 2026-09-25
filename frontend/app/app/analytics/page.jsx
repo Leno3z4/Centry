@@ -14,10 +14,7 @@ const STRATEGY_ABI = [
   { type: 'function', name: 'slope1PerYear', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'slope2PerYear', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'kink', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
-];
-
-const ERC20_BALANCE_ABI = [
-  { type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'maxRatePerYear', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
 ];
 
 function formatNumber(value, digits = 2) {
@@ -38,11 +35,13 @@ function formatUnitsSafe(value, decimals) {
   }
 }
 
-function formatUsdFromPrice(amountRaw, priceE18Raw, decimals) {
+function formatUsdFromPrice(amount, priceE18, decimals) {
+  if (!amount || !priceE18) return 0;
   try {
-    const amount = Number(formatUnits(amountRaw ?? 0n, decimals));
-    const price = Number(formatUnits(priceE18Raw ?? 0n, 18));
-    return Number.isFinite(amount) && Number.isFinite(price) ? amount * price : 0;
+    const tokenAmount = Number(formatUnits(amount, decimals));
+    const usdPrice = Number(formatUnits(priceE18, 18));
+    if (!Number.isFinite(tokenAmount) || !Number.isFinite(usdPrice)) return 0;
+    return tokenAmount * usdPrice;
   } catch {
     return 0;
   }
@@ -64,20 +63,22 @@ function projectedBorrowRate(utilization, strategy) {
 }
 
 function AnalyticsContent() {
+  const strategyQueries = [
+    ['base', 'baseRatePerYear'],
+    ['slope1', 'slope1PerYear'],
+    ['slope2', 'slope2PerYear'],
+    ['kink', 'kink'],
+  ];
+
   const strategyResults = useReadContracts({
-    contracts: [
-      ['baseRatePerYear', 'base'],
-      ['slope1PerYear', 'slope1'],
-      ['slope2PerYear', 'slope2'],
-      ['kink', 'kink'],
-    ].map(([functionName]) => ({
+    contracts: strategyQueries.map(([, functionName]) => ({
       address: CONTRACT_ADDRESSES.interestRateModel,
       abi: STRATEGY_ABI,
       functionName,
     })),
   }).data;
 
-  const strategy = strategyResults?.length === 4
+  const strategy = strategyResults && strategyResults.length === 4
     ? {
         base: strategyResults[0]?.result ?? 0n,
         slope1: strategyResults[1]?.result ?? 0n,
@@ -113,7 +114,7 @@ function AnalyticsContent() {
     },
     {
       address: market.address,
-      abi: ERC20_BALANCE_ABI,
+      abi: [{ type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ type: 'uint256' }] }],
       functionName: 'balanceOf',
       args: [CONTRACT_ADDRESSES.lendingPool],
     },
@@ -178,6 +179,7 @@ function AnalyticsContent() {
     <div className="page-stack">
       <div className="section-header">
         <div>
+          <span className="section-kicker">ANALYTICS</span>
           <h1>Protocol analytics</h1>
           <p>Live market, liquidity, utilization, and risk data from the deployed Centry contracts.</p>
         </div>
@@ -192,7 +194,7 @@ function AnalyticsContent() {
 
       <section className="content-grid analytics-grid">
         <div className="panel panel-large">
-          <div className="panel-head"><div><h2>Live market snapshot</h2></div></div>
+          <div className="panel-head"><div><span className="section-kicker">MARKETS</span><h2>Live market snapshot</h2></div></div>
           <div className="analytics-market-list">
             {markets.map((market) => (
               <div className="analytics-market" key={market.id}>
@@ -217,7 +219,7 @@ function AnalyticsContent() {
         </div>
 
         <div className="panel">
-          <div className="panel-head"><div><h2>Reserve parameters</h2></div></div>
+          <div className="panel-head"><div><span className="section-kicker">RISK</span><h2>Reserve parameters</h2></div></div>
           <div className="risk-list">
             {markets.map((market) => (
               <div className="risk-card" key={market.id}>
@@ -232,38 +234,13 @@ function AnalyticsContent() {
         </div>
       </section>
 
-      <div className="panel analytics-note">
-        <p>Market totals and rates are calculated from the deployed reserves and immutable interest-rate strategy. Historical time-series charts are intentionally omitted until an event indexer is available.</p>
-      </div>
-
       <style jsx global>{`
         .analytics-stats{grid-template-columns:repeat(4,minmax(0,1fr))}
         .analytics-grid{align-items:start}
         .analytics-market-list{display:grid;gap:12px}
-        .analytics-market{padding:17px;border:1px solid #202020;border-radius:14px;background:#0d0d0d}
+        .analytics-market{padding:17px;border:1px solid #2d233b;border-radius:14px;background:rgba(13,9,21,.68)}
         .analytics-market-main{display:flex;justify-content:space-between;align-items:center;gap:16px}
-        .analytics-asset{display:flex;align-items:center;gap:12px}
-        .analytics-asset .token{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:#080808;color:#ffffff;font-weight:650;border:1px solid #2a2a2a}
-        .analytics-asset strong,.analytics-asset small{display:block}
-        .analytics-asset small{margin-top:4px;color:rgba(255,255,255,.78);font-size:12px}
-        .analytics-market-status{font-size:12px;color:rgba(255,255,255,.78)}
-        .analytics-market-numbers{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-top:16px}
-        .analytics-market-numbers span,.analytics-util-head span,.risk-card span{display:block;color:rgba(255,255,255,.78);font-size:12px}
-        .analytics-market-numbers strong{display:block;margin-top:5px;color:#ffffff;font-size:13px;font-variant-numeric:tabular-nums}
-        .analytics-util{margin-top:15px}
-        .analytics-util-head{display:flex;justify-content:space-between;gap:12px}
-        .analytics-util-head strong{font-size:12px;color:#ffffff}
-        .analytics-util-track{height:5px;margin-top:9px;border-radius:999px;background:#202020;overflow:hidden}
-        .analytics-util-fill{height:100%;border-radius:999px;background:#0071e3}
-        .risk-list{display:grid;gap:12px}
-        .risk-card{padding:15px;border:1px solid #202020;border-radius:14px;background:#0d0d0d}
-        .risk-card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-        .risk-card-head strong{font-size:13px;color:#ffffff}
-        .risk-card-head span{color:rgba(255,255,255,.78);font-size:11px}
-        .risk-card>div:not(.risk-card-head){display:flex;justify-content:space-between;gap:16px;padding:8px 0;border-top:1px solid #202020}
-        .risk-card>div:not(.risk-card-head) strong{font-size:12px;color:#ffffff}
-        .analytics-note{padding:16px}
-        .analytics-note p{margin:7px 0 0;color:rgba(255,255,255,.78);font-size:12px;line-height:1.6}
+        .analytics-asset{display:flex;align-items:center;gap:12px}.analytics-asset .token{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:#241938;color:#d9c8ff;font-weight:800}.analytics-asset strong,.analytics-asset small{display:block}.analytics-asset small{margin-top:4px;color:#8f849d;font-size:11px}.analytics-market-status{font-size:11px;color:#8f849d}.analytics-market-numbers{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-top:16px}.analytics-market-numbers span,.analytics-util-head span,.risk-card span{display:block;color:#8f849d;font-size:11px}.analytics-market-numbers strong{display:block;margin-top:5px;font-size:13px;font-variant-numeric:tabular-nums}.analytics-util{margin-top:15px}.analytics-util-head{display:flex;justify-content:space-between;gap:12px}.analytics-util-head strong{font-size:11px}.analytics-util-track{height:5px;margin-top:9px;border-radius:999px;background:#251c30;overflow:hidden}.analytics-util-fill{height:100%;border-radius:999px;background:#9d85bc}.risk-list{display:grid;gap:12px}.risk-card{padding:15px;border:1px solid #2d233b;border-radius:14px;background:rgba(13,9,21,.56)}.risk-card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.risk-card-head strong{font-size:13px}.risk-card-head span{color:#8f849d;font-size:10px}.risk-card>div:not(.risk-card-head){display:flex;justify-content:space-between;gap:16px;padding:8px 0;border-top:1px solid #292133}.risk-card>div:not(.risk-card-head) strong{font-size:12px}.analytics-note{padding:16px}.analytics-note p{margin:7px 0 0;color:#8f849d;font-size:11px;line-height:1.6}
         @media (max-width:900px){.analytics-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.analytics-market-numbers{grid-template-columns:repeat(3,minmax(0,1fr))}}
         @media (max-width:640px){.analytics-stats{grid-template-columns:1fr}.analytics-market-numbers{grid-template-columns:repeat(2,minmax(0,1fr))}}
       `}</style>

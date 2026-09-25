@@ -244,6 +244,10 @@ Centry is designed around explicit authorization boundaries:
 
 Connection credentials, wallet addresses, balances, transaction payloads, and API responses should be treated as private user data.
 
+## System design
+
+The current application and agent architecture, queue model, concurrency boundaries, failure handling, security rules, and scaling path are documented in [`docs/system-design.md`](docs/system-design.md).
+
 ## Important files
 
 | File | Purpose |
