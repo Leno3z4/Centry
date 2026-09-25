@@ -4,26 +4,26 @@ import Link from 'next/link';
 import { useEffect } from 'react';
 
 const ACCOUNT_FLOW = [
-  { number: '01', title: 'Own', text: 'Your smart account stays under your control.' },
-  { number: '02', title: 'Define', text: 'Choose the action, the contract, and how long the permission lasts.' },
-  { number: '03', title: 'Execute', text: 'Actions outside those rules are rejected.' },
+  { number: '01', title: 'Own', text: 'Your smart account remains controlled by your wallet.' },
+  { number: '02', title: 'Configure', text: 'Name the agent, choose its actions, and set the limits.' },
+  { number: '03', title: 'Execute', text: 'The configured runner can act only inside those permissions.' },
 ];
 
 const CAPABILITIES = [
   {
     number: '01',
     title: 'Lending',
-    text: 'Supply supported assets, borrow against a position, repay debt, or withdraw available liquidity.',
+    text: 'Supply, borrow, repay and withdraw supported assets from one wallet-owned account.',
   },
   {
     number: '02',
     title: 'Swaps',
-    text: 'Swap USDC through the configured UnitFlow route, with a minimum output set before signing.',
+    text: 'Move supported assets through Centry’s configured routes with transaction limits in place.',
   },
   {
     number: '03',
-    title: 'Account',
-    text: 'Keep positions and transaction authority under a wallet-owned smart account with explicit rules.',
+    title: 'Agents',
+    text: 'Give a named agent its own smart-account wallet, strategy, permissions and execution path.',
   },
 ];
 
@@ -91,14 +91,26 @@ export default function LandingHome() {
 
       <section className="landing-home-hero">
         <div className="landing-home-hero-copy" data-reveal>
-          <h1>Lend. Swap. Yield. Automate.</h1>
+          <div className="landing-home-status">ARC MAINNET · FINANCIAL WORKSPACE</div>
+          <h1>DeFi, with your rules.</h1>
           <p className="landing-home-hero-text">
-            Centry gives you one place to manage USDC lending and execution on Arc. Supply or borrow USDC, repay when you need to, withdraw available liquidity, or use the configured swap route. Your smart account stays under your control.
+            Centry brings lending, swaps, smart accounts and autonomous execution into one Arc-native workspace. Your wallet stays in control while every action stays inside the rules you define.
           </p>
           <Link href="/app" className="landing-home-primary">Open app</Link>
         </div>
 
         <div className="landing-home-hero-visual" aria-hidden="true">
+          <div className="landing-home-hero-console">
+            <div className="landing-home-hero-console-top">
+              <span>CENTRY ACCOUNT</span>
+              <strong>ARC · 5042</strong>
+            </div>
+            <h3>One account. Multiple paths.</h3>
+            <p>Positions, swaps and autonomous actions share the same wallet-owned execution boundary.</p>
+            <div className="landing-home-hero-console-row"><span>Assets</span><strong>Lending + swaps</strong></div>
+            <div className="landing-home-hero-console-row"><span>Control</span><strong>Wallet-owned</strong></div>
+            <div className="landing-home-hero-console-row"><span>Automation</span><strong>Policy bounded</strong></div>
+          </div>
           <div className="landing-home-shard-fallback">
             {Array.from({ length: 28 }, (_, index) => (
               <i
@@ -119,21 +131,21 @@ export default function LandingHome() {
 
       <section className="landing-home-section landing-home-overview" data-reveal>
         <div className="landing-home-section-main">
-          <h2>Manage your positions with USDC and other collateralized assets.</h2>
+          <h2>One account for the work that matters.</h2>
           <p className="landing-home-section-lede">
-            Supply USDC and see the position build. Borrow against it when you need liquidity. Repay the debt, then withdraw what is available. Use the configured execution route without leaving the account.
+            Manage lending positions, move supported assets, and hand repetitive execution to named agents without giving up control of the account.
           </p>
         </div>
         <div className="landing-home-overview-note">
           <span>ARC</span>
           <p>
-            The account owner keeps control. Permissions can be used when another signer needs to act.
+            Your connected wallet remains the owner. Automation never replaces the account’s permission boundary.
           </p>
         </div>
       </section>
 
       <section className="landing-home-section landing-home-capabilities" data-reveal>
-        <h2>Everything starts with your account.</h2>
+        <h2>Built around the account, not around a dashboard.</h2>
         <div className="landing-home-capability-list">
           {CAPABILITIES.map((item) => (
             <article key={item.number} className="landing-home-capability">
@@ -147,9 +159,9 @@ export default function LandingHome() {
 
       <section className="landing-home-section landing-home-account" data-reveal>
         <div className="landing-home-section-main">
-          <h2>The rules live with the account.</h2>
+          <h2>Give an agent a job, then bound it.</h2>
           <p className="landing-home-section-lede">
-            The account owner can set who may act, which contract they may call, which function they may use, how long the permission lasts, and how much native value it can move. A call outside those rules is rejected.
+            Name the agent, define its strategy, choose the actions and assets it can use, and set the amount limits that apply to each run. The hosted runner can execute the strategy without receiving your owner private key.
           </p>
         </div>
         <div className="landing-home-flow">
@@ -164,8 +176,8 @@ export default function LandingHome() {
       </section>
 
       <section className="landing-home-final" data-reveal>
-        <h2>Open Centry.</h2>
-        <p>Connect a wallet, choose an account, and start working with your positions on Arc.</p>
+        <h2>Your account. Your rules.</h2>
+        <p>Connect a wallet, manage your positions, and create an agent when you want automation to do the repetitive work.</p>
         <Link href="/app" className="landing-home-primary">Open app</Link>
       </section>
 
