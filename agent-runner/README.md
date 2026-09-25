@@ -67,6 +67,18 @@ With no autonomy instructions and no pending A2A tasks, the agent simply wakes, 
 
 The normal A2A endpoint now persists inbound work in D1. The next scheduler tick delivers pending tasks to the recipient agent. Completing a task never changes onchain permissions. The recipient smart account remains the final execution boundary.
 
+## Protocol analytics indexer
+
+The existing one-minute scheduler also maintains protocol analytics in the shared D1 database. It indexes lending-pool events and captures an hourly snapshot of each active reserve plus an aggregate protocol row.
+
+For a controlled historical backfill, set:
+
+```text
+CENTRY_ANALYTICS_START_BLOCK=<Arc Mainnet block>
+```
+
+When unset, the first run starts from a bounded recent lookback and then advances the cursor continuously. Indexed history is exposed by the Next.js `/api/analytics` endpoint and rendered on `/app/analytics`.
+
 ## Security
 
 The runner private key is never stored in D1. It is a Cloudflare Worker secret and is only used to sign Arc transactions.
