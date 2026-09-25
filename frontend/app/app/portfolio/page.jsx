@@ -170,8 +170,24 @@ function PortfolioContent() {
               <div><strong>{formatPercent(market.ltvBps / 100)}</strong><small>LT {formatPercent(market.liquidationThresholdBps / 100)}</small></div>
               <div><strong>{formatUsd(market.cashUsd)}</strong><small>Supply cap {formatPercent(market.supplyCapUtilizationPct)} · Borrow cap {formatPercent(market.borrowCapUtilizationPct)}</small></div>
               <div>
-                <strong>{market.suppliedUsd > 0 && market.liquidationPriceUsd != null ? formatUsd(market.liquidationPriceUsd) : '—'}</strong>
-                <small>{market.suppliedUsd > 0 && market.distanceToLiquidationPct != null ? formatPercent(market.distanceToLiquidationPct) + ' price distance' : 'No active collateral'}</small>
+                <strong>
+                  {market.liquidationPriceStatus === 'price'
+                    ? formatUsd(market.liquidationPriceUsd)
+                    : market.liquidationPriceStatus === 'already-breached'
+                      ? 'Already below HF 1.00'
+                      : market.liquidationPriceStatus === 'other-collateral-sufficient'
+                        ? 'Protected by other collateral'
+                        : '—'}
+                </strong>
+                <small>
+                  {market.liquidationPriceStatus === 'price'
+                    ? formatPercent(market.distanceToLiquidationPct) + ' price distance'
+                    : market.liquidationPriceStatus === 'already-breached'
+                      ? 'Current oracle price is below the estimated threshold'
+                      : market.liquidationPriceStatus === 'other-collateral-sufficient'
+                        ? 'Other supplied collateral covers the debt at HF 1.00'
+                        : 'No active collateral'}
+                </small>
               </div>
             </div>
           ))}
