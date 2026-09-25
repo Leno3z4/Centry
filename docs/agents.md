@@ -237,6 +237,22 @@ The route returns an ERC-8004 registration file and verifies that:
 
 The endpoint is therefore suitable as the `agentURI` published by the ERC-8004 identity registry.
 
+## Runtime reliability
+
+Queued work uses a leased state machine:
+
+~~~text
+pending -> processing -> completed
+                  \
+                   -> failed
+
+processing + expired lease -> processing
+~~~
+
+A claim records a unique lease ID, expiry time, and attempt count. Completion requires the same lease ID, so a stale worker cannot complete a task after another worker has reclaimed it. Task creation is idempotent by task ID.
+
+The runner also uses a per-agent lock plus a separate transaction mutex for the shared signer. External AI calls have a bounded timeout, so a provider outage cannot hold a run indefinitely.
+
 ## Runtime configuration
 
 The API runtime needs these server-side values:
