@@ -5,10 +5,9 @@ import { arcMainnet } from '../config/multiWagmi';
 import { ACTIVE_MARKETS } from '../constants/markets';
 import { CONTRACT_ADDRESSES } from '../constants/contracts';
 import { ERC20_ABI, LENDING_POOL_ABI, ORACLE_ABI } from '../constants/abis';
-import { buildRiskSummary, projectedBorrowRate, supplyApyFromBorrowRate, liquidationPriceForCollateral } from '../lib/defiRisk';
+import { buildRiskSummary, supplyApyFromBorrowRate, liquidationPriceForCollateral } from '../lib/defiRisk';
 
 const STRATEGY_ABI = [
-  { type: 'function', name: 'kink', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'getBorrowRate', stateMutability: 'view', inputs: [{ name: 'utilization', type: 'uint256' }], outputs: [{ type: 'uint256' }] },
 ];
 
@@ -35,10 +34,6 @@ export function useDeFiRisk() {
   const chainId = useChainId();
   const enabled = chainId === arcMainnet.id;
 
-  const strategyContracts = [
-    { address: CONTRACT_ADDRESSES.interestRateModel, abi: STRATEGY_ABI, functionName: 'kink' },
-  ];
-
   const marketContracts = useMemo(
     () => ACTIVE_MARKETS.flatMap((market) => [
       { address: CONTRACT_ADDRESSES.lendingPool, abi: LENDING_POOL_ABI, functionName: 'getReserveConfig', args: [market.address] },
@@ -61,19 +56,25 @@ export function useDeFiRisk() {
     query: { enabled: enabled && Boolean(address) },
   });
 
-  const { data: strategyResults, isLoading: strategyLoading } = useReadContracts({
-    contracts: strategyContracts,
-    query: { enabled },
-  });
-
   const { data: marketResults, isLoading: marketLoading } = useReadContracts({
     contracts: marketContracts,
     query: { enabled: enabled && Boolean(address) },
   });
 
-  const strategy = strategyResults?.length === 1
-    ? { kink: safeUnits(strategyResults[0]?.result, 18) }
-    : null;
+  const rateContracts = useMemo(
+    () => ACTIVE_MARKETS.map((market, index) => ({
+      address: CONTRACT_ADDRESSES.interestRateModel,
+      abi: STRATEGY_ABI,
+      functionName: 'getBorrowRate',
+      args: [marketResults?.[index * 8 + 3]?.status === 'success' ? marketResults[index * 8 + 3].result : 0n],
+    })),
+    [marketResults],
+  );
+
+  const { data: rateResults, isLoading: rateLoading } = useReadContracts({
+    contracts: rateContracts,
+    query: { enabled: enabled && Boolean(marketResults?.length) },
+  });
 
   const markets = useMemo(() => ACTIVE_MARKETS.map((market, index) => {
     const offset = index * 8;
@@ -92,7 +93,7 @@ export function useDeFiRisk() {
     const borrowedUsd = safeUnits(borrowedRaw, market.decimals) * priceUsd;
     const utilization = safeUnits(utilizationRaw, 18);
     const reserveFactorBps = Number(config?.[5] || 0);
-    const borrowApyRaw = marketResults?.[offset + 8];
+    const borrowApyRaw = rateResults?.[index];
     const borrowApy = borrowApyRaw?.status === 'success'
       ? safeUnits(borrowApyRaw.result, 18) * 100
       : 0;
@@ -118,7 +119,7 @@ export function useDeFiRisk() {
       borrowApy,
       supplyApy,
     };
-  }), [marketResults, strategy]);
+  }), [marketResults, rateResults]);
 
   const contractHealthFactor = healthFactorRaw === undefined || healthFactorRaw >= maxUint256 - 1000n
     ? null
@@ -155,7 +156,7 @@ export function useDeFiRisk() {
   );
 
   return {
-    loading: strategyLoading || marketLoading || healthLoading,
+    loading: rateLoading || marketLoading || healthLoading,
     enabled,
     address,
     markets: marketsWithRisk,
