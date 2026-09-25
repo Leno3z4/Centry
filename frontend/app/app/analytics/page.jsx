@@ -227,11 +227,6 @@ function AnalyticsContent() {
         </div>
       </section>
 
-      <div className="panel analytics-note">
-        <span className="section-kicker">ABOUT THESE NUMBERS</span>
-        <p>Market totals and rates are calculated from the deployed reserves and immutable interest-rate strategy.</p>
-      </div>
-
       <style jsx global>{`
         .analytics-stats{grid-template-columns:repeat(4,minmax(0,1fr))}
         .analytics-grid{align-items:start}
