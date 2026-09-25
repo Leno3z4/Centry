@@ -150,3 +150,8 @@ export async function getAgentRuntime(agentId) {
 export async function listActionReceipts(agentId, limit = 20) {
   return call("list_action_receipts", { agentId, limit });
 }
+
+
+export async function getProtocolAnalytics(days = 7) {
+  return call("get_protocol_analytics", { days });
+}
