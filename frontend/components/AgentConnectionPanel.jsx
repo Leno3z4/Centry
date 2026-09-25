@@ -20,7 +20,7 @@ const FACTORY_ABI = [
   },
 ];
 
-const DEFAULT_SCOPES = ['read'];
+const DEFAULT_SCOPES = ['read', 'lend', 'borrow', 'repay', 'swap'];
 const SCOPE_OPTIONS = [
   ['read', 'Read balances, positions, markets, rates and connection state'],
   ['lend', 'Supply, withdraw and manage lending positions'],
@@ -44,12 +44,12 @@ function short(address) {
   return address ? `${address.slice(0, 6)}…${address.slice(-4)}` : '';
 }
 
-export default function AgentConnectionPanel({ agentAccount = '' } = {}) {
+export default function AgentConnectionPanel() {
   const { address, isConnected, chainId } = useAccount();
   const publicClient = usePublicClient({ chainId: arcMainnet.id });
   const { signMessageAsync } = useSignMessage();
   const [selectedScopes, setSelectedScopes] = useState(DEFAULT_SCOPES);
-  const [selectedAccount, setSelectedAccount] = useState(agentAccount || '');
+  const [selectedAccount, setSelectedAccount] = useState('');
   const [existingAccount, setCustomAccount] = useState('');
   const [prompt, setPrompt] = useState('');
   const [connectionUrl, setConnectionUrl] = useState('');
@@ -57,7 +57,6 @@ export default function AgentConnectionPanel({ agentAccount = '' } = {}) {
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   const [isConnectingAgent, setIsConnectingAgent] = useState(false);
-  const [operatorAddress, setOperatorAddress] = useState('');
 
   const factoryAddress = process.env.NEXT_PUBLIC_CENTRY_AGENT_FACTORY;
   const configuredApi = apiBase();
@@ -72,17 +71,12 @@ export default function AgentConnectionPanel({ agentAccount = '' } = {}) {
   });
 
   const accounts = useMemo(() => accountsQuery.data || [], [accountsQuery.data]);
-  const activeAccount = agentAccount || selectedAccount || existingAccount || accounts[0] || '';
+  const activeAccount = selectedAccount || existingAccount || accounts[0] || '';
   const wrongNetwork = isConnected && chainId !== arcMainnet.id;
 
   useEffect(() => {
-    if (agentAccount) {
-      setSelectedAccount(agentAccount);
-      setCustomAccount('');
-      return;
-    }
     if (!selectedAccount && accounts[0]) setSelectedAccount(accounts[0]);
-  }, [accounts, agentAccount, selectedAccount]);
+  }, [accounts, selectedAccount]);
 
   function toggleScope(scope) {
     setSelectedScopes((current) => {
@@ -94,7 +88,7 @@ export default function AgentConnectionPanel({ agentAccount = '' } = {}) {
   }
 
   async function connectAgent() {
-    if (!address || !activeAccount || !operatorAddress || !configuredApi) return;
+    if (!address || !activeAccount || !configuredApi) return;
 
     setError('');
     setPrompt('');
@@ -108,7 +102,7 @@ export default function AgentConnectionPanel({ agentAccount = '' } = {}) {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         cache: 'no-store',
-        body: JSON.stringify({ owner: address, account: activeAccount, scopes: selectedScopes }),
+        body: JSON.stringify({ owner: address, account: activeAccount }),
       });
       const challenge = await challengeResponse.json();
       if (!challengeResponse.ok) throw new Error(challenge.error || 'Could not create the connection challenge.');
@@ -124,7 +118,6 @@ export default function AgentConnectionPanel({ agentAccount = '' } = {}) {
         body: JSON.stringify({
           challengeToken: challenge.challengeToken,
           signature,
-          operator: operatorAddress,
           scopes: selectedScopes,
         }),
       });
@@ -180,21 +173,31 @@ export default function AgentConnectionPanel({ agentAccount = '' } = {}) {
 
         <div className={styles.section}>
           <div className={styles.sectionTitle}>Agent account</div>
-          <div className={styles.notice}>
-            This connection is scoped to <strong>{short(agentAccount)}</strong>.
-            <a className={styles.addressLink} href={explorerAddress(agentAccount)} target="_blank" rel="noreferrer">{agentAccount}</a>
+          {accounts.length ? (
+            <div className={styles.accountList}>
+              {accounts.map((account) => (
+                <button
+                  key={account}
+                  type="button"
+                  className={`${styles.accountOption} ${activeAccount.toLowerCase() === account.toLowerCase() ? styles.selected : ''}`}
+                  onClick={() => { setSelectedAccount(account); setCustomAccount(''); }}
+                >
+                  <span><strong>{short(account)}</strong><small>Cent​ry smart account</small></span>
+                  <span>{activeAccount.toLowerCase() === account.toLowerCase() ? 'Selected' : 'Use'}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          <div className={styles.customRow}>
+            <input
+              value={existingAccount}
+              onChange={(event) => { setCustomAccount(event.target.value.trim()); setSelectedAccount(''); }}
+              placeholder="Paste an existing Centry agent account"
+              spellCheck="false"
+            />
           </div>
-        </div>
-        <div className={styles.section}>
-          <div className={styles.sectionTitle}>External operator</div>
-          <p className={styles.lede}>Enter the wallet address the external agent will use to sign transactions. It must already be authorized on this Centry smart account.</p>
-          <input
-            value={operatorAddress}
-            onChange={(event) => setOperatorAddress(event.target.value.trim())}
-            placeholder="0x… external agent operator address"
-            spellCheck="false"
-            inputMode="text"
-          />
+          {activeAccount ? <a className={styles.addressLink} href={explorerAddress(activeAccount)} target="_blank" rel="noreferrer">{activeAccount}</a> : <div className={styles.muted}>Select an existing Centry agent account to continue.</div>}
         </div>
 
         <div className={styles.section}>
@@ -215,7 +218,7 @@ export default function AgentConnectionPanel({ agentAccount = '' } = {}) {
         </div>
 
         <div className={styles.actionRow}>
-          <button type="button" className={styles.primaryButton} onClick={connectAgent} disabled={!activeAccount || !operatorAddress || !configuredApi || isConnectingAgent || wrongNetwork || selectedScopes.length === 0}>
+          <button type="button" className={styles.primaryButton} onClick={connectAgent} disabled={!activeAccount || !configuredApi || isConnectingAgent || wrongNetwork || selectedScopes.length === 0}>
             {isConnectingAgent ? 'Connecting…' : 'Generate agent connection'}
           </button>
           {status ? <span className={styles.status}>{status}</span> : null}
