@@ -15,7 +15,7 @@ export async function GET(_request, { params }) {
   const storedName = String(agent.name || "").trim();
   const storedDescription = String(agent.description || "").trim();
   const registeredName = !storedName || /^unregistered agent$/i.test(storedName)
-    ? "Centry Agent"
+    ? "Name your agent"
     : storedName;
   const registeredDescription = !storedDescription || /^agent account created onchain; finish registration to configure it\.?$/i.test(storedDescription)
     ? "Configurable Centry onchain agent."
