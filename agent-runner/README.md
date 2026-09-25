@@ -75,9 +75,16 @@ For a controlled historical backfill, set:
 
 ```text
 CENTRY_ANALYTICS_START_BLOCK=<Arc Mainnet block>
+CENTRY_ANALYTICS_RPC_URL=<dedicated Arc RPC endpoint>
 ```
 
-When unset, the first run starts from a bounded recent lookback and then advances the cursor continuously. Indexed history is exposed by the Next.js `/api/analytics` endpoint and rendered on `/app/analytics`.
+The analytics indexer uses `CENTRY_ANALYTICS_RPC_URL` when set, otherwise it shares `CENTRY_AGENT_RPC_URL`. Hourly protocol snapshots are captured once per hour; the event cursor may advance every scheduler tick while avoiding repeated hourly reserve reads. Indexed history is exposed by the Next.js `/api/analytics` endpoint and rendered on `/app/analytics`.
+
+## RPC reliability
+
+The hosted runner defaults to two concurrent agent runs (configurable up to three) and uses bounded JSON-RPC batches with no automatic fallback to a burst of individual reads after a throttle response. Transient RPC throttling gets a short exponential backoff.
+
+For production, set `CENTRY_AGENT_RPC_URL` to a dedicated Arc provider endpoint rather than the shared public endpoint. Arc currently documents Alchemy, Blockdaemon, dRPC and QuickNode RPC endpoints alongside `https://rpc.mainnet.arc.io`.
 
 ## Security
 

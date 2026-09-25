@@ -14,12 +14,19 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
-const ARC_RPC = "https://rpc.mainnet.arc.io";
+const DEFAULT_ARC_RPC = "https://rpc.mainnet.arc.io";
+const DEFAULT_RUNNER_CONCURRENCY = 2;
+const MAX_RUNNER_CONCURRENCY = 3;
+const RPC_BATCH_SIZE = 6;
+const RPC_MAX_ATTEMPTS = 2;
+const RPC_RETRY_BASE_MS = 1000;
+const RPC_TIMEOUT_MS = 15000;
+
 const ARC_CHAIN = {
   id: 5042,
   name: "Arc",
   nativeCurrency: { name: "USD Coin", symbol: "USDC", decimals: 18 },
-  rpcUrls: { default: { http: [ARC_RPC] } },
+  rpcUrls: { default: { http: [DEFAULT_ARC_RPC] } },
 };
 
 const ACCOUNT_ABI = parseAbi([
@@ -181,7 +188,10 @@ const UNITFLOW_FEES = [100, 500, 3000, 10000];
 
 const publicClientFor = (rpcUrl) => createPublicClient({
   chain: { ...ARC_CHAIN, rpcUrls: { default: { http: [rpcUrl] } } },
-  transport: http(rpcUrl),
+  transport: http(rpcUrl, {
+    retryCount: 0,
+    timeout: RPC_TIMEOUT_MS,
+  }),
 });
 
 function getRunnerAccount(env) {
@@ -903,7 +913,8 @@ function isTransientRpcLimit(error) {
     message.includes("request exceeds defined limit") ||
     message.includes("rate limit") ||
     message.includes("too many requests") ||
-    message.includes("429")
+    message.includes("429") ||
+    message.includes("throttl")
   );
 }
 
@@ -911,15 +922,19 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function rpcRetryDelay(attempt) {
+  return Math.min(4000, RPC_RETRY_BASE_MS * (2 ** attempt));
+}
+
 async function readRequiredContract(publicClient, request, label) {
   let lastError = null;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; attempt < RPC_MAX_ATTEMPTS; attempt += 1) {
     try {
       return await publicClient.readContract(request);
     } catch (error) {
       lastError = error;
-      if (!isTransientRpcLimit(error) || attempt === 2) break;
-      await sleep(250 * (attempt + 1));
+      if (!isTransientRpcLimit(error) || attempt + 1 >= RPC_MAX_ATTEMPTS) break;
+      await sleep(rpcRetryDelay(attempt));
     }
   }
   const message = lastError instanceof Error ? lastError.message : "rpc_read_failed";
@@ -927,26 +942,25 @@ async function readRequiredContract(publicClient, request, label) {
 }
 
 async function readOptionalContract(publicClient, request) {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  for (let attempt = 0; attempt < RPC_MAX_ATTEMPTS; attempt += 1) {
     try {
       return await publicClient.readContract(request);
     } catch (error) {
-      if (!isTransientRpcLimit(error) || attempt === 1) return null;
-      await sleep(250);
+      if (!isTransientRpcLimit(error) || attempt + 1 >= RPC_MAX_ATTEMPTS) return null;
+      await sleep(rpcRetryDelay(attempt));
     }
   }
   return null;
 }
 
 async function readRpcBatch(rpcUrl, requests) {
-  const MAX_BATCH_SIZE = 8;
   const allValues = [];
 
-  for (let offset = 0; offset < requests.length; offset += MAX_BATCH_SIZE) {
-    const chunk = requests.slice(offset, offset + MAX_BATCH_SIZE);
+  for (let offset = 0; offset < requests.length; offset += RPC_BATCH_SIZE) {
+    const chunk = requests.slice(offset, offset + RPC_BATCH_SIZE);
     let lastError = null;
 
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    for (let attempt = 0; attempt < RPC_MAX_ATTEMPTS; attempt += 1) {
       try {
         const payload = chunk.map((item, index) => item.kind === "balance"
           ? {
@@ -965,11 +979,15 @@ async function readRpcBatch(rpcUrl, requests) {
               }, "latest"],
             });
 
-        const response = await fetch(rpcUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
+        const response = await fetchWithTimeout(
+          rpcUrl,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          },
+          RPC_TIMEOUT_MS,
+        );
         if (!response.ok) throw new Error(`rpc_http_${response.status}`);
 
         const body = await response.json();
@@ -1008,8 +1026,8 @@ async function readRpcBatch(rpcUrl, requests) {
         });
 
         const transientFailure = values.find((item) => !item.ok && isTransientRpcLimit(item.error));
-        if (transientFailure && attempt < 2) {
-          await sleep(300 * (attempt + 1));
+        if (transientFailure && attempt + 1 < RPC_MAX_ATTEMPTS) {
+          await sleep(rpcRetryDelay(attempt));
           continue;
         }
 
@@ -1018,8 +1036,8 @@ async function readRpcBatch(rpcUrl, requests) {
         break;
       } catch (error) {
         lastError = error;
-        if (!isTransientRpcLimit(error) || attempt === 2) break;
-        await sleep(300 * (attempt + 1));
+        if (!isTransientRpcLimit(error) || attempt + 1 >= RPC_MAX_ATTEMPTS) break;
+        await sleep(rpcRetryDelay(attempt));
       }
     }
 
@@ -1122,7 +1140,8 @@ async function readAgentSnapshot(publicClient, account, runnerAddress, rpcUrl) {
       },
     };
   } catch (error) {
-    return readAgentSnapshotFallback(publicClient, account, runnerAddress);
+    const message = error instanceof Error ? error.message : "rpc_snapshot_failed";
+    throw new Error(`agent_rpc_read_failed_snapshot:${message}`);
   }
 }
 
@@ -1601,7 +1620,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
 
   try {
     const account = getAddress(agent.account);
-    const rpcUrl = String(env.CENTRY_AGENT_RPC_URL || ARC_RPC);
+    const rpcUrl = String(env.CENTRY_AGENT_RPC_URL || DEFAULT_ARC_RPC);
 
     const claimed = await claimAgentTasks(db, agent.id, {
       taskId: requestedTaskId,
@@ -2150,17 +2169,16 @@ function toUsdE18(amountRaw, priceE18, decimals) {
 
 async function indexProtocolEvents(db, publicClient, fromBlock, toBlock) {
   if (fromBlock > toBlock) return 0;
-  const logsByEvent = await Promise.all(
-    ANALYTICS_EVENTS.map(async (definition) => {
-      const logs = await publicClient.getLogs({
-        address: LENDING_POOL,
-        event: definition.event,
-        fromBlock,
-        toBlock,
-      });
-      return { definition, logs };
-    }),
-  );
+  const logsByEvent = [];
+  for (const definition of ANALYTICS_EVENTS) {
+    const logs = await publicClient.getLogs({
+      address: LENDING_POOL,
+      event: definition.event,
+      fromBlock,
+      toBlock,
+    });
+    logsByEvent.push({ definition, logs });
+  }
 
   const blockTimestamps = new Map();
   const createdAt = new Date().toISOString();
@@ -2398,7 +2416,20 @@ async function snapshotProtocolHourly(db, publicClient, bucketStart) {
 }
 
 async function runProtocolAnalyticsIndexer(env, scheduledAt) {
-  const rpcUrl = String(env.CENTRY_AGENT_RPC_URL || ARC_RPC);
+  const minute = new Date(scheduledAt).getUTCMinutes();
+  if (minute % 5 !== 0) {
+    return {
+      skipped: true,
+      reason: "analytics_interval",
+      intervalMinutes: 5,
+    };
+  }
+
+  const rpcUrl = String(
+    env.CENTRY_ANALYTICS_RPC_URL ||
+    env.CENTRY_AGENT_RPC_URL ||
+    DEFAULT_ARC_RPC,
+  );
   const publicClient = publicClientFor(rpcUrl);
   const latestBlock = BigInt(await publicClient.getBlockNumber());
 
@@ -2442,7 +2473,13 @@ async function runProtocolAnalyticsIndexer(env, scheduledAt) {
   }
 
   const bucketStart = Math.floor(new Date(scheduledAt).getTime() / 3600000) * 3600;
-  const metrics = await snapshotProtocolHourly(env.DB, publicClient, bucketStart);
+  const snapshotMarker = await env.DB.prepare(
+    "SELECT 1 FROM centry_protocol_hourly WHERE bucket_start = ? AND asset = 'TOTAL' LIMIT 1"
+  ).bind(bucketStart).first();
+
+  const metrics = snapshotMarker
+    ? 0
+    : await snapshotProtocolHourly(env.DB, publicClient, bucketStart);
 
   return {
     latestBlock: Number(latestBlock),
@@ -2486,7 +2523,7 @@ async function runSingleAgent(env, agentId, taskId) {
   const agent = await getAgentById(env.DB, agentId);
   if (!agent) throw new Error("agent_not_found");
 
-  const rpcUrl = String(env.CENTRY_AGENT_RPC_URL || ARC_RPC);
+  const rpcUrl = String(env.CENTRY_AGENT_RPC_URL || DEFAULT_ARC_RPC);
   const runnerAccount = getRunnerAccount(env);
   const runnerAddress = getAddress(runnerAccount.address);
   const publicClient = publicClientFor(rpcUrl);
@@ -2509,7 +2546,7 @@ async function runSingleAgent(env, agentId, taskId) {
 }
 
 async function runScheduler(env, scheduledAt) {
-  const rpcUrl = String(env.CENTRY_AGENT_RPC_URL || ARC_RPC);
+  const rpcUrl = String(env.CENTRY_AGENT_RPC_URL || DEFAULT_ARC_RPC);
   const runnerAccount = getRunnerAccount(env);
   const runnerAddress = getAddress(runnerAccount.address);
   const publicClient = publicClientFor(rpcUrl);
@@ -2525,7 +2562,12 @@ async function runScheduler(env, scheduledAt) {
   const agents = await getAgents(env.DB);
   const results = await withConcurrency(
     agents,
-    clampInt(env.CENTRY_AGENT_RUNNER_CONCURRENCY, 1, 6, 6),
+    clampInt(
+      env.CENTRY_AGENT_RUNNER_CONCURRENCY,
+      1,
+      MAX_RUNNER_CONCURRENCY,
+      DEFAULT_RUNNER_CONCURRENCY,
+    ),
     (agent) => runAgent(env.DB, publicClient, walletClient, runnerAddress, agent, scheduledAt, env),
   );
 
@@ -2544,15 +2586,6 @@ export default {
       : new Date().toISOString();
 
     ctx.waitUntil(
-      runProtocolAnalyticsIndexer(env, scheduledAt)
-        .then((result) => console.log("centry_protocol_analytics_indexed", result))
-        .catch((error) => console.error("centry_protocol_analytics_indexer_failed", {
-          scheduledAt,
-          error: error instanceof Error ? error.message : String(error),
-        })),
-    );
-
-    ctx.waitUntil(
       runScheduler(env, scheduledAt)
         .then((result) => {
           console.log("centry_agent_scheduler_completed", {
@@ -2561,12 +2594,30 @@ export default {
             agentCount: result.agentCount,
             results: result.results,
           });
+          return { schedulerOk: true, result };
         })
         .catch((error) => {
           console.error("centry_agent_scheduler_failed", {
             scheduledAt,
             error: error instanceof Error ? error.message : String(error),
           });
+          return { schedulerOk: false, error };
+        })
+        .then(async ({ schedulerOk }) => {
+          try {
+            const result = await runProtocolAnalyticsIndexer(env, scheduledAt);
+            console.log("centry_protocol_analytics_indexed", {
+              scheduledAt,
+              schedulerOk,
+              ...result,
+            });
+          } catch (error) {
+            console.error("centry_protocol_analytics_indexer_failed", {
+              scheduledAt,
+              schedulerOk,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
         }),
     );
   },
