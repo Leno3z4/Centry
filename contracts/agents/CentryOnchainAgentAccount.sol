@@ -115,7 +115,7 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
         address indexed operator,
         address indexed target,
         bytes4 indexed selector,
-        address indexed asset,
+        address asset,
         uint128 maxAmountPerCall,
         uint128 maxAmountPerWindow,
         uint64 windowDuration
