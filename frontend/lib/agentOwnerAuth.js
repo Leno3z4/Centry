@@ -1,39 +1,78 @@
 import { JsonRpcProvider, Contract, getAddress, isAddress, verifyMessage } from "ethers";
 import crypto from "node:crypto";
+import { consumeOwnerAuthNonce } from "./agentStore";
 
 const ACCOUNT_ABI = [
   "function owner() view returns (address)",
   "function active() view returns (bool)",
 ];
 
+const DEFAULT_AGENT_RPC_URL = "https://rpc.mainnet.arc.io";
+
 function secret() {
   return process.env.CENTRY_AGENT_CONNECTION_SECRET || "";
+}
+
+function resolveAgentRpcUrl(value) {
+  const configured = value || process.env.CENTRY_AGENT_RPC_URL || process.env.CENTRY_ERC8004_RPC_URL || "";
+  try {
+    const url = new URL(configured);
+    if (["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(url.hostname)) return DEFAULT_AGENT_RPC_URL;
+    return url.toString();
+  } catch {
+    return DEFAULT_AGENT_RPC_URL;
+  }
 }
 
 function sign(value) {
   return crypto.createHmac("sha256", secret()).update(value).digest("base64url");
 }
 
-export function issueOwnerChallenge({ owner, account, action }) {
+function canonicalize(value) {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value && typeof value === "object") {
+    return Object.keys(value).sort().reduce((result, key) => {
+      result[key] = canonicalize(value[key]);
+      return result;
+    }, {});
+  }
+  return value;
+}
+
+function canonicalParams(params) {
+  return JSON.stringify(canonicalize(params && typeof params === "object" ? params : {}));
+}
+
+function paramsHash(params) {
+  return crypto.createHash("sha256").update(canonicalParams(params)).digest("hex");
+}
+
+function authorizationMessage({ action, account, owner, nonce, exp, params }) {
+  return [
+    "Centry agent administration",
+    "",
+    "Action: " + action,
+    "Account: " + account,
+    "Owner: " + owner,
+    "Nonce: " + nonce,
+    "Expires: " + exp,
+    "Parameters: " + canonicalParams(params),
+    "",
+    "I authorize this Centry agent administration action with exactly the parameters listed above.",
+  ].join("\n");
+}
+
+export function issueOwnerChallenge({ owner, account, action, params = {} }) {
   if (!secret()) throw new Error("agent_connection_secret_not_configured");
   const normalizedOwner = getAddress(owner);
   const normalizedAccount = getAddress(account);
+  const normalizedParams = canonicalize(params && typeof params === "object" ? params : {});
   const nonce = crypto.randomUUID();
   const exp = Math.floor(Date.now() / 1000) + 300;
-  const payload = { kind: "centry-owner-admin", nonce, owner: normalizedOwner, account: normalizedAccount, action, exp };
+  const payload = { kind: "centry-owner-admin", nonce, owner: normalizedOwner, account: normalizedAccount, action, params: normalizedParams, paramsHash: paramsHash(normalizedParams), exp };
   const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const token = `${encoded}.${sign(encoded)}`;
-  const message = [
-    "Centry agent administration",
-    "",
-    `Action: ${action}`,
-    `Account: ${normalizedAccount}`,
-    `Owner: ${normalizedOwner}`,
-    `Nonce: ${nonce}`,
-    `Expires: ${exp}`,
-    "",
-    "I authorize this Centry agent administration action for this account.",
-  ].join("\n");
+  const token = encoded + "." + sign(encoded);
+  const message = authorizationMessage({ action, account: normalizedAccount, owner: normalizedOwner, nonce, exp, params: normalizedParams });
   return { token, message, ...payload };
 }
 
@@ -49,45 +88,28 @@ export function verifyOwnerChallenge(token) {
   }
 }
 
-export async function verifyOwnerAuthorization({ rpcUrl, challengeToken, signature, owner, account, action }) {
+export async function verifyOwnerAuthorization({ rpcUrl, challengeToken, signature, owner, account, action, params = {} }) {
   const challenge = verifyOwnerChallenge(challengeToken);
-  if (!challenge || challenge.owner.toLowerCase() !== owner.toLowerCase() || challenge.account.toLowerCase() !== account.toLowerCase() || challenge.action !== action) throw new Error("invalid_owner_challenge");
+  const normalizedOwner = getAddress(owner);
+  const normalizedAccount = getAddress(account);
+  const normalizedParams = canonicalize(params && typeof params === "object" ? params : {});
+  if (!challenge || challenge.owner.toLowerCase() !== normalizedOwner.toLowerCase() || challenge.account.toLowerCase() !== normalizedAccount.toLowerCase() || challenge.action !== action || challenge.paramsHash !== paramsHash(normalizedParams) || canonicalParams(challenge.params) !== canonicalParams(normalizedParams)) {
+    throw new Error("invalid_owner_challenge");
+  }
 
-  const message = [
-    "Centry agent administration",
-    "",
-    `Action: ${action}`,
-    `Account: ${challenge.account}`,
-    `Owner: ${challenge.owner}`,
-    `Nonce: ${challenge.nonce}`,
-    `Expires: ${challenge.exp}`,
-    "",
-    "I authorize this Centry agent administration action for this account.",
-  ].join("\n");
-
+  const message = authorizationMessage({ action: challenge.action, account: challenge.account, owner: challenge.owner, nonce: challenge.nonce, exp: challenge.exp, params: challenge.params });
   const signer = getAddress(verifyMessage(message, signature));
   if (signer.toLowerCase() !== challenge.owner.toLowerCase()) throw new Error("owner_signature_mismatch");
 
-  const provider = new JsonRpcProvider(rpcUrl);
+  const provider = new JsonRpcProvider(resolveAgentRpcUrl(rpcUrl));
   const contract = new Contract(challenge.account, ACCOUNT_ABI, provider);
   const [onchainOwner, active] = await Promise.all([contract.owner(), contract.active()]);
   if (getAddress(onchainOwner).toLowerCase() !== signer.toLowerCase()) throw new Error("account_owner_mismatch");
 
+  const consumed = await consumeOwnerAuthNonce({ nonce: challenge.nonce, owner: challenge.owner, account: challenge.account, action: challenge.action, paramsHash: challenge.paramsHash });
+  if (!consumed) throw new Error("owner_challenge_replayed");
+
   return { challenge, active: Boolean(active) };
-}
-
-
-const DEFAULT_AGENT_RPC_URL = "https://rpc.mainnet.arc.io";
-
-function resolveAgentRpcUrl(value) {
-  const configured = value || process.env.CENTRY_AGENT_RPC_URL || process.env.CENTRY_ERC8004_RPC_URL || "";
-  try {
-    const url = new URL(configured);
-    if (["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(url.hostname)) return DEFAULT_AGENT_RPC_URL;
-    return url.toString();
-  } catch {
-    return DEFAULT_AGENT_RPC_URL;
-  }
 }
 
 export const OWNER_SESSION_COOKIE = "centry_owner_session";

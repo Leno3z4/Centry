@@ -16,8 +16,14 @@ export async function POST(request, { params }) {
       owner: getAddress(agent.owner),
       account: getAddress(agent.account),
       action: "revoke-api-key",
+      params: { keyId: String(body.keyId || "") },
     });
-    await revokeAgentKey(String(body.keyId || ""));
+    const revoked = await revokeAgentKey(
+      String(body.keyId || ""),
+      String(agentId),
+      getAddress(agent.owner),
+    );
+    if (!revoked?.revoked) throw new Error("agent_key_not_found_or_not_owned");
     return Response.json({ revoked: true }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "api_key_revoke_failed" }, { status: 403 });

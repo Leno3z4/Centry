@@ -44,6 +44,7 @@ export async function POST(request) {
       owner,
       account,
       action: "agent-session",
+      params: {},
     });
 
     const session = issueOwnerSession({ owner });

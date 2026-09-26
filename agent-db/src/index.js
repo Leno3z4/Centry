@@ -10,6 +10,7 @@ const OPERATIONS = new Set([
   "list_agent_keys",
   "get_active_agent_key",
   "revoke_agent_key",
+  "consume_owner_auth_nonce",
   "set_provider_config",
   "list_provider_configs",
   "get_provider_config",
@@ -175,10 +176,34 @@ async function runOperation(db, operation, args) {
 
     case "revoke_agent_key": {
       const id = requireString(args.id, "id");
+      const agentId = requireString(args.agentId, "agentId");
+      const owner = requireString(args.owner, "owner");
+      const key = await db.prepare(
+        "SELECT id FROM centry_agent_keys WHERE id = ? AND agent_id = ? AND lower(owner) = lower(?) LIMIT 1"
+      ).bind(id, agentId, owner).first();
+      if (!key) return { id, revoked: false };
       await db.prepare(
-        "UPDATE centry_agent_keys SET revoked_at = ? WHERE id = ?"
-      ).bind(args.revokedAt || new Date().toISOString(), id).run();
-      return { id };
+        "UPDATE centry_agent_keys SET revoked_at = COALESCE(revoked_at, ?) WHERE id = ? AND agent_id = ? AND lower(owner) = lower(?)"
+      ).bind(args.revokedAt || new Date().toISOString(), id, agentId, owner).run();
+      return { id, revoked: true };
+    }
+
+    case "consume_owner_auth_nonce": {
+      const nonce = requireString(args.nonce, "nonce");
+      const owner = requireString(args.owner, "owner");
+      const account = requireString(args.account, "account");
+      const action = requireString(args.action, "action");
+      const paramsHash = requireString(args.paramsHash, "paramsHash");
+      const now = new Date().toISOString();
+      await db.prepare(
+        "DELETE FROM centry_owner_auth_nonces WHERE consumed_at < ?"
+      ).bind(new Date(Date.now() - 86400000).toISOString()).run();
+      const result = await db.prepare(
+        `INSERT OR IGNORE INTO centry_owner_auth_nonces
+          (nonce, owner, account, action, params_hash, consumed_at)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      ).bind(nonce, owner, account, action, paramsHash, now).run();
+      return Number(result?.meta?.changes || 0) === 1;
     }
 
     case "set_provider_config":

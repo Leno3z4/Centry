@@ -12,14 +12,25 @@ export async function POST(request, { params }) {
   if (!isAddress(body?.owner || "")) return Response.json({ error: "invalid_owner" }, { status: 400 });
   if (getAddress(body.owner).toLowerCase() !== getAddress(agent.owner).toLowerCase()) return Response.json({ error: "owner_mismatch" }, { status: 403 });
   const rpcUrl = process.env.CENTRY_AGENT_RPC_URL;
+  const scopes = Array.isArray(body.scopes) && body.scopes.length
+    ? [...new Set(body.scopes.map((scope) => String(scope)))]
+    : ["read","lend","borrow","repay","swap"];
+  const operator = body.operator && isAddress(body.operator) ? getAddress(body.operator) : null;
+  const label = body.label || "External agent";
+  if (!operator) return Response.json({ error: "operator_required" }, { status: 400 });
   try {
-    await verifyOwnerAuthorization({ rpcUrl, challengeToken: body.challengeToken, signature: body.signature, owner: getAddress(agent.owner), account: getAddress(agent.account), action: "create-api-key" });
+    await verifyOwnerAuthorization({
+      rpcUrl,
+      challengeToken: body.challengeToken,
+      signature: body.signature,
+      owner: getAddress(agent.owner),
+      account: getAddress(agent.account),
+      action: "create-api-key",
+      params: { label, operator, scopes },
+    });
     const id = crypto.randomUUID();
     const raw = generateApiKey(id);
-    const scopes = Array.isArray(body.scopes) && body.scopes.length ? [...new Set(body.scopes)] : ["read","lend","borrow","repay","swap"];
-    const operator = body.operator && isAddress(body.operator) ? getAddress(body.operator) : null;
-    if (!operator) return Response.json({ error: "operator_required" }, { status: 400 });
-    await createAgentKey({ id, agentId, owner: agent.owner, operator, label: body.label || "External agent", keyHash: hashApiKey(raw), scopes });
+    await createAgentKey({ id, agentId, owner: agent.owner, operator, label, keyHash: hashApiKey(raw), scopes });
     return Response.json({ key: raw, keyId: id, operator, scopes, warning: "Copy this key now. Centry does not display the secret again." }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "api_key_creation_failed" }, { status: 403 });

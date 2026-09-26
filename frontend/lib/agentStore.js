@@ -1,25 +1,12 @@
 const dbUrl = () => (process.env.CENTRY_AGENT_DB_URL || "").replace(/\/$/, "");
 const dbSecret = () => process.env.CENTRY_AGENT_DB_SECRET || "";
 
-async function fetchWithTimeout(url, options = {}, timeoutMs = 8_000) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } catch (error) {
-    if (error?.name === "AbortError") throw new Error("agent_store_timeout");
-    throw error;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 async function call(operation, args = {}) {
   const url = dbUrl();
   const secret = dbSecret();
   if (!url || !secret) throw new Error("agent_store_not_configured");
 
-  const response = await fetchWithTimeout(url, {
+  const response = await fetch(url, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -88,8 +75,24 @@ export async function getActiveAgentKey(id) {
   return call("get_active_agent_key", { id });
 }
 
-export async function revokeAgentKey(id, revokedAt = new Date().toISOString()) {
-  return call("revoke_agent_key", { id, revokedAt });
+export async function revokeAgentKey(id, agentId, owner, revokedAt = new Date().toISOString()) {
+  return call("revoke_agent_key", { id, agentId, owner, revokedAt });
+}
+
+export async function consumeOwnerAuthNonce({ nonce, owner, account, action, paramsHash }) {
+  return call("consume_owner_auth_nonce", { nonce, owner, account, action, paramsHash });
+}
+
+export async function getAgentRuntime(agentId) {
+  return call("get_agent_runtime", { agentId });
+}
+
+export async function listActionReceipts(agentId, limit = 20) {
+  return call("list_action_receipts", { agentId, limit });
+}
+
+export async function getProtocolAnalytics(days = 7) {
+  return call("get_protocol_analytics", { days });
 }
 
 export async function setProviderConfig({ agentId, provider, model, encryptedApiKey }) {
@@ -154,17 +157,3 @@ export async function getAgentTask(id) {
 }
 
 export async function updateAgentConfig(id, config) { return call("update_agent_config", { id, config }); }
-
-
-export async function getAgentRuntime(agentId) {
-  return call("get_agent_runtime", { agentId });
-}
-
-export async function listActionReceipts(agentId, limit = 20) {
-  return call("list_action_receipts", { agentId, limit });
-}
-
-
-export async function getProtocolAnalytics(days = 7) {
-  return call("get_protocol_analytics", { days });
-}
