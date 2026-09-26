@@ -198,8 +198,10 @@ function ConfigureContent() {
 
       const desiredPermissions = [];
       const desiredLimits = [];
+      const desiredApprovalSpenders = [];
       const permissionKeys = new Set();
       const limitKeys = new Set();
+      const approvalSpenderKeys = new Set();
 
       const addPermission = (target, signature) => {
         const normalizedTarget = target.toLowerCase();
@@ -211,6 +213,13 @@ function ConfigureContent() {
           target,
           selector: selector(signature),
         });
+      };
+
+      const addApprovalSpender = (asset, spender) => {
+        const key = asset.toLowerCase() + ':' + spender.toLowerCase();
+        if (approvalSpenderKeys.has(key)) return;
+        approvalSpenderKeys.add(key);
+        desiredApprovalSpenders.push({ asset, spender });
       };
 
       const addLimit = (target, signature, asset) => {
@@ -247,12 +256,14 @@ function ConfigureContent() {
           if (!tokenAddresses[asset]) continue;
           addPermission(tokenAddresses[asset], 'approve(address,uint256)');
           addLimit(tokenAddresses[asset], 'approve(address,uint256)', tokenAddresses[asset]);
+          addApprovalSpender(tokenAddresses[asset], CONTRACT_ADDRESSES.lendingPool);
         }
       }
 
       if (allowedActions.includes('swap')) {
         addPermission(CONTRACT_ADDRESSES.centryToken, 'approve(address,uint256)');
         addLimit(CONTRACT_ADDRESSES.centryToken, 'approve(address,uint256)', CONTRACT_ADDRESSES.centryToken);
+        addApprovalSpender(CONTRACT_ADDRESSES.centryToken, CONTRACT_ADDRESSES.unitFlowRouter);
       }
 
       if (allowedActions.includes('transfer')) {
@@ -298,6 +309,25 @@ function ConfigureContent() {
             label: 'permission ' + item.target.slice(0, 10) + '… ' + item.selector,
             functionName: 'setPermission',
             args: [RUNNER_ADDRESS, item.target, item.selector, true, desiredExpiry, 0n],
+          });
+        }
+      }
+
+      for (const item of desiredApprovalSpenders) {
+        const allowed = await publicClient.readContract({
+          address: agent.account,
+          abi: ACCOUNT_ABI,
+          functionName: 'approvalSpenders',
+          args: [RUNNER_ADDRESS, item.asset, item.spender],
+        });
+        if (!allowed) {
+          const symbol = Object.entries(tokenAddresses).find(([, value]) =>
+            String(value).toLowerCase() === item.asset.toLowerCase()
+          )?.[0] || 'asset';
+          pending.push({
+            label: 'approve spender ' + symbol,
+            functionName: 'setApprovalSpender',
+            args: [RUNNER_ADDRESS, item.asset, item.spender, true],
           });
         }
       }
