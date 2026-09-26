@@ -100,7 +100,7 @@ function OverviewContent() {
                 (firstMarket?.symbol || '')
               : '—'}
           </strong>
-          <p className="overview-widget-note">Your active deposit</p>
+          <p className="overview-widget-note">Your active supply</p>
         </OverviewWidget>
       );
     }
@@ -254,11 +254,6 @@ function OverviewContent() {
               <span>Total portfolio</span>
               <strong>{isConnected ? '$' + formatNumber(lending.accountPosition?.totalCollateralValueUsd, 2) : '—'}</strong>
               <small>Current collateral value</small>
-            </div>
-            <div className="hero-actions overview-hero-actions">
-              <a className="primary-btn" href="/app/markets">Deposit</a>
-              <a className="secondary-btn" href="/app/markets">Borrow</a>
-              <a className="secondary-btn" href="/app/swap">Swap</a>
             </div>
           </div>
 
