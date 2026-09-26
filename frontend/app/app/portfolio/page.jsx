@@ -44,7 +44,7 @@ function healthTone(percent) {
 
 function StatCard({ label, value, detail }) {
   return (
-    <div className="metric" key={label}>
+    <div className="portfolioQuickMetric">
       <span>{label}</span>
       <strong>{value}</strong>
       <small>{detail}</small>
@@ -160,38 +160,9 @@ function PortfolioContent() {
       <TransactionHistory />
     <style jsx global>{`
       .risk-overview-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:14px}
-      .risk-summary-panel,.collateral-panel,.market-risk-panel{padding:20px}
-      .risk-summary-panel .panel-head p,.collateral-panel .panel-head p{margin:6px 0 0;color:rgba(255,255,255,.56);font-size:12px;line-height:1.5}
-      .risk-state-chip{display:inline-flex;align-items:center;padding:6px 9px;border:1px solid #2a2a2a;border-radius:999px;background:#111;color:rgba(255,255,255,.72);font-size:10px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
-      .risk-summary-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:16px}
-      .risk-summary-metrics>div{padding:13px;border:1px solid #202020;border-radius:12px;background:#0d0d0d}
-      .risk-summary-metrics span,.risk-summary-metrics small{display:block;color:rgba(255,255,255,.5);font-size:10px}
-      .risk-summary-metrics strong{display:block;margin:6px 0 4px;color:#fff;font-size:17px}
-      .risk-distance-track{height:6px;margin-top:15px;overflow:hidden;border-radius:999px;background:#202020}
-      .risk-distance-track>div{height:100%;border-radius:inherit;background:#0a84ff}
-      .collateral-list{display:grid;gap:12px;margin-top:16px}
-      .collateral-row{display:grid;gap:7px;padding:11px 0;border-bottom:1px solid #202020}
-      .collateral-row:last-child{border-bottom:0}
-      .collateral-row>div:first-child{display:flex;justify-content:space-between;gap:12px}
-      .collateral-row strong{color:#fff;font-size:12px}
-      .collateral-row span{color:rgba(255,255,255,.52);font-size:11px}
-      .collateral-share{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:10px}
-      .collateral-share>div{height:4px;border-radius:999px;background:#202020;overflow:hidden}
-      .collateral-share>div>span{display:block;height:100%;border-radius:inherit;background:#0a84ff}
-      .market-risk-panel{margin-top:14px}
-      .market-risk-table{margin-top:15px;border:1px solid #202020;border-radius:13px;overflow:auto}
-      .market-risk-table-head,.market-risk-row{display:grid;grid-template-columns:1.15fr .8fr .8fr .8fr .95fr 1fr 1.25fr;min-width:860px;gap:12px;align-items:center}
-      .market-risk-table-head{padding:10px 12px;background:#111;border-bottom:1px solid #202020;color:rgba(255,255,255,.43);font-size:10px;text-transform:uppercase;letter-spacing:.05em}
-      .market-risk-row{padding:13px 12px;border-bottom:1px solid #202020;background:#0d0d0d}
-      .market-risk-row:last-child{border-bottom:0}
-      .market-risk-row strong,.market-risk-row small{display:block}
-      .market-risk-row strong{color:#fff;font-size:12px}
-      .market-risk-row small{margin-top:3px;color:rgba(255,255,255,.45);font-size:10px}
-      .risk-footnote{margin-top:11px;color:rgba(255,255,255,.42);font-size:10px;line-height:1.5}
-      .risk-empty{padding:18px 0;color:rgba(255,255,255,.5);font-size:12px}
-      @media (max-width:900px){.risk-overview-grid{grid-template-columns:1fr}}
-      @media (max-width:640px){.risk-summary-metrics{grid-template-columns:1fr}}
-
+      .risk-summary-panel,.collateral-panel,.market-risk-panel{padding:20px;background:#1e1e1e!important;border-color:#343941!important;box-shadow:0 12px 32px rgba(0,0,0,.14)!important}
+      .risk-summary-panel .panel-head p,.collateral-panel .panel-head p{margin:6px 0 0;color:rgba(255,255,255,.5);font-size:12px;line-height:1.5}
+      .risk-state-chip{display:inline-flex;align-items:center;padding:6px 9px;border:1px solid #343941;border-radius:999px;background:#17191c;color:rgba(255,255,255,.72);font-size:10px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
       .portfolio-hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,360px);align-items:end;gap:18px}
       .portfolio-hero>div:first-child{min-width:0}
       .portfolio-primary-metric{padding:18px 20px;border:1px solid #343941;border-radius:16px;background:#1e1e1e;box-shadow:0 14px 36px rgba(0,0,0,.18)}
@@ -199,10 +170,10 @@ function PortfolioContent() {
       .portfolio-primary-metric strong{display:block;margin:7px 0 4px;color:#fff;font-size:34px;line-height:1;letter-spacing:-1px}
       .portfolio-primary-metric small{text-transform:none;letter-spacing:0;font-size:11px}
       .portfolio-quick-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-      .portfolio-quick-metrics .metric{min-height:0;padding:15px 16px;border:1px solid #30343a;border-radius:14px;background:#17191c}
-      .portfolio-quick-metrics .metric>strong{font-size:20px}
-      .risk-summary-panel,.collateral-panel,.market-risk-panel{background:#1e1e1e!important;border-color:#343941!important;box-shadow:0 12px 32px rgba(0,0,0,.14)!important}
-      .risk-summary-panel .panel-head p,.collateral-panel .panel-head p{color:rgba(255,255,255,.5)}
+      .portfolioQuickMetric{min-width:0;padding:15px 16px;border:1px solid #30343a;border-radius:14px;background:#17191c;box-shadow:0 10px 26px rgba(0,0,0,.1)}
+      .portfolioQuickMetric>span{color:rgba(255,255,255,.5);font-size:10px;text-transform:uppercase;letter-spacing:.04em}
+      .portfolioQuickMetric>strong{display:block;margin-top:6px;color:#fff;font-size:20px;font-variant-numeric:tabular-nums}
+      .portfolioQuickMetric>small{display:block;margin-top:4px;color:rgba(255,255,255,.45);font-size:10px;line-height:1.45}
       .risk-state-chip.safe{border-color:rgba(52,199,89,.25);background:rgba(52,199,89,.09);color:#a6e9bb}
       .risk-state-chip.warning{border-color:rgba(255,159,10,.28);background:rgba(255,159,10,.09);color:#ffd58a}
       .risk-state-chip.danger{border-color:rgba(255,69,58,.3);background:rgba(255,69,58,.09);color:#ffaaa3}
@@ -219,27 +190,32 @@ function PortfolioContent() {
       .health-status-bar.danger>div{background:#ff453a}
       .health-foot-row{display:flex;justify-content:space-between;gap:12px;margin-top:11px;color:rgba(255,255,255,.45);font-size:10px}
       .health-foot-row strong{color:rgba(255,255,255,.82)}
-      .collateral-list{margin-top:14px}
-      .collateral-row{padding:12px 0;border-bottom-color:#2b2f34}
-      .collateral-asset{display:grid!important;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px}
-      .asset-badge{display:grid;width:30px;height:30px;place-items:center;border:1px solid #3a3f46;border-radius:50%;background:#15171a;color:#fff;font-size:12px;font-weight:750;box-shadow:inset 0 0 0 2px rgba(255,255,255,.025)}
+      .collateral-list{display:grid;gap:12px;margin-top:14px}
+      .collateral-row{display:grid;gap:7px;padding:12px 0;border-bottom:1px solid #2b2f34}
+      .collateral-row:last-child{border-bottom:0}
+      .collateral-asset{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px}
+      .asset-badge{display:grid;width:30px;height:30px;place-items:center;border:1px solid #3a3f46;border-radius:50%;background:#15171a;color:#fff;font-size:12px;font-weight:750}
       .collateral-asset>div{display:grid;gap:2px;min-width:0}
       .collateral-asset>div span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-      .collateral-share{grid-template-columns:auto minmax(0,1fr);gap:10px;margin-top:7px}
+      .collateral-share{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:10px;margin-top:7px}
       .collateral-share>strong{font-size:10px;color:rgba(255,255,255,.58)}
-      .collateral-share>div{background:#2b2f34}
-      .collateral-share>div>span{background:#8fbdf2}
-      .risk-empty{display:grid;justify-items:start;gap:7px;padding:17px 0}
+      .collateral-share>div{height:4px;border-radius:999px;background:#2b2f34;overflow:hidden}
+      .collateral-share>div>span{display:block;height:100%;border-radius:inherit;background:#8fbdf2}
+      .risk-empty{display:grid;justify-items:start;gap:7px;padding:17px 0;color:rgba(255,255,255,.5);font-size:12px}
       .empty-state-mark{display:grid;width:28px;height:28px;place-items:center;border:1px solid #384049;border-radius:9px;background:#15181b;color:#8fbdf2;font-size:16px}
       .empty-state-action{display:inline-flex;margin-top:4px;padding:8px 10px;border:1px solid #35414d;border-radius:9px;background:#171c22;color:#ddecff;font-size:11px;font-weight:700;text-decoration:none}
       .empty-state-action:hover{border-color:#0a84ff;background:#1a232c}
       .market-risk-panel{margin-top:14px}
-      .market-risk-table{border-color:#30343a;background:#111!important}
-      .market-risk-table-head,.market-risk-row{grid-template-columns:1.35fr .85fr .85fr .85fr 1.15fr;min-width:720px}
-      .market-risk-table-head{background:#17191c;border-bottom-color:#30343a}
-      .market-risk-row{background:#111317;border-bottom-color:#282d33}
+      .market-risk-table{margin-top:15px;border:1px solid #30343a;border-radius:13px;overflow:auto;background:#111317}
+      .market-risk-table-head,.market-risk-row{display:grid;grid-template-columns:1.35fr .85fr .85fr .85fr 1.15fr;min-width:720px;gap:12px;align-items:center}
+      .market-risk-table-head{padding:10px 12px;background:#17191c;border-bottom:1px solid #30343a;color:rgba(255,255,255,.43);font-size:10px;text-transform:uppercase;letter-spacing:.05em}
+      .market-risk-row{padding:13px 12px;border-bottom:1px solid #282d33;background:#111317}
+      .market-risk-row:last-child{border-bottom:0}
       .market-asset-cell{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:10px;min-width:0}
       .market-asset-cell>div{min-width:0}
+      .market-risk-row strong,.market-risk-row small{display:block}
+      .market-risk-row strong{color:#fff;font-size:12px}
+      .market-risk-row small{margin-top:3px;color:rgba(255,255,255,.45);font-size:10px}
       .market-asset-cell small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       .market-risk-main{min-width:0}
       .market-risk-details{margin-top:6px}
@@ -250,9 +226,10 @@ function PortfolioContent() {
       .market-risk-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px 10px;margin-top:8px;padding:9px;border:1px solid #2c3137;border-radius:9px;background:#17191c}
       .market-risk-detail-grid span{color:rgba(255,255,255,.45);font-size:9px}
       .market-risk-detail-grid strong{display:block;margin-top:2px;color:#fff;font-size:10px}
-      @media (max-width:900px){.portfolio-hero{grid-template-columns:1fr}.portfolio-primary-metric{max-width:none}.portfolio-quick-metrics{grid-template-columns:1fr 1fr}}
-      @media (max-width:640px){.portfolio-quick-metrics{grid-template-columns:1fr}.health-hero-row{grid-template-columns:1fr}.health-hero-meta{grid-template-columns:1fr 1fr}.health-foot-row{flex-direction:column}.portfolio-primary-metric strong{font-size:30px}}
-    `}</style>
+      .risk-footnote{margin-top:11px;color:rgba(255,255,255,.42);font-size:10px;line-height:1.5}
+      @media(max-width:900px){.portfolio-hero{grid-template-columns:1fr}.portfolio-primary-metric{max-width:none}.portfolio-quick-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.risk-overview-grid{grid-template-columns:1fr}}
+      @media(max-width:640px){.portfolio-quick-metrics{grid-template-columns:1fr}.health-hero-row{grid-template-columns:1fr}.health-hero-meta{grid-template-columns:1fr 1fr}.health-foot-row{flex-direction:column}.portfolio-primary-metric strong{font-size:30px}}
+      @media(prefers-reduced-motion:reduce){.health-status-bar>div{transition:none}}\n
     </div>
   );
 }
