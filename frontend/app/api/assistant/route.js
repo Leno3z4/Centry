@@ -174,7 +174,13 @@ function parseExplicitExecution(question, context) {
     const output = marketBySymbol(match[3], context);
     const amount = parseNumber(match[1]);
     if (amount && input?.address && output?.address) {
-      const raw = (() => { try { return BigInt(Math.round(amount * 10 ** input.decimals)).toString(); } catch { return null; } })();
+      const raw = (() => {
+        try {
+          return parseUnits(String(match[1]), input.decimals).toString();
+        } catch {
+          return null;
+        }
+      })();
       if (raw) return { answer: `Swap ${amount} ${input.symbol} to ${output.symbol}. Opening the wallet signature now.`, plan: { title: `Swap ${input.symbol} → ${output.symbol}`, reason: 'Explicit swap request.', autoExecute: true, actions: [{ type: ACTIONS.swap, inputToken: input.address, outputToken: output.address, inputDecimals: input.decimals, inputSymbol: input.symbol, outputSymbol: output.symbol, amount: String(amount), amountRaw: raw, slippage: 0.5 }] } };
     }
   }
