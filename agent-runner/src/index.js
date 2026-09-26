@@ -46,6 +46,7 @@ const FACTORY_ABI = parseAbi([
 
 const ERC20_ABI = parseAbi([
   "function approve(address spender,uint256 amount) returns (bool)",
+  "function allowance(address owner,address spender) view returns (uint256)",
   "function balanceOf(address account) view returns (uint256)",
   "function decimals() view returns (uint8)",
   "function symbol() view returns (string)",
@@ -635,16 +636,24 @@ function annotateActionCalls(actions, calls) {
   let offset = 0;
   for (let actionIndex = 0; actionIndex < actions.length; actionIndex += 1) {
     const type = String(actions[actionIndex]?.action || "").trim();
-    const count = ["approve", "supply", "withdraw", "borrow", "transfer", "castVote"].includes(type)
-      ? 1
-      : ["repay", "swap"].includes(type)
-        ? 2
-        : 0;
-    for (let i = 0; i < count && offset + i < calls.length; i += 1) {
-      calls[offset + i].actionIndex = actionIndex;
-      calls[offset + i].actionType = type;
+
+    const annotate = (call, actionType) => {
+      if (!call) return;
+      call.actionIndex = actionIndex;
+      call.actionType = actionType;
+    };
+
+    const approvalMayPrecede = ["supply", "repay", "swap"].includes(type);
+    if (approvalMayPrecede && calls[offset]?.selector?.toLowerCase() === "0x095ea7b3") {
+      annotate(calls[offset], "approve");
+      offset += 1;
     }
-    offset += count;
+
+    const callCount = type === "repay" || type === "swap" ? 1 : 1;
+    for (let i = 0; i < callCount && offset + i < calls.length; i += 1) {
+      annotate(calls[offset + i], type);
+    }
+    offset += callCount;
   }
 }
 
@@ -1563,6 +1572,42 @@ async function readOwnerChatBalance(publicClient, account, symbol, rpcUrl) {
 }
 
 
+async function ensureBatchAllowance(publicClient, calls, allowanceState, token, spender, account, amount) {
+  const key = `${token.toLowerCase()}:${spender.toLowerCase()}`;
+  let remaining = allowanceState.get(key);
+
+  if (remaining === undefined) {
+    remaining = await readRequiredContract(
+      publicClient,
+      {
+        address: token,
+        abi: ERC20_ABI,
+        functionName: "allowance",
+        args: [account, spender],
+      },
+      `allowance_${token}_${spender}`,
+    );
+  }
+
+  remaining = BigInt(remaining || 0n);
+
+  if (remaining < amount) {
+    const approvalCall = makeCall(
+      token,
+      encodeFunctionData({
+        abi: ERC20_ABI,
+        functionName: "approve",
+        args: [spender, amount],
+      }),
+    );
+    approvalCall.generatedActionType = "approve";
+    calls.push(approvalCall);
+    remaining = amount;
+  }
+
+  remaining -= amount;
+  allowanceState.set(key, remaining);
+}
 async function quoteCentToUsdc(publicClient, amountIn, slippageBps = 50, fromAddress) {
   let best = null;
   const input = TOKENS.CENT;
@@ -1603,6 +1648,7 @@ async function buildCalls(publicClient, agent, actions, autonomy, db, options = 
   const calls = [];
   const account = getAddress(agent.account);
   const policy = agentPolicy(autonomy);
+  const allowanceState = new Map();
 
   for (const action of actions) {
     const type = String(action?.action || "").trim();
@@ -1611,10 +1657,31 @@ async function buildCalls(publicClient, agent, actions, autonomy, db, options = 
       case "approve": {
         const asset = assetAddress(action.asset);
         const amount = humanReadableAmounts
-          ? assetAmountToBaseUnits(action.amount, asset)
+          ? assetAmountToBaseUnits(action.amount, action.asset)
           : positiveUint(action.amount, "amount");
-        const data = encodeFunctionData({ abi: ERC20_ABI, functionName: "approve", args: [LENDING_POOL, amount] });
-        calls.push(makeCall(asset, data));
+        const spender = action.spender
+          ? getAddress(action.spender)
+          : LENDING_POOL;
+        const allowedSpender =
+          spender.toLowerCase() === LENDING_POOL.toLowerCase() ||
+          spender.toLowerCase() === UNITFLOW_ROUTER.toLowerCase();
+        if (!allowedSpender) throw new Error("agent_approval_spender_not_allowed");
+        if (
+          spender.toLowerCase() === UNITFLOW_ROUTER.toLowerCase() &&
+          asset !== TOKENS.CENT
+        ) {
+          throw new Error("agent_approval_asset_not_allowed");
+        }
+
+        const data = encodeFunctionData({
+          abi: ERC20_ABI,
+          functionName: "approve",
+          args: [spender, amount],
+        });
+        const approvalCall = makeCall(asset, data);
+        approvalCall.generatedActionType = "approve";
+        calls.push(approvalCall);
+        allowanceState.set(`${asset.toLowerCase()}:${spender.toLowerCase()}`, amount);
         break;
       }
 
@@ -1624,13 +1691,18 @@ async function buildCalls(publicClient, agent, actions, autonomy, db, options = 
       case "repay": {
         const asset = assetAddress(action.asset);
         const amount = humanReadableAmounts
-          ? assetAmountToBaseUnits(action.amount, asset)
+          ? assetAmountToBaseUnits(action.amount, action.asset)
           : positiveUint(action.amount, "amount");
-        if (type === "repay") {
-          const approval = encodeFunctionData({ abi: ERC20_ABI, functionName: "approve", args: [LENDING_POOL, amount] });
-          calls.push(makeCall(asset, approval));
+
+        if (type === "supply" || type === "repay") {
+          await ensureBatchAllowance(publicClient, calls, allowanceState, asset, LENDING_POOL, account, amount);
         }
-        const data = encodeFunctionData({ abi: LENDING_POOL_ABI, functionName: type, args: [asset, amount] });
+
+        const data = encodeFunctionData({
+          abi: LENDING_POOL_ABI,
+          functionName: type,
+          args: [asset, amount],
+        });
         calls.push(makeCall(LENDING_POOL, data));
         break;
       }
@@ -1642,7 +1714,7 @@ async function buildCalls(publicClient, agent, actions, autonomy, db, options = 
           throw new Error("unsupported_swap_direction");
         }
         const amountIn = humanReadableAmounts
-          ? assetAmountToBaseUnits(action.amount, input)
+          ? assetAmountToBaseUnits(action.amount, action.asset || action.inputToken)
           : positiveUint(action.amount, "amount");
         const quoted = await quoteCentToUsdc(
           publicClient,
@@ -1654,14 +1726,12 @@ async function buildCalls(publicClient, agent, actions, autonomy, db, options = 
         if (!UNITFLOW_FEES.includes(fee)) throw new Error("unsupported_unitflow_fee");
         const minOut = action.minOut
           ? (humanReadableAmounts
-              ? assetAmountToBaseUnits(action.minOut, output, "minOut")
+              ? assetAmountToBaseUnits(action.minOut, action.toAsset || action.outputToken, "minOut")
               : positiveUint(action.minOut, "minOut"))
           : quoted.minOut;
-        const approval = encodeFunctionData({
-          abi: ERC20_ABI,
-          functionName: "approve",
-          args: [UNITFLOW_ROUTER, amountIn],
-        });
+
+        await ensureBatchAllowance(publicClient, calls, allowanceState, input, UNITFLOW_ROUTER, account, amountIn);
+
         const swap = encodeFunctionData({
           abi: UNITFLOW_ROUTER_ABI,
           functionName: "exactInputSingle",
@@ -1676,7 +1746,6 @@ async function buildCalls(publicClient, agent, actions, autonomy, db, options = 
             sqrtPriceLimitX96: 0n,
           }],
         });
-        calls.push(makeCall(input, approval));
         calls.push(makeCall(UNITFLOW_ROUTER, swap));
         break;
       }
@@ -1690,9 +1759,13 @@ async function buildCalls(publicClient, agent, actions, autonomy, db, options = 
         await verifyAgentGenesis(publicClient, agent.account, target.account, options.env);
         const asset = assetAddress(action.asset);
         const amount = humanReadableAmounts
-          ? assetAmountToBaseUnits(action.amount, asset)
+          ? assetAmountToBaseUnits(action.amount, action.asset)
           : positiveUint(action.amount, "amount");
-        const data = encodeFunctionData({ abi: ACCOUNT_ABI, functionName: "transferToAgent", args: [asset, getAddress(target.account), amount] });
+        const data = encodeFunctionData({
+          abi: ACCOUNT_ABI,
+          functionName: "transferToAgent",
+          args: [asset, getAddress(target.account), amount],
+        });
         calls.push(makeCall(account, data));
         break;
       }
@@ -1718,7 +1791,6 @@ async function buildCalls(publicClient, agent, actions, autonomy, db, options = 
   if (calls.length === 0 || calls.length > 32) throw new Error("invalid_call_batch");
   return calls;
 }
-
 async function assertPermissions(publicClient, account, runnerAddress, calls) {
   for (const call of calls) {
     let permitted;
