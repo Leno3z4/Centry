@@ -199,7 +199,7 @@ function AnalyticsContent() {
             {markets.map((market) => (
               <div className="analyticsMarket" key={market.id}>
                 <div className="analyticsMarketMain">
-                  <div className="analyticsAsset"><span className="token analyticsToken">{market.symbol === 'cirBTC' ? '₿' : market.symbol === 'EURC' ? '€' : '$'}</span><div><strong>{market.symbol}</strong><small>{market.name}</small></div></div>
+                  <div className="analyticsAsset"><span className="analyticsToken">{market.symbol === 'cirBTC' ? '₿' : market.symbol === 'EURC' ? '€' : '$'}</span><div><strong>{market.symbol}</strong><small>{market.name}</small></div></div>
                   <div className="analyticsMarketStatus"><span className={market.active ? 'status-live' : ''}>{isLoading ? 'Loading' : market.active ? 'Live' : 'Inactive'}</span></div>
                 </div>
                 <div className="analyticsMarketNumbers">
