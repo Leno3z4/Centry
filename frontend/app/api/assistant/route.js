@@ -202,7 +202,7 @@ Only these assistant transaction actions are allowed:
 - swap
 - bridge
 
-The assistant never executes silently. Always set autoExecute=false so the user sees the transaction preview and must sign in their wallet.
+The assistant never bypasses the wallet. For explicit state-changing requests, set autoExecute=true so the UI can open the wallet signing flow immediately; the user must still approve every transaction.
 
 Never expose or generate arbitrary calldata, contract addresses, token addresses, recipients, private keys, API keys, proofs, hashes, or hidden parameters. Never create/change permissions, ownership, agent activation, governance state, or reward claims from chat. Governance and rewards can be explained, but are not executable from this assistant while those controls are disabled.
 
@@ -212,7 +212,7 @@ Read-only questions must return plan:null. A transaction plan requires explicit 
 `;
 
 function buildPrompt({ question, context: verifiedContext }) {
-  return `${CENTRY_AGENT_SYSTEM_PROMPT}\n\n${EXECUTION_SCHEMA}\n\nVERIFIED CENTRY REFERENCE:\n${CENTRY_KNOWLEDGE_BASE}\n\nMARKETS:\n${JSON.stringify(MARKET_REFERENCE)}\n\nPOSITION:\n${JSON.stringify(context, null, 2)}\n\nREQUEST:\n${question}`;
+  return `${CENTRY_AGENT_SYSTEM_PROMPT}\n\n${EXECUTION_SCHEMA}\n\nVERIFIED CENTRY REFERENCE:\n${CENTRY_KNOWLEDGE_BASE}\n\nMARKETS:\n${JSON.stringify(MARKET_REFERENCE)}\n\nPOSITION:\n${JSON.stringify(verifiedContext, null, 2)}\n\nREQUEST:\n${question}`;
 }
 
 function parseModelJson(text) {
@@ -301,7 +301,7 @@ function normalizePlan(plan) {
   return {
     title: cleanText(plan.title || 'Centry transaction', 120),
     reason: cleanText(plan.reason || 'Explicit transaction request.', 240),
-    autoExecute: false,
+    autoExecute: plan.autoExecute === true,
     actions,
   };
 }
@@ -349,16 +349,16 @@ export async function POST(request) {
       return withRateLimitHeaders(NextResponse.json({ success: true, answer: fallbackPositionAnswer(safeContext, question), provider: 'local-fallback' }), limit);
     }
     const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
-    const response = await fetch(`${GEMINI_ENDPOINT}/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ systemInstruction: { parts: [{ text: CENTRY_AGENT_SYSTEM_PROMPT }] }, contents: [{ role: 'user', parts: [{ text: buildPrompt({ question, context }) }] }], generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 700 } }), cache: 'no-store' });
+    const response = await fetch(`${GEMINI_ENDPOINT}/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ systemInstruction: { parts: [{ text: CENTRY_AGENT_SYSTEM_PROMPT }] }, contents: [{ role: 'user', parts: [{ text: buildPrompt({ question, context: verifiedContext }) }] }], generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 700 } }), cache: 'no-store' });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) return withRateLimitHeaders(NextResponse.json({ success: true, answer: fallbackPositionAnswer(verifiedContext?.verified ? verifiedContext : {}, question), provider: 'local-fallback', warning: 'AI provider unavailable.' }), limit);
     const rawModelText = data?.candidates?.[0]?.content?.parts?.map((part) => part?.text || '').join('');
     const parsed = parseModelJson(rawModelText);
-    if (!parsed) return withRateLimitHeaders(NextResponse.json({ success: true, answer: fallbackPositionAnswer(context, question), provider: model }), limit);
+    if (!parsed) return withRateLimitHeaders(NextResponse.json({ success: true, answer: fallbackPositionAnswer(verifiedContext?.verified ? verifiedContext : {}, question), provider: model }), limit);
     const safePlan = applyContextSafety(normalizePlan(parsed.plan), verifiedContext);
     return withRateLimitHeaders(NextResponse.json({
       success: true,
-      answer: parsed.answer || fallbackPositionAnswer(context, question),
+      answer: parsed.answer || fallbackPositionAnswer(verifiedContext?.verified ? verifiedContext : {}, question),
       plan: safePlan,
       provider: model,
     }), limit);
