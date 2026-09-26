@@ -2209,3 +2209,205 @@
   .portfolioHeaderActions { display: grid; grid-template-columns: 1fr 1fr; }
   .portfolioHeaderActions .iconButton { width: 100%; }
 }
+
+
+/* Unified runtime / execution surface */
+.runtimeBox {
+  display: grid;
+  gap: 16px;
+  padding: 21px;
+  border: 1px solid #24272b;
+  border-radius: 18px;
+  background: #0c0d0f;
+}
+
+.runtimeBoxHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.runtimeBoxHead h2 {
+  margin: 6px 0 0;
+  color: #fff;
+  font-size: 22px;
+  letter-spacing: -.5px;
+}
+
+.runtimeBoxHead p {
+  margin: 5px 0 0;
+  color: rgba(255,255,255,.62);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.runtimeSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.runtimeSummaryGrid > div,
+.runtimeEventRow > div,
+.executionProofInline > div {
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid #202327;
+  border-radius: 13px;
+  background: #101215;
+}
+
+.runtimeSummaryGrid span,
+.runtimeEventRow span,
+.executionProofInline span {
+  display: block;
+  color: rgba(255,255,255,.52);
+  font-size: 10px;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.runtimeSummaryGrid > div > strong:not(.statusBadge),
+.runtimeEventRow strong,
+.executionProofInline strong {
+  display: block;
+  margin-top: 8px;
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.runtimeSummaryGrid small {
+  display: block;
+  margin-top: 5px;
+  color: rgba(255,255,255,.48);
+  font-size: 10px;
+}
+
+.runtimeEventRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, .35fr);
+  gap: 10px;
+}
+
+.runtimeEventDanger {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255,69,58,.32);
+  border-radius: 12px;
+  background: rgba(255,69,58,.07);
+}
+
+.runtimeEventDanger strong {
+  color: #ffd8d5;
+  font-size: 12px;
+}
+
+.runtimeEventDanger span {
+  color: #e4a6a1;
+  font: 10px/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+.healthWarning {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 11px;
+  align-items: start;
+  padding: 13px 14px;
+  border-radius: 13px;
+}
+
+.healthWarningWarning {
+  border: 1px solid rgba(255,176,0,.28);
+  background: rgba(255,176,0,.07);
+}
+
+.healthWarningDanger {
+  border: 1px solid rgba(255,69,58,.34);
+  background: rgba(255,69,58,.07);
+}
+
+.healthWarningIcon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid rgba(255,176,0,.4);
+  border-radius: 50%;
+  color: #ffb000;
+  font-weight: 800;
+}
+
+.healthWarningDanger .healthWarningIcon {
+  border-color: rgba(255,69,58,.42);
+  color: #ff453a;
+}
+
+.healthWarning strong {
+  display: block;
+  color: #ffe8ae;
+  font-size: 12px;
+}
+
+.healthWarningDanger strong {
+  color: #ffd8d5;
+}
+
+.healthWarning p {
+  margin: 4px 0 0;
+  color: rgba(255,255,255,.7);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.healthWarning small {
+  display: block;
+  margin-top: 5px;
+  color: rgba(255,255,255,.48);
+  font-size: 9px;
+}
+
+.executionProofInline {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.executionProofInline strong {
+  font-size: 11px;
+}
+
+@media (max-width: 900px) {
+  .runtimeSummaryGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .executionProofInline {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .runtimeBox {
+    padding: 16px;
+    border-radius: 16px;
+  }
+
+  .runtimeBoxHead {
+    align-items: flex-start;
+  }
+
+  .runtimeBoxHead .statusBadge {
+    flex: 0 0 auto;
+  }
+
+  .runtimeSummaryGrid,
+  .runtimeEventRow,
+  .executionProofInline {
+    grid-template-columns: 1fr;
+  }
+}
