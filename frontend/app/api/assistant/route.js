@@ -233,9 +233,13 @@ function parseModelJson(text) {
   }
 }
 
-function visibleAmount(value) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+function exactAmount(value, decimals) {
+  try {
+    if (typeof value !== 'string' || !/^\d+(?:\.\d+)?$/.test(value)) return null;
+    return parseUnits(value, decimals);
+  } catch {
+    return null;
+  }
 }
 
 function applyContextSafety(plan, context) {
@@ -249,18 +253,28 @@ function applyContextSafety(plan, context) {
     if ([ACTIONS.supply, ACTIONS.withdraw, ACTIONS.repay].includes(action.type)) {
       const market = marketForAddress(action.asset);
       if (!market) return null;
-      const available = action.type === ACTIONS.supply ? visibleAmount(market.walletBalance)
-        : action.type === ACTIONS.withdraw ? visibleAmount(market.supplied)
-        : visibleAmount(market.borrowed);
-      if (available != null && Number(action.amount) > available) return null;
+
+      const requested = exactAmount(String(action.amount), market.decimals);
+      const availableText = action.type === ACTIONS.supply
+        ? market.walletBalance
+        : action.type === ACTIONS.withdraw
+          ? market.supplied
+          : market.borrowed;
+      const available = exactAmount(String(availableText), market.decimals);
+
+      if (requested == null || available == null || requested > available) return null;
     }
 
     if (action.type === ACTIONS.swap) {
       const market = marketForAddress(action.inputToken);
-      const available = visibleAmount(market?.walletBalance);
-      if (!market || available == null || Number(action.amount) > available) return null;
+      if (!market) return null;
+
+      const requested = exactAmount(String(action.amount), market.decimals);
+      const available = exactAmount(String(market.walletBalance), market.decimals);
+      if (requested == null || available == null || requested > available) return null;
     }
   }
+
   return plan;
 }
 
