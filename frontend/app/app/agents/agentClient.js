@@ -74,7 +74,7 @@ export const ACCOUNT_ABI = [
   { type: 'function', name: 'withdrawNative', stateMutability: 'nonpayable', inputs: [{ name: 'amount', type: 'uint256' }], outputs: [] },
   { type: 'function', name: 'withdrawToken', stateMutability: 'nonpayable', inputs: [{ name: 'token', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [] },
   { type: 'function', name: 'transferToAgent', stateMutability: 'nonpayable', inputs: [{ name: 'token', type: 'address' }, { name: 'recipient', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [] },
-  { type: 'function', name: 'setPermission', stateMutability: 'nonpayable', inputs: [{ name: 'operator', type: 'address' }, { name: 'target', type: 'address' }, { name: 'selector', type: 'bytes4' }, { name: 'allowed', type: 'bool' }, { name: 'expiresAt', type: 'uint64' }, { name: 'maxNativeValue', type: 'uint256' }], outputs: [] },
+  { type: 'function', name: 'setPermission', stateMutability: 'nonpayable', inputs: [{ name: 'operator', type: 'address' }, { name: 'target', type: 'address' }, { name: 'selector', type: 'bytes4' }, { name: 'allowed', type: 'bool' }, { name: 'expiresAt', type: 'uint64' }, { name: 'maxNativeValue', type: 'uint128' }], outputs: [] },
 ];
 
 export const providerOptions = [
