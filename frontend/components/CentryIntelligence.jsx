@@ -6,6 +6,7 @@ import { useCentryPositionEvents } from '../hooks/useCentryPositionEvents';
 import CentryExecutionPanel from './CentryExecutionPanel';
 import CentryTransactionPreview from './CentryTransactionPreview';
 import styles from './CentryIntelligence.module.css';
+import { useAccount } from 'wagmi';
 
 const SUGGESTED = ['What is Centry?', 'Show my position', 'What can you do for me?', 'Explain Centry security'];
 function money(value) { const n = Number(value); return Number.isFinite(n) ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'; }
@@ -16,6 +17,7 @@ export default function CentryIntelligence({ market, lending, gateway, compact: 
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(false);
   const inputRef = useRef(null);
+  const { address } = useAccount();
   const context = useMemo(() => buildCentryPositionContext({
     marketSymbol: market?.symbol,
     walletBalance: lending?.walletBalance,
@@ -54,7 +56,7 @@ export default function CentryIntelligence({ market, lending, gateway, compact: 
       const response = await fetch('/api/assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: next, context }),
+        body: JSON.stringify({ question: next, account: address || '', market: market?.symbol || 'USDC', context }),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok || !result.success) throw new Error(result.error || 'Unable to analyze the request.');
