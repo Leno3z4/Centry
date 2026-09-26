@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useAccount, useConnectorClient, usePublicClient, useSignMessage, useWalletClient } from 'wagmi';
+import { useAccount, useChainId, useConnectorClient, usePublicClient, useSignMessage, useWalletClient } from 'wagmi';
 import { encodeFunctionData, keccak256, toBytes } from 'viem';
 import { Providers } from '../../../../../components/Providers';
 import { AppShell } from '../../../../../components/AppShell';
@@ -37,6 +37,7 @@ function ConfigureContent() {
   const { account } = useParams();
   const router = useRouter();
   const { address } = useAccount();
+  const chainId = useChainId();
   const publicClient = usePublicClient();
   const { signMessageAsync } = useSignMessage();
   const { data: connectorClient } = useConnectorClient();
@@ -139,8 +140,23 @@ function ConfigureContent() {
   }
 
   async function authorizeRunner() {
+    setError('');
+    setStatus('');
+
     if (!agent || !RUNNER_ADDRESS) return setError('Hosted runner address is not configured.');
-    if (!address || (!connectorClient && !walletClient)) return setError('Connect your wallet to authorize the hosted runner.');
+    if (!address || !publicClient) return setError('Connect your wallet before authorizing the hosted runner.');
+    if (chainId !== arcMainnet.id) return setError('Switch your wallet to Arc Mainnet before authorizing the hosted runner.');
+
+    const batchClient =
+      walletClient && typeof walletClient.sendCalls === 'function' && typeof walletClient.waitForCallsStatus === 'function'
+        ? walletClient
+        : connectorClient && typeof connectorClient.sendCalls === 'function' && typeof connectorClient.waitForCallsStatus === 'function'
+          ? connectorClient
+          : null;
+
+    if (!batchClient) {
+      return setError('This wallet does not support atomic batch authorization on Arc Mainnet. No transaction was sent.');
+    }
 
     const policy = agent.config?.policy;
     const allowedActions = policy?.allowedActions || AGENT_ACTION_OPTIONS.map(([value]) => value);
@@ -151,7 +167,17 @@ function ConfigureContent() {
 
     try {
       setAuthorizing(true);
-      setStatus('Preparing runner authorization…');
+      setStatus('Checking agent ownership and saved permissions…');
+
+      const owner = await publicClient.readContract({
+        address: agent.account,
+        abi: ACCOUNT_ABI,
+        functionName: 'owner',
+      });
+      if (String(owner).toLowerCase() !== String(address).toLowerCase()) {
+        throw new Error('connected_wallet_is_not_agent_owner');
+      }
+
       const permissions = [];
       const permissionKeys = new Set();
       const add = (target, signature) => {
@@ -181,88 +207,73 @@ function ConfigureContent() {
       if (allowedActions.includes('swap')) add(CONTRACT_ADDRESSES.centryToken, 'approve(address,uint256)');
       if (allowedActions.includes('transfer')) add(agent.account, 'transferToAgent(address,address,uint256)');
 
-      if (connectorClient && typeof connectorClient.sendCalls === 'function' && typeof connectorClient.waitForCallsStatus === 'function') {
-        const calls = [
-          ...permissions.map(([target, sel]) => ({
-            to: agent.account,
-            data: encodeFunctionData({
-              abi: ACCOUNT_ABI,
-              functionName: 'setPermission',
-              args: [RUNNER_ADDRESS, target, sel, true, 0n, 0n],
-            }),
-          })),
-          {
-            to: agent.account,
-            data: encodeFunctionData({
-              abi: ACCOUNT_ABI,
-              functionName: 'setAgentOperator',
-              args: [RUNNER_ADDRESS, true],
-            }),
-          },
-        ];
+      const calls = [
+        ...permissions.map(([target, sel]) => ({
+          to: agent.account,
+          data: encodeFunctionData({
+            abi: ACCOUNT_ABI,
+            functionName: 'setPermission',
+            args: [RUNNER_ADDRESS, target, sel, true, 0n, 0n],
+          }),
+        })),
+        {
+          to: agent.account,
+          data: encodeFunctionData({
+            abi: ACCOUNT_ABI,
+            functionName: 'setAgentOperator',
+            args: [RUNNER_ADDRESS, true],
+          }),
+        },
+      ];
 
-        setStatus('Approve one atomic batch covering ' + calls.length + ' onchain authorization calls…');
-        try {
-          const { id } = await connectorClient.sendCalls({
-            account: address,
-            chain: arcMainnet,
-            calls,
-            forceAtomic: true,
-          });
-          const result = await connectorClient.waitForCallsStatus({
-            id,
-            throwOnFailure: true,
-            timeout: 60_000,
-            retryCount: 8,
-            retryDelay: 1_000,
-          });
-          if (result?.atomic) {
-            await loadAgent();
-            setStatus('Hosted runner authorized for the current saved policy.');
-            return;
-          }
-        } catch (batchError) {
-          const batchMessage = batchError?.shortMessage || batchError?.message || '';
-          const unsupported = /5792|sendCalls|wallet.*support|unsupported|not supported|atomic/i.test(batchMessage);
-          if (!unsupported) throw batchError;
-        }
-      }
-
-      if (!walletClient) {
-        throw new Error('This wallet does not expose a compatible transaction method for runner authorization.');
-      }
-
-      setStatus('Approve ' + (permissions.length + 1) + ' runner authorization transactions in your wallet…');
-      let completed = 0;
-      for (const [target, sel] of permissions) {
-        const hash = await walletClient.writeContract({
+      setStatus('Preflighting ' + calls.length + ' authorization calls…');
+      for (let index = 0; index < calls.length; index += 1) {
+        const call = calls[index];
+        await publicClient.call({
           account: address,
-          chain: arcMainnet,
-          address: agent.account,
-          abi: ACCOUNT_ABI,
-          functionName: 'setPermission',
-          args: [RUNNER_ADDRESS, target, sel, true, 0n, 0n],
+          to: call.to,
+          data: call.data,
         });
-        await publicClient.waitForTransactionReceipt({ hash });
-        completed += 1;
-        setStatus('Authorizing runner… ' + completed + '/' + (permissions.length + 1) + ' confirmed');
       }
 
-      const operatorHash = await walletClient.writeContract({
+      setStatus('Approve one atomic authorization batch in your wallet…');
+      const { id } = await batchClient.sendCalls({
         account: address,
         chain: arcMainnet,
-        address: agent.account,
-        abi: ACCOUNT_ABI,
-        functionName: 'setAgentOperator',
-        args: [RUNNER_ADDRESS, true],
+        calls,
+        forceAtomic: true,
       });
-      await publicClient.waitForTransactionReceipt({ hash: operatorHash });
+
+      const result = await batchClient.waitForCallsStatus({
+        id,
+        throwOnFailure: true,
+        timeout: 60_000,
+        retryCount: 8,
+        retryDelay: 1_000,
+      });
+
+      if (result?.atomic !== true) {
+        throw new Error('wallet_did_not_confirm_atomic_authorization');
+      }
+
+      const failedReceipts = (result?.receipts || []).filter((receipt) => String(receipt?.status || '').toLowerCase() !== '0x1');
+      if (failedReceipts.length) {
+        throw new Error('atomic_authorization_transaction_reverted');
+      }
 
       await loadAgent();
       setStatus('Hosted runner authorized for the current saved policy.');
     } catch (e) {
-      const message = e?.shortMessage || e?.message || '';
-      setError(message || 'Runner authorization failed.');
+      const raw = e?.shortMessage || e?.message || '';
+      const message =
+        raw === 'connected_wallet_is_not_agent_owner'
+          ? 'The connected wallet is not the owner of this agent smart account. No transaction was sent.'
+          : raw === 'wallet_did_not_confirm_atomic_authorization'
+            ? 'The wallet did not provide atomic execution, so Centry did not fall back to multiple transactions. No partial authorization was submitted.'
+            : /5792|sendCalls|5760|atomicity.*not supported|unsupported.*atomic/i.test(raw)
+              ? 'This wallet does not support atomic batch authorization on Arc Mainnet. No transaction was sent.'
+              : raw || 'Runner authorization failed during preflight. No transaction was sent unless your wallet explicitly confirmed the batch.';
+      setError(message);
       setStatus('');
     } finally {
       setAuthorizing(false);
