@@ -7,7 +7,7 @@ import CentryExecutionPanel from './CentryExecutionPanel';
 import CentryTransactionPreview from './CentryTransactionPreview';
 import styles from './CentryIntelligence.module.css';
 
-const SUGGESTED = ['What can I do with my position?', 'Show my borrow capacity', 'What is my market liquidity?'];
+const SUGGESTED = ['What is Centry?', 'Show my position', 'What can you do for me?', 'Explain Centry security'];
 function money(value) { const n = Number(value); return Number.isFinite(n) ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'; }
 
 export default function CentryIntelligence({ market, lending, gateway, compact: compactMode = false }) {
@@ -76,8 +76,8 @@ export default function CentryIntelligence({ market, lending, gateway, compact: 
     }
   };
 
-  return <section className={`${styles.card} ${compactMode ? styles.compactCard : ''}`} aria-label="Centrion assistant">
-    {!compactMode ? <div className={styles.header}><div><span className={styles.eyebrow}>Centrion</span><h2>Understand your position</h2><p>Ask about your position or tell Centrion what you want done inside Centry.</p></div>{liquidation.atRisk ? <div className={`${styles.status} ${styles.status_danger}`}><span>Liquidation risk</span><strong>HF {lending.healthFactor}</strong></div> : null}</div> : null}
+  return <section className={`${styles.card} ${compactMode ? styles.compactCard : ''}`} aria-label="Cask assistant">
+    {!compactMode ? <div className={styles.header}><div><span className={styles.eyebrow}>Cask</span><h2>Ask anything about Centry</h2><p>Get answers from Centry data, or ask Cask to prepare a supported transaction.</p></div>{liquidation.atRisk ? <div className={`${styles.status} ${styles.status_danger}`}><span>Liquidation risk</span><strong>HF {lending.healthFactor}</strong></div> : null}</div> : null}
     {account?.ready && !compactMode ? <div className={styles.snapshot}><div><span>Collateral</span><strong>${money(account.totalCollateralValueUsd)}</strong></div><div><span>Debt</span><strong>${money(account.totalDebtValueUsd)}</strong></div><div><span>Remaining capacity</span><strong>${money(account.remainingBorrowCapacityUsd)}</strong></div><div><span>Markets</span><strong>{markets.length}</strong></div></div> : null}
     {compactMode && liquidation.atRisk ? <div className={styles.compactContext}><span>Liquidation risk</span><strong>HF {lending.healthFactor}</strong></div> : null}
 
