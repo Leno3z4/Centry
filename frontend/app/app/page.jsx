@@ -278,27 +278,372 @@ function OverviewContent() {
         />
       </div>
 
-      <section className="hero">
+      <section className="hero overview-hero">
         <div className="hero-copy">
+          <span className="overview-hero-kicker">ACCOUNT OVERVIEW</span>
           <h1>
             See where you<br /><em>stand.</em>
           </h1>
-          <p>Check your balances, then choose what to do next.</p>
+          <p>Track your position and move straight into the next action.</p>
           <div className="hero-actions">
-            <a className="primary-btn" href="/app/portfolio">
-              View portfolio
-            </a>
-            <a className="secondary-btn" href="/app/swap">
-              Swap assets
-            </a>
+            <a className="primary-btn" href="/app/markets">Deposit</a>
+            <a className="secondary-btn" href="/app/markets">Borrow</a>
+            <a className="secondary-btn" href="/app/swap">Swap</a>
           </div>
         </div>
 
-        <div className="orbital-art" aria-hidden="true">
-          <div className="orbit orbit-a" />
-          <div className="orbit orbit-b" />
-          <div className="orbit orbit-c" />
-          <div className="usdc-orb"><span>$</span></div>
+        <div className="overview-hero-summary">
+          <div className="overview-summary-main">
+            <span>Total portfolio</span>
+            <strong>{isConnected ? '
+
+      <section
+        className="overview-widget-board"
+        aria-labelledby="overview-widgets-title"
+      >
+        <div className="overview-board-head">
+          <div>
+            <h2 id="overview-widgets-title">Overview</h2>
+            
+          </div>
+        </div>
+
+        <DraggableWidgetGrid
+          items={OVERVIEW_WIDGETS}
+          maxColumns={4}
+          cellSize={235}
+          gap={12}
+          radius={22}
+          renderItem={renderOverviewWidget}
+        />
+      </section>
+
+      <style jsx global>{`
+        .page-stack{position:relative;isolation:isolate}
+        .overview-aero-background{position:fixed;inset:0;z-index:0;opacity:.025;pointer-events:none;overflow:hidden}
+        .overview-aero-background > *{width:100%;height:100%}
+        .page-stack > :not(.overview-aero-background){position:relative;z-index:1}
+
+        .overview-widget-board{margin-top:4px}
+        .overview-board-head{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:14px;padding:0 2px}
+        .overview-board-head h2{margin:0;color:#fff;font-size:18px;font-weight:600;letter-spacing:-.02em}
+        .overview-board-head p{margin:5px 0 0;color:rgba(255,255,255,.5);font-size:13px}
+        .overview-phone-hint{display:none}
+
+        .overview-widget{height:100%;min-height:0;padding:20px;background:#111;border-radius:22px;color:#fff}
+        .overview-widget-head{display:flex;align-items:center;justify-content:space-between;gap:14px}
+        .overview-widget-head h3{margin:0;color:rgba(255,255,255,.82);font-size:14px;font-weight:600;letter-spacing:-.01em}
+        .overview-widget-head > span,.overview-widget-head > a{color:rgba(255,255,255,.48);font-size:12px;text-decoration:none}
+        .overview-widget-head > a:hover{color:#fff}
+        .overview-widget-body{display:flex;min-height:0;flex:1;flex-direction:column;margin-top:18px}
+        .overview-widget-value{font-size:32px;line-height:1.05;font-weight:650;letter-spacing:-1.3px;color:#fff}
+        .overview-widget-note{margin:auto 0 0;color:rgba(255,255,255,.5);font-size:12px;line-height:1.4}
+
+        .overview-market-widget .overview-widget-body{margin-top:14px}
+        .overview-market-list{display:flex;min-height:0;flex:1;flex-direction:column;gap:8px}
+        .overview-market-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.08);text-decoration:none}
+        .overview-market-row:last-child{border-bottom:0}
+        .overview-market-asset{display:flex;align-items:center;min-width:0;gap:10px}
+        .overview-market-icon{display:inline-flex;width:30px;height:30px;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.1);border-radius:9px;background:#181818;color:#fff;font-size:15px}
+        .overview-market-asset strong{display:block;color:#fff;font-size:13px;font-weight:600}
+        .overview-market-asset small{display:block;margin-top:3px;color:rgba(255,255,255,.42);font-size:11px}
+        .overview-market-status span{display:block;color:rgba(255,255,255,.38);font-size:10px}
+        .overview-market-status strong{display:block;margin-top:4px;color:rgba(255,255,255,.65);font-size:12px;font-weight:600}
+        .overview-market-status strong.status-live{color:#63d08a}
+        .overview-market-open{color:rgba(255,255,255,.68);font-size:12px;font-weight:600;white-space:nowrap}
+        .overview-market-row:hover .overview-market-open{color:#fff}
+
+        .overview-position-content{display:flex;min-height:0;flex:1;flex-direction:column}
+        .overview-position-content .health-meter{margin:0}
+        .overview-position-content .connect-prompt{display:flex;min-height:0;flex:1;align-items:center;color:rgba(255,255,255,.55)}
+        .overview-widget-button{margin-top:auto !important}
+
+        @media (max-width:640px){
+          .overview-desktop-hint{display:none}
+          .overview-phone-hint{display:inline}
+          .overview-widget{padding:17px;border-radius:18px}
+          .overview-widget-value{font-size:28px}
+          .overview-market-row{grid-template-columns:minmax(0,1fr) auto;gap:11px}
+          .overview-market-status{display:none}
+        }
+      `}</style>
+    </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <Providers>
+      <AppShell>
+        <OverviewContent />
+      </AppShell>
+    </Providers>
+  );
+}
+ + formatNumber(lending.accountPosition.totalCollateralValueUsd, 2) : '—'}</strong>
+            <small>Collateral value across supported markets</small>
+          </div>
+          <div className="overview-summary-grid">
+            <div><span>Supplied</span><strong>{isConnected ? '
+
+      <section
+        className="overview-widget-board"
+        aria-labelledby="overview-widgets-title"
+      >
+        <div className="overview-board-head">
+          <div>
+            <h2 id="overview-widgets-title">Overview</h2>
+            <p className="overview-board-hint"><span className="overview-desktop-hint">Drag cards to arrange your workspace.</span><span className="overview-phone-hint">Cards stack for easy scrolling on phones.</span></p>
+          </div>
+        </div>
+
+        <DraggableWidgetGrid
+          items={OVERVIEW_WIDGETS}
+          maxColumns={4}
+          cellSize={235}
+          gap={12}
+          radius={22}
+          renderItem={renderOverviewWidget}
+        />
+      </section>
+
+      <style jsx global>{`
+        .page-stack{position:relative;isolation:isolate}
+        .overview-aero-background{position:fixed;inset:0;z-index:0;opacity:.025;pointer-events:none;overflow:hidden}
+        .overview-aero-background > *{width:100%;height:100%}
+        .page-stack > :not(.overview-aero-background){position:relative;z-index:1}
+
+        .overview-widget-board{margin-top:4px}
+        .overview-board-head{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:14px;padding:0 2px}
+        .overview-board-head h2{margin:0;color:#fff;font-size:18px;font-weight:600;letter-spacing:-.02em}
+        .overview-board-head p{margin:5px 0 0;color:rgba(255,255,255,.5);font-size:13px}
+        .overview-phone-hint{display:none}
+
+        .overview-widget{height:100%;min-height:0;padding:20px;background:#111;border-radius:22px;color:#fff}
+        .overview-widget-head{display:flex;align-items:center;justify-content:space-between;gap:14px}
+        .overview-widget-head h3{margin:0;color:rgba(255,255,255,.82);font-size:14px;font-weight:600;letter-spacing:-.01em}
+        .overview-widget-head > span,.overview-widget-head > a{color:rgba(255,255,255,.48);font-size:12px;text-decoration:none}
+        .overview-widget-head > a:hover{color:#fff}
+        .overview-widget-body{display:flex;min-height:0;flex:1;flex-direction:column;margin-top:18px}
+        .overview-widget-value{font-size:32px;line-height:1.05;font-weight:650;letter-spacing:-1.3px;color:#fff}
+        .overview-widget-note{margin:auto 0 0;color:rgba(255,255,255,.5);font-size:12px;line-height:1.4}
+
+        .overview-market-widget .overview-widget-body{margin-top:14px}
+        .overview-market-list{display:flex;min-height:0;flex:1;flex-direction:column;gap:8px}
+        .overview-market-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.08);text-decoration:none}
+        .overview-market-row:last-child{border-bottom:0}
+        .overview-market-asset{display:flex;align-items:center;min-width:0;gap:10px}
+        .overview-market-icon{display:inline-flex;width:30px;height:30px;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.1);border-radius:9px;background:#181818;color:#fff;font-size:15px}
+        .overview-market-asset strong{display:block;color:#fff;font-size:13px;font-weight:600}
+        .overview-market-asset small{display:block;margin-top:3px;color:rgba(255,255,255,.42);font-size:11px}
+        .overview-market-status span{display:block;color:rgba(255,255,255,.38);font-size:10px}
+        .overview-market-status strong{display:block;margin-top:4px;color:rgba(255,255,255,.65);font-size:12px;font-weight:600}
+        .overview-market-status strong.status-live{color:#63d08a}
+        .overview-market-open{color:rgba(255,255,255,.68);font-size:12px;font-weight:600;white-space:nowrap}
+        .overview-market-row:hover .overview-market-open{color:#fff}
+
+        .overview-position-content{display:flex;min-height:0;flex:1;flex-direction:column}
+        .overview-position-content .health-meter{margin:0}
+        .overview-position-content .connect-prompt{display:flex;min-height:0;flex:1;align-items:center;color:rgba(255,255,255,.55)}
+        .overview-widget-button{margin-top:auto !important}
+
+        @media (max-width:640px){
+          .overview-desktop-hint{display:none}
+          .overview-phone-hint{display:inline}
+          .overview-widget{padding:17px;border-radius:18px}
+          .overview-widget-value{font-size:28px}
+          .overview-market-row{grid-template-columns:minmax(0,1fr) auto;gap:11px}
+          .overview-market-status{display:none}
+        }
+      `}</style>
+    </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <Providers>
+      <AppShell>
+        <OverviewContent />
+      </AppShell>
+    </Providers>
+  );
+}
+ + formatNumber(lending.accountPosition.totalCollateralValueUsd, 2) : '—'}</strong></div>
+            <div><span>Borrowed</span><strong>{isConnected ? '
+
+      <section
+        className="overview-widget-board"
+        aria-labelledby="overview-widgets-title"
+      >
+        <div className="overview-board-head">
+          <div>
+            <h2 id="overview-widgets-title">Overview</h2>
+            <p className="overview-board-hint"><span className="overview-desktop-hint">Drag cards to arrange your workspace.</span><span className="overview-phone-hint">Cards stack for easy scrolling on phones.</span></p>
+          </div>
+        </div>
+
+        <DraggableWidgetGrid
+          items={OVERVIEW_WIDGETS}
+          maxColumns={4}
+          cellSize={235}
+          gap={12}
+          radius={22}
+          renderItem={renderOverviewWidget}
+        />
+      </section>
+
+      <style jsx global>{`
+        .page-stack{position:relative;isolation:isolate}
+        .overview-aero-background{position:fixed;inset:0;z-index:0;opacity:.025;pointer-events:none;overflow:hidden}
+        .overview-aero-background > *{width:100%;height:100%}
+        .page-stack > :not(.overview-aero-background){position:relative;z-index:1}
+
+        .overview-widget-board{margin-top:4px}
+        .overview-board-head{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:14px;padding:0 2px}
+        .overview-board-head h2{margin:0;color:#fff;font-size:18px;font-weight:600;letter-spacing:-.02em}
+        .overview-board-head p{margin:5px 0 0;color:rgba(255,255,255,.5);font-size:13px}
+        .overview-phone-hint{display:none}
+
+        .overview-widget{height:100%;min-height:0;padding:20px;background:#111;border-radius:22px;color:#fff}
+        .overview-widget-head{display:flex;align-items:center;justify-content:space-between;gap:14px}
+        .overview-widget-head h3{margin:0;color:rgba(255,255,255,.82);font-size:14px;font-weight:600;letter-spacing:-.01em}
+        .overview-widget-head > span,.overview-widget-head > a{color:rgba(255,255,255,.48);font-size:12px;text-decoration:none}
+        .overview-widget-head > a:hover{color:#fff}
+        .overview-widget-body{display:flex;min-height:0;flex:1;flex-direction:column;margin-top:18px}
+        .overview-widget-value{font-size:32px;line-height:1.05;font-weight:650;letter-spacing:-1.3px;color:#fff}
+        .overview-widget-note{margin:auto 0 0;color:rgba(255,255,255,.5);font-size:12px;line-height:1.4}
+
+        .overview-market-widget .overview-widget-body{margin-top:14px}
+        .overview-market-list{display:flex;min-height:0;flex:1;flex-direction:column;gap:8px}
+        .overview-market-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.08);text-decoration:none}
+        .overview-market-row:last-child{border-bottom:0}
+        .overview-market-asset{display:flex;align-items:center;min-width:0;gap:10px}
+        .overview-market-icon{display:inline-flex;width:30px;height:30px;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.1);border-radius:9px;background:#181818;color:#fff;font-size:15px}
+        .overview-market-asset strong{display:block;color:#fff;font-size:13px;font-weight:600}
+        .overview-market-asset small{display:block;margin-top:3px;color:rgba(255,255,255,.42);font-size:11px}
+        .overview-market-status span{display:block;color:rgba(255,255,255,.38);font-size:10px}
+        .overview-market-status strong{display:block;margin-top:4px;color:rgba(255,255,255,.65);font-size:12px;font-weight:600}
+        .overview-market-status strong.status-live{color:#63d08a}
+        .overview-market-open{color:rgba(255,255,255,.68);font-size:12px;font-weight:600;white-space:nowrap}
+        .overview-market-row:hover .overview-market-open{color:#fff}
+
+        .overview-position-content{display:flex;min-height:0;flex:1;flex-direction:column}
+        .overview-position-content .health-meter{margin:0}
+        .overview-position-content .connect-prompt{display:flex;min-height:0;flex:1;align-items:center;color:rgba(255,255,255,.55)}
+        .overview-widget-button{margin-top:auto !important}
+
+        @media (max-width:640px){
+          .overview-desktop-hint{display:none}
+          .overview-phone-hint{display:inline}
+          .overview-widget{padding:17px;border-radius:18px}
+          .overview-widget-value{font-size:28px}
+          .overview-market-row{grid-template-columns:minmax(0,1fr) auto;gap:11px}
+          .overview-market-status{display:none}
+        }
+      `}</style>
+    </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <Providers>
+      <AppShell>
+        <OverviewContent />
+      </AppShell>
+    </Providers>
+  );
+}
+ + formatNumber(lending.accountPosition.totalDebtValueUsd, 2) : '—'}</strong></div>
+            <div><span>Net position</span><strong>{isConnected ? '
+
+      <section
+        className="overview-widget-board"
+        aria-labelledby="overview-widgets-title"
+      >
+        <div className="overview-board-head">
+          <div>
+            <h2 id="overview-widgets-title">Overview</h2>
+            <p className="overview-board-hint"><span className="overview-desktop-hint">Drag cards to arrange your workspace.</span><span className="overview-phone-hint">Cards stack for easy scrolling on phones.</span></p>
+          </div>
+        </div>
+
+        <DraggableWidgetGrid
+          items={OVERVIEW_WIDGETS}
+          maxColumns={4}
+          cellSize={235}
+          gap={12}
+          radius={22}
+          renderItem={renderOverviewWidget}
+        />
+      </section>
+
+      <style jsx global>{`
+        .page-stack{position:relative;isolation:isolate}
+        .overview-aero-background{position:fixed;inset:0;z-index:0;opacity:.025;pointer-events:none;overflow:hidden}
+        .overview-aero-background > *{width:100%;height:100%}
+        .page-stack > :not(.overview-aero-background){position:relative;z-index:1}
+
+        .overview-widget-board{margin-top:4px}
+        .overview-board-head{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:14px;padding:0 2px}
+        .overview-board-head h2{margin:0;color:#fff;font-size:18px;font-weight:600;letter-spacing:-.02em}
+        .overview-board-head p{margin:5px 0 0;color:rgba(255,255,255,.5);font-size:13px}
+        .overview-phone-hint{display:none}
+
+        .overview-widget{height:100%;min-height:0;padding:20px;background:#111;border-radius:22px;color:#fff}
+        .overview-widget-head{display:flex;align-items:center;justify-content:space-between;gap:14px}
+        .overview-widget-head h3{margin:0;color:rgba(255,255,255,.82);font-size:14px;font-weight:600;letter-spacing:-.01em}
+        .overview-widget-head > span,.overview-widget-head > a{color:rgba(255,255,255,.48);font-size:12px;text-decoration:none}
+        .overview-widget-head > a:hover{color:#fff}
+        .overview-widget-body{display:flex;min-height:0;flex:1;flex-direction:column;margin-top:18px}
+        .overview-widget-value{font-size:32px;line-height:1.05;font-weight:650;letter-spacing:-1.3px;color:#fff}
+        .overview-widget-note{margin:auto 0 0;color:rgba(255,255,255,.5);font-size:12px;line-height:1.4}
+
+        .overview-market-widget .overview-widget-body{margin-top:14px}
+        .overview-market-list{display:flex;min-height:0;flex:1;flex-direction:column;gap:8px}
+        .overview-market-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.08);text-decoration:none}
+        .overview-market-row:last-child{border-bottom:0}
+        .overview-market-asset{display:flex;align-items:center;min-width:0;gap:10px}
+        .overview-market-icon{display:inline-flex;width:30px;height:30px;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.1);border-radius:9px;background:#181818;color:#fff;font-size:15px}
+        .overview-market-asset strong{display:block;color:#fff;font-size:13px;font-weight:600}
+        .overview-market-asset small{display:block;margin-top:3px;color:rgba(255,255,255,.42);font-size:11px}
+        .overview-market-status span{display:block;color:rgba(255,255,255,.38);font-size:10px}
+        .overview-market-status strong{display:block;margin-top:4px;color:rgba(255,255,255,.65);font-size:12px;font-weight:600}
+        .overview-market-status strong.status-live{color:#63d08a}
+        .overview-market-open{color:rgba(255,255,255,.68);font-size:12px;font-weight:600;white-space:nowrap}
+        .overview-market-row:hover .overview-market-open{color:#fff}
+
+        .overview-position-content{display:flex;min-height:0;flex:1;flex-direction:column}
+        .overview-position-content .health-meter{margin:0}
+        .overview-position-content .connect-prompt{display:flex;min-height:0;flex:1;align-items:center;color:rgba(255,255,255,.55)}
+        .overview-widget-button{margin-top:auto !important}
+
+        @media (max-width:640px){
+          .overview-desktop-hint{display:none}
+          .overview-phone-hint{display:inline}
+          .overview-widget{padding:17px;border-radius:18px}
+          .overview-widget-value{font-size:28px}
+          .overview-market-row{grid-template-columns:minmax(0,1fr) auto;gap:11px}
+          .overview-market-status{display:none}
+        }
+      `}</style>
+    </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <Providers>
+      <AppShell>
+        <OverviewContent />
+      </AppShell>
+    </Providers>
+  );
+}
+ + formatNumber(Math.max(lending.accountPosition.totalCollateralValueUsd - lending.accountPosition.totalDebtValueUsd, 0), 2) : '—'}</strong></div>
+            <div className="overview-summary-health"><span>Health factor</span><strong>{isConnected ? lending.healthFactor : '—'}</strong></div>
+          </div>
         </div>
       </section>
 
