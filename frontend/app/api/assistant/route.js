@@ -106,7 +106,24 @@ function parseExplicitExecution(question, context) {
   return null;
 }
 
-const EXECUTION_SCHEMA = `Return JSON only. If the user asks to transact, return {"answer":"...","plan":{"title":"...","reason":"...","autoExecute":false,"actions":[...]}}. Allowed actions: lending.supply, lending.withdraw, lending.borrow, lending.repay, token.approve, token.approveCent, governance.createLock, governance.increaseLock, governance.extendLock, governance.withdrawLock, rewards.claim, swap, bridge, gateway.fund. Supported bridge keys: arc, base, arbitrum, ethereum. Never invent token addresses, balances, tokenIds, reward proofs, calldata, or hashes. For rewards.claim provide only tokenId. For gateway.fund provide amount. For swap provide inputToken, outputToken, amount, inputDecimals, inputSymbol, outputSymbol, amountRaw, slippage. For bridge provide fromChain, toChain, amount. Do not warn about liquidation unless the supplied health factor is below 1.0. When the user explicitly asks for an action, prioritize the action plan over generic financial commentary.`;
+const EXECUTION_SCHEMA = `Return JSON only. For a transaction request, return {"answer":"...","plan":{"title":"...","reason":"...","autoExecute":false,"actions":[...]}}.
+
+Only these assistant transaction actions are allowed:
+- lending.supply
+- lending.withdraw
+- lending.borrow
+- lending.repay
+- swap
+- bridge
+
+The assistant never executes silently. Always set autoExecute=false so the user sees the transaction preview and must sign in their wallet.
+
+Never expose or generate arbitrary calldata, contract addresses, token addresses, recipients, private keys, API keys, proofs, hashes, or hidden parameters. Never create/change permissions, ownership, agent activation, governance state, or reward claims from chat. Governance and rewards can be explained, but are not executable from this assistant while those controls are disabled.
+
+Supported lending assets must come from the configured Centry markets. Bridge routes are limited to arc, base, arbitrum, ethereum and are USDC-only. Swap assets must come from configured Centry markets and the existing swap infrastructure; never invent a route or quote.
+
+Read-only questions must return plan:null. A transaction plan requires explicit state-changing intent. Never infer intent from topic words alone. Do not warn about liquidation unless the supplied health factor is below 1.0.
+`;
 
 function buildPrompt({ question, context }) {
   return `${CENTRY_AGENT_SYSTEM_PROMPT}\n\n${EXECUTION_SCHEMA}\n\nMARKETS:\n${JSON.stringify(MARKET_REFERENCE)}\n\nPOSITION:\n${JSON.stringify(context, null, 2)}\n\nREQUEST:\n${question}`;
@@ -120,6 +137,58 @@ function parseModelJson(text) {
   }
 }
 
+function normalizePlan(plan) {
+  if (!plan || typeof plan !== 'object' || !Array.isArray(plan.actions) || !plan.actions.length) return null;
+
+  const allowed = new Set([
+    ACTIONS.supply,
+    ACTIONS.withdraw,
+    ACTIONS.borrow,
+    ACTIONS.repay,
+    ACTIONS.swap,
+    ACTIONS.bridge,
+  ]);
+
+  const actions = plan.actions.slice(0, 4).filter((action) => {
+    if (!action || typeof action !== 'object' || !allowed.has(action.type)) return false;
+    if ([ACTIONS.supply, ACTIONS.withdraw, ACTIONS.borrow, ACTIONS.repay].includes(action.type)) {
+      return Boolean(
+        action.asset &&
+        MARKET_REFERENCE.some((market) => String(market.address).toLowerCase() === String(action.asset).toLowerCase()) &&
+        parseNumber(action.amount)
+      );
+    }
+    if (action.type === ACTIONS.swap) {
+      return Boolean(
+        action.inputToken &&
+        action.outputToken &&
+        MARKET_REFERENCE.some((market) => String(market.address).toLowerCase() === String(action.inputToken).toLowerCase()) &&
+        MARKET_REFERENCE.some((market) => String(market.address).toLowerCase() === String(action.outputToken).toLowerCase()) &&
+        parseNumber(action.amount) &&
+        String(action.amountRaw || '').match(/^\d+$/)
+      );
+    }
+    if (action.type === ACTIONS.bridge) {
+      const from = String(action.fromChain || '').toLowerCase();
+      const to = String(action.toChain || '').toLowerCase();
+      return from !== to &&
+        ['arc', 'base', 'arbitrum', 'ethereum'].includes(from) &&
+        ['arc', 'base', 'arbitrum', 'ethereum'].includes(to) &&
+        parseNumber(action.amount);
+    }
+    return false;
+  });
+
+  if (!actions.length) return null;
+
+  return {
+    title: cleanText(plan.title || 'Centry transaction', 120),
+    reason: cleanText(plan.reason || 'Explicit transaction request.', 240),
+    autoExecute: false,
+    actions,
+  };
+}
+
 export async function POST(request) {
   const limit = rateLimit(request, 'assistant', { max: 12, windowMs: 60_000 });
   if (!limit.allowed) return rateLimitResponse(limit);
@@ -131,7 +200,14 @@ export async function POST(request) {
     if (!question) return withRateLimitHeaders(NextResponse.json({ success: false, error: 'Ask a question about Centry.' }, { status: 400 }), limit);
 
     const explicit = parseExplicitExecution(question, context);
-    if (explicit) return withRateLimitHeaders(NextResponse.json({ success: true, ...explicit, provider: 'deterministic' }), limit);
+    if (explicit) {
+      return withRateLimitHeaders(NextResponse.json({
+        success: true,
+        ...explicit,
+        plan: explicit.plan ? { ...explicit.plan, autoExecute: false } : null,
+        provider: 'deterministic',
+      }), limit);
+    }
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) return withRateLimitHeaders(NextResponse.json({ success: true, answer: fallbackPositionAnswer(context, question), provider: 'local-fallback' }), limit);
@@ -142,7 +218,13 @@ export async function POST(request) {
     const rawModelText = data?.candidates?.[0]?.content?.parts?.map((part) => part?.text || '').join('');
     const parsed = parseModelJson(rawModelText);
     if (!parsed) return withRateLimitHeaders(NextResponse.json({ success: true, answer: fallbackPositionAnswer(context, question), provider: model }), limit);
-    return withRateLimitHeaders(NextResponse.json({ success: true, answer: parsed.answer || fallbackPositionAnswer(context, question), plan: parsed.plan || null, provider: model }), limit);
+    const safePlan = normalizePlan(parsed.plan);
+    return withRateLimitHeaders(NextResponse.json({
+      success: true,
+      answer: parsed.answer || fallbackPositionAnswer(context, question),
+      plan: safePlan,
+      provider: model,
+    }), limit);
   } catch (error) {
     return withRateLimitHeaders(NextResponse.json({ success: false, error: error?.message || 'Centrion is temporarily unavailable.' }, { status: 500 }), limit);
   }
