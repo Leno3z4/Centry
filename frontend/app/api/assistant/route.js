@@ -367,6 +367,6 @@ export async function POST(request) {
       provider: model,
     }), limit);
   } catch (error) {
-    return withRateLimitHeaders(NextResponse.json({ success: false, error: error?.message || 'Centrion is temporarily unavailable.' }, { status: 500 }), limit);
+    return withRateLimitHeaders(NextResponse.json({ success: false, error: error?.message || 'Cask is temporarily unavailable.' }, { status: 500 }), limit);
   }
 }
