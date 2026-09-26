@@ -127,7 +127,7 @@ export function fallbackPositionAnswer(context, question) {
     if (account?.ready) return `Collateral value: $${usd(account.totalCollateralValueUsd)}. Debt: $${usd(account.totalDebtValueUsd)}. Remaining borrow capacity: $${usd(account.remainingBorrowCapacityUsd)}. Current ${market} debt: ${borrowed}.`;
     return `${market}: wallet ${context.walletBalance}, supplied ${context.supplied}, borrowed ${borrowed}, remaining capacity ${context.remainingBorrowCapacity}, health factor ${context.healthFactor}.`;
   }
-  return `I can analyze the current Centry position from the latest onchain snapshot.`;
+  return `I can answer questions about Centry's lending markets, swaps, bridge, Gateway, portfolio, Cask, agents, automation, security, and docs. A connected wallet is only needed when you ask for your own live account state or want to trigger a transaction.`;
 }
 
 export const CENTRY_KNOWLEDGE_BASE = `
