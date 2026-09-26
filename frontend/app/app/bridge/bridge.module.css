@@ -420,3 +420,135 @@
     grid-template-columns: 1fr auto;
   }
 }
+
+/* Bridge interface refinement */
+.page { max-width: 760px; gap: 18px; }
+.header { max-width: 700px; margin: 0 auto; width: 100%; }
+.header h1 { font-size: clamp(42px, 5vw, 62px); font-weight: 700; }
+.header p { color: rgba(255,255,255,.66); }
+.card {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 22px;
+  gap: 14px;
+  background: #121416;
+  border-color: #282c31;
+  box-shadow: 0 18px 50px rgba(0,0,0,.17);
+}
+.transferFields {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) 46px minmax(0,1fr);
+  align-items: center;
+  gap: 10px;
+}
+.fieldCard {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #30343a;
+  border-radius: 16px;
+  background: #17191c;
+}
+.fieldLabelRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.fieldLabelRow label { color:#fff; font-size:12px; font-weight:650; }
+.fieldLabelRow span { color:rgba(255,255,255,.42); font-size:9px; text-transform:uppercase; letter-spacing:.05em; }
+.fieldCard .chainTrigger { min-height:58px; background:#101215; border-color:#252a30; }
+.fieldCard .chainTrigger:hover,
+.fieldCard .chainTriggerOpen { background:#15181c; border-color:#4a5058; }
+.arrowButton {
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  border-color: #343940;
+  background: #1a1d21;
+  box-shadow: 0 8px 22px rgba(0,0,0,.2);
+}
+.arrowButton:hover:not(:disabled) { border-color:#0a84ff; background:#19212a; color:#ddecff; transform:translateY(-1px); }
+.amountBlock {
+  margin-top: 4px;
+  padding: 14px;
+  border:1px solid #30343a;
+  border-radius:16px;
+  background:#17191c;
+}
+.amountHeader label { color:#fff; font-weight:650; }
+.balanceButton {
+  min-height:28px;
+  padding:5px 9px;
+  border:1px solid #343940;
+  border-radius:8px;
+  background:#1a1d21;
+  color:#ddecff;
+}
+.balanceButton:hover:not(:disabled) { border-color:#0a84ff; color:#fff; }
+.amountField {
+  margin-top:7px;
+  padding:15px 14px;
+  border-color:#30343a;
+  background:#101215;
+}
+.amountField input { font-size:34px; font-weight:550; letter-spacing:-1px; }
+.amountField input::placeholder { color:rgba(255,255,255,.28); }
+.amountField span { font-size:13px; color:rgba(255,255,255,.72); }
+.summary {
+  margin-top: 2px;
+  border-color:#282c31;
+  background:#282c31;
+}
+.summary div { padding:11px 13px; background:#111317; }
+.summary span { color:rgba(255,255,255,.48); font-size:11px; }
+.summary strong { color:#fff; font-size:11px; }
+.primaryButton {
+  min-height:54px;
+  margin-top:2px;
+  background:#0a84ff;
+  border-color:#0a84ff;
+  font-size:14px;
+  font-weight:700;
+  box-shadow:0 10px 26px rgba(10,132,255,.16);
+}
+.primaryButton:hover:not(:disabled) { background:#0077ee; border-color:#0077ee; transform:translateY(-1px); }
+.primaryButton:disabled { background:#1b1e22; border-color:#30343a; color:rgba(255,255,255,.42); opacity:1; box-shadow:none; }
+.notice { color:rgba(255,255,255,.7); background:#171a1e; border-color:#30343a; }
+.noticeError { color:#ff9c96; border-color:rgba(255,69,58,.3); background:rgba(255,69,58,.08); }
+.noticeSuccess { color:#a6e9bb; border-color:rgba(52,199,89,.3); background:rgba(52,199,89,.08); }
+.refreshButton { color:#5eaaff; }
+.infoFooter {
+  display:flex;
+  align-items:flex-start;
+  gap:9px;
+  max-width:680px;
+  margin:0 auto;
+  color:rgba(255,255,255,.42);
+}
+.infoButton {
+  display:grid;
+  width:18px;
+  height:18px;
+  flex:0 0 auto;
+  place-items:center;
+  border:1px solid #343940;
+  border-radius:50%;
+  background:#121416;
+  color:rgba(255,255,255,.62);
+  font-size:10px;
+  font-weight:700;
+  cursor:pointer;
+}
+.infoFooter p { margin:1px 0 0; font-size:10px; line-height:1.5; color:rgba(255,255,255,.46); }
+@media (max-width:700px) {
+  .transferFields { grid-template-columns:1fr; gap:6px; }
+  .arrowButton { margin:-4px auto; position:relative; z-index:2; }
+  .fieldCard { padding:10px; }
+}
+@media (max-width:620px) {
+  .page { gap:14px; }
+  .card { padding:16px; border-radius:16px; }
+  .header h1 { font-size:40px; letter-spacing:-1.8px; }
+  .amountField input { font-size:30px; }
+}
