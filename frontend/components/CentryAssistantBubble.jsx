@@ -57,7 +57,7 @@ export default function CentryAssistantBubble() {
       ) : null}
 
       {open ? (
-        <aside id="centrion-panel" ref={panelRef} className={styles.panel} aria-label="Centrion assistant">
+        <aside id="centrion-panel" ref={panelRef} className={`${styles.panel} ${styles.panelOpen}`} aria-label="Centrion assistant">
           <div className={styles.panelHeader}>
             <div className={styles.brand}><span className={styles.brandMark}>C</span><span>Centrion</span></div>
             <button type="button" onClick={() => setOpen(false)} className={styles.close} aria-label="Close Centrion">×</button>
