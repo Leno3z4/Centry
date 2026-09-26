@@ -305,7 +305,6 @@ function OverviewContent() {
         .overview-hero{gap:32px}
         .overview-hero-summary-full{width:100%;box-sizing:border-box}
         .overview-summary-top{display:flex;align-items:end;justify-content:space-between;gap:24px}
-        .overview-hero-actions{flex:0 0 auto;align-items:center}
         .overview-summary-note{display:block;margin-top:14px;color:rgba(255,255,255,.34);font-size:10px}
 
         .overview-hero-kicker{display:inline-block;margin-bottom:10px;color:rgba(255,255,255,.45);font-size:11px;letter-spacing:.14em;font-weight:700}
@@ -364,8 +363,6 @@ function OverviewContent() {
           .overview-hero{gap:22px}
           .overview-hero-summary{padding:18px;border-radius:18px}
           .overview-summary-top{align-items:stretch;flex-direction:column;gap:16px}
-          .overview-hero-actions{width:100%}
-          .overview-hero-actions>a{flex:1 1 0}
           .overview-summary-main strong{font-size:31px}
           .overview-summary-grid{gap:0 13px}
           .overview-summary-grid>div{padding:12px 0 2px}
