@@ -3,7 +3,7 @@ import { CENTRY_AGENT_SYSTEM_PROMPT, CENTRY_KNOWLEDGE_BASE, fallbackPositionAnsw
 import { rateLimit, rateLimitResponse, withRateLimitHeaders } from '../../../lib/rateLimit';
 import { SWAP_MARKETS } from '../../../constants/markets';
 import { CONTRACT_ADDRESSES } from '../../../constants/contracts';
-import { Contract, JsonRpcProvider, getAddress, isAddress, formatUnits } from 'ethers';
+import { Contract, JsonRpcProvider, getAddress, isAddress, formatUnits, parseUnits } from 'ethers';
 
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 const DEFAULT_MODEL = 'gemini-3.1-flash-lite';
@@ -280,14 +280,24 @@ function normalizePlan(plan) {
       );
     }
     if (action.type === ACTIONS.swap) {
-      return Boolean(
-        action.inputToken &&
-        action.outputToken &&
-        MARKET_REFERENCE.some((market) => String(market.address).toLowerCase() === String(action.inputToken).toLowerCase()) &&
-        MARKET_REFERENCE.some((market) => String(market.address).toLowerCase() === String(action.outputToken).toLowerCase()) &&
-        parseNumber(action.amount) &&
-        String(action.amountRaw || '').match(/^\d+$/)
+      const inputMarket = MARKET_REFERENCE.find(
+        (market) => String(market.address).toLowerCase() === String(action.inputToken).toLowerCase(),
       );
+      const outputMarket = MARKET_REFERENCE.find(
+        (market) => String(market.address).toLowerCase() === String(action.outputToken).toLowerCase(),
+      );
+      if (!inputMarket || !outputMarket || inputMarket.address.toLowerCase() === outputMarket.address.toLowerCase()) {
+        return false;
+      }
+      if (!parseNumber(action.amount) || !String(action.amountRaw || '').match(/^\d+$/)) {
+        return false;
+      }
+      try {
+        const expectedRaw = parseUnits(String(action.amount), inputMarket.decimals).toString();
+        return String(action.amountRaw) === expectedRaw;
+      } catch {
+        return false;
+      }
     }
     if (action.type === ACTIONS.bridge) {
       const from = String(action.fromChain || '').toLowerCase();
