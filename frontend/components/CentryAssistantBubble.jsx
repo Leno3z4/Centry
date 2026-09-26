@@ -111,7 +111,7 @@ export default function CentryAssistantBubble() {
               ×
             </button>
           </div>
-          <div className={styles.aiNotice}>Review transaction details before signing.</div>
+          <div className={styles.aiNotice}>Cask can answer Centry questions or prepare a supported transaction. You sign every transaction.</div>
           <div className={styles.panelBody}>
             <AssistantErrorBoundary onClose={closePanel}>
               <AssistantPanelContent />
