@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { authenticateAgent, jsonResponse, requireScope } from "../../../../../lib/agentApi";
 import { getAgentByAccount, getAgentById, enqueueAgentTask } from "../../../../../lib/agentStore";
+import { verifyAgentGenesisPair } from "../../../../../lib/agentGenesis";
 
 function noStore(body, status = 200) {
   return Response.json(body, {
@@ -30,6 +31,7 @@ export async function GET(request) {
       taskStatus: `${origin}/api/v1/agent-connections/session/a2a/task?taskId={taskId}`,
     },
     onchainExecution: "user-owned-agent-account",
+    genesisBoundary: "canonical-genesis-factory",
   });
 }
 
@@ -61,7 +63,18 @@ export async function POST(request) {
   const toAgent = await getAgentById(toAgentId).catch(() => null);
   if (!toAgent) return noStore({ error: "target_agent_not_found" }, 404);
   if (toAgent.id === fromAgent.id) return noStore({ error: "self_message_not_allowed" }, 400);
-  if (String(toAgent.owner).toLowerCase() !== String(fromAgent.owner).toLowerCase()) return noStore({ error: "external_agent_interaction_prohibited" }, 403);
+
+  try {
+    await verifyAgentGenesisPair(
+      fromAgent.account,
+      toAgent.account,
+      { rpcUrl: process.env.CENTRY_AGENT_RPC_URL },
+    );
+  } catch (error) {
+    return noStore({
+      error: error instanceof Error ? error.message : "external_agent_interaction_prohibited",
+    }, 403);
+  }
 
   const taskId = crypto.randomUUID();
   try {
@@ -87,7 +100,8 @@ export async function POST(request) {
         account: toAgent.account,
       },
       executionBoundary: "recipient-agent-account",
-      note: "The message is queued for the next global agent wake. Message routing does not grant execution authority; any onchain action still requires the recipient owner's live agent policy and authorized operator.",
+      genesisBoundary: "canonical-genesis-factory",
+      note: "The message is queued for the next global agent wake. Cross-owner routing is allowed only between agents created by the canonical genesis factory; messages never grant execution authority to the sender.",
     }, 202);
   } catch (error) {
     return noStore({

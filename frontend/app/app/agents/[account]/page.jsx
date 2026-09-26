@@ -335,6 +335,8 @@ function DashboardContent() {
         </div>
       </section>
 
+      <AgentNetworkPanel agent={agent} />
+
       <section className={styles.analyticsGrid}>
         <section className={styles.card}>
           <div className={styles.sectionHead}>
