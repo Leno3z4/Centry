@@ -427,6 +427,70 @@ function filterRiskGuardActions(actions, riskDecision) {
   return input.filter((action) => String(action?.action || "").trim() !== "borrow");
 }
 
+function evaluateHealthWarning(snapshot) {
+  const rawHealth = snapshot?.lending?.healthFactor;
+  if (rawHealth == null) {
+    return {
+      level: "unknown",
+      active: false,
+      healthFactor: null,
+      message: "Health factor is not available in the latest snapshot.",
+    };
+  }
+
+  let healthFactor;
+  try {
+    healthFactor = BigInt(rawHealth);
+  } catch {
+    return {
+      level: "unknown",
+      active: false,
+      healthFactor: null,
+      message: "The latest health factor could not be read.",
+    };
+  }
+
+  const warnAt = 1500000000000000000n;
+  const criticalAt = 1200000000000000000n;
+  const liquidationAt = 1000000000000000000n;
+  const display = formatUnits(healthFactor, 18);
+
+  if (healthFactor < liquidationAt) {
+    return {
+      level: "liquidation",
+      active: true,
+      healthFactor,
+      message: "Health factor is below 1.00. Liquidation risk is active.",
+    };
+  }
+
+  if (healthFactor < criticalAt) {
+    return {
+      level: "critical",
+      active: true,
+      healthFactor,
+      message: "Health factor is in the critical warning range. Reduce debt or add collateral.",
+    };
+  }
+
+  if (healthFactor < warnAt) {
+    return {
+      level: "warning",
+      active: true,
+      healthFactor,
+      message: "Health factor has fallen below 1.50. Consider reducing debt or adding collateral.",
+    };
+  }
+
+  return {
+    level: "healthy",
+    active: false,
+    healthFactor,
+    message: "Health factor is above the warning threshold.",
+    display,
+  };
+}
+
 function agentPolicy(autonomy) {
   const policy = autonomy && typeof autonomy.policy === "object" ? autonomy.policy : {};
   const allowedActions = Array.isArray(policy.allowedActions) && policy.allowedActions.length
