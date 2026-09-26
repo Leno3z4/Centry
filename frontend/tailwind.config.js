@@ -12,6 +12,7 @@ module.exports = {
         background: "#080808",
         foreground: "#ffffff",
         card: "#0d0d0d",
+        "card-foreground": "#ffffff",
         border: "#2a2a2a",
         "muted-foreground": "rgba(255,255,255,.58)",
       },
