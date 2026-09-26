@@ -5,6 +5,8 @@ import "../core/CentryLendingPool.sol";
 import "../core/CentryInterestRateStrategy.sol";
 import "../mocks/CentryMockERC20.sol";
 import "../mocks/CentryMockOracle.sol";
+import "../agents/CentryOnchainAgentFactory.sol";
+import "../agents/CentryOnchainAgentAccount.sol";
 
 interface Vm {
     function warp(uint256 newTimestamp) external;
@@ -46,6 +48,88 @@ contract CentryLendingPoolTest {
         collateral.mint(borrower, 2_000e18);
         debt.mint(address(this), 2_000e18);
         debt.mint(liquidator, 2_000e18);
+    }
+
+    function testAgentFinancialLimitIsEnforcedAndResets() external {
+        CentryOnchainAgentFactory factory = new CentryOnchainAgentFactory();
+        address operator = address(0xA11CE);
+
+        factory.createAgentAccount(
+            bytes32("security"),
+            bytes32(0),
+            "",
+            operator
+        );
+
+        address agentAddress = factory.getAgentAccounts(address(this))[0];
+        CentryOnchainAgentAccount agent = CentryOnchainAgentAccount(payable(agentAddress));
+        agent.setActive(true);
+
+        bytes4 approveSelector = bytes4(keccak256("approve(address,uint256)"));
+        uint64 permissionExpiry = uint64(block.timestamp + 3 days);
+        agent.setPermission(
+            operator,
+            address(debt),
+            approveSelector,
+            true,
+            permissionExpiry,
+            0
+        );
+        agent.setFinancialLimit(
+            operator,
+            address(debt),
+            approveSelector,
+            address(debt),
+            100e18,
+            150e18,
+            1 days
+        );
+
+        bytes memory approve100 = abi.encodeWithSelector(
+            approveSelector,
+            address(pool),
+            100e18
+        );
+
+        vm.prank(operator);
+        agent.execute(address(debt), 0, approve100);
+
+        bytes memory approve51 = abi.encodeWithSelector(
+            approveSelector,
+            address(pool),
+            51e18
+        );
+        vm.prank(operator);
+        (bool windowExceeded,) = address(agent).call(
+            abi.encodeWithSelector(
+                agent.execute.selector,
+                address(debt),
+                0,
+                approve51
+            )
+        );
+        _assertFalse(windowExceeded);
+
+        bytes memory approve101 = abi.encodeWithSelector(
+            approveSelector,
+            address(pool),
+            101e18
+        );
+        vm.prank(operator);
+        (bool callExceeded,) = address(agent).call(
+            abi.encodeWithSelector(
+                agent.execute.selector,
+                address(debt),
+                0,
+                approve101
+            )
+        );
+        _assertFalse(callExceeded);
+
+        vm.warp(block.timestamp + 1 days + 1);
+
+        vm.prank(operator);
+        agent.execute(address(debt), 0, approve100);
     }
 
     function testSupplyAndWithdraw() external {
