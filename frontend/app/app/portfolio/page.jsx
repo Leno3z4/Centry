@@ -2,6 +2,7 @@
 
 import { useAccount } from 'wagmi';
 import { useMemo } from 'react';
+import Link from 'next/link';
 import { Providers } from '../../../components/Providers';
 import { AppShell } from '../../../components/AppShell';
 import TransactionHistory from '../../../components/TransactionHistory';
@@ -67,88 +68,59 @@ function PortfolioContent() {
 
   return (
     <div className="page-stack">
-      <div className="section-header">
+      <div className="section-header portfolio-hero">
         <div>
-          <h1>Your position</h1>
-          <p>Account-wide collateral, debt, borrowing capacity, and health.</p>
+          <span className="section-kicker">ACCOUNT PORTFOLIO</span>
+          <h1>Your portfolio</h1>
+          <p>Account-wide collateral, debt, borrowing room, and health in one view.</p>
+        </div>
+        <div className="portfolio-primary-metric">
+          <span>Total Portfolio Value</span>
+          <strong>{isConnected && lending.accountPosition.ready ? formatUsd(lending.accountPosition.totalCollateralValueUsd) : "—"}</strong>
+          <small>Total collateral value at current oracle prices</small>
         </div>
       </div>
-
       {!isConnected && (
         <div className="connect-prompt large-prompt">
           Connect your wallet to load your onchain portfolio.
         </div>
       )}
 
-      <section className="portfolio-grid">
-        <StatCard
-          label="Borrow limit"
-          value={isConnected ? `$${formatNumber(lending.borrowLimit)}` : '—'}
-          detail="Remaining account borrowing room"
-        />
-        <StatCard
-          label="Total debt"
-          value={isConnected ? `$${formatNumber(lending.totalDebtValue)}` : '—'}
-          detail="Across all lending markets"
-        />
-        <StatCard
-          label="Health"
-          value={isConnected ? `${lending.healthFactorPercent}%` : '—'}
-          detail="Account-wide safety"
-        />
-        <StatCard
-          label="Health factor"
-          value={isConnected ? lending.healthFactor : '—'}
-          detail="Direct from the lending pool"
-        />
+      <section className="portfolio-quick-metrics">
+        <StatCard label="Total collateral" value={isConnected ? formatUsd(lending.accountPosition.totalCollateralValueUsd) : "—"} detail="Current supplied collateral value" />
+        <StatCard label="Total debt" value={isConnected ? formatUsd(lending.accountPosition.totalDebtValueUsd) : "—"} detail="Across active lending markets" />
+        <StatCard label="Borrowing room" value={isConnected ? formatUsd(lending.accountPosition.remainingBorrowCapacityUsd) : "—"} detail="Remaining account capacity" />
       </section>
-
       <section className="risk-overview-grid">
         <div className="panel risk-summary-panel">
           <div className="panel-head">
-            <div>
-              <h2>Risk overview</h2>
-              <p>Derived from current collateral, debt, oracle prices, and reserve liquidation thresholds.</p>
-            </div>
+            <div><h2>Account health</h2><p>A single view of your liquidation buffer, health factor, and current debt exposure.</p></div>
             <span className="risk-state-chip">{risk.summary.positionStatus}</span>
           </div>
-
-          <div className="risk-summary-metrics">
-            <div><span>Distance to liquidation</span><strong>{isConnected ? formatPercent(risk.summary.distanceToLiquidationPct) : '—'}</strong><small>Based on current health factor</small></div>
-            <div><span>Weighted collateral</span><strong>{isConnected ? formatUsd(risk.summary.weightedCollateralUsd) : '—'}</strong><small>Collateral × liquidation threshold</small></div>
-            <div><span>Debt</span><strong>{isConnected ? formatUsd(risk.summary.totalDebtUsd) : '—'}</strong><small>Across active markets</small></div>
-            <div><span>Liquidation threshold</span><strong>1.00 HF</strong><small>Current deployed pool rule</small></div>
-          </div>
-
-          <div className="risk-distance-track" aria-label="Distance to liquidation">
-            <div style={{ width: ((Math.min(100, Math.max(0, risk.summary.distanceToLiquidationPct || 0))) + '%') }} />
-          </div>
-        </div>
-
-        <div className="panel collateral-panel">
-          <div className="panel-head">
-            <div>
-              <h2>Collateral composition</h2>
-              <p>Share of your supplied collateral by current oracle value.</p>
+          <div className="health-hero-row">
+            <div className="health-hero-value"><span>Health</span><strong>{isConnected ? lending.healthFactorPercent + "%" : "—"}</strong></div>
+            <div className="health-hero-meta">
+              <div><span>Health factor</span><strong>{isConnected ? lending.healthFactor : "—"}</strong></div>
+              <div><span>Distance to liquidation</span><strong>{isConnected ? formatPercent(risk.summary.distanceToLiquidationPct) : "—"}</strong></div>
             </div>
           </div>
+          <div className="health-status-bar"><div style={{ width: ((Math.min(100, Math.max(0, lending.healthFactorPercent || 0))) + "%") }} /></div>
+          <div className="health-foot-row"><span>Liquidation threshold <strong>1.00 HF</strong></span><span>Total debt <strong>{isConnected ? formatUsd(risk.summary.totalDebtUsd) : "—"}</strong></span></div>
+        </div>
+        <div className="panel collateral-panel">
+          <div className="panel-head"><div><h2>Collateral composition</h2><p>Share of your supplied collateral by current oracle value.</p></div></div>
           <div className="collateral-list">
             {collateralRows.length ? collateralRows.map((market) => (
               <div className="collateral-row" key={market.id}>
-                <div>
-                  <strong>{market.symbol}</strong>
-                  <span>{formatUsd(market.suppliedUsd)}</span>
-                </div>
-                <div className="collateral-share">
-                  <strong>{formatPercent(market.collateralSharePct)}</strong>
-                  <div><span style={{ width: ((Math.min(100, Math.max(0, market.collateralSharePct))) + '%') }} /></div>
-                </div>
+                <div className="collateral-asset"><span className="asset-badge" aria-hidden="true">{market.symbol === "cirBTC" ? "₿" : market.symbol === "USDC" ? "$" : "€"}</span><div><strong>{market.symbol}</strong><span>{market.name}</span></div><strong>{formatUsd(market.suppliedUsd)}</strong></div>
+                <div className="collateral-share"><strong>{formatPercent(market.collateralSharePct)}</strong><div><span style={{ width: ((Math.min(100, Math.max(0, market.collateralSharePct))) + "%") }} /></div></div>
               </div>
-            )) : <div className="risk-empty">No supplied collateral in the current snapshot.</div>}
+            )) : (
+              <div className="risk-empty"><span className="empty-state-mark">+</span><strong>No collateral supplied yet</strong><p>Deposit USDC or another supported collateral asset to start building your position.</p><Link href="/app/markets" className="empty-state-action">Deposit Collateral to Start →</Link></div>
+            )}
           </div>
         </div>
       </section>
-
       <section className="panel market-risk-panel">
         <div className="panel-head">
           <div>
@@ -159,77 +131,24 @@ function PortfolioContent() {
 
         <div className="market-risk-table">
           <div className="market-risk-table-head">
-            <span>Market</span><span>Utilization</span><span>Supply APY</span><span>Borrow APY</span><span>LTV / LT</span><span>Liquidity</span><span>Liquidation price</span>
+            <span>Market</span><span>Utilization</span><span>Supply APY</span><span>Borrow APY</span><span>Risk</span>
           </div>
           {risk.markets.map((market) => (
             <div className="market-risk-row" key={market.id}>
-              <div><strong>{market.symbol}</strong><small>{market.name} · Oracle {formatUsd(market.priceUsd)}</small></div>
+              <div className="market-asset-cell"><span className="asset-badge" aria-hidden="true">{market.symbol === "cirBTC" ? "₿" : market.symbol === "USDC" ? "$" : "€"}</span><div><strong>{market.symbol}</strong><small>{market.name} · Oracle {formatUsd(market.priceUsd)}</small></div></div>
               <div><strong>{formatPercent(market.utilizationPct)}</strong></div>
               <div><strong>{formatApy(market.supplyApy)}</strong></div>
               <div><strong>{formatApy(market.borrowApy)}</strong></div>
-              <div><strong>{formatPercent(market.ltvBps / 100)}</strong><small>LT {formatPercent(market.liquidationThresholdBps / 100)} · Bonus {formatPercent((market.liquidationBonusBps - 10000) / 100)}</small></div>
-              <div><strong>{formatUsd(market.cashUsd)}</strong><small>Supply cap {formatPercent(market.supplyCapUtilizationPct)} · Borrow cap {formatPercent(market.borrowCapUtilizationPct)} · RF {formatPercent(market.reserveFactorBps / 100)}</small></div>
-              <div>
-                <strong>
-                  {market.liquidationPriceStatus === 'price'
-                    ? formatUsd(market.liquidationPriceUsd)
-                    : market.liquidationPriceStatus === 'already-breached'
-                      ? 'Already below HF 1.00'
-                      : market.liquidationPriceStatus === 'other-collateral-sufficient'
-                        ? 'Protected by other collateral'
-                        : '—'}
-                </strong>
-                <small>
-                  {market.liquidationPriceStatus === 'price'
-                    ? formatPercent(market.distanceToLiquidationPct) + ' price distance'
-                    : market.liquidationPriceStatus === 'already-breached'
-                      ? 'Current oracle price is below the estimated threshold'
-                      : market.liquidationPriceStatus === 'other-collateral-sufficient'
-                        ? 'Other supplied collateral covers the debt at HF 1.00'
-                        : 'No active collateral'}
-                </small>
+              <div className="market-risk-main"><strong>{market.liquidationPriceStatus === "price" ? formatUsd(market.liquidationPriceUsd) : market.liquidationPriceStatus === "already-breached" ? "Below HF 1.00" : market.liquidationPriceStatus === "other-collateral-sufficient" ? "Protected" : "—"}</strong><small>{market.liquidationPriceStatus === "price" ? formatPercent(market.distanceToLiquidationPct) + " price distance" : "Liquidation price estimate"}</small>
+                <details className="market-risk-details"><summary>View risk details</summary><div className="market-risk-detail-grid"><span>LTV <strong>{formatPercent(market.ltvBps / 100)}</strong></span><span>LT <strong>{formatPercent(market.liquidationThresholdBps / 100)}</strong></span><span>Liquidity <strong>{formatUsd(market.cashUsd)}</strong></span><span>Reserve factor <strong>{formatPercent(market.reserveFactorBps / 100)}</strong></span></div></details>
               </div>
-            </div>
-          ))}
+            </div>          ))}
         </div>
 
         <div className="risk-footnote">
           Liquidation price is an isolated collateral estimate: it holds other collateral values and debt prices constant and solves for the price of that collateral at HF = 1.00.
         </div>
       </section>
-
-      <div className="panel">
-        <div className="panel-head">
-          <div>
-            <h2>Position health</h2>
-          </div>
-        </div>
-
-        <div className="health-meter">
-          <div className="health-meter-head">
-            <span>Position health</span>
-            <strong>{isConnected ? `${lending.healthFactorPercent}%` : '—'}</strong>
-          </div>
-          <div className="health-factor-label">
-            Health factor {isConnected ? lending.healthFactor : '—'}
-          </div>
-          <div
-            className="health-track"
-            role="progressbar"
-            aria-valuemin="0"
-            aria-valuemax="100"
-            aria-valuenow={isConnected ? lending.healthFactorPercent : 0}
-          >
-            <div
-              className="health-fill"
-              style={{ width: `${isConnected ? lending.healthFactorPercent : 0}%` }}
-            />
-          </div>
-          <p>
-            Health is account-wide and uses the deployed Centry lending pool. A debt-free account is shown as 100%.
-          </p>
-        </div>
-      </div>
 
       <TransactionHistory />
     <style jsx global>{`
