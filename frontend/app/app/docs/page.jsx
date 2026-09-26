@@ -26,6 +26,51 @@ const addressRows = [
   ['Self-Repay Executor V2', CONTRACT_ADDRESSES.selfRepayExecutor],
 ];
 
+
+function ContractRow({ label, address }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    if (!address) return;
+    try {
+      await navigator.clipboard.writeText(address);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1400);
+    } catch {
+      setCopied(false);
+    }
+  };
+  return (
+    <div className="contract-row">
+      <div className="contract-label"><strong>{label}</strong><span>Arc deployment</span></div>
+      <code>{address || 'Not configured'}</code>
+      {address ? <button type="button" onClick={copy} className="contract-copy">{copied ? 'Copied' : 'Copy'}</button> : null}
+      {address ? <a href={`https://explorer.arc.io/address/${address}`} target="_blank" rel="noreferrer" className="contract-explorer">Explorer ↗</a> : null}
+    </div>
+  );
+}
+
+function ProtocolFlow() {
+  const steps = [
+    ['01', 'Lend / Borrow', 'Supply collateral or borrow against it.'],
+    ['02', 'Lock CENT', 'veCENT turns locked CENT into a position.'],
+    ['03', 'Protocol revenue', 'Revenue funds the rewards engine.'],
+    ['04', 'veCENT rewards', 'Epoch allocations are queued and claimed.'],
+    ['05', 'Self-repay', 'Keeper execution can convert rewards into debt repayment.'],
+  ];
+  return (
+    <div className="protocol-flow" aria-label="Centry protocol flow">
+      {steps.map(([number, title, text], index) => (
+        <div className="protocol-flow-step" key={number}>
+          <div className="protocol-flow-node"><span>{number}</span></div>
+          <strong>{title}</strong>
+          <p>{text}</p>
+          {index < steps.length - 1 ? <span className="protocol-flow-arrow" aria-hidden="true">→</span> : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function Page() {
   const [mobileDocsNavOpen, setMobileDocsNavOpen] = useState(false);
 
@@ -50,7 +95,7 @@ export default function Page() {
                 These docs describe the live protocol architecture and the flow between its contracts.
               </p>
             </div>
-            <a className="secondary-btn" href="/app">Open app</a>
+            <a className="secondary-btn" href="/app">open Centry</a>
           </div>
 
           <div className="docs-layout">
@@ -131,19 +176,7 @@ export default function Page() {
                   Protocol revenue can be converted into CENT and distributed to veCENT positions. Those rewards can
                   also be routed through Centry&apos;s self-repay system to reduce supported debt automatically.
                 </p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 9, marginTop: 18 }}>
-                  {[
-                    ['Lend', 'Supply liquidity'],
-                    ['Borrow', 'Borrow against collateral'],
-                    ['Earn', 'Revenue → CENT rewards'],
-                    ['Repay', 'Rewards can repay debt'],
-                  ].map(([title, text]) => (
-                    <div key={title} style={{ padding: 14, border: '1px solid var(--line)', borderRadius: 11, background: 'var(--panel-2)' }}>
-                      <strong style={{ display: 'block', fontSize: 12 }}>{title}</strong>
-                      <span style={{ display: 'block', marginTop: 6, color: 'var(--muted-2)', fontSize: 10, lineHeight: 1.5 }}>{text}</span>
-                    </div>
-                  ))}
-                </div>
+                <ProtocolFlow />
               </section>
 
               <section id="lending" className="panel">
@@ -169,13 +202,7 @@ export default function Page() {
                     <p className="panel-copy" style={{ marginBottom: 0 }}>Unhealthy accounts can be liquidated, repaying debt and seizing collateral with the configured bonus.</p>
                   </div>
                 </div>
-                <div style={{ marginTop: 16, padding: 14, border: '1px solid var(--line)', borderRadius: 11, background: 'var(--panel-2)' }}>
-                  <div className="section-kicker">CURRENT ARC MAINNET CONFIGURATION</div>
-                  <p className="panel-copy" style={{ marginBottom: 0 }}>
-                    Arc mainnet chain ID: <code>5042</code>. The live USDC reserve uses the Arc native USDC ERC-20 interface.
-                    Risk parameters shown here reflect the deployed Arc Mainnet configuration; verify the live contracts before changing any risk assumption.
-                  </p>
-                </div>
+                <div className="docs-callout docs-callout-info"><span className="docs-callout-label">NETWORK</span><div><strong>Arc Mainnet · Chain ID <code>5042</code></strong><p>The live USDC reserve uses the Arc-native USDC ERC-20 interface. Verify current onchain parameters before relying on any risk assumption.</p></div></div>
               </section>
 
               <section id="governance" className="panel">
@@ -186,7 +213,8 @@ export default function Page() {
                   locked amount and a lock end time. The current implementation allows locks from 1 week up to 104 weeks.
                   The position can be increased or extended while it is active.
                 </p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 16 }}>
+                <div className="docs-callout docs-callout-warning"><span className="docs-callout-label">RISK</span><div><strong>Verify live parameters before use.</strong><p>Oracle data, reserve limits, liquidation settings, and keeper infrastructure are live system dependencies.</p></div></div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
                   <div style={{ padding: 14, border: '1px solid var(--line)', borderRadius: 11 }}>
                     <strong style={{ fontSize: 11 }}>Lock</strong>
                     <p className="panel-copy" style={{ marginBottom: 0 }}>CENT is escrowed in the veCENT contract and the position receives voting-power accounting over time.</p>
@@ -196,13 +224,7 @@ export default function Page() {
                     <p className="panel-copy" style={{ marginBottom: 0 }}>A mature position can withdraw its full amount. Early withdrawal applies the protocol&apos;s configured 25% fee split.</p>
                   </div>
                 </div>
-                <div style={{ marginTop: 16, padding: 14, border: '1px solid var(--line)', borderRadius: 11, background: 'var(--panel-2)' }}>
-                  <strong style={{ fontSize: 11 }}>Early withdrawal economics</strong>
-                  <p className="panel-copy" style={{ margin: '7px 0 0' }}>
-                    Early withdrawal returns 75% of the locked amount. Of the 25% fee, 60% is routed to the rewards controller
-                    and 40% to the treasury. That means 15% of the original principal feeds rewards and 10% goes to treasury.
-                  </p>
-                </div>
+                <div className="docs-callout docs-callout-warning"><span className="docs-callout-label">25% FEE</span><div><strong>Early withdrawal economics</strong><p>Early withdrawal returns 75% of the locked amount. Of the fee, 60% goes to the rewards controller and 40% to treasury.</p></div></div>
               </section>
 
               <section id="rewards" className="panel">
@@ -282,14 +304,7 @@ export default function Page() {
                 <div className="section-kicker">07 / CONTRACTS</div>
                 <h2>Live Arc mainnet deployment</h2>
                 <p className="panel-copy">These are the protocol addresses currently configured by the frontend.</p>
-                <div style={{ display: 'grid', gap: 7, marginTop: 14 }}>
-                  {addressRows.map(([label, address]) => (
-                    <div key={label} style={{ display: 'grid', gridTemplateColumns: '190px minmax(0, 1fr)', gap: 12, alignItems: 'center', padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 9, background: 'var(--panel-2)' }}>
-                      <strong style={{ fontSize: 10 }}>{label}</strong>
-                      <code style={{ color: 'var(--text)', fontSize: 10, overflowWrap: 'anywhere' }}>{address || 'Not configured'}</code>
-                    </div>
-                  ))}
-                </div>
+                <div className="contracts-list">{addressRows.map(([label, address]) => <ContractRow key={label} label={label} address={address} />)}</div>
                 <div style={{ marginTop: 14, padding: 12, border: '1px solid var(--line)', borderRadius: 9 }}>
                   <div className="section-kicker">ASSETS</div>
                   <p className="panel-copy" style={{ marginBottom: 0 }}>
@@ -328,6 +343,46 @@ export default function Page() {
             </main>
           </div>
         </div>
+    <style jsx global>{`
+      .docs-page .section-header h1{font-size:clamp(44px,6vw,72px);letter-spacing:-3px}
+      .docs-page .section-header p{max-width:760px;line-height:1.6;color:rgba(255,255,255,.68)}
+      .docs-layout{grid-template-columns:minmax(0,1fr) 190px;gap:18px}
+      .docs-sidebar{grid-column:2;grid-row:1;top:84px;background:#17191c!important;border-color:#343941!important}
+      .docs-content{grid-column:1;grid-row:1;gap:16px}
+      .docs-sidebar-links{gap:6px}
+      .docs-sidebar-links a{border-color:#2c3036;background:#111317;color:rgba(255,255,255,.62);transition:background .15s ease,border-color .15s ease,color .15s ease}
+      .docs-sidebar-links a:hover{background:#1e2227;border-color:#414852;color:#fff}
+      .docs-content>.panel{padding:22px;border-color:#343941!important;background:#1e1e24!important;box-shadow:0 12px 30px rgba(0,0,0,.12)}
+      .docs-content>.panel h2{font-size:27px;letter-spacing:-.7px}
+      .docs-content>.panel p{line-height:1.62}
+      .protocol-flow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:20px;padding:14px;border:1px solid rgba(255,255,255,.08);border-radius:14px;background:#17191f}
+      .protocol-flow-step{position:relative;min-width:0;padding:4px 10px}
+      .protocol-flow-node{display:flex;align-items:center;justify-content:space-between}
+      .protocol-flow-node:before{content:"";display:block;width:27px;height:1px;background:#35404b}
+      .protocol-flow-node span{display:grid;width:28px;height:28px;place-items:center;border:1px solid #3a4652;border-radius:9px;background:#1d232a;color:#8fbdf2;font-size:9px;font-weight:700}
+      .protocol-flow-step:first-child .protocol-flow-node:before{display:none}
+      .protocol-flow-step strong{display:block;margin-top:12px;font-size:12px}
+      .protocol-flow-step p{margin:5px 0 0;color:rgba(255,255,255,.5);font-size:10px;line-height:1.55}
+      .protocol-flow-arrow{position:absolute;top:21px;right:-7px;color:#52606f;font-size:12px}
+      .docs-callout{display:grid;grid-template-columns:auto minmax(0,1fr);gap:11px;align-items:start;margin-top:16px;padding:14px;border:1px solid #343941;border-radius:12px;background:#171a1e}
+      .docs-callout-label{padding:5px 7px;border:1px solid #3b4652;border-radius:7px;color:#9fb2c8;font-size:8px;font-weight:750;letter-spacing:.06em}
+      .docs-callout strong{font-size:12px}
+      .docs-callout p{margin:5px 0 0!important;color:rgba(255,255,255,.56)!important;font-size:11px!important}
+      .docs-callout-info{background:#151b21;border-color:#31404e}
+      .docs-callout-warning{background:#1c1916;border-color:#4a3b2b}
+      .docs-callout-warning .docs-callout-label{color:#ffd08a;border-color:#5c4930}
+      .contracts-list{display:grid;gap:8px;margin-top:14px}
+      .contract-row{display:grid;grid-template-columns:150px minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:10px 12px;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:#17191f}
+      .contract-label{display:grid;gap:3px;min-width:0}
+      .contract-label strong{font-size:10px}
+      .contract-label span{font-size:8px;color:#8a8f9e}
+      .contract-row code{min-width:0;padding:8px 9px;overflow-wrap:anywhere;border:1px solid #2c323a;border-radius:8px;background:#101215;color:#dbe3ec;font:10px ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+      .contract-copy,.contract-explorer{min-height:32px;padding:0 9px;border:1px solid #35404a;border-radius:8px;background:#1d2227;color:#b9d7f3;font-size:9px;font-weight:650;text-decoration:none;cursor:pointer}
+      .contract-copy:hover,.contract-explorer:hover{border-color:#0a84ff;background:#202830;color:#fff}
+      .contract-copy{font:inherit}
+      @media(max-width:900px){.docs-layout{grid-template-columns:minmax(0,1fr)}.docs-sidebar{display:none}.docs-content{grid-column:1}.protocol-flow{grid-template-columns:repeat(2,minmax(0,1fr))}.protocol-flow-arrow{display:none}}
+      @media(max-width:640px){.docs-content>.panel{padding:18px}.docs-page .section-header h1{font-size:42px;letter-spacing:-2px}.protocol-flow{grid-template-columns:1fr}.contract-row{grid-template-columns:1fr}.contract-copy,.contract-explorer{justify-self:start;padding:0 12px}}
+    `}</style>
       </AppShell>
     </Providers>
   );
