@@ -69,7 +69,10 @@ function OverviewWidget({ title, meta, children, className = '' }) {
   return (
     <section className={'overview-widget ' + className}>
       <header className="overview-widget-head">
-        <h3>{title}</h3>
+        <div className="overview-widget-title">
+          <span className="overview-drag-handle" aria-hidden="true">⋮⋮</span>
+          <h3>{title}</h3>
+        </div>
         {meta ? <span>{meta}</span> : null}
       </header>
       <div className="overview-widget-body">{children}</div>
@@ -139,14 +142,11 @@ function OverviewContent() {
     if (item.id === 'health') {
       return (
         <OverviewWidget title="Account health">
-          <strong className="overview-widget-value">
-            {isConnected ? lending.healthFactor : '—'}
-          </strong>
-          <p className="overview-widget-note">
-            {isConnected
-              ? lending.healthFactorPercent + '% account health'
-              : 'Connect wallet'}
-          </p>
+          {isConnected ? (
+            <HealthMeter percent={lending.healthFactorPercent} factor={lending.healthFactor} compact />
+          ) : (
+            <strong className="overview-widget-value">—</strong>
+          )}
         </OverviewWidget>
       );
     }
