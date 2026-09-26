@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useAccount, useChainId, useConnectorClient, usePublicClient, useSignMessage } from 'wagmi';
+import { useAccount, useChainId, usePublicClient, useSignMessage, useWriteContract } from 'wagmi';
 import { encodeFunctionData, keccak256, toBytes } from 'viem';
 import { Providers } from '../../../../../components/Providers';
 import { AppShell } from '../../../../../components/AppShell';
@@ -40,7 +40,7 @@ function ConfigureContent() {
   const chainId = useChainId();
   const publicClient = usePublicClient();
   const { signMessageAsync } = useSignMessage();
-  const { data: connectorClient } = useConnectorClient();
+  const { writeContractAsync, isPending: writePending } = useWriteContract();
 
   const [agent, setAgent] = useState(null);
   const [status, setStatus] = useState('');
@@ -145,9 +145,6 @@ function ConfigureContent() {
     if (!agent || !RUNNER_ADDRESS) return setError('Hosted runner address is not configured.');
     if (!address || !publicClient) return setError('Connect your wallet before authorizing the hosted runner.');
     if (chainId !== arcMainnet.id) return setError('Switch your wallet to Arc Mainnet before authorizing the hosted runner.');
-    if (!connectorClient || typeof connectorClient.sendCalls !== 'function' || typeof connectorClient.waitForCallsStatus !== 'function') {
-      return setError('This wallet does not support atomic batch authorization on Arc Mainnet. No transaction was sent.');
-    }
 
     const policy = agent.config?.policy;
     const allowedActions = policy?.allowedActions || AGENT_ACTION_OPTIONS.map(([value]) => value);
@@ -205,78 +202,73 @@ function ConfigureContent() {
         args: [RUNNER_ADDRESS],
       });
 
-      const existingPermissions = await Promise.all(
-        desiredPermissions.map(async ([target, sel]) => {
-          const current = await publicClient.readContract({
-            address: agent.account,
-            abi: ACCOUNT_ABI,
-            functionName: 'permissions',
-            args: [RUNNER_ADDRESS, target, sel],
-          });
-          const allowed = Boolean(current?.[0]);
-          const expiresAt = BigInt(current?.[1] ?? 0);
-          const maxNativeValue = BigInt(current?.[2] ?? 0);
-          return [target, sel, allowed && expiresAt === 0n && maxNativeValue === 0n];
-        }),
-      );
-
-      const calls = [];
-
+      const pending = [];
       if (!operatorAlreadyAuthorized) {
-        calls.push({
-          to: agent.account,
-          data: encodeFunctionData({
-            abi: ACCOUNT_ABI,
-            functionName: 'setAgentOperator',
-            args: [RUNNER_ADDRESS, true],
-          }),
+        pending.push({
+          label: 'runner operator',
+          functionName: 'setAgentOperator',
+          args: [RUNNER_ADDRESS, true],
         });
       }
 
-      for (const [target, sel, alreadyAuthorized] of existingPermissions) {
-        if (alreadyAuthorized) continue;
-        calls.push({
-          to: agent.account,
-          data: encodeFunctionData({
-            abi: ACCOUNT_ABI,
-            functionName: 'setPermission',
-            args: [RUNNER_ADDRESS, target, sel, true, 0n, 0n],
-          }),
+      for (const [target, sel] of desiredPermissions) {
+        const current = await publicClient.readContract({
+          address: agent.account,
+          abi: ACCOUNT_ABI,
+          functionName: 'permissions',
+          args: [RUNNER_ADDRESS, target, sel],
+        });
+        const allowed = Boolean(current?.[0]);
+        const expiresAt = BigInt(current?.[1] ?? 0);
+        const maxNativeValue = BigInt(current?.[2] ?? 0);
+
+        if (allowed && expiresAt === 0n && maxNativeValue === 0n) continue;
+
+        pending.push({
+          label: 'permission ' + target.slice(0, 10) + '… ' + sel,
+          functionName: 'setPermission',
+          args: [RUNNER_ADDRESS, target, sel, true, 0n, 0n],
         });
       }
 
-      if (!calls.length) {
+      if (!pending.length) {
         await loadAgent();
         setStatus('Hosted runner is already authorized for the current saved policy.');
         return;
       }
 
-      setStatus('Approve one atomic authorization request covering ' + calls.length + ' missing onchain permissions…');
+      setStatus('Preparing ' + pending.length + ' separate authorization transactions…');
 
-      const { id } = await connectorClient.sendCalls({
-        account: address,
-        chain: arcMainnet,
-        calls,
-        forceAtomic: true,
-      });
+      for (let index = 0; index < pending.length; index += 1) {
+        const item = pending[index];
+        const txConfig = {
+          account: address,
+          chain: arcMainnet,
+          address: agent.account,
+          abi: ACCOUNT_ABI,
+          functionName: item.functionName,
+          args: item.args,
+        };
 
-      const result = await connectorClient.waitForCallsStatus({
-        id,
-        throwOnFailure: true,
-        timeout: 60_000,
-        retryCount: 8,
-        retryDelay: 1_000,
-      });
+        // Simulate this exact single-call transaction before opening the wallet.
+        await publicClient.call({
+          account: address,
+          to: agent.account,
+          data: encodeFunctionData({
+            abi: ACCOUNT_ABI,
+            functionName: item.functionName,
+            args: item.args,
+          }),
+        });
 
-      if (result?.atomic !== true) {
-        throw new Error('wallet_did_not_confirm_atomic_authorization');
-      }
+        setStatus('Approve transaction ' + (index + 1) + '/' + pending.length + ': ' + item.label + '…');
 
-      const failedReceipts = (result?.receipts || []).filter(
-        (receipt) => String(receipt?.status || '').toLowerCase() !== '0x1',
-      );
-      if (failedReceipts.length) {
-        throw new Error('atomic_authorization_transaction_reverted');
+        const hash = await writeContractAsync(txConfig);
+        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
+        if (String(receipt?.status || '').toLowerCase() !== 'success' && String(receipt?.status || '').toLowerCase() !== '0x1') {
+          throw new Error('authorization_transaction_reverted');
+        }
       }
 
       await loadAgent();
@@ -286,11 +278,11 @@ function ConfigureContent() {
       const message =
         raw === 'connected_wallet_is_not_agent_owner'
           ? 'The connected wallet is not the owner of this agent smart account. No transaction was sent.'
-          : raw === 'wallet_did_not_confirm_atomic_authorization'
-            ? 'The wallet did not provide atomic execution, so Centry did not fall back to multiple transactions. No partial authorization was submitted.'
-            : /call bundle.*large|bundle.*large|too large.*wallet|5792|sendCalls|5760|atomicity.*not supported|unsupported.*atomic/i.test(raw)
-              ? 'This wallet rejected the atomic authorization bundle as too large or unsupported. Centry did not split it into multiple transactions.'
-              : raw || 'Runner authorization failed. No partial authorization was submitted.';
+          : raw === 'authorization_transaction_reverted'
+            ? 'An authorization transaction reverted. Remaining authorization transactions were not sent.'
+            : /user rejected|user denied|rejected the request|denied/i.test(raw)
+              ? 'Authorization was rejected in the wallet. Remaining authorization transactions were not sent.'
+              : raw || 'Runner authorization failed. Remaining authorization transactions were not sent.';
       setError(message);
       setStatus('');
     } finally {
@@ -325,7 +317,7 @@ function ConfigureContent() {
           <div><strong>Centry runner</strong><p>{RUNNER_ADDRESS || 'Not configured'}</p></div>
           <div className={styles.price}>Arc · 5042</div>
         </div>
-        <button className={styles.secondaryButton} onClick={authorizeRunner} disabled={saving || authorizing}>
+        <button className={styles.secondaryButton} onClick={authorizeRunner} disabled={saving || authorizing || writePending}>
           {authorizing ? 'Authorizing…' : 'Authorize runner + saved permissions'}
         </button>
       </section>
