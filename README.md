@@ -1,5 +1,5 @@
 # Centry 
-
+ 
 Centry is a non-custodial lending and onchain-agent protocol built around user-owned smart accounts. The repository contains the protocol contracts, frontend, agent connection layer, keeper infrastructure, deployment documentation, and the external-agent skill.
 
 > **Development status:** Centry is actively being developed and deployed in stages. Existing deployed contracts are kept unchanged while newer application and agent infrastructure is wired to the live Arc Mainnet deployment. Check the deployment documents and network-specific configuration before changing any contract.
