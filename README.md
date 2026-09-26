@@ -265,3 +265,5 @@ The current application and agent architecture, queue model, concurrency boundar
 
 ## Status
 Live on Mainnet
+
+<!-- Deployment refresh marker — no application code changed. -->
