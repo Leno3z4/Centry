@@ -173,17 +173,7 @@ function OverviewContent() {
         >
           <div className="overview-market-list">
             {ACTIVE_MARKETS.map((market, index) => {
-              const configRead = marketConfigs?.[index];
-              const reserveActive =
-                configRead?.status === 'success'
-                  ? Boolean(configRead.result?.[0])
-                  : null;
-              const reserveStatus =
-                marketConfigsLoading || reserveActive === null
-                  ? 'Checking…'
-                  : reserveActive
-                    ? 'Active'
-                    : 'Inactive';
+              const riskMarket = defiRisk.markets.find((item) => item.id === market.id);
               const marketIcon =
                 market.symbol === 'cirBTC'
                   ? '₿'
@@ -204,13 +194,11 @@ function OverviewContent() {
                       <small>{market.name}</small>
                     </span>
                   </div>
-                  <div className="overview-market-status">
-                    <span>Status</span>
-                    <strong className={reserveActive ? 'status-live' : ''}>
-                      {reserveStatus}
-                    </strong>
+                  <div className="overview-market-apys">
+                    <span>Supply {riskMarket ? riskMarket.supplyApy.toFixed(2) : '—'}%</span>
+                    <span>Borrow {riskMarket ? riskMarket.borrowApy.toFixed(2) : '—'}%</span>
                   </div>
-                  <span className="overview-market-open">Open</span>
+                  <span className="overview-market-open">View →</span>
                 </a>
               );
             })}
