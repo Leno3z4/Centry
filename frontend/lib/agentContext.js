@@ -78,6 +78,30 @@ export function fallbackPositionAnswer(context, question) {
   const market = context.market;
   const account = context.accountPosition;
 
+  if (lower.includes('what is centry') || lower.includes('what is centry?') || lower === 'centry') {
+    return 'Centry is a non-custodial onchain capital application on Arc. It combines lending, swaps, bridging, portfolio tracking, market analytics, and user-owned agent automation around a wallet-controlled account.';
+  }
+
+  if (lower.includes('supported') && (lower.includes('asset') || lower.includes('market') || lower.includes('token'))) {
+    return 'Centry currently exposes USDC, EURC, and cirBTC as configured lending markets. Live support and rates should be checked from the current market data before acting.';
+  }
+
+  if (lower.includes('security') || lower.includes('safe') || lower.includes('protect')) {
+    return 'Centry keeps the user wallet as the signing authority. Chat cannot change ownership or permissions, arbitrary calldata is not allowed, transactions use a fixed supported action set, and every transaction must be reviewed and signed by the user.';
+  }
+
+  if (lower.includes('agent') || lower.includes('autonom')) {
+    return 'Centry agents are user-owned smart accounts with live onchain operator and function permissions. Scheduled/runtime actions are bounded by those permissions, and Cask can prepare supported wallet transactions without receiving the owner private key.';
+  }
+
+  if (lower.includes('bridge')) {
+    return 'Centry supports configured USDC bridge routes between Arc, Base, Arbitrum, and Ethereum. Route availability, fees, and timing should come from the live bridge state rather than assumptions.';
+  }
+
+  if (lower.includes('swap')) {
+    return 'Centry uses its configured swap infrastructure. Cask can prepare a supported swap from an explicit request, but it should never invent a quote, route, price, or token address.';
+  }
+
   if (lower.includes('borrow') || lower.includes('safe')) {
     if (risk.atRisk) return `Liquidation risk is active: your health factor is ${context.healthFactor}, below Centry's liquidation threshold of 1.00.`;
     if (capacity != null && capacity > 0) return `Health factor: ${context.healthFactor}. Remaining borrow capacity: about $${usd(capacity)}. Your account is not currently below the liquidation threshold.`;
@@ -120,6 +144,8 @@ Core product surfaces:
 - Agents: each user-owned agent is a smart account. The owner controls activation and operator authorization. Autonomous work is performed only through the configured runner and live onchain permissions.
 - Agent runtime: scheduled wakes, owner chat tasks, health warnings, execution proof, action receipts, and runtime status are persisted and observable.
 - Docs: Centry documents its protocol, lending, revenue, automation, contracts, risk controls, and agent architecture.
+- Current configured public contract roles include the lending pool, oracle, CENT token, veCENT, rewards, self-repay executor, swap router/adapter, treasury, and Governor. Treat any live address supplied by the app/docs as authoritative.
+- The documented protocol parameters include a 25% early withdrawal fee on the relevant lock/revenue flow. Never invent fees when the user asks for a live transaction cost; use the current preview or configured contract data.
 
 Security model:
 - Centry is non-custodial. The user's owner/private wallet key is not given to the AI.
