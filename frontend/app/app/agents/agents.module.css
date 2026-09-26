@@ -1634,3 +1634,38 @@
   font-size: 11px;
   line-height: 1.5;
 }
+
+
+.chatPage {
+  display: grid;
+  gap: 12px;
+}
+
+.chatWorkspace {
+  min-width: 0;
+}
+
+.chatPlan {
+  min-width: 0;
+}
+
+@media (min-width: 980px) {
+  .chatPage {
+    grid-template-columns: minmax(0, 1fr) 300px;
+    align-items: start;
+  }
+
+  .chatComposerLarge {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 979px) {
+  .chatPlan {
+    order: 2;
+  }
+
+  .chatComposerLarge {
+    order: 3;
+  }
+}
