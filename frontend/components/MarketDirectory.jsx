@@ -183,7 +183,7 @@ export default function MarketDirectory() {
           const borrowApy = data?.borrowApy || 0;
 
           return (
-            <article key={market.id} className={styles.marketCard}>
+            <Link href={'/app/markets/' + market.id} key={market.id} className={styles.marketCard}>
               <div className={styles.cardTop}>
                 <div className={styles.assetIdentity}>
                   <span
@@ -216,11 +216,53 @@ export default function MarketDirectory() {
                 </div>
                 <div className={styles.metric}>
                   <span>Total supplied</span>
-                  <strong>{marketReady ? '$' + formatUsd(tvl, true) : '—'}</strong>
+                  <strong>{marketReady ? '
+        })}
+      </section>
+
+      {visibleMarkets.length === 0 ? (
+        <div className={styles.emptyState}>
+          <strong>No markets match that search.</strong>
+          <button
+            type="button"
+            onClick={() => {
+              setQuery('');
+              setCategory('all');
+            }}
+          >
+            Clear filters
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+ + formatUsd(tvl, true) : '—'}</strong>
                 </div>
                 <div className={styles.metric}>
                   <span>Total borrowed</span>
-                  <strong>{marketReady ? '$' + formatUsd(borrowed, true) : '—'}</strong>
+                  <strong>{marketReady ? '
+        })}
+      </section>
+
+      {visibleMarkets.length === 0 ? (
+        <div className={styles.emptyState}>
+          <strong>No markets match that search.</strong>
+          <button
+            type="button"
+            onClick={() => {
+              setQuery('');
+              setCategory('all');
+            }}
+          >
+            Clear filters
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+ + formatUsd(borrowed, true) : '—'}</strong>
                 </div>
               </div>
 
@@ -234,11 +276,11 @@ export default function MarketDirectory() {
                 </div>
               </div>
 
-              <Link href={'/app/markets/' + market.id} className={styles.viewMarket}>
-                View Market
+              <div className={styles.viewMarket}>
+                <span>Open market</span>
                 <span aria-hidden="true">→</span>
-              </Link>
-            </article>
+              </div>
+            </Link>
           );
         })}
       </section>
