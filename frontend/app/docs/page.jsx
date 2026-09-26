@@ -510,16 +510,26 @@ export default function Page() {
           }
 
           .docs-section-heading{
-            display:grid;
-            grid-template-columns:48px minmax(0,1fr);
-            gap:18px;
-            align-items:start;
+            display:block;
           }
 
           .docs-section-heading>span{
-            padding-top:4px;
-            color:#0a84ff;
-            font:11px ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+            display:inline-flex;
+            min-width:30px;
+            min-height:24px;
+            align-items:center;
+            justify-content:center;
+            padding:0 7px;
+            border:1px solid rgba(10,132,255,.22);
+            border-radius:7px;
+            background:rgba(10,132,255,.07);
+            color:#76b7ff;
+            font:9px ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+            letter-spacing:.08em;
+          }
+
+          .docs-section-heading>div{
+            margin-top:10px;
           }
 
           .docs-section-heading h2{
@@ -534,7 +544,7 @@ export default function Page() {
 
           .docs-copy-wide{
             max-width:780px;
-            margin:32px 0 0 66px;
+            margin:28px 0 0;
           }
 
           .docs-copy-wide p,
@@ -552,7 +562,7 @@ export default function Page() {
           .docs-grid{
             display:grid;
             gap:10px;
-            margin:28px 0 0 66px;
+            margin:28px 0 0;
           }
 
           .docs-grid-2{
@@ -594,22 +604,17 @@ export default function Page() {
 
           .docs-flow{
             display:grid;
-            grid-template-columns:repeat(4,minmax(0,1fr));
-            margin:28px 0 0 66px;
-            border:1px solid rgba(255,255,255,.08);
-            border-radius:16px;
-            overflow:hidden;
+            grid-template-columns:repeat(2,minmax(0,1fr));
+            gap:10px;
+            margin:28px 0 0;
           }
 
           .docs-flow-step{
             min-width:0;
             padding:20px;
-            border-right:1px solid rgba(255,255,255,.07);
+            border:1px solid rgba(255,255,255,.08);
+            border-radius:14px;
             background:#0e1013;
-          }
-
-          .docs-flow-step:last-child{
-            border-right:0;
           }
 
           .docs-flow-step>span{
@@ -634,7 +639,7 @@ export default function Page() {
           .docs-market-list{
             display:grid;
             gap:2px;
-            margin:28px 0 0 66px;
+            margin:28px 0 0;
           }
 
           .docs-market-row{
@@ -687,7 +692,7 @@ export default function Page() {
             grid-template-columns:auto minmax(0,1fr);
             gap:12px;
             align-items:start;
-            margin:28px 0 0 66px;
+            margin:28px 0 0;
             padding:17px;
             border:1px solid rgba(255,255,255,.08);
             border-radius:14px;
@@ -722,14 +727,14 @@ export default function Page() {
 
           .docs-reference-copy{
             max-width:780px;
-            margin:26px 0 0 66px;
+            margin:26px 0 0;
           }
 
           .docs-contract-list,
           .docs-rewards-contracts{
             display:grid;
             gap:8px;
-            margin:22px 0 0 66px;
+            margin:22px 0 0;
           }
 
           .docs-contract-row{
@@ -762,7 +767,10 @@ export default function Page() {
           .docs-contract-row code{
             min-width:0;
             overflow-wrap:anywhere;
-            color:rgba(255,255,255,.58);
+            padding:8px 10px;
+            border-radius:8px;
+            background:#0a0c0f;
+            color:#c7d8e9;
             font:9px ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
           }
 
@@ -881,31 +889,10 @@ export default function Page() {
               gap:12px;
             }
 
-            .docs-copy-wide,
-            .docs-grid,
-            .docs-flow,
-            .docs-market-list,
-            .docs-callout,
-            .docs-reference-copy,
-            .docs-contract-list{
-              margin-left:46px;
-            }
-
             .docs-grid-3,
-            .docs-grid-2{
-              grid-template-columns:1fr;
-            }
-
+            .docs-grid-2,
             .docs-flow{
-              grid-template-columns:repeat(2,minmax(0,1fr));
-            }
-
-            .docs-flow-step:nth-child(2){
-              border-right:0;
-            }
-
-            .docs-flow-step:nth-child(-n+2){
-              border-bottom:1px solid rgba(255,255,255,.07);
+              grid-template-columns:1fr;
             }
 
             .docs-market-row{
