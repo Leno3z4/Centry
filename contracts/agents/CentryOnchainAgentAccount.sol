@@ -27,6 +27,32 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
         uint128 maxNativeValue;
     }
 
+    struct FinancialLimit {
+        uint128 maxAmountPerCall;
+        uint128 maxAmountPerWindow;
+        uint128 spentInWindow;
+        uint64 windowStart;
+        uint64 windowDuration;
+    }
+
+    uint256 public constant FINANCIAL_LIMIT_VERSION = 1;
+    uint64 public constant MIN_FINANCIAL_WINDOW = 1 hours;
+    uint64 public constant MAX_FINANCIAL_WINDOW = 30 days;
+
+    bytes4 private constant APPROVE_SELECTOR = 0x095ea7b3;
+    bytes4 private constant TRANSFER_SELECTOR = 0xa9059cbb;
+    bytes4 private constant TRANSFER_FROM_SELECTOR = 0x23b872dd;
+    bytes4 private constant SUPPLY_SELECTOR = bytes4(keccak256("supply(address,uint256)"));
+    bytes4 private constant WITHDRAW_SELECTOR = bytes4(keccak256("withdraw(address,uint256)"));
+    bytes4 private constant BORROW_SELECTOR = bytes4(keccak256("borrow(address,uint256)"));
+    bytes4 private constant REPAY_SELECTOR = bytes4(keccak256("repay(address,uint256)"));
+    bytes4 private constant SWAP_EXACT_INPUT_SINGLE_SELECTOR = bytes4(
+        keccak256("exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))")
+    );
+    bytes4 private constant TRANSFER_TO_AGENT_SELECTOR = bytes4(
+        keccak256("transferToAgent(address,address,uint256)")
+    );
+
     address public owner;
     address public pendingOwner;
     address public immutable factory;
@@ -42,6 +68,8 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
 
     mapping(address => bool) public agentOperators;
     mapping(address => mapping(address => mapping(bytes4 => Permission))) public permissions;
+    mapping(address => mapping(address => mapping(bytes4 => mapping(address => FinancialLimit)))) public financialLimits;
+    mapping(address => mapping(address => mapping(address => bool))) public approvalSpenders;
 
     error AlreadyInitialized();
     error InvalidOwner();
@@ -60,6 +88,12 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
     error InvalidWithdrawalToken();
     error WithdrawalFailed();
     error InvalidAgentRecipient();
+    error InvalidFinancialLimit();
+    error FinancialLimitNotConfigured();
+    error FinancialLimitExceeded();
+    error InvalidFinancialCall();
+    error ApprovalSpenderNotAllowed();
+    error FinancialRecipientNotAllowed();
 
     event Initialized(
         address indexed owner,
@@ -79,6 +113,21 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
         bool allowed,
         uint64 expiresAt,
         uint128 maxNativeValue
+    );
+    event FinancialLimitSet(
+        address indexed operator,
+        address indexed target,
+        bytes4 indexed selector,
+        address asset,
+        uint128 maxAmountPerCall,
+        uint128 maxAmountPerWindow,
+        uint64 windowDuration
+    );
+    event ApprovalSpenderSet(
+        address indexed operator,
+        address indexed asset,
+        address indexed spender,
+        bool allowed
     );
     event AgentExecuted(
         address indexed operator,
@@ -101,6 +150,10 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
     constructor() {
         factory = msg.sender;
         initialized = true;
+    }
+
+    function financialLimitVersion() external pure returns (uint256) {
+        return FINANCIAL_LIMIT_VERSION;
     }
 
     modifier onlyOwner() {
@@ -177,6 +230,62 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
         });
 
         emit PermissionSet(operator, target, selector, allowed, expiresAt, maxNativeValue);
+    }
+
+    function setApprovalSpender(
+        address operator,
+        address asset,
+        address spender,
+        bool allowed
+    ) external onlyOwner {
+        if (operator == address(0) || asset == address(0) || spender == address(0)) revert InvalidOwner();
+        approvalSpenders[operator][asset][spender] = allowed;
+        emit ApprovalSpenderSet(operator, asset, spender, allowed);
+    }
+
+    function setFinancialLimit(
+        address operator,
+        address target,
+        bytes4 selector,
+        address asset,
+        uint128 maxAmountPerCall,
+        uint128 maxAmountPerWindow,
+        uint64 windowDuration
+    ) external onlyOwner {
+        if (operator == address(0) || target == address(0) || asset == address(0)) revert InvalidOwner();
+        if (!_isFinancialSelector(selector)) revert InvalidFinancialLimit();
+
+        if (maxAmountPerCall == 0 && maxAmountPerWindow == 0) {
+            delete financialLimits[operator][target][selector][asset];
+            emit FinancialLimitSet(operator, target, selector, asset, 0, 0, 0);
+            return;
+        }
+
+        if (
+            maxAmountPerCall == 0 ||
+            maxAmountPerWindow == 0 ||
+            maxAmountPerCall > maxAmountPerWindow ||
+            windowDuration < MIN_FINANCIAL_WINDOW ||
+            windowDuration > MAX_FINANCIAL_WINDOW
+        ) revert InvalidFinancialLimit();
+
+        financialLimits[operator][target][selector][asset] = FinancialLimit({
+            maxAmountPerCall: maxAmountPerCall,
+            maxAmountPerWindow: maxAmountPerWindow,
+            spentInWindow: 0,
+            windowStart: uint64(block.timestamp),
+            windowDuration: windowDuration
+        });
+
+        emit FinancialLimitSet(
+            operator,
+            target,
+            selector,
+            asset,
+            maxAmountPerCall,
+            maxAmountPerWindow,
+            windowDuration
+        );
     }
 
     function setAgentMetadata(bytes32 configHash_, string calldata metadataURI_) external onlyOwner {
@@ -267,6 +376,7 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
         if (!agentOperators[msg.sender]) revert NotAgent();
         bytes4 selector = _selector(data);
         _checkPermission(msg.sender, target, selector, value);
+        _enforceFinancialLimit(msg.sender, target, selector, data);
 
         (bool success, bytes memory returnData) = target.call{value: value}(data);
         if (!success) _revertWithData(returnData);
@@ -291,6 +401,7 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
         for (uint256 i = 0; i < length; i++) {
             bytes4 selector = _selector(data[i]);
             _checkPermission(msg.sender, targets[i], selector, values[i]);
+            _enforceFinancialLimit(msg.sender, targets[i], selector, data[i]);
 
             (bool success, bytes memory returnData) = targets[i].call{value: values[i]}(data[i]);
             if (!success) _revertWithData(returnData);
@@ -328,6 +439,142 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
             (bool success, bytes memory returnData) = targets[i].call{value: values[i]}(data[i]);
             if (!success) _revertWithData(returnData);
             results[i] = returnData;
+        }
+    }
+
+    function _isFinancialSelector(bytes4 selector) internal pure returns (bool) {
+        return
+            selector == APPROVE_SELECTOR ||
+            selector == TRANSFER_SELECTOR ||
+            selector == TRANSFER_FROM_SELECTOR ||
+            selector == SUPPLY_SELECTOR ||
+            selector == WITHDRAW_SELECTOR ||
+            selector == BORROW_SELECTOR ||
+            selector == REPAY_SELECTOR ||
+            selector == SWAP_EXACT_INPUT_SINGLE_SELECTOR ||
+            selector == TRANSFER_TO_AGENT_SELECTOR;
+    }
+
+    function _financialCallAssetAmount(
+        address target,
+        bytes4 selector,
+        bytes calldata data
+    ) internal pure returns (address asset, uint256 amount, address counterparty) {
+        if (data.length < 4) revert InvalidFinancialCall();
+
+        if (selector == APPROVE_SELECTOR || selector == TRANSFER_SELECTOR) {
+            asset = target;
+            (counterparty, amount) = abi.decode(data[4:], (address, uint256));
+            return (asset, amount, counterparty);
+        }
+
+        if (selector == TRANSFER_FROM_SELECTOR) {
+            asset = target;
+            (, counterparty, amount) = abi.decode(data[4:], (address, address, uint256));
+            return (asset, amount, counterparty);
+        }
+
+        if (
+            selector == SUPPLY_SELECTOR ||
+            selector == WITHDRAW_SELECTOR ||
+            selector == BORROW_SELECTOR ||
+            selector == REPAY_SELECTOR
+        ) {
+            (asset, amount) = abi.decode(data[4:], (address, uint256));
+            if (asset == address(0)) revert InvalidFinancialCall();
+            return (asset, amount, address(0));
+        }
+
+        if (selector == TRANSFER_TO_AGENT_SELECTOR) {
+            (asset, counterparty, amount) = abi.decode(data[4:], (address, address, uint256));
+            if (asset == address(0) || counterparty == address(0)) revert InvalidFinancialCall();
+            return (asset, amount, counterparty);
+        }
+
+        if (selector == SWAP_EXACT_INPUT_SINGLE_SELECTOR) {
+            (
+                address tokenIn,
+                address tokenOut,
+                uint24 fee,
+                address recipient,
+                uint256 deadline,
+                uint256 amountIn,
+                uint256 amountOutMinimum,
+                uint160 sqrtPriceLimitX96
+            ) = abi.decode(
+                data[4:],
+                (address, address, uint24, address, uint256, uint256, uint256, uint160)
+            );
+            tokenOut;
+            fee;
+            recipient;
+            deadline;
+            amountOutMinimum;
+            sqrtPriceLimitX96;
+            if (tokenIn == address(0) || recipient == address(0)) revert InvalidFinancialCall();
+            return (tokenIn, amountIn, recipient);
+        }
+
+        revert InvalidFinancialCall();
+    }
+
+    function _enforceFinancialLimit(
+        address operator,
+        address target,
+        bytes4 selector,
+        bytes calldata data
+    ) internal {
+        if (!_isFinancialSelector(selector)) return;
+
+        (address asset, uint256 amount, address counterparty) = _financialCallAssetAmount(target, selector, data);
+
+        if (selector == APPROVE_SELECTOR && !approvalSpenders[operator][asset][counterparty]) {
+            revert ApprovalSpenderNotAllowed();
+        }
+
+        if (selector == TRANSFER_SELECTOR || selector == TRANSFER_FROM_SELECTOR) {
+            if (!_isAllowedFinancialRecipient(counterparty)) revert FinancialRecipientNotAllowed();
+        }
+
+        if (selector == SWAP_EXACT_INPUT_SINGLE_SELECTOR && counterparty != address(this)) {
+            revert FinancialRecipientNotAllowed();
+        }
+
+        FinancialLimit storage limit = financialLimits[operator][target][selector][asset];
+
+        if (
+            limit.maxAmountPerCall == 0 ||
+            limit.maxAmountPerWindow == 0 ||
+            limit.windowDuration == 0
+        ) revert FinancialLimitNotConfigured();
+
+        if (amount > limit.maxAmountPerCall) revert FinancialLimitExceeded();
+
+        if (block.timestamp >= uint256(limit.windowStart) + uint256(limit.windowDuration)) {
+            limit.windowStart = uint64(block.timestamp);
+            limit.spentInWindow = 0;
+        }
+
+        if (amount > uint256(limit.maxAmountPerWindow) - uint256(limit.spentInWindow)) {
+            revert FinancialLimitExceeded();
+        }
+
+        limit.spentInWindow += uint128(amount);
+    }
+
+    function _isAllowedFinancialRecipient(address recipient) internal view returns (bool) {
+        if (recipient == owner) return true;
+
+        try ICentryAgentFactoryRegistry(factory).isCentryAgentAccount(recipient) returns (bool registered) {
+            if (!registered) return false;
+        } catch {
+            return false;
+        }
+
+        try CentryOnchainAgentAccount(payable(recipient)).owner() returns (address recipientOwner) {
+            return recipientOwner == owner;
+        } catch {
+            return false;
         }
     }
 

@@ -938,3 +938,42 @@ body {
     background: #1d2125 !important;
   }
 }
+
+/* Final form-control reset: keep text fields clean and borderless across the app. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+select,
+textarea {
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
+select:focus,
+textarea:focus {
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.amount-input-wrap,
+.amount-input-wrap:focus-within {
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Keep keyboard focus visible on actions without reintroducing input chrome. */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid rgba(10,132,255,.78) !important;
+  outline-offset: 3px !important;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+}

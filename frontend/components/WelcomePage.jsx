@@ -17,7 +17,7 @@ const AeroShards = dynamic(() => import('./AeroShards'), {
 const HOW_IT_WORKS = [
     ['01', 'Supply liquidity', 'Deposit a supported asset and earn interest as borrowers use available liquidity.'],
     ['02', 'Borrow against collateral', 'Supply eligible collateral, stay within the live risk limits, and borrow available liquidity.'],
-    ['03', 'Coordinate with veCENT', 'Lock CENT into veCENT to build voting power and participate in Centry governance.'],
+    ['03', 'Manage your position', 'Swap, bridge, repay, and monitor your capital from one account.'],
 ];
 
 function formatUsd(value) {
@@ -127,17 +127,17 @@ export default function WelcomePage() {
                 <Link href="/" className="landing-brand">Centry</Link>
                 <div className="landing-nav-links">
                     <a href="#how-it-works">How it works</a>
-                    <a href="#governance">Governance</a>
-                    <Link href="/app" className="landing-nav-app">Open app</Link>
+                    <Link href="/docs" className="landing-nav-docs">Docs</Link>
+                    <Link href="/app" className="landing-nav-app">open Centry</Link>
                 </div>
             </nav>
 
             <section className="landing-hero">
                 <div className="landing-hero-copy">
                     <h1>Lending, without the noise.</h1>
-                    <p>Supply liquidity, borrow against supported collateral, and coordinate the protocol through veCENT governance.</p>
+                    <p>Supply liquidity, borrow against supported collateral, and manage your capital from one account.</p>
                     <div className="landing-actions">
-                        <Link className="primary-btn" href="/app">Enter Centry</Link>
+                        <Link className="primary-btn" href="/app">open Centry</Link>
                         <a className="secondary-btn" href="#how-it-works">Explore the protocol</a>
                     </div>
                 </div>
@@ -158,7 +158,7 @@ export default function WelcomePage() {
             <section id="how-it-works" className="landing-how-section">
                 <div className="landing-how-copy">
                     <h2>A lending system you can understand at a glance.</h2>
-                    <p>Three core actions connect liquidity, borrowing, risk, rewards, and governance.</p>
+                    <p>Three core actions connect liquidity, borrowing, risk, and capital management.</p>
 
                     <div className="landing-how-list">
                         {HOW_IT_WORKS.map(([number, title, text]) => (
@@ -174,26 +174,18 @@ export default function WelcomePage() {
                 </div>
             </section>
 
-            <section id="governance" className="landing-governance-section">
-                <div className="landing-governance-copy">
-                    <h2>CENT becomes influence through time.</h2>
-                    <p>Lock CENT into veCENT, build voting power over time, and manage your position directly from the app.</p>
-                    <Link className="secondary-btn" href="/app">Open governance</Link>
-                </div>
-                <div className="landing-governance-rule" aria-hidden="true" />
-            </section>
-
             <section className="landing-cta">
                 <div>
                     <h2>Enter the live protocol.</h2>
-                    <p>Supply, borrow, manage your position, and follow rewards from one interface.</p>
+                    <p>Supply, borrow, manage your position, and monitor your capital from one interface.</p>
                 </div>
-                <Link className="primary-btn" href="/app">Launch app</Link>
+                <Link className="primary-btn" href="/app">open Centry</Link>
             </section>
 
             <footer className="landing-footer">
                 <strong>Centry</strong>
                 <span>Experimental software</span>
+                <Link href="/docs" className="landing-footer-docs">Docs</Link>
             </footer>
 
             <style jsx global>{`
@@ -227,7 +219,6 @@ export default function WelcomePage() {
                 .landing-nav,
                 .landing-hero,
                 .landing-how-section,
-                .landing-governance-section,
                 .landing-cta,
                 .landing-footer {
                     width: var(--landing-content);
@@ -262,6 +253,8 @@ export default function WelcomePage() {
 
                 .landing-nav-links a:hover { color: #fff; }
 
+                .landing-nav-docs { color: rgba(255,255,255,.78); }
+                .landing-nav-docs:hover { color: #fff; }
                 .landing-nav-app { padding: 8px 13px; border: 1px solid rgba(161, 128, 193, .32); border-radius: 999px; color: #ffffff !important; background: rgba(0,113,227,.08); }
                 .landing-nav-app:hover { border-color: rgba(190, 157, 222, .5); background: rgba(0,113,227,.12); }
 
@@ -336,11 +329,6 @@ export default function WelcomePage() {
                 .landing-how-item h3 { margin: -3px 0 7px; font-family: var(--display-font); font-size: 25px; font-weight: 400; letter-spacing: -.4px; }
                 .landing-how-item p { margin: 0; color: rgba(255,255,255,.78); font-size: 11px; line-height: 1.7; }
 
-                .landing-governance-section { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, .75fr) minmax(180px, .7fr); gap: 90px; align-items: center; padding: 90px 0 120px; }
-                .landing-governance-copy { width: min(600px, 100%); }
-                .landing-governance-copy .secondary-btn { margin-top: 24px; }
-                .landing-governance-rule { height: 1px; background: #2a2a2a; }
-
                 .landing-cta {
                     position: relative;
                     z-index: 1;
@@ -361,17 +349,16 @@ export default function WelcomePage() {
 
                 .landing-footer { position: relative; z-index: 1; padding-top: 26px; border-top: 1px solid rgba(139, 113, 171, .14); display: flex; justify-content: space-between; gap: 15px; color: rgba(255,255,255,.60); font-size: 10px; }
                 .landing-footer strong { color: #ffffff; font-family: var(--display-font); font-size: 16px; font-weight: 400; }
+                .landing-footer-docs { color: rgba(255,255,255,.60); text-decoration: none; }
+                .landing-footer-docs:hover { color: #fff; }
 
                 @media (max-width: 900px) {
                     .landing-page { --landing-content: min(720px, calc(100vw - 36px)); padding: 0 18px 28px; }
                     .landing-nav { grid-template-columns: auto auto; gap: 16px; min-height: 68px; }
                     .landing-nav-links { grid-column: 1 / -1; grid-row: 2; width: 100%; justify-content: flex-start; gap: 18px; padding: 0 0 13px; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
                     .landing-nav-links::-webkit-scrollbar { display: none; }
-                    .landing-network { justify-self: end; }
                     .landing-hero { grid-template-columns: 1fr; min-height: auto; gap: 48px; padding: 68px 0 84px; }
                     .landing-hero-metrics { justify-self: start; width: 100%; max-width: 620px; }
-                    .landing-governance-section { grid-template-columns: 1fr; gap: 26px; }
-                    .landing-governance-rule { width: 72%; }
                     .landing-cta { grid-template-columns: 1fr; padding: 30px; }
                     .landing-cta .primary-btn { justify-self: start; }
                 }
@@ -379,25 +366,21 @@ export default function WelcomePage() {
                 @media (max-width: 620px) {
                     .landing-page { --landing-content: calc(100vw - 28px); padding: 0 14px 22px; }
                     .landing-brand { font-size: 22px; }
-                    .landing-network { font-size: 8px; }
                     .landing-nav { min-height: 64px; }
                     .landing-nav-links { gap: 15px; font-size: 10px; }
                     .landing-hero { padding: 52px 0 66px; }
                     .landing-hero h1 { font-size: clamp(43px, 13.5vw, 61px); letter-spacing: -2.6px; }
                     .landing-hero-copy > p { font-size: 13px; }
                     .landing-actions .primary-btn,
-                    .landing-actions .secondary-btn,
-                    .landing-governance-copy .secondary-btn { width: 100%; text-align: center; }
+                    .landing-actions .secondary-btn { width: 100%; text-align: center; }
                     .landing-metric { padding: 20px 0; }
                     .landing-metric strong { font-size: 29px; }
                     .landing-how-section { padding: 66px 0 90px; }
                     .landing-how-copy h2,
                     .landing-section-heading h2,
-                    .landing-governance-copy h2,
                     .landing-cta h2 { font-size: clamp(31px, 10vw, 43px); letter-spacing: -1.5px; }
                     .landing-how-item { grid-template-columns: 32px minmax(0,1fr); gap: 10px; }
                     .landing-how-item h3 { font-size: 22px; }
-                    .landing-governance-section { padding: 66px 0 88px; }
                     .landing-cta { margin-top: 10px; padding: 26px 22px; }
                     .landing-cta .primary-btn { width: 100%; text-align: center; }
                     .landing-footer { flex-direction: column; }

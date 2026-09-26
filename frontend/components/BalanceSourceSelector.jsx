@@ -36,8 +36,7 @@ export default function BalanceSourceSelector({ value, onChange, walletBalance =
     <div className={styles.root} ref={rootRef}>
       <button type="button" className={`${styles.trigger} ${open ? styles.open : ''}`} onClick={() => setOpen((current) => !current)} disabled={disabled} aria-haspopup="listbox" aria-expanded={open}>
         <span className={styles.icon}>{value === 'gateway' ? '◎' : '◉'}</span>
-        <span className={styles.copy}><small>Balance source</small><strong>{label}</strong></span>
-        <span className={styles.amount}>{formatBalance(balance)} <em>USDC</em></span>
+        <span className={styles.copy}><small>Funding source</small><strong>{label}</strong></span>
         <span className={styles.chevron}>⌄</span>
       </button>
 

@@ -14,6 +14,7 @@ import {
 export const ACCOUNT_ABI = [
   "function active() view returns (bool)",
   "function agentOperators(address) view returns (bool)",
+  "function permissions(address operator,address target,bytes4 selector) view returns (bool allowed,uint64 expiresAt,uint128 maxNativeValue)",
   "function canExecute(address operator,address target,bytes4 selector,uint256 value) view returns (bool)",
   "function execute(address target,uint256 value,bytes data) returns (bytes)",
   "function executeBatch(address[] targets,uint256[] values,bytes[] data) returns (bytes[])",
@@ -52,12 +53,16 @@ export async function checkActionPermissions({ rpcUrl, account, operator, calls 
   await assertLiveOperator({ rpcUrl, account, operator });
   const contract = createAccountContract(rpcUrl, account);
   const checked = [];
+  const now = BigInt(Math.floor(Date.now() / 1000));
   for (const current of calls) {
+    const permission = await contract.permissions(operator, current.target, current.selector);
+    const expiresAt = BigInt(permission?.expiresAt ?? permission?.[1] ?? 0);
     const permitted = await contract.canExecute(operator, current.target, current.selector, current.value);
-    if (!permitted) {
+    if (!permitted || expiresAt === 0n || expiresAt < now) {
       return {
         permitted: false,
         denied: current,
+        reason: expiresAt === 0n ? "indefinite_permission_rejected" : "permission_expired",
         calls: checked,
       };
     }

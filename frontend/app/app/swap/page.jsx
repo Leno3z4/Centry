@@ -75,6 +75,8 @@ function SwapContent() {
   const [amount, setAmount] = useState('');
   const [slippage, setSlippage] = useState('0.50');
   const [fundingSource, setFundingSource] = useState('wallet');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [tradeDetailsOpen, setTradeDetailsOpen] = useState(false);
   const [quote, setQuote] = useState(null);
   const [preparedTransactions, setPreparedTransactions] = useState(null);
   const [swapTx, setSwapTx] = useState(null);
@@ -102,10 +104,21 @@ function SwapContent() {
   const networkBlocksAction = wrongNetwork && !gatewayCanQuoteOffArc;
   const { data: inputDecimals } = useReadContract({ address: fromMarket?.address, abi: ERC20_ABI, functionName: 'decimals', query: { enabled: Boolean(fromMarket?.address) } });
   const { data: outputDecimals } = useReadContract({ address: toMarket?.address, abi: ERC20_ABI, functionName: 'decimals', query: { enabled: Boolean(toMarket?.address) } });
-  const { data: arcWalletBalanceRaw } = useReadContract({ address: gatewayEnabled ? fromMarket?.address : undefined, abi: ERC20_ABI, functionName: 'balanceOf', args: address ? [address] : undefined, chainId: ARC_CHAIN_ID, query: { enabled: Boolean(address && gatewayEnabled) } });
-  const arcWalletBalance = gatewayEnabled && arcWalletBalanceRaw != null ? formatUnits(arcWalletBalanceRaw, 6) : '0';
+  const { data: arcWalletBalanceRaw } = useReadContract({
+    address: fromMarket?.address,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
+    chainId: ARC_CHAIN_ID,
+    query: { enabled: Boolean(address && fromMarket?.address) },
+  });
   const fromTokenDecimals = Number(inputDecimals ?? fromMarket?.decimals ?? 6);
   const toTokenDecimals = Number(outputDecimals ?? toMarket?.decimals ?? 6);
+  const arcWalletBalance = arcWalletBalanceRaw != null ? formatUnits(arcWalletBalanceRaw, fromTokenDecimals) : '0';
+  const walletBalanceNumber = safeNumber(arcWalletBalance) ?? 0;
+  const amountNumber = safeNumber(amount) ?? 0;
+  const walletAmountUnavailable = fundingSource === 'wallet' && amountNumber > walletBalanceNumber;
+  const amountUnavailable = gatewayAmountUnavailable || walletAmountUnavailable;
 
   const slippageBps = useMemo(() => {
     const parsed = Number(slippage);
@@ -119,6 +132,7 @@ function SwapContent() {
   }, [amount, fromTokenDecimals]);
 
   useEffect(() => { if (!gatewayEnabled) setFundingSource('wallet'); }, [gatewayEnabled]);
+  useEffect(() => { setTradeDetailsOpen(Boolean(quote)); }, [quote]);
 
   useEffect(() => {
     const requestId = ++requestIdRef.current;
@@ -258,31 +272,64 @@ function SwapContent() {
       <header className={styles.header}><div><span className={styles.kicker}>CENTRY · SWAP</span><h1>Swap assets</h1><p>Find a routed Arc swap without leaving Centry.</p></div></header>
       <div className={styles.panelGrid}>
         <section className={styles.panel}>
-          <div className={styles.panelHead}><div><span className={styles.kicker}>ARC SWAP</span><h2>Exchange</h2></div></div>
+          <div className={styles.panelHead}>
+            <div><span className={styles.kicker}>ARC SWAP</span><h2>Exchange</h2></div>
+            <div className={styles.settingsWrap}>
+              <button type="button" className={styles.settingsButton} onClick={() => setSettingsOpen((open) => !open)} aria-expanded={settingsOpen} aria-haspopup="dialog" aria-label="Swap settings">⚙</button>
+              {settingsOpen ? (
+                <div className={styles.settingsPopover} role="dialog" aria-label="Swap settings">
+                  <strong>Swap settings</strong>
+                  <span>Slippage tolerance used for the routed quote.</span>
+                  <label>Slippage tolerance
+                    <span className={styles.settingsInputWrap}>
+                      <input className={styles.slippageInput} value={slippage} onChange={(event) => setSlippage(event.target.value)} inputMode="decimal" aria-label="Slippage tolerance" />
+                      <em>%</em>
+                    </span>
+                  </label>
+                </div>
+              ) : null}
+            </div>
+          </div>
           {wrongNetwork && !gatewayCanQuoteOffArc ? <div className={`${styles.notice} ${styles.noticeError}`}><strong>Wallet is on chain {chainId}.</strong> Arc Mainnet is required for swaps.<button type="button" className={styles.inlineButton} onClick={requestArcNetwork} disabled={switchingNetwork}>{switchingNetwork ? 'Switching…' : 'Switch to Arc Mainnet'}</button></div> : null}
           <div className={styles.swapStack}>
-            <div className={styles.assetField}><label htmlFor="swap-amount">You pay</label><div className={styles.assetRow}><input id="swap-amount" className={styles.amountInput} type="text" inputMode="decimal" placeholder="0.00" value={amount} onChange={(event) => { const value = event.target.value; if (value === '' || /^\d*(\.\d*)?$/.test(value)) setAmount(value); }} /><TokenDropdown value={fromId} markets={LIVE_MARKETS} onChange={changeFrom} label="Input token" /></div></div>
+            <div className={styles.assetField}>
+              <div className={styles.amountFieldHead}>
+                <label htmlFor="swap-amount">You pay</label>
+                <div className={styles.inlineBalance}>
+                  <span>Balance: {Number(walletBalanceNumber).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 6 })} {fromMarket.symbol}</span>
+                  <button type="button" className={styles.maxButton} onClick={() => setAmount(arcWalletBalance)} disabled={!isConnected || walletBalanceNumber <= 0 || isPreparing || approvalPending}>MAX</button>
+                </div>
+              </div>
+              <div className={styles.assetRow}>
+                <input id="swap-amount" className={styles.amountInput} type="text" inputMode="decimal" placeholder="0.00" value={amount} onChange={(event) => { const value = event.target.value; if (value === '' || /^\d*(\.\d*)?$/.test(value)) setAmount(value); }} />
+                <TokenDropdown value={fromId} markets={LIVE_MARKETS} onChange={changeFrom} label="Input token" />
+              </div>
+            </div>
             <button type="button" className={styles.switchButton} onClick={swapTokens} disabled={networkBlocksAction || isPreparing || approvalPending} aria-label="Reverse swap">↕</button>
             <div className={styles.assetField}><label>Receive</label><div className={styles.assetRow}><div className={styles.amountInput}>{outputAmount}</div><TokenDropdown value={toId} markets={LIVE_MARKETS} onChange={changeTo} label="Output token" /></div></div>
           </div>
           {gatewayEnabled ? <div style={{ marginTop: 12 }}><BalanceSourceSelector value={fundingSource} onChange={setFundingSource} walletBalance={arcWalletBalance} gatewayBalances={gateway.balances} disabled={isPreparing || approvalPending} /></div> : null}
-          <div className={styles.metaRow}><span>Slippage</span><input className={styles.slippageInput} value={slippage} onChange={(event) => setSlippage(event.target.value)} inputMode="decimal" aria-label="Slippage percentage" /><span>%</span></div>
           {quote ? <div className={styles.quoteCard}><div className={styles.quoteRow}><span>Expected output</span><strong className={styles.quoteOutput}>{outputAmount} {toMarket.symbol}</strong></div><div className={styles.quoteRow}><span>Minimum received</span><strong>{minOutput} {toMarket.symbol}</strong></div><div className={styles.quoteRow}><span>Price impact</span><strong>{formatPriceImpact(safePriceImpactPercent)}</strong></div>{safePriceImpactPercent != null && safePriceImpactPercent >= 5 ? <div className={`${styles.notice} ${styles.noticeError}`}>High price impact: {formatPriceImpact(safePriceImpactPercent)}. Consider a smaller trade or a different route.</div> : null}<div className={styles.quoteRow}><span>Route</span><strong>{typeof quote.route === 'string' ? quote.route : 'Automatic route'}</strong></div></div> : <div className={styles.quoteStatus}>{networkBlocksAction ? 'Switch to Arc Mainnet or select Gateway unified.' : stage === 'quoting' ? 'Fetching the best available route…' : stage === 'preparing' ? 'Preparing the transaction…' : 'Enter an amount to get a quote.'}</div>}
-          {gatewayAmountUnavailable ? <div className={`${styles.notice} ${styles.noticeError}`}>Gateway unified balance is too low for this amount.</div> : null}
+          {amountUnavailable ? <div className={`${styles.notice} ${styles.noticeError}`}>{gatewayAmountUnavailable ? 'Gateway unified balance is too low for this amount.' : 'Insufficient ' + fromMarket.symbol + ' balance.'}</div> : null}
           {notice && <div className={styles.notice}>{notice}</div>}
           {error && <div className={`${styles.notice} ${styles.noticeError}`}>{error}</div>}
           {approvalReceipt.isLoading ? <div className={styles.notice}>Waiting for approval confirmation…</div> : null}
           {swapReceipt.isLoading ? <div className={styles.notice}>Waiting for swap confirmation…</div> : null}
           {swapReceipt.isSuccess ? <div className={`${styles.notice} ${styles.noticeSuccess}`}>Swap confirmed on Arc.</div> : null}
-          {networkBlocksAction ? <button type="button" className={styles.primaryButton} disabled={switchingNetwork} onClick={requestArcNetwork}>{switchingNetwork ? 'Switching network…' : 'Switch to Arc Mainnet'}</button> : isConnected && quoteReady ? <>{approvalRequired && !approvalComplete ? <button type="button" className={styles.secondaryButton} disabled={isPreparing || approvalPending || switchingNetwork || !preparedTransactions} onClick={approveToken}>{walletPending ? 'Confirm in wallet…' : approvalPending ? `Waiting for ${fromMarket.symbol} approval…` : `Approve ${fromMarket.symbol}`}</button> : <button type="button" className={styles.primaryButton} disabled={isPreparing || switchingNetwork || !preparedTransactions || !approvalComplete || gatewayAmountUnavailable} onClick={buildAndSwap}>{walletPending ? 'Confirm in wallet…' : fundingSource === 'gateway' && gatewayEnabled ? 'Use Gateway USDC' : `Swap ${fromMarket.symbol} → ${toMarket.symbol}`}</button>}</> : <button type="button" className={styles.secondaryButton} disabled>{!isConnected ? 'Connect wallet' : stage === 'quoting' ? 'Finding route…' : stage === 'preparing' ? 'Preparing swap…' : 'Enter an amount'}</button>}
+          {networkBlocksAction ? <button type="button" className={styles.primaryButton} disabled={switchingNetwork} onClick={requestArcNetwork}>{switchingNetwork ? 'Switching network…' : 'Switch to Arc Mainnet'}</button> : isConnected && quoteReady && !amountUnavailable ? <>{approvalRequired && !approvalComplete ? <button type="button" className={styles.secondaryButton} disabled={isPreparing || approvalPending || switchingNetwork || !preparedTransactions} onClick={approveToken}>{walletPending ? 'Confirm in wallet…' : approvalPending ? `Waiting for ${fromMarket.symbol} approval…` : `Approve ${fromMarket.symbol}`}</button> : <button type="button" className={styles.primaryButton} disabled={isPreparing || switchingNetwork || !preparedTransactions || !approvalComplete} onClick={buildAndSwap}>{walletPending ? 'Confirm in wallet…' : fundingSource === 'gateway' && gatewayEnabled ? 'Use Gateway USDC' : `Swap ${fromMarket.symbol} → ${toMarket.symbol}`}</button>}</> : <button type="button" className={styles.secondaryButton} disabled>{!isConnected ? 'Connect wallet' : amountUnavailable ? `Insufficient ${fromMarket.symbol} balance` : stage === 'quoting' ? 'Finding route…' : stage === 'preparing' ? 'Preparing swap…' : 'Enter an amount'}</button>}
         </section>
 
-        <details className={`${styles.panel} ${styles.bridgeCard}`}>
-          <summary style={{ cursor: 'pointer' }}><span className={styles.kicker}>TRADE INFO</span><h2>Trade details</h2></summary>
+        <section className={styles.tradeDetails}>
+          <button type="button" className={styles.tradeDetailsToggle} onClick={() => setTradeDetailsOpen((open) => !open)} aria-expanded={tradeDetailsOpen}>
+            <span><span className={styles.kicker}>TRADE INFO</span><strong>Network Fee &amp; Route Details</strong></span>
+            <span className={tradeDetailsOpen ? styles.chevronOpen : styles.chevron}>⌄</span>
+          </button>
+          {tradeDetailsOpen ? <div className={styles.tradeDetailsBody}>
           <p className={styles.bridgeDescription}>Centry selects the best available Arc route across the supported swap assets.</p>
           <div className={styles.quoteCard}><div className={styles.bridgeRow}><span>Network</span><strong>Arc Mainnet</strong></div><div className={styles.bridgeRow}><span>Slippage tolerance</span><strong>{slippage}%</strong></div><div className={styles.bridgeRow}><span>Price impact</span><strong>{quote ? formatPriceImpact(safePriceImpactPercent) : '—'}</strong></div><div className={styles.bridgeRow}><span>Gas</span><strong>{quote?.gasEstimate ? `${quote.gasEstimate} units` : 'Calculated by wallet'}</strong></div></div>
           {quote?.feeBps != null ? <div className={styles.quoteCard}><div className={styles.bridgeRow}><span>Liquidity fee</span><strong>{(Number(quote.feeBps) / 100).toFixed(2)}%</strong></div></div> : null}
-        </details>
+          </div> : null}
+        </section>
       </div>
     </div>
   );

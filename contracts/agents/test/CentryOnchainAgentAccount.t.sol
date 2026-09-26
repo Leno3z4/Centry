@@ -44,9 +44,15 @@ contract MockERC8004IdentityRegistry {
 
 contract MockAgentToken {
     mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
 
     function mint(address to, uint256 amount) external {
         balanceOf[to] += amount;
+    }
+
+    function approve(address spender, uint256 amount) external returns (bool) {
+        allowance[msg.sender][spender] = amount;
+        return true;
     }
 
     function transfer(address to, uint256 amount) external returns (bool) {
@@ -89,6 +95,71 @@ contract CentryOnchainAgentAccountTest {
 
         vm.prank(user);
         account.setActive(true);
+    }
+
+    function testFinancialLimitsRequireApprovedSpenderAndReset() external {
+        MockAgentToken token = new MockAgentToken();
+        bytes4 approveSelector = bytes4(keccak256("approve(address,uint256)"));
+        uint64 expiry = uint64(block.timestamp + 3 days);
+
+        vm.prank(user);
+        account.setPermission(agent, address(token), approveSelector, true, expiry, 0);
+
+        vm.prank(user);
+        account.setFinancialLimit(
+            agent,
+            address(token),
+            approveSelector,
+            address(token),
+            100,
+            150,
+            1 days
+        );
+
+        vm.prank(user);
+        account.setApprovalSpender(agent, address(token), address(target), true);
+
+        vm.prank(agent);
+        account.execute(
+            address(token),
+            0,
+            abi.encodeWithSelector(approveSelector, address(target), 100)
+        );
+
+        vm.prank(agent);
+        (bool maliciousSpenderOk,) = address(account).call(
+            abi.encodeCall(
+                account.execute,
+                (
+                    address(token),
+                    0,
+                    abi.encodeWithSelector(approveSelector, address(0xBEEF), 1)
+                )
+            )
+        );
+        _assertFalse(maliciousSpenderOk);
+
+        vm.prank(agent);
+        (bool windowExceeded,) = address(account).call(
+            abi.encodeCall(
+                account.execute,
+                (
+                    address(token),
+                    0,
+                    abi.encodeWithSelector(approveSelector, address(target), 51)
+                )
+            )
+        );
+        _assertFalse(windowExceeded);
+
+        vm.warp(block.timestamp + 1 days + 1);
+
+        vm.prank(agent);
+        account.execute(
+            address(token),
+            0,
+            abi.encodeWithSelector(approveSelector, address(target), 100)
+        );
     }
 
     function testAgentCanExecutePermittedCall() external {

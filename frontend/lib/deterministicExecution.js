@@ -34,7 +34,7 @@ export function buildDeterministicExecutionPlan(question) {
 
     return {
       title: `${verb[0].toUpperCase()}${verb.slice(1)} ${amount} ${asset.symbol}`,
-      reason: `Centrion prepared the requested ${verb} action using the configured ${asset.symbol} market.`,
+      reason: `Cask prepared the requested ${verb} action using the configured ${asset.symbol} market.`,
       actions: [{
         type,
         amount,

@@ -39,6 +39,40 @@ function unauthorized() {
   return Response.json({ error: "unauthorized" }, { status: 401 });
 }
 
+function timingSafeEqualHex(left, right) {
+  if (typeof left !== "string" || typeof right !== "string" || left.length !== right.length) return false;
+  let diff = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    diff |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  }
+  return diff === 0;
+}
+
+async function verifySignedRequest(request, rawBody, secret) {
+  if (!secret) return false;
+
+  const timestamp = request.headers.get("x-centry-db-timestamp") || "";
+  const signature = request.headers.get("x-centry-db-signature") || "";
+  if (!/^[0-9]{10,16}$/.test(timestamp) || !/^[0-9a-f]{64}$/i.test(signature)) return false;
+
+  const timestampMs = Number(timestamp);
+  if (!Number.isSafeInteger(timestampMs) || Math.abs(Date.now() - timestampMs) > 5 * 60_000) return false;
+
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["verify"],
+  );
+  return crypto.subtle.verify(
+    "HMAC",
+    key,
+    Uint8Array.from(signature.match(/.{2}/g).map((pair) => Number.parseInt(pair, 16))),
+    new TextEncoder().encode(`${timestamp}.${rawBody}`),
+  );
+}
+
 function badRequest(error) {
   return Response.json({ error }, { status: 400 });
 }
@@ -633,14 +667,14 @@ export default {
     }
 
     const expected = env.CENTRY_AGENT_DB_SECRET || "";
-    const authorization = request.headers.get("authorization") || "";
-    if (!expected || authorization !== `Bearer ${expected}`) {
+    const rawBody = await request.text();
+    if (!(await verifySignedRequest(request, rawBody, expected))) {
       return unauthorized();
     }
 
     let body;
     try {
-      body = await request.json();
+      body = JSON.parse(rawBody);
     } catch {
       return badRequest("invalid_json");
     }

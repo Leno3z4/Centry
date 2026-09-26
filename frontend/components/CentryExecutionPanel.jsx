@@ -175,8 +175,8 @@ export default function CentryExecutionPanel({ plan, onDone }) {
 
   if (!plan || !validation.ok) return null;
   const steps = plan.actions.flatMap((action, index) => [...approvalSteps.filter((step) => step.index === index).map((step) => ({ ...step, kind: 'approval' })), { index, action, kind: 'action' }]);
-  return <section className={styles.card} aria-label="Centrion execution plan">
-    <div className={styles.header}><div><span className={styles.eyebrow}>{preparing ? 'PREPARING' : plan.autoExecute ? 'READY — WALLET NEXT' : 'READY TO EXECUTE'}</span><h3>{plan.title || 'Centry action'}</h3><p>{plan.reason || 'Centrion prepared this action from your request.'}</p></div></div>
+  return <section className={styles.card} aria-label="Cask execution plan">
+    <div className={styles.header}><div><span className={styles.eyebrow}>{preparing ? 'PREPARING' : plan.autoExecute ? 'READY — WALLET NEXT' : 'READY TO EXECUTE'}</span><h3>{plan.title || 'Centry action'}</h3><p>{plan.reason || 'Cask prepared this action from your request.'}</p></div></div>
     <div className={styles.actions}>{steps.map((step, i) => <div className={`${styles.action} ${step.kind === 'approval' ? styles.actionApproval : ''}`} key={`${step.kind}-${step.index}-${i}`}><span>{i + 1}</span><strong>{step.kind === 'approval' ? step.label : describeAgentAction(step.action)}</strong></div>)}</div>
     {preparing ? <div className={styles.note}>Checking allowances before any wallet transaction…</div> : null}
     {completed.length ? <div className={styles.completed}>{completed.map((x, i) => <div key={`${x.hash}-${i}`}>Signed and submitted · <code>{String(x.hash).slice(0, 10)}…</code></div>)}</div> : null}

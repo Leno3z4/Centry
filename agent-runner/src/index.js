@@ -427,6 +427,90 @@ function filterRiskGuardActions(actions, riskDecision) {
   return input.filter((action) => String(action?.action || "").trim() !== "borrow");
 }
 
+function evaluateHealthWarning(snapshot) {
+  const rawHealth = snapshot?.lending?.healthFactor;
+  if (rawHealth == null) {
+    return {
+      level: "unknown",
+      active: false,
+      healthFactor: null,
+      message: "Health factor is not available in the latest snapshot.",
+    };
+  }
+
+  let healthFactor;
+  try {
+    healthFactor = BigInt(rawHealth);
+  } catch {
+    return {
+      level: "unknown",
+      active: false,
+      healthFactor: null,
+      message: "The latest health factor could not be read.",
+    };
+  }
+
+  const warnAt = 1500000000000000000n;
+  const criticalAt = 1200000000000000000n;
+  const liquidationAt = 1000000000000000000n;
+  const display = formatUnits(healthFactor, 18);
+
+  if (healthFactor < liquidationAt) {
+    return {
+      level: "liquidation",
+      active: true,
+      healthFactor,
+      message: "Health factor is below 1.00. Liquidation risk is active.",
+    };
+  }
+
+  if (healthFactor < criticalAt) {
+    return {
+      level: "critical",
+      active: true,
+      healthFactor,
+      message: "Health factor is in the critical warning range. Reduce debt or add collateral.",
+    };
+  }
+
+  if (healthFactor < warnAt) {
+    return {
+      level: "warning",
+      active: true,
+      healthFactor,
+      message: "Health factor has fallen below 1.50. Consider reducing debt or adding collateral.",
+    };
+  }
+
+  return {
+    level: "healthy",
+    active: false,
+    healthFactor,
+    message: "Health factor is above the warning threshold.",
+    display,
+  };
+}
+
+function a2aReceivePolicy(config) {
+  const a2a = config?.a2a && typeof config.a2a === "object" ? config.a2a : {};
+  const allowedAgentIds = Array.isArray(a2a.allowedAgentIds)
+    ? new Set(a2a.allowedAgentIds.map((value) => String(value).trim()).filter(Boolean))
+    : new Set();
+
+  return {
+    receiveEnabled: a2a.receiveEnabled === true,
+    allowedAgentIds,
+  };
+}
+
+function a2aTaskAllowed(config, task) {
+  const policy = a2aReceivePolicy(config);
+  if (policy.receiveEnabled !== true) return false;
+  const senderId = String(task?.from_agent_id || "").trim();
+  if (!senderId) return false;
+  return policy.allowedAgentIds.size === 0 || policy.allowedAgentIds.has(senderId);
+}
+
 function agentPolicy(autonomy) {
   const policy = autonomy && typeof autonomy.policy === "object" ? autonomy.policy : {};
   const allowedActions = Array.isArray(policy.allowedActions) && policy.allowedActions.length
@@ -1951,30 +2035,51 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
       leaseMs: 300_000,
     });
     taskLeaseId = claimed.leaseId;
-    tasks = claimed.tasks;
-    ownerChatTask = tasks.find((task) => parseOwnerChatTask(task));
-    ownerChatEnvelope = ownerChatTask ? parseOwnerChatTask(ownerChatTask) : null;
 
-    if (requestedTaskId && !ownerChatTask) {
+    const config = parseJson(agent.config_json || "{}", {});
+    const rejectedA2A = [];
+    const allowedTasks = [];
+
+    for (const task of claimed.tasks || []) {
+      const ownerRequest = parseOwnerChatTask(task);
+      if (ownerRequest || a2aTaskAllowed(config, task)) {
+        allowedTasks.push(task);
+      } else {
+        rejectedA2A.push(task);
+      }
+    }
+
+    for (const task of rejectedA2A) {
       await completeTask(
         db,
-        requestedTaskId,
+        task.id,
         taskLeaseId,
         "failed",
         JSON.stringify({
-          kind: "owner_chat_result",
-          status: "failed",
-          error: "task_not_owner_chat",
+          kind: "a2a_task_result",
+          status: "rejected",
+          error: "recipient_a2a_not_allowlisted_or_opted_in",
         }),
-      );
+      ).catch(() => {});
+    }
+
+    if (requestedTaskId && rejectedA2A.some((task) => String(task.id) === String(requestedTaskId))) {
       runStatus = "failed";
-      reason = "task_not_owner_chat";
+      reason = "recipient_a2a_not_allowlisted_or_opted_in";
+      return { agentId: agent.id, status: runStatus, reason };
+    }
+
+    tasks = allowedTasks;
+    ownerChatTask = tasks.find((task) => parseOwnerChatTask(task));
+    ownerChatEnvelope = ownerChatTask ? parseOwnerChatTask(ownerChatTask) : null;
+
+    if (requestedTaskId && !ownerChatTask && !tasks.some((task) => String(task.id) === String(requestedTaskId))) {
+      runStatus = "failed";
+      reason = "task_not_found_after_claim";
       return { agentId: agent.id, status: runStatus, reason };
     }
 
     if (ownerChatTask) tasks = [ownerChatTask];
-
-    const config = parseJson(agent.config_json || "{}", {});
     const storedAutonomy = config?.autonomy && typeof config.autonomy === "object" ? config.autonomy : {};
     const policy = config?.policy && typeof config.policy === "object" ? config.policy : {};
     const autonomy = { ...storedAutonomy, policy };
@@ -1982,18 +2087,6 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
     const instructions = String(autonomy.instructions || "").trim();
     const configuredRiskGuard = riskGuardConfig(autonomy);
     let riskDecision = null;
-
-    if (!ownerChatTask && !autonomyEnabled) {
-      runStatus = "idle";
-      reason = "autonomy_disabled";
-      return { agentId: agent.id, status: runStatus, reason };
-    }
-
-    if (!ownerChatTask && !instructions && tasks.length === 0 && !configuredRiskGuard.enabled) {
-      runStatus = "idle";
-      reason = "no_work";
-      return { agentId: agent.id, status: runStatus, reason };
-    }
 
     const priorRuntime = await db.prepare(
       "SELECT strategy_state_json FROM centry_agent_runtime WHERE agent_id = ? LIMIT 1"
@@ -2050,17 +2143,30 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
         : emptyAgentSnapshot(account, runnerAddress);
 
     riskDecision = evaluateRiskGuard(snapshot, autonomy, agentPolicy(autonomy));
+    const healthWarning = evaluateHealthWarning(snapshot);
+    const previousHealthWarning = priorStrategyState?.healthWarning || {};
+    const warningStateChanged = Boolean(healthWarning.active) &&
+      String(previousHealthWarning.level || "") !== healthWarning.level;
 
     await writeAgentRuntime(db, agent.id, {
       lastEvaluationAt: new Date().toISOString(),
       accountActive: snapshot.active,
       operatorAuthorized: snapshot.operatorAuthorized,
     }).catch(() => {});
+
     await mergeStrategyState(db, agent.id, {
       autonomyEnabled,
       instructionsConfigured: Boolean(instructions),
       pendingTaskCount: tasks.length,
       peerStudyCount: peerStudies.length,
+      healthWarning: {
+        level: healthWarning.level,
+        active: healthWarning.active,
+        healthFactor: healthWarning.healthFactor == null ? null : healthWarning.healthFactor.toString(),
+        message: healthWarning.message,
+        checkedAt: new Date().toISOString(),
+        ...(warningStateChanged ? { lastNotifiedAt: new Date().toISOString() } : {}),
+      },
       riskGuard: {
         enabled: riskDecision.enabled,
         state: riskDecision.state,
@@ -2073,6 +2179,27 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
         stopBorrowAtHealthFactor: riskDecision.stopBorrowAtHealthFactor.toString(),
       },
     }).catch(() => {});
+
+    if (warningStateChanged) {
+      await addAgentChatMessage(db, {
+        id: crypto.randomUUID(),
+        agentId: agent.id,
+        role: "system",
+        content: "Health warning: " + healthWarning.message + " Current health factor: " + formatUnits(healthWarning.healthFactor, 18) + ".",
+      }).catch(() => {});
+    }
+
+    if (!ownerChatTask && !autonomyEnabled) {
+      runStatus = "idle";
+      reason = healthWarning.active ? "health_warning" : "autonomy_disabled";
+      return { agentId: agent.id, status: runStatus, reason };
+    }
+
+    if (!ownerChatTask && !instructions && tasks.length === 0 && !configuredRiskGuard.enabled) {
+      runStatus = "idle";
+      reason = healthWarning.active ? "health_warning" : "no_work";
+      return { agentId: agent.id, status: runStatus, reason };
+    }
 
     if (!snapshot.active && !ownerChatTask) {
       runStatus = "skipped";
@@ -2087,7 +2214,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
     }
 
     if (!ownerChatTask) {
-      peerStudies = await buildPeerStudies(publicClient, agent, context, env).catch((error) => {
+      peerStudies = await buildPeerStudies(publicClient, agent, {}, env).catch((error) => {
         console.warn("centry_agent_peer_study_failed", {
           agentId: agent.id,
           error: error instanceof Error ? error.message : String(error),

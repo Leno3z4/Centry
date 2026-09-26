@@ -14,7 +14,7 @@ export default function sitemap() {
     '/app/bridge',
     '/app/portfolio',
     '/app/analytics',
-    '/app/docs',
+    '/docs',
   ];
 
   return routes.map((path) => ({

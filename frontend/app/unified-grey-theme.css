@@ -42,8 +42,7 @@ a { color: inherit; }
 .wallet-balance,
 .panel,
 .metric,
-.form-card,
-.risk-card,
+.form-card
 .action-card,
 .feature-card,
 .doc-card,
@@ -86,7 +85,7 @@ a { color: inherit; }
 .nav-item,
 .action-tabs button {
   background: transparent !important;
-  color: rgba(255,255,255,.78) !important;
+  color: #a0a4ad !important;
 }
 
 .nav-item:hover,
@@ -391,7 +390,6 @@ main, section, article, aside, nav, header, footer { border-color: #2a2a2a; }
   .app-shell .panel,
   .app-shell .form-card,
   .app-shell .metric,
-  .app-shell .risk-card,
   .app-shell .action-card,
   .app-shell .feature-card,
   .app-shell .doc-card {
@@ -505,8 +503,7 @@ body,
 .wallet-balance,
 .panel,
 .metric,
-.form-card,
-.risk-card,
+.form-card
 .action-card,
 .feature-card,
 .doc-card,
@@ -688,8 +685,7 @@ textarea,
 .market-list-item,
 .landing-home-product,
 .landing-home-explore-card,
-.landing-home-cta,
-.analytics-market,
+.landing-home-cta
 .governance-position-card,
 .reward-position,
 .reward-hero-meta > div,
@@ -705,8 +701,7 @@ textarea,
 
 [class*="badge__"],
 [class*="token__"],
-.token,
-.analytics-asset .token,
+.token
 .reward-position-title .token,
 .wallet-option-mark {
   background:
@@ -761,7 +756,7 @@ footer {
   border: 1px solid #2d2d2d;
   border-radius: 999px;
   background: #111111;
-  color: rgba(255,255,255,.52);
+  color:rgba(255,255,255,.38);
   font-size: 8px;
   font-weight: 700;
   letter-spacing: .08em;
@@ -798,4 +793,29 @@ footer {
 .landing-home-capability,
 .landing-home-final {
   box-shadow: none;
+}
+
+/* Portfolio and navigation refinement */
+.nav-item.active {
+  background: #1b222a !important;
+  border-color: #35414d !important;
+  color: #ffffff !important;
+  box-shadow: inset 2px 0 0 #0a84ff !important;
+}
+.nav-item-disabled {
+  position: relative;
+  opacity: .52 !important;
+}
+.nav-item-status {
+  margin-left: auto;
+  padding: 2px 5px;
+  border: 1px solid #30343a;
+  border-radius: 999px;
+  background: #121416;
+  color: rgba(255,255,255,.4) !important;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }

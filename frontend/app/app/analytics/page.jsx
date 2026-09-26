@@ -185,33 +185,33 @@ function AnalyticsContent() {
         </div>
       </div>
 
-      <section className="stats-grid analytics-stats">
-        <div className="metric"><span>Total supplied</span><strong>${formatNumber(totals.suppliedUsd)}</strong><small>Across active markets</small></div>
-        <div className="metric"><span>Total borrowed</span><strong>${formatNumber(totals.borrowedUsd)}</strong><small>Current outstanding debt</small></div>
-        <div className="metric"><span>Available liquidity</span><strong>${formatNumber(totals.cashUsd)}</strong><small>Reserve cash</small></div>
-        <div className="metric"><span>Utilization</span><strong>{percent(overallUtilization)}</strong><small>Borrowed ÷ supplied</small></div>
+      <section className="stats-grid analyticsStats">
+        <div className="analyticsMetric"><span>Total supplied</span><strong>${formatNumber(totals.suppliedUsd)}</strong><small>Across active markets</small></div>
+        <div className="analyticsMetric"><span>Total borrowed</span><strong className={totals.borrowedUsd === 0 ? "zero-value" : ""}>${formatNumber(totals.borrowedUsd)}</strong><small>Current outstanding debt</small></div>
+        <div className="analyticsMetric"><span>Available liquidity</span><strong className={totals.cashUsd === 0 ? "zero-value" : ""}>${formatNumber(totals.cashUsd)}</strong><small>Reserve cash</small></div>
+        <div className="analyticsMetric"><span>Utilization</span><strong className={overallUtilization === 0 ? "zero-value" : ""}>{percent(overallUtilization)}</strong><small>Borrowed ÷ supplied</small></div>
       </section>
 
-      <section className="content-grid analytics-grid">
+      <section className="content-grid analyticsGrid">
         <div className="panel panel-large">
           <div className="panel-head"><div><span className="section-kicker">MARKETS</span><h2>Live market snapshot</h2></div></div>
-          <div className="analytics-market-list">
+          <div className="analyticsMarketList">
             {markets.map((market) => (
-              <div className="analytics-market" key={market.id}>
-                <div className="analytics-market-main">
-                  <div className="analytics-asset"><span className="token usdc">{market.symbol === 'cirBTC' ? '₿' : market.symbol === 'EURC' ? '€' : '$'}</span><div><strong>{market.symbol}</strong><small>{market.name}</small></div></div>
-                  <div className="analytics-market-status"><span className={market.active ? 'status-live' : ''}>{isLoading ? 'Loading' : market.active ? 'Live' : 'Inactive'}</span></div>
+              <div className="analyticsMarket" key={market.id}>
+                <div className="analyticsMarketMain">
+                  <div className="analyticsAsset"><span className="analyticsToken">{market.symbol === 'cirBTC' ? '₿' : market.symbol === 'EURC' ? '€' : '$'}</span><div><strong>{market.symbol}</strong><small>{market.name}</small></div></div>
+                  <div className="analyticsMarketStatus"><span className={market.active ? 'status-live' : ''}>{isLoading ? 'Loading' : market.active ? 'Live' : 'Inactive'}</span></div>
                 </div>
-                <div className="analytics-market-numbers">
-                  <div><span>Supply</span><strong>{formatNumber(market.supply, 2)}</strong></div>
-                  <div><span>Borrowed</span><strong>{formatNumber(market.borrow, 2)}</strong></div>
-                  <div><span>Liquidity</span><strong>{formatNumber(market.cash, 2)}</strong></div>
-                  <div><span>Supply APY</span><strong>{percent(market.supplyApy)}</strong></div>
-                  <div><span>Borrow APY</span><strong>{percent(market.borrowApy)}</strong></div>
+                <div className="analyticsMarketNumbers">
+                  <div><span>Supply</span><strong className={Number(market.supply) === 0 ? "zero-value" : ""}>{formatNumber(market.supply, 2)}</strong></div>
+                  <div><span>Borrowed</span><strong className={Number(market.borrow) === 0 ? "zero-value" : ""}>{formatNumber(market.borrow, 2)}</strong></div>
+                  <div><span>Liquidity</span><strong className={Number(market.cash) === 0 ? "zero-value" : ""}>{formatNumber(market.cash, 2)}</strong></div>
+                  <div className="analyticsPrimaryMetric"><span>Supply APY</span><strong className="metric-accent">{percent(market.supplyApy)}</strong></div>
+                  <div className="analyticsPrimaryMetric"><span>Borrow APY</span><strong className="metric-accent">{percent(market.borrowApy)}</strong></div>
                 </div>
-                <div className="analytics-util">
-                  <div className="analytics-util-head"><span>Utilization</span><strong>{percent(market.utilization)}</strong></div>
-                  <div className="analytics-util-track"><div className="analytics-util-fill" style={{ width: `${Math.min(100, Math.max(0, market.utilization))}%` }} /></div>
+                <div className="analyticsUtil">
+                  <div className="analyticsUtilHead"><span>Utilization</span><strong>{percent(market.utilization)}</strong></div>
+                  <div className="analyticsUtilTrack"><div className="analyticsUtilFill" style={{ width: `${Math.min(100, Math.max(0, market.utilization))}%` }} /></div>
                 </div>
               </div>
             ))}
@@ -220,10 +220,10 @@ function AnalyticsContent() {
 
         <div className="panel">
           <div className="panel-head"><div><span className="section-kicker">RISK</span><h2>Reserve parameters</h2></div></div>
-          <div className="risk-list">
+          <div className="analyticsRiskList">
             {markets.map((market) => (
-              <div className="risk-card" key={market.id}>
-                <div className="risk-card-head"><strong>{market.symbol}</strong><span>{market.active ? 'Active' : 'Inactive'}</span></div>
+              <div className="analyticsRiskCard" key={market.id}>
+                <div className="analyticsRiskCardHead"><strong>{market.symbol}</strong><span>{market.active ? 'Active' : 'Inactive'}</span></div>
                 <div><span>Loan to value</span><strong>{percent(market.ltv)}</strong></div>
                 <div><span>Liquidation threshold</span><strong>{percent(market.liquidationThreshold)}</strong></div>
                 <div><span>Liquidation bonus</span><strong>{percent(market.liquidationBonus)}</strong></div>
@@ -235,14 +235,47 @@ function AnalyticsContent() {
       </section>
 
       <style jsx global>{`
-        .analytics-stats{grid-template-columns:repeat(4,minmax(0,1fr))}
-        .analytics-grid{align-items:start}
-        .analytics-market-list{display:grid;gap:12px}
-        .analytics-market{padding:17px;border:1px solid #2d233b;border-radius:14px;background:rgba(13,9,21,.68)}
-        .analytics-market-main{display:flex;justify-content:space-between;align-items:center;gap:16px}
-        .analytics-asset{display:flex;align-items:center;gap:12px}.analytics-asset .token{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:#241938;color:#d9c8ff;font-weight:800}.analytics-asset strong,.analytics-asset small{display:block}.analytics-asset small{margin-top:4px;color:#8f849d;font-size:11px}.analytics-market-status{font-size:11px;color:#8f849d}.analytics-market-numbers{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-top:16px}.analytics-market-numbers span,.analytics-util-head span,.risk-card span{display:block;color:#8f849d;font-size:11px}.analytics-market-numbers strong{display:block;margin-top:5px;font-size:13px;font-variant-numeric:tabular-nums}.analytics-util{margin-top:15px}.analytics-util-head{display:flex;justify-content:space-between;gap:12px}.analytics-util-head strong{font-size:11px}.analytics-util-track{height:5px;margin-top:9px;border-radius:999px;background:#251c30;overflow:hidden}.analytics-util-fill{height:100%;border-radius:999px;background:#9d85bc}.risk-list{display:grid;gap:12px}.risk-card{padding:15px;border:1px solid #2d233b;border-radius:14px;background:rgba(13,9,21,.56)}.risk-card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.risk-card-head strong{font-size:13px}.risk-card-head span{color:#8f849d;font-size:10px}.risk-card>div:not(.risk-card-head){display:flex;justify-content:space-between;gap:16px;padding:8px 0;border-top:1px solid #292133}.risk-card>div:not(.risk-card-head) strong{font-size:12px}.analytics-note{padding:16px}.analytics-note p{margin:7px 0 0;color:#8f849d;font-size:11px;line-height:1.6}
-        @media (max-width:900px){.analytics-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.analytics-market-numbers{grid-template-columns:repeat(3,minmax(0,1fr))}}
-        @media (max-width:640px){.analytics-stats{grid-template-columns:1fr}.analytics-market-numbers{grid-template-columns:repeat(2,minmax(0,1fr))}}
+        .analyticsStats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+        .analyticsStats .analyticsMetric{min-width:0;padding:16px 18px;border:1px solid rgba(255,255,255,.08);border-radius:14px;background:#1e1e24;box-shadow:0 10px 28px rgba(0,0,0,.12)}
+        .analyticsStats .analyticsMetric>span{display:block;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.04em;color:#9aa1ad}
+        .analyticsStats .analyticsMetric>strong{display:block;margin-top:6px;color:#f4f6f8;font-size:22px;font-weight:650;font-variant-numeric:tabular-nums}
+        .analyticsStats .analyticsMetric>small{display:block;margin-top:4px;color:#8a8f9e}
+        .analyticsStats .analyticsMetric .zero-value{color:#8a8f9e}
+        .analyticsGrid{align-items:start;gap:14px}
+        .analyticsMarketList{display:grid;gap:12px}
+        .analyticsMarket{padding:18px;border:1px solid rgba(255,255,255,.08);border-radius:15px;background:#1e1e24;box-shadow:0 12px 28px rgba(0,0,0,.14)}
+        .analyticsMarketMain{display:flex;justify-content:space-between;align-items:center;gap:16px}
+        .analyticsAsset{display:flex;align-items:center;gap:12px;min-width:0}
+        .analyticsToken{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;flex:0 0 auto;border-radius:50%;background:#171a1f!important;border:1px solid #424a55!important;color:#f0f3f7!important;font-size:13px;font-weight:800}
+        .analyticsAsset>div{min-width:0}
+        .analyticsAsset strong{font-size:14px}
+        .analyticsAsset small{display:block;margin-top:3px;color:#8a8f9e;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .analyticsMarketStatus{font-size:10px;color:#8a8f9e;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
+        .analyticsMarketStatus .status-live{color:#78d6a2}
+        .analyticsMarket-numbers{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-top:17px}
+        .analyticsMarket-numbers>div{min-width:0;padding:11px 12px;border:1px solid rgba(255,255,255,.06);border-radius:10px;background:#17191f}
+        .analyticsMarket-numbers span{display:block;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.04em;color:#8a8f9e}
+        .analyticsMarket-numbers strong{display:block;margin-top:6px;color:#f0f3f6;font-size:16px;font-weight:650;font-variant-numeric:tabular-nums}
+        .analyticsMarket-numbers strong.zero-value{color:#8a8f9e}
+        .analyticsMarket-numbers .analyticsPrimaryMetric{background:#18211f;border-color:rgba(93,211,168,.18)}
+        .analyticsMarket-numbers .analyticsPrimaryMetric .metric-accent{color:#70d9ad;font-size:18px}
+        .analyticsUtil{margin-top:15px;padding-top:12px;border-top:1px solid rgba(255,255,255,.06)}
+        .analyticsUtilHead{display:flex;justify-content:space-between;gap:12px;align-items:center}
+        .analyticsUtilHead span{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.04em;color:#8a8f9e}
+        .analyticsUtilHead strong{font-size:12px;color:#dfe5ed}
+        .analyticsUtilTrack{height:7px;margin-top:9px;border-radius:999px;background:#2a2e36;overflow:hidden}
+        .analyticsUtilFill{height:100%;border-radius:999px;background:#62d2a2;box-shadow:0 0 10px rgba(98,210,162,.14)}
+        .analyticsRiskList{display:grid;gap:12px}
+        .analyticsRiskCard{padding:16px;border:1px solid rgba(255,255,255,.08);border-radius:14px;background:#1e1e24;box-shadow:0 10px 26px rgba(0,0,0,.12)}
+        .analyticsRiskCardHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:11px}
+        .analyticsRiskCardHead strong{font-size:13px}
+        .analyticsRiskCardHead span{color:#8a8f9e;font-size:10px}
+        .analyticsRiskCard>div:not(.analyticsRiskCardHead){display:flex;justify-content:space-between;gap:16px;padding:9px 0;border-top:1px solid rgba(255,255,255,.06)}
+        .analyticsRiskCard>div:not(.analyticsRiskCardHead) span{font-size:11px;color:#8a8f9e}
+        .analyticsRiskCard>div:not(.analyticsRiskCardHead) strong{font-size:12px;color:#eef1f4}
+        @media(max-width:900px){.analyticsStats{grid-template-columns:repeat(2,minmax(0,1fr))}.analyticsMarket-numbers{grid-template-columns:repeat(3,minmax(0,1fr))}}
+        @media(max-width:640px){.analyticsStats{grid-template-columns:1fr}.analyticsMarket-numbers{grid-template-columns:repeat(2,minmax(0,1fr))}.analyticsMarketMain{align-items:flex-start}}
+        @media(prefers-reduced-motion:reduce){.analyticsUtilFill{transition:none!important}}
       `}</style>
     </div>
   );

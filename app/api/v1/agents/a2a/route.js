@@ -49,6 +49,34 @@ async function verifySameGenesisFactory(sourceAccount, targetAccount, rpcUrl) {
   return expectedFactory;
 }
 
+function a2aConfigForAgent(agent) {
+  let config = {};
+  try {
+    config = JSON.parse(agent?.config_json || "{}");
+  } catch {
+    config = {};
+  }
+
+  const a2a = config?.a2a && typeof config.a2a === "object" ? config.a2a : {};
+  const allowedAgentIds = Array.isArray(a2a.allowedAgentIds)
+    ? [...new Set(a2a.allowedAgentIds.map((value) => String(value).trim()).filter(Boolean))].slice(0, 100)
+    : [];
+
+  return {
+    receiveEnabled: a2a.receiveEnabled === true,
+    allowedAgentIds,
+  };
+}
+
+function canReceiveA2ATasks(target, sourceAgentId) {
+  const config = a2aConfigForAgent(target);
+  if (!config.receiveEnabled) return { allowed: false, reason: "target_a2a_disabled" };
+  if (config.allowedAgentIds.length && !config.allowedAgentIds.includes(String(sourceAgentId))) {
+    return { allowed: false, reason: "target_a2a_sender_not_allowlisted" };
+  }
+  return { allowed: true, reason: null };
+}
+
 export async function GET(request) {
   const agentId = new URL(request.url).searchParams.get("agentId");
   if (!agentId) return noStore({ error: "agentId_required" }, 400);
@@ -102,6 +130,12 @@ export async function POST(request) {
   const toAgent = await getAgentById(toAgentId).catch(() => null);
   if (!toAgent) return noStore({ error: "target_agent_not_found" }, 404);
   if (toAgent.id === fromAgent.id) return noStore({ error: "self_message_not_allowed" }, 400);
+
+  const receivePolicy = canReceiveA2ATasks(toAgent, fromAgent.id);
+  if (!receivePolicy.allowed) {
+    return noStore({ error: receivePolicy.reason }, 403);
+  }
+
   try {
     await verifySameGenesisFactory(
       fromAgent.account,
@@ -141,7 +175,7 @@ export async function POST(request) {
         account: toAgent.account,
       },
       executionBoundary: "recipient-agent-account",
-      note: "The message is queued for the next global agent wake. Message routing does not grant execution authority; any onchain action still requires the recipient owner's live agent policy and authorized operator.",
+      note: "The message is queued for the next global agent wake. The recipient explicitly opted into agent-to-agent tasks; an allowlist, when configured, must include the sender. Message routing does not grant execution authority; any onchain action still requires the recipient owner's live agent policy and authorized operator.",
     }, 202);
   } catch (error) {
     return noStore({

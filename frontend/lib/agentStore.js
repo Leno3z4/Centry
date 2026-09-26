@@ -1,3 +1,5 @@
+import { createHmac } from "node:crypto";
+
 const dbUrl = () => (process.env.CENTRY_AGENT_DB_URL || "").replace(/\/$/, "");
 const dbSecret = () => process.env.CENTRY_AGENT_DB_SECRET || "";
 
@@ -6,25 +8,32 @@ async function call(operation, args = {}) {
   const secret = dbSecret();
   if (!url || !secret) throw new Error("agent_store_not_configured");
 
+  const body = JSON.stringify({ operation, args });
+  const timestamp = String(Date.now());
+  const signature = createHmac("sha256", secret)
+    .update(`${timestamp}.${body}`)
+    .digest("hex");
+
   const response = await fetch(url, {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${secret}`,
+      "x-centry-db-timestamp": timestamp,
+      "x-centry-db-signature": signature,
     },
-    body: JSON.stringify({ operation, args }),
+    body,
     cache: "no-store",
   });
 
-  let body = null;
-  try { body = await response.json(); } catch {}
+  let responseBody = null;
+  try { responseBody = await response.json(); } catch {}
 
   if (!response.ok) {
-    const error = body?.error || "agent_store_request_failed";
+    const error = responseBody?.error || "agent_store_request_failed";
     throw new Error(error);
   }
 
-  return body?.result;
+  return responseBody?.result;
 }
 
 export async function getAgentById(id) {
