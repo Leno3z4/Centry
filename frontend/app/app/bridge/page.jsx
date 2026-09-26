@@ -83,6 +83,7 @@ function BridgeContent() {
   const source = BRIDGE_CHAINS.find((chain) => chain.id === fromId) || BRIDGE_CHAINS[0];
   const destination = BRIDGE_CHAINS.find((chain) => chain.id === toId) || BRIDGE_CHAINS[1];
   const validAmount = /^\d+(\.\d{1,6})?$/.test(amount) && Number(amount) > 0;
+  const balanceInsufficient = validAmount && balance != null && Number(amount) > Number(balance);
 
   const readBalance = async () => {
     if (!connectorClient?.request || !address || !source) return;
