@@ -249,31 +249,13 @@ function OverviewContent() {
 
       <section className="hero overview-hero">
         <div className="overview-hero-summary overview-hero-summary-full">
-          <div className="overview-summary-top">
-            <div className="overview-summary-main">
-              <span>Total portfolio</span>
-              <strong>{isConnected ? '$' + formatNumber(lending.accountPosition?.totalCollateralValueUsd, 2) : '—'}</strong>
-              <small>Current collateral value</small>
-            </div>
-          </div>
-
-          <div className="overview-summary-grid">
-            <div>
-              <span>Supplied</span>
-              <strong>{isConnected ? formatNumber(lending.supplyBalance, 2) + ' ' + (firstMarket?.symbol || '') : '—'}</strong>
-            </div>
-            <div>
-              <span>Borrowed</span>
-              <strong>{isConnected ? formatNumber(lending.borrowBalance, 2) + ' ' + (firstMarket?.symbol || '') : '—'}</strong>
-            </div>
-            <div>
-              <span>Net position</span>
-              <strong>{isConnected ? '$' + formatNumber(Number(lending.accountPosition?.totalCollateralValueUsd || 0) - Number(lending.accountPosition?.totalDebtValueUsd || 0), 2) : '—'}</strong>
-            </div>
-            <div>
-              <span>Health factor</span>
-              <strong className={'health-value-' + healthTone(lending.healthFactorPercent)}>{isConnected ? lending.healthFactor || '—' : '—'}</strong>
-            </div>
+          <div className="overview-wallet-balance">
+            <span>Wallet balance</span>
+            <strong>
+              {isConnected
+                ? formatNumber(lending.walletBalance, 2) + ' ' + (firstMarket?.symbol || 'USDC')
+                : '—'}
+            </strong>
           </div>
         </div>
       </section>
@@ -304,21 +286,10 @@ function OverviewContent() {
 
         .overview-hero{gap:32px}
         .overview-hero-summary-full{width:100%;box-sizing:border-box}
-        .overview-summary-top{display:flex;align-items:end;justify-content:space-between;gap:24px}
-        .overview-summary-note{display:block;margin-top:14px;color:rgba(255,255,255,.34);font-size:10px}
-
-        .overview-hero-kicker{display:inline-block;margin-bottom:10px;color:rgba(255,255,255,.45);font-size:11px;letter-spacing:.14em;font-weight:700}
         .overview-hero-summary{width:min(520px,100%);padding:22px;border:1px solid rgba(255,255,255,.1);border-radius:22px;background:rgba(17,17,17,.94);box-shadow:0 18px 55px rgba(0,0,0,.24)}
-        .overview-summary-main{padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,.08)}
-        .overview-summary-main>span,.overview-summary-grid span{display:block;color:rgba(255,255,255,.42);font-size:11px;letter-spacing:.04em}
-        .overview-summary-main strong{display:block;margin-top:7px;color:#fff;font-size:38px;line-height:1.05;font-weight:650;letter-spacing:-1.5px}
-        .overview-summary-main small{display:block;margin-top:7px;color:rgba(255,255,255,.43);font-size:11px}
-        .overview-summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 20px}
-        .overview-summary-grid>div{padding:14px 0 2px}
-        .overview-summary-grid strong{display:block;margin-top:5px;color:rgba(255,255,255,.86);font-size:14px;font-weight:600}
-        .overview-summary-grid .health-value-danger{color:#ff6b6b}
-        .overview-summary-grid .health-value-warning{color:#f2bb55}
-        .overview-summary-grid .health-value-safe{color:#7ed7a0}
+        .overview-wallet-balance{display:flex;align-items:baseline;justify-content:space-between;gap:24px}
+        .overview-wallet-balance span{color:rgba(255,255,255,.48);font-size:12px;letter-spacing:.02em}
+        .overview-wallet-balance strong{color:#fff;font-size:38px;line-height:1.05;font-weight:650;letter-spacing:-1.5px;font-variant-numeric:tabular-nums}
 
         .overview-widget-board{margin-top:4px}
         .overview-board-head{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:14px;padding:0 2px}
@@ -362,10 +333,8 @@ function OverviewContent() {
         @media (max-width:640px){
           .overview-hero{gap:22px}
           .overview-hero-summary{padding:18px;border-radius:18px}
-          .overview-summary-top{align-items:stretch;flex-direction:column;gap:16px}
-          .overview-summary-main strong{font-size:31px}
-          .overview-summary-grid{gap:0 13px}
-          .overview-summary-grid>div{padding:12px 0 2px}
+          .overview-wallet-balance{align-items:flex-start;flex-direction:column;gap:8px}
+          .overview-wallet-balance strong{font-size:31px}
           .overview-widget{padding:17px;border-radius:18px}
           .overview-widget-value{font-size:28px}
           .overview-market-row{grid-template-columns:minmax(0,1fr) auto;gap:11px}
