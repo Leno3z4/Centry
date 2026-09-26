@@ -636,16 +636,24 @@ function annotateActionCalls(actions, calls) {
   let offset = 0;
   for (let actionIndex = 0; actionIndex < actions.length; actionIndex += 1) {
     const type = String(actions[actionIndex]?.action || "").trim();
-    const count = ["approve", "supply", "withdraw", "borrow", "transfer", "castVote"].includes(type)
-      ? 1
-      : ["repay", "swap"].includes(type)
-        ? 2
-        : 0;
-    for (let i = 0; i < count && offset + i < calls.length; i += 1) {
-      calls[offset + i].actionIndex = actionIndex;
-      calls[offset + i].actionType = type;
+
+    const annotate = (call, actionType) => {
+      if (!call) return;
+      call.actionIndex = actionIndex;
+      call.actionType = actionType;
+    };
+
+    const approvalMayPrecede = ["supply", "repay", "swap"].includes(type);
+    if (approvalMayPrecede && calls[offset]?.selector?.toLowerCase() === "0x095ea7b3") {
+      annotate(calls[offset], "approve");
+      offset += 1;
     }
-    offset += count;
+
+    const callCount = type === "repay" || type === "swap" ? 1 : 1;
+    for (let i = 0; i < callCount && offset + i < calls.length; i += 1) {
+      annotate(calls[offset + i], type);
+    }
+    offset += callCount;
   }
 }
 
@@ -1584,16 +1592,16 @@ async function ensureBatchAllowance(publicClient, calls, allowanceState, token, 
   remaining = BigInt(remaining || 0n);
 
   if (remaining < amount) {
-    calls.push(
-      makeCall(
-        token,
-        encodeFunctionData({
-          abi: ERC20_ABI,
-          functionName: "approve",
-          args: [spender, amount],
-        }),
-      ),
+    const approvalCall = makeCall(
+      token,
+      encodeFunctionData({
+        abi: ERC20_ABI,
+        functionName: "approve",
+        args: [spender, amount],
+      }),
     );
+    approvalCall.generatedActionType = "approve";
+    calls.push(approvalCall);
     remaining = amount;
   }
 
@@ -1651,9 +1659,28 @@ async function buildCalls(publicClient, agent, actions, autonomy, db, options = 
         const amount = humanReadableAmounts
           ? assetAmountToBaseUnits(action.amount, action.asset)
           : positiveUint(action.amount, "amount");
-        const spender = action.spender ? getAddress(action.spender) : LENDING_POOL;
-        const data = encodeFunctionData({ abi: ERC20_ABI, functionName: "approve", args: [spender, amount] });
-        calls.push(makeCall(asset, data));
+        const spender = action.spender
+          ? getAddress(action.spender)
+          : LENDING_POOL;
+        const allowedSpender =
+          spender.toLowerCase() === LENDING_POOL.toLowerCase() ||
+          spender.toLowerCase() === UNITFLOW_ROUTER.toLowerCase();
+        if (!allowedSpender) throw new Error("agent_approval_spender_not_allowed");
+        if (
+          spender.toLowerCase() === UNITFLOW_ROUTER.toLowerCase() &&
+          asset !== TOKENS.CENT
+        ) {
+          throw new Error("agent_approval_asset_not_allowed");
+        }
+
+        const data = encodeFunctionData({
+          abi: ERC20_ABI,
+          functionName: "approve",
+          args: [spender, amount],
+        });
+        const approvalCall = makeCall(asset, data);
+        approvalCall.generatedActionType = "approve";
+        calls.push(approvalCall);
         allowanceState.set(`${asset.toLowerCase()}:${spender.toLowerCase()}`, amount);
         break;
       }
