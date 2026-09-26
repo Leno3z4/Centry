@@ -67,7 +67,6 @@ export function AppShell({ children }) {
               {group.label && (
                 <div className="nav-group-label-row">
                   <div className="nav-group-label">{group.label}</div>
-                  {group.key === 'earn' ? <span className="nav-group-status">Coming soon</span> : null}
                 </div>
               )}
               {NAV_ITEMS.filter((item) => item.group === group.key).map((item) => (
@@ -80,6 +79,7 @@ export function AppShell({ children }) {
                   >
                     <span className="nav-icon">{item.icon}</span>
                     <span>{item.label}</span>
+                    <span className="nav-item-status">Coming soon</span>
                   </div>
                 ) : (
                   <Link key={item.href} href={item.href} className={`nav-item ${active === item.href ? 'active' : ''}`} aria-current={active === item.href ? 'page' : undefined} prefetch={false}>
