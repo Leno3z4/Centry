@@ -249,11 +249,9 @@ function OverviewContent() {
 
       <section className="hero overview-hero">
         <div className="hero-copy">
-          <span className="overview-hero-kicker">ACCOUNT OVERVIEW</span>
-          <h1>
-            See where you<br /><em>stand.</em>
-          </h1>
-          <p>Track your position and move straight into the next action.</p>
+          <span className="overview-hero-kicker">ACCOUNT</span>
+          <h1>Your account</h1>
+          <p>Manage collateral, borrowing, and swaps from one place.</p>
           <div className="hero-actions">
             <a className="primary-btn" href="/app/markets">Deposit</a>
             <a className="secondary-btn" href="/app/markets">Borrow</a>
@@ -328,6 +326,11 @@ function OverviewContent() {
 
         .overview-widget-board{margin-top:4px}
         .overview-board-head{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:14px;padding:0 2px}
+
+        .overview-hero h1{font-size:clamp(30px,3.6vw,42px);letter-spacing:-1.5px;font-weight:650;line-height:1.02}
+        .overview-hero .hero-copy>p{max-width:500px}
+        @media (max-width:640px){.overview-hero h1{font-size:32px}}
+
         .overview-board-head h2{margin:0;color:#fff;font-size:18px;font-weight:600;letter-spacing:-.02em}
 
         .overview-widget{height:100%;min-height:0;padding:20px;background:#111;border-radius:22px;color:#fff}
