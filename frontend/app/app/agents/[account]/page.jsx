@@ -11,6 +11,7 @@ import WalletAssetDropdown from '../WalletAssetDropdown';
 import { CONTRACT_ADDRESSES } from '../../../../constants/contracts';
 import { ORACLE_ABI } from '../../../../constants/abis';
 import styles from '../agents.module.css';
+import AgentPortfolioChart from '../../../../components/ui/c-chart-21';
 import {
   ACCOUNT_ABI,
   API_BASE,
@@ -263,17 +264,6 @@ function DashboardContent() {
     return { totalUsd, rows, activeRows };
   }, [balances]);
 
-  const portfolioGradient = useMemo(() => {
-    if (!portfolio.activeRows.length) return 'conic-gradient(#2b2d31 0 100%)';
-    let cursor = 0;
-    const segments = portfolio.activeRows.map((item) => {
-      const start = cursor;
-      cursor += item.percentage;
-      return `${item.color} ${start}% ${cursor}%`;
-    });
-    return `conic-gradient(${segments.join(', ')})`;
-  }, [portfolio.activeRows]);
-
   if (!isConnected) return <div className={styles.emptyState}><h1>Connect your wallet</h1><p>Your agent dashboard is tied to the wallet that owns the smart account.</p></div>;
   if (!agent) return <div className={styles.emptyState}><p>Loading agent…</p></div>;
 
@@ -359,29 +349,18 @@ function DashboardContent() {
           </div>
 
           <div className={styles.portfolioBody}>
-            <div className={styles.pieWrap}>
-              <div className={styles.portfolioPie} style={{ background: portfolioGradient }} aria-label={`Agent portfolio total ${formatUsd(portfolio.totalUsd)}`}>
-                <div className={styles.pieCenter}>
-                  <strong>{formatUsd(portfolio.totalUsd)}</strong>
-                  <span>Total value</span>
-                </div>
-              </div>
-            </div>
-
-            <div className={styles.portfolioLegend}>
-              {portfolio.rows.map((item) => (
-                <div className={styles.portfolioRow} key={item.key}>
-                  <div className={styles.portfolioAsset}>
-                    <span className={styles.portfolioDot} style={{ background: item.color }} />
-                    <div><strong>{item.key === 'native' ? 'USDC' : item.label}</strong><span>{formatAssetAmount(item.raw, item.decimals)}</span></div>
-                  </div>
-                  <div className={styles.portfolioValue}>
-                    <strong>{formatUsd(item.usdValue)}</strong>
-                    <span>{item.usdValue == null ? 'No USD feed' : item.percentage > 0 ? `${item.percentage < 10 ? item.percentage.toFixed(1) : item.percentage.toFixed(0)}%` : '0%'}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <AgentPortfolioChart
+              formatUsd={formatUsd}
+              rows={portfolio.rows.map((item) => ({
+                key: item.key,
+                label: item.label,
+                amount: formatAssetAmount(item.raw, item.decimals),
+                usdValue: item.usdValue,
+                percentage: item.percentage,
+                color: item.color,
+              }))}
+              totalUsd={portfolio.totalUsd}
+            />
           </div>
 
           <div className={styles.portfolioMeta}>
