@@ -105,22 +105,6 @@ export default function Page() {
           </div>
 
           <div className="docs-layout">
-            <aside className="panel docs-sidebar" aria-label="Documentation sections">
-              <div className="section-kicker">ON THIS PAGE</div>
-              <div className="docs-sidebar-groups">
-                {docsGroups.map(([groupLabel, items]) => (
-                  <details key={groupLabel} open>
-                    <summary>{groupLabel}</summary>
-                    <div className="docs-sidebar-links">
-                      {items.map(([id, label]) => (
-                        <a key={id} href={`#${id}`} onClick={() => setMobileDocsNavOpen(false)}>{label}</a>
-                      ))}
-                    </div>
-                  </details>
-                ))}
-              </div>
-            </aside>
-
             <button
               type="button"
               className="docs-mobile-menu-button"
@@ -348,6 +332,22 @@ export default function Page() {
                 </div>
               </section>
             </main>
+            <aside className="panel docs-sidebar" aria-label="Documentation sections">
+              <div className="section-kicker">ON THIS PAGE</div>
+              <div className="docs-sidebar-groups">
+                {docsGroups.map(([groupLabel, items]) => (
+                  <details key={groupLabel} open>
+                    <summary>{groupLabel}</summary>
+                    <div className="docs-sidebar-links">
+                      {items.map(([id, label]) => (
+                        <a key={id} href={`#${id}`} onClick={() => setMobileDocsNavOpen(false)}>{label}</a>
+                      ))}
+                    </div>
+                  </details>
+                ))}
+              </div>
+            </aside>
+
           </div>
         </div>
     <style jsx global>{`
