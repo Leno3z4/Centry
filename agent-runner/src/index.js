@@ -2047,18 +2047,6 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
     const configuredRiskGuard = riskGuardConfig(autonomy);
     let riskDecision = null;
 
-    if (!ownerChatTask && !autonomyEnabled) {
-      runStatus = "idle";
-      reason = "autonomy_disabled";
-      return { agentId: agent.id, status: runStatus, reason };
-    }
-
-    if (!ownerChatTask && !instructions && tasks.length === 0 && !configuredRiskGuard.enabled) {
-      runStatus = "idle";
-      reason = "no_work";
-      return { agentId: agent.id, status: runStatus, reason };
-    }
-
     const priorRuntime = await db.prepare(
       "SELECT strategy_state_json FROM centry_agent_runtime WHERE agent_id = ? LIMIT 1"
     ).bind(agent.id).first().catch(() => null);
@@ -2158,6 +2146,18 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
         role: "system",
         content: "Health warning: " + healthWarning.message + " Current health factor: " + formatUnits(healthWarning.healthFactor, 18) + ".",
       }).catch(() => {});
+    }
+
+    if (!ownerChatTask && !autonomyEnabled) {
+      runStatus = "idle";
+      reason = healthWarning.active ? "health_warning" : "autonomy_disabled";
+      return { agentId: agent.id, status: runStatus, reason };
+    }
+
+    if (!ownerChatTask && !instructions && tasks.length === 0 && !configuredRiskGuard.enabled) {
+      runStatus = "idle";
+      reason = healthWarning.active ? "health_warning" : "no_work";
+      return { agentId: agent.id, status: runStatus, reason };
     }
 
     if (!snapshot.active && !ownerChatTask) {
