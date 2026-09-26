@@ -212,7 +212,11 @@ Read-only questions must return plan:null. A transaction plan requires explicit 
 `;
 
 function buildPrompt({ question, context: verifiedContext }) {
-  return `${CENTRY_AGENT_SYSTEM_PROMPT}\n\n${EXECUTION_SCHEMA}\n\nVERIFIED CENTRY REFERENCE:\n${CENTRY_KNOWLEDGE_BASE}\n\nMARKETS:\n${JSON.stringify(MARKET_REFERENCE)}\n\nPOSITION:\n${JSON.stringify(verifiedContext, null, 2)}\n\nREQUEST:\n${question}`;
+  const hasVerifiedAccount = verifiedContext?.verified === true;
+  const positionSection = hasVerifiedAccount
+    ? JSON.stringify(verifiedContext, null, 2)
+    : 'NO VERIFIED USER POSITION IS AVAILABLE. The user has no connected wallet context for this request. Answer using Centry knowledge only. Do not mention, infer, or fabricate the user\'s balance, position, debt, health factor, borrow capacity, or other personal state.';
+  return `${CENTRY_AGENT_SYSTEM_PROMPT}\n\n${EXECUTION_SCHEMA}\n\nVERIFIED CENTRY REFERENCE:\n${CENTRY_KNOWLEDGE_BASE}\n\nMARKETS:\n${JSON.stringify(MARKET_REFERENCE)}\n\nUSER STATE:\n${positionSection}\n\nREQUEST:\n${question}`;
 }
 
 function parseModelJson(text) {
