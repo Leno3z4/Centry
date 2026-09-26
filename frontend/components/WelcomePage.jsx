@@ -127,7 +127,7 @@ export default function WelcomePage() {
                 <Link href="/" className="landing-brand">Centry</Link>
                 <div className="landing-nav-links">
                     <a href="#how-it-works">How it works</a>
-                    <a href="#governance">Governance</a>
+                    <Link href="/docs" className="landing-nav-docs">Docs</Link>
                     <Link href="/app" className="landing-nav-app">Open app</Link>
                 </div>
             </nav>
@@ -174,15 +174,6 @@ export default function WelcomePage() {
                 </div>
             </section>
 
-            <section id="governance" className="landing-governance-section">
-                <div className="landing-governance-copy">
-                    <h2>CENT becomes influence through time.</h2>
-                    <p>Lock CENT into veCENT, build voting power over time, and manage your position directly from the app.</p>
-                    <Link className="secondary-btn" href="/app">Open governance</Link>
-                </div>
-                <div className="landing-governance-rule" aria-hidden="true" />
-            </section>
-
             <section className="landing-cta">
                 <div>
                     <h2>Enter the live protocol.</h2>
@@ -194,6 +185,7 @@ export default function WelcomePage() {
             <footer className="landing-footer">
                 <strong>Centry</strong>
                 <span>Experimental software</span>
+                <Link href="/docs" className="landing-footer-docs">Docs</Link>
             </footer>
 
             <style jsx global>{`
@@ -262,6 +254,8 @@ export default function WelcomePage() {
 
                 .landing-nav-links a:hover { color: #fff; }
 
+                .landing-nav-docs { color: rgba(255,255,255,.78); }
+                .landing-nav-docs:hover { color: #fff; }
                 .landing-nav-app { padding: 8px 13px; border: 1px solid rgba(161, 128, 193, .32); border-radius: 999px; color: #ffffff !important; background: rgba(0,113,227,.08); }
                 .landing-nav-app:hover { border-color: rgba(190, 157, 222, .5); background: rgba(0,113,227,.12); }
 
@@ -361,13 +355,14 @@ export default function WelcomePage() {
 
                 .landing-footer { position: relative; z-index: 1; padding-top: 26px; border-top: 1px solid rgba(139, 113, 171, .14); display: flex; justify-content: space-between; gap: 15px; color: rgba(255,255,255,.60); font-size: 10px; }
                 .landing-footer strong { color: #ffffff; font-family: var(--display-font); font-size: 16px; font-weight: 400; }
+                .landing-footer-docs { color: rgba(255,255,255,.60); text-decoration: none; }
+                .landing-footer-docs:hover { color: #fff; }
 
                 @media (max-width: 900px) {
                     .landing-page { --landing-content: min(720px, calc(100vw - 36px)); padding: 0 18px 28px; }
                     .landing-nav { grid-template-columns: auto auto; gap: 16px; min-height: 68px; }
                     .landing-nav-links { grid-column: 1 / -1; grid-row: 2; width: 100%; justify-content: flex-start; gap: 18px; padding: 0 0 13px; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
                     .landing-nav-links::-webkit-scrollbar { display: none; }
-                    .landing-network { justify-self: end; }
                     .landing-hero { grid-template-columns: 1fr; min-height: auto; gap: 48px; padding: 68px 0 84px; }
                     .landing-hero-metrics { justify-self: start; width: 100%; max-width: 620px; }
                     .landing-governance-section { grid-template-columns: 1fr; gap: 26px; }
@@ -379,7 +374,6 @@ export default function WelcomePage() {
                 @media (max-width: 620px) {
                     .landing-page { --landing-content: calc(100vw - 28px); padding: 0 14px 22px; }
                     .landing-brand { font-size: 22px; }
-                    .landing-network { font-size: 8px; }
                     .landing-nav { min-height: 64px; }
                     .landing-nav-links { gap: 15px; font-size: 10px; }
                     .landing-hero { padding: 52px 0 66px; }
