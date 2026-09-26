@@ -150,6 +150,10 @@ export function defaultAgentConfig() {
       allowedAssets: AGENT_ASSET_OPTIONS.map(([value]) => value),
       maxAmountByAsset: { USDC: '', EURC: '', CIRBTC: '', CENT: '' },
     },
+    a2a: {
+      receiveEnabled: false,
+      allowedAgentIds: [],
+    },
   };
 }
 
@@ -248,6 +252,10 @@ export function normalizeConfigForHash(config) {
       allowedActions: [...(config.policy?.allowedActions || [])].sort(),
       allowedAssets: [...(config.policy?.allowedAssets || [])].sort(),
       maxAmountByAsset: { ...(config.policy?.maxAmountByAsset || {}) },
+    },
+    a2a: {
+      receiveEnabled: config.a2a?.receiveEnabled === true,
+      allowedAgentIds: [...(config.a2a?.allowedAgentIds || [])].map(String).sort(),
     },
   };
 }
