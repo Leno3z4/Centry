@@ -16,6 +16,12 @@ const docsSections = [
   ['risk', 'Risk & mainnet'],
 ];
 
+const docsGroups = [
+  ['Core protocol', [['overview', 'Overview'], ['lending', 'Lending'], ['governance', 'CENT & veCENT'], ['rewards', 'Revenue rewards']]],
+  ['Automation', [['self-repay', 'Self-repayment'], ['automation', 'Automation']]],
+  ['Reference', [['contracts', 'Contracts'], ['risk', 'Risk & mainnet']]],
+];
+
 const addressRows = [
   ['Lending Pool', CONTRACT_ADDRESSES.lendingPool],
   ['Interest Rate Model', CONTRACT_ADDRESSES.interestRateModel],
@@ -101,15 +107,16 @@ export default function Page() {
           <div className="docs-layout">
             <aside className="panel docs-sidebar" aria-label="Documentation sections">
               <div className="section-kicker">ON THIS PAGE</div>
-              <div className="docs-sidebar-links">
-                {docsSections.map(([id, label]) => (
-                  <a
-                    key={id}
-                    href={`#${id}`}
-                    onClick={() => setMobileDocsNavOpen(false)}
-                  >
-                    {label}
-                  </a>
+              <div className="docs-sidebar-groups">
+                {docsGroups.map(([groupLabel, items]) => (
+                  <details key={groupLabel} open>
+                    <summary>{groupLabel}</summary>
+                    <div className="docs-sidebar-links">
+                      {items.map(([id, label]) => (
+                        <a key={id} href={`#${id}`} onClick={() => setMobileDocsNavOpen(false)}>{label}</a>
+                      ))}
+                    </div>
+                  </details>
                 ))}
               </div>
             </aside>
@@ -349,7 +356,14 @@ export default function Page() {
       .docs-layout{grid-template-columns:minmax(0,1fr) 190px;gap:18px}
       .docs-sidebar{grid-column:2;grid-row:1;top:84px;background:#17191c!important;border-color:#343941!important}
       .docs-content{grid-column:1;grid-row:1;gap:16px}
-      .docs-sidebar-links{gap:6px}
+      .docs-sidebar-links{gap:5px;margin-top:8px}
+      .docs-sidebar-groups{display:grid;gap:9px;margin-top:12px}
+      .docs-sidebar-groups details{border:1px solid rgba(255,255,255,.06);border-radius:10px;background:#111317;overflow:hidden}
+      .docs-sidebar-groups summary{padding:9px 10px;color:#a0a4ad;font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;list-style:none}
+      .docs-sidebar-groups summary::-webkit-details-marker{display:none}
+      .docs-sidebar-groups summary:after{content:"+";float:right;color:#69717b}
+      .docs-sidebar-groups details[open] summary:after{content:"−"}
+
       .docs-sidebar-links a{border-color:#2c3036;background:#111317;color:rgba(255,255,255,.62);transition:background .15s ease,border-color .15s ease,color .15s ease}
       .docs-sidebar-links a:hover{background:#1e2227;border-color:#414852;color:#fff}
       .docs-content>.panel{padding:22px;border-color:#343941!important;background:#1e1e24!important;box-shadow:0 12px 30px rgba(0,0,0,.12)}
