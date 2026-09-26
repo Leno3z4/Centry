@@ -216,53 +216,11 @@ export default function MarketDirectory() {
                 </div>
                 <div className={styles.metric}>
                   <span>Total supplied</span>
-                  <strong>{marketReady ? '
-        })}
-      </section>
-
-      {visibleMarkets.length === 0 ? (
-        <div className={styles.emptyState}>
-          <strong>No markets match that search.</strong>
-          <button
-            type="button"
-            onClick={() => {
-              setQuery('');
-              setCategory('all');
-            }}
-          >
-            Clear filters
-          </button>
-        </div>
-      ) : null}
-    </div>
-  );
-}
- + formatUsd(tvl, true) : '—'}</strong>
+                  <strong>{marketReady ? '$' + formatUsd(tvl, true) : '—'}</strong>
                 </div>
                 <div className={styles.metric}>
                   <span>Total borrowed</span>
-                  <strong>{marketReady ? '
-        })}
-      </section>
-
-      {visibleMarkets.length === 0 ? (
-        <div className={styles.emptyState}>
-          <strong>No markets match that search.</strong>
-          <button
-            type="button"
-            onClick={() => {
-              setQuery('');
-              setCategory('all');
-            }}
-          >
-            Clear filters
-          </button>
-        </div>
-      ) : null}
-    </div>
-  );
-}
- + formatUsd(borrowed, true) : '—'}</strong>
+                  <strong>{marketReady ? '$' + formatUsd(borrowed, true) : '—'}</strong>
                 </div>
               </div>
 
