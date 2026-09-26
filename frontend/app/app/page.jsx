@@ -252,8 +252,17 @@ function OverviewContent() {
           <div className="overview-summary-top">
             <div className="overview-summary-main">
               <span>Total portfolio</span>
-              <strong>{isConnected ? '
-          <small className="overview-summary-note">Values reflect the latest available onchain position.</small>
+              <strong>{isConnected ? '$' + formatNumber(lending.accountPosition?.totalCollateralValueUsd, 2) : '—'}</strong>
+              <small>Current collateral value</small>
+            </div>
+            <div className="hero-actions overview-hero-actions">
+              <a className="primary-btn" href="/app/markets">Deposit</a>
+              <a className="secondary-btn" href="/app/markets">Borrow</a>
+              <a className="secondary-btn" href="/app/swap">Swap</a>
+            </div>
+          </div>
+
+          <div className="overview-summary-grid">
             <div>
               <span>Supplied</span>
               <strong>{isConnected ? formatNumber(lending.supplyBalance, 2) + ' ' + (firstMarket?.symbol || '') : '—'}</strong>
