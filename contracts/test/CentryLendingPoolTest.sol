@@ -85,6 +85,8 @@ contract CentryLendingPoolTest {
             1 days
         );
 
+        agent.setApprovalSpender(operator, address(debt), address(pool), true);
+
         bytes memory approve100 = abi.encodeWithSelector(
             approveSelector,
             address(pool),
