@@ -7,6 +7,6 @@
     "check": "node --check src/index.js"
   },
   "dependencies": {
-    "viem": "^2.33.0"
+    "viem": "2.33.0"
   }
 }
