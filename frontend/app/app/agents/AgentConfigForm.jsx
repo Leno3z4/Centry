@@ -42,6 +42,12 @@ function cleanIncomingConfig(agent) {
         CENT: String(policy.maxAmountByAsset?.CENT || ''),
       },
     },
+    a2a: {
+      receiveEnabled: agent?.config?.a2a?.receiveEnabled === true,
+      allowedAgentIds: Array.isArray(agent?.config?.a2a?.allowedAgentIds)
+        ? agent.config.a2a.allowedAgentIds.map((value) => String(value)).filter(Boolean)
+        : [],
+    },
   };
 }
 
@@ -125,12 +131,31 @@ export function AgentConfigForm({ mode = 'create', agent = null, onSubmit, submi
     }));
   }
 
+  function updateA2A(path, value) {
+    setForm((current) => ({
+      ...current,
+      a2a: { ...current.a2a, [path]: value },
+    }));
+  }
+
   async function submit(event) {
     event.preventDefault();
     setError('');
 
     if (!form.policy.allowedActions.length) return setError('Select at least one allowed action.');
     if (!form.policy.allowedAssets.length) return setError('Select at least one allowed asset.');
+    const financialActions = ['supply', 'withdraw', 'borrow', 'repay', 'transfer'];
+    const requiredCapAssets = new Set(
+      form.policy.allowedActions.some((action) => financialActions.includes(action))
+        ? form.policy.allowedAssets
+        : [],
+    );
+    if (form.policy.allowedActions.includes('swap')) requiredCapAssets.add('CENT');
+    for (const asset of requiredCapAssets) {
+      if (!String(form.policy.maxAmountByAsset[asset] || '').trim()) {
+        return setError('Set a maximum amount for ' + asset + ' before enabling that financial action.');
+      }
+    }
     if (!form.name.trim() && mode === 'create') return setError('Give your agent a name.');
     const providerParts = [form.provider.trim(), form.model.trim(), form.providerKey.trim()].filter(Boolean).length;
     if (providerParts > 0 && providerParts < 3) return setError('To configure an AI provider now, enter the provider, model, and API key together. Otherwise leave all three blank.');
@@ -170,6 +195,10 @@ export function AgentConfigForm({ mode = 'create', agent = null, onSubmit, submi
           maxAmountByAsset: Object.fromEntries(
             Object.entries(form.policy.maxAmountByAsset).filter(([, value]) => String(value || '').trim()),
           ),
+        },
+        a2a: {
+          receiveEnabled: form.a2a?.receiveEnabled === true,
+          allowedAgentIds: Array.from(new Set(form.a2a?.allowedAgentIds || [])).slice(0, 100),
         },
       });
     } catch (e) {
@@ -316,6 +345,35 @@ export function AgentConfigForm({ mode = 'create', agent = null, onSubmit, submi
             </div>
           ))}
         </div>
+      </section>
+
+      <section className={styles.configPanel}>
+        <div className={styles.sectionHead}>
+          <div>
+            <h2>Agent-to-agent</h2>
+            <p>Keep inbound agent tasks off unless you explicitly want other Centry agents to contact this agent.</p>
+          </div>
+        </div>
+        <label className={styles.scope}>
+          <input
+            type="checkbox"
+            checked={form.a2a?.receiveEnabled === true}
+            onChange={(e) => updateA2A('receiveEnabled', e.target.checked)}
+          />
+          <span>
+            <strong>Allow incoming agent tasks</strong>
+            <small>When enabled, same-factory agents may send tasks unless an allowlist is configured below.</small>
+          </span>
+        </label>
+        <label className={styles.label}>Trusted agent IDs <span className={styles.hint}>optional</span></label>
+        <textarea
+          className={styles.input}
+          rows={3}
+          value={(form.a2a?.allowedAgentIds || []).join('\n')}
+          onChange={(e) => updateA2A('allowedAgentIds', e.target.value.split(/[\n,\s]+/).map((value) => value.trim()).filter(Boolean))}
+          placeholder="One agent ID per line. Leave empty to allow any opted-in same-factory agent."
+          disabled={form.a2a?.receiveEnabled !== true}
+        />
       </section>
 
       {error ? <div className={styles.error}>{error}</div> : null}
