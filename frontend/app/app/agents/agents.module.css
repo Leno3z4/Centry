@@ -1951,3 +1951,261 @@
     flex: 0 0 auto;
   }
 }
+
+
+/* Agent analytics refinement */
+.headerCopy { min-width: 0; }
+.dashboardHeader {
+  padding: 4px 0 2px;
+}
+.headerActions {
+  margin-left: auto;
+  justify-content: flex-end;
+  padding: 6px;
+  border: 1px solid #202327;
+  border-radius: 14px;
+  background: #0b0c0e;
+}
+.toggleButton {
+  border-color: rgba(10,132,255,.55);
+  background: rgba(10,132,255,.12);
+  color: #eaf4ff;
+}
+.toggleButton:hover:not(:disabled) {
+  border-color: #0a84ff;
+  background: rgba(10,132,255,.2);
+}
+.runtimeAlert {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 15px 17px;
+  border: 1px solid rgba(255,176,0,.32);
+  border-radius: 14px;
+  background: rgba(255,176,0,.07);
+}
+.runtimeAlertInfo { border-color: rgba(10,132,255,.28); background: rgba(10,132,255,.06); }
+.runtimeAlertDanger { border-color: rgba(255,69,58,.34); background: rgba(255,69,58,.07); }
+.runtimeAlertIcon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255,176,0,.38);
+  border-radius: 50%;
+  color: #ffb000;
+  font-weight: 800;
+}
+.runtimeAlertInfo .runtimeAlertIcon { border-color: rgba(10,132,255,.35); color: #0a84ff; }
+.runtimeAlertDanger .runtimeAlertIcon { border-color: rgba(255,69,58,.4); color: #ff453a; }
+.runtimeAlertLabel,
+.sectionKicker {
+  display: block;
+  color: rgba(255,255,255,.5);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.runtimeAlert strong {
+  display: block;
+  margin-top: 4px;
+  color: #fff;
+  font-size: 14px;
+}
+.runtimeAlert p {
+  margin: 4px 0 0;
+  color: rgba(255,255,255,.72);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.heartbeatPanel {
+  display: grid;
+  gap: 18px;
+  padding: 21px;
+  border: 1px solid #24272b;
+  border-radius: 18px;
+  background: #0c0d0f;
+}
+.heartbeatHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+.heartbeatHead h2 {
+  margin: 6px 0 0;
+  color: #fff;
+  font-size: 22px;
+  letter-spacing: -.5px;
+}
+.heartbeatHead p {
+  margin: 5px 0 0;
+  color: rgba(255,255,255,.62);
+  font-size: 12px;
+}
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  padding: 6px 9px;
+  border: 1px solid #30343a;
+  border-radius: 999px;
+  background: #141619;
+  color: #fff;
+  font-size: 11px;
+  line-height: 1;
+}
+.statusBadge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #7d838b;
+}
+.statusRunning {
+  border-color: rgba(52,199,89,.3);
+  background: rgba(52,199,89,.08);
+  color: #d9ffe3;
+}
+.statusRunning::before { background: #34c759; box-shadow: 0 0 8px rgba(52,199,89,.5); }
+.statusReady {
+  border-color: rgba(10,132,255,.3);
+  background: rgba(10,132,255,.08);
+  color: #dcebff;
+}
+.statusReady::before { background: #0a84ff; box-shadow: 0 0 8px rgba(10,132,255,.45); }
+.statusWarning {
+  border-color: rgba(255,176,0,.3);
+  background: rgba(255,176,0,.08);
+  color: #ffe8ae;
+}
+.statusWarning::before { background: #ffb000; }
+.statusDanger {
+  border-color: rgba(255,69,58,.3);
+  background: rgba(255,69,58,.08);
+  color: #ffd8d5;
+}
+.statusDanger::before { background: #ff453a; }
+.statusMuted { color: rgba(255,255,255,.7); }
+.heartbeatGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0,1fr));
+  gap: 10px;
+}
+.heartbeatStat {
+  min-width: 0;
+  min-height: 92px;
+  padding: 14px;
+  border: 1px solid #202327;
+  border-radius: 13px;
+  background: #101215;
+}
+.heartbeatStat > span:first-child {
+  display: block;
+  color: rgba(255,255,255,.52);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.heartbeatStat > strong:not(.statusBadge) {
+  display: block;
+  margin-top: 10px;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.heartbeatStat small {
+  display: block;
+  margin-top: 6px;
+  color: rgba(255,255,255,.52);
+  font-size: 10px;
+  line-height: 1.4;
+}
+.portfolioCard {
+  background: #0d0f12;
+}
+.portfolioHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.iconButton {
+  width: 42px;
+  min-height: 42px;
+  border: 1px solid #2a2d32;
+  border-radius: 11px;
+  background: #111317;
+  color: rgba(255,255,255,.8);
+  cursor: pointer;
+}
+.portfolioTotal {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+}
+.portfolioTotal span {
+  color: rgba(255,255,255,.5);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.portfolioTotal strong {
+  color: #fff;
+  font-size: 28px;
+  letter-spacing: -.8px;
+}
+.portfolioSegmentBar {
+  display: flex;
+  gap: 2px;
+  width: 100%;
+  height: 10px;
+  margin-top: 2px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #191c20;
+}
+.portfolioSegmentBar > span {
+  min-width: 2px;
+  height: 100%;
+  transition: width .25s ease;
+}
+.portfolioSegmentEmpty { width: 100%; background: #191c20 !important; }
+.portfolioLegend {
+  display: grid;
+  gap: 2px;
+}
+.portfolioLegendRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid #202327;
+}
+.portfolioLegendRow:last-child { border-bottom: 0; }
+.portfolioMeta { color: rgba(255,255,255,.52); }
+.quickLinks { display: none; }
+
+@media (max-width: 900px) {
+  .headerActions { margin-left: 0; width: 100%; justify-content: stretch; }
+  .headerActions > * { flex: 1 1 0; }
+  .heartbeatGrid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .portfolioHeaderActions { flex-wrap: wrap; }
+}
+@media (max-width: 650px) {
+  .heartbeatHead { flex-direction: column; }
+  .heartbeatGrid { grid-template-columns: 1fr; }
+  .portfolioHeaderActions { width: 100%; }
+  .portfolioHeaderActions > * { flex: 1 1 0; }
+}
+@media (max-width: 430px) {
+  .headerActions { display: grid; grid-template-columns: 1fr 1fr; }
+  .headerActions > * { width: 100%; }
+  .portfolioHeaderActions { display: grid; grid-template-columns: 1fr 1fr; }
+  .portfolioHeaderActions .iconButton { width: 100%; }
+}
