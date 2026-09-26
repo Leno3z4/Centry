@@ -230,6 +230,7 @@ function PortfolioContent() {
       @media(max-width:900px){.portfolio-hero{grid-template-columns:1fr}.portfolio-primary-metric{max-width:none}.portfolio-quick-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.risk-overview-grid{grid-template-columns:1fr}}
       @media(max-width:640px){.portfolio-quick-metrics{grid-template-columns:1fr}.health-hero-row{grid-template-columns:1fr}.health-hero-meta{grid-template-columns:1fr 1fr}.health-foot-row{flex-direction:column}.portfolio-primary-metric strong{font-size:30px}}
       @media(prefers-reduced-motion:reduce){.health-status-bar>div{transition:none}}\n
+    `}</style>
     </div>
   );
 }
