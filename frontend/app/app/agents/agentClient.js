@@ -76,6 +76,9 @@ export const ACCOUNT_ABI = [
   { type: 'function', name: 'transferToAgent', stateMutability: 'nonpayable', inputs: [{ name: 'token', type: 'address' }, { name: 'recipient', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [] },
   { type: 'function', name: 'setPermission', stateMutability: 'nonpayable', inputs: [{ name: 'operator', type: 'address' }, { name: 'target', type: 'address' }, { name: 'selector', type: 'bytes4' }, { name: 'allowed', type: 'bool' }, { name: 'expiresAt', type: 'uint64' }, { name: 'maxNativeValue', type: 'uint128' }], outputs: [] },
   { type: 'function', name: 'permissions', stateMutability: 'view', inputs: [{ name: 'operator', type: 'address' }, { name: 'target', type: 'address' }, { name: 'selector', type: 'bytes4' }], outputs: [{ name: 'allowed', type: 'bool' }, { name: 'expiresAt', type: 'uint64' }, { name: 'maxNativeValue', type: 'uint128' }] },
+  { type: 'function', name: 'financialLimitVersion', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'setFinancialLimit', stateMutability: 'nonpayable', inputs: [{ name: 'operator', type: 'address' }, { name: 'target', type: 'address' }, { name: 'selector', type: 'bytes4' }, { name: 'asset', type: 'address' }, { name: 'maxAmountPerCall', type: 'uint128' }, { name: 'maxAmountPerWindow', type: 'uint128' }, { name: 'windowDuration', type: 'uint64' }], outputs: [] },
+  { type: 'function', name: 'financialLimits', stateMutability: 'view', inputs: [{ name: 'operator', type: 'address' }, { name: 'target', type: 'address' }, { name: 'selector', type: 'bytes4' }, { name: 'asset', type: 'address' }], outputs: [{ name: 'maxAmountPerCall', type: 'uint128' }, { name: 'maxAmountPerWindow', type: 'uint128' }, { name: 'spentInWindow', type: 'uint128' }, { name: 'windowStart', type: 'uint64' }, { name: 'windowDuration', type: 'uint64' }] },
 ];
 
 export const providerOptions = [
@@ -83,6 +86,9 @@ export const providerOptions = [
   ['openai', 'OpenAI'],
   ['anthropic', 'Anthropic'],
 ];
+
+export const RUNNER_PERMISSION_TTL_SECONDS = 7 * 24 * 60 * 60;
+export const RUNNER_FINANCIAL_WINDOW_SECONDS = 24 * 60 * 60;
 
 export const AGENT_ACTION_OPTIONS = [
   ['supply', 'Supply', 'Supply assets into Centry lending'],
