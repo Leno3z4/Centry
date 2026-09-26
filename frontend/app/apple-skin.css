@@ -1023,3 +1023,26 @@ textarea,
     font-size: 11px !important;
   }
 }
+
+/* Global form-control cleanup: no decorative borders or focus rings on text inputs. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+select,
+textarea {
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
+select:focus,
+textarea:focus {
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.amount-input-wrap,
+.amount-input-wrap:focus-within {
+  border: 0 !important;
+  box-shadow: none !important;
+}
