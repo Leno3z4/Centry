@@ -2114,17 +2114,31 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
         : emptyAgentSnapshot(account, runnerAddress);
 
     riskDecision = evaluateRiskGuard(snapshot, autonomy, agentPolicy(autonomy));
+    const healthWarning = evaluateHealthWarning(snapshot);
+    const previousHealthWarning = priorStrategyState?.healthWarning || {};
+    const warningStateChanged = Boolean(healthWarning.active) &&
+      String(previousHealthWarning.level || "") !== healthWarning.level;
 
     await writeAgentRuntime(db, agent.id, {
       lastEvaluationAt: new Date().toISOString(),
       accountActive: snapshot.active,
       operatorAuthorized: snapshot.operatorAuthorized,
+      lastReason: healthWarning.active ? "health_warning" : undefined,
     }).catch(() => {});
+
     await mergeStrategyState(db, agent.id, {
       autonomyEnabled,
       instructionsConfigured: Boolean(instructions),
       pendingTaskCount: tasks.length,
       peerStudyCount: peerStudies.length,
+      healthWarning: {
+        level: healthWarning.level,
+        active: healthWarning.active,
+        healthFactor: healthWarning.healthFactor == null ? null : healthWarning.healthFactor.toString(),
+        message: healthWarning.message,
+        checkedAt: new Date().toISOString(),
+        ...(warningStateChanged ? { lastNotifiedAt: new Date().toISOString() } : {}),
+      },
       riskGuard: {
         enabled: riskDecision.enabled,
         state: riskDecision.state,
@@ -2137,6 +2151,15 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
         stopBorrowAtHealthFactor: riskDecision.stopBorrowAtHealthFactor.toString(),
       },
     }).catch(() => {});
+
+    if (warningStateChanged) {
+      await addAgentChatMessage(db, {
+        id: crypto.randomUUID(),
+        agentId: agent.id,
+        role: "system",
+        content: "Health warning: " + healthWarning.message + " Current health factor: " + formatUnits(healthWarning.healthFactor, 18) + ".",
+      }).catch(() => {});
+    }
 
     if (!snapshot.active && !ownerChatTask) {
       runStatus = "skipped";
@@ -2151,7 +2174,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
     }
 
     if (!ownerChatTask) {
-      peerStudies = await buildPeerStudies(publicClient, agent, context, env).catch((error) => {
+      peerStudies = await buildPeerStudies(publicClient, agent, {}, env).catch((error) => {
         console.warn("centry_agent_peer_study_failed", {
           agentId: agent.id,
           error: error instanceof Error ? error.message : String(error),
