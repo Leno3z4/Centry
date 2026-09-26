@@ -86,7 +86,7 @@ export default function LandingHome() {
 
       <nav className="landing-home-nav">
         <Link href="/" className="landing-home-brand" aria-label="Centry home">CENTRY</Link>
-        <Link href="/app" className="landing-home-open">Open app</Link>
+        <Link href="/app" className="landing-home-open">open Centry</Link>
       </nav>
 
       <section className="landing-home-hero">
@@ -95,7 +95,7 @@ export default function LandingHome() {
           <p className="landing-home-hero-text">
             Centry gives you one place to manage USDC lending and execution on Arc. Supply or borrow USDC, repay when you need to, withdraw available liquidity, or use the configured swap route. Your smart account stays under your control.
           </p>
-          <Link href="/app" className="landing-home-primary">Open app</Link>
+          <Link href="/app" className="landing-home-primary">open Centry</Link>
         </div>
 
         <div className="landing-home-hero-visual" aria-hidden="true">
@@ -166,7 +166,7 @@ export default function LandingHome() {
       <section className="landing-home-final" data-reveal>
         <h2>Open Centry.</h2>
         <p>Connect a wallet, choose an account, and start working with your positions on Arc.</p>
-        <Link href="/app" className="landing-home-primary">Open app</Link>
+        <Link href="/app" className="landing-home-primary">open Centry</Link>
       </section>
 
     </main>
