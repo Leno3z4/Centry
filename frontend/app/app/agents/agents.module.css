@@ -3399,10 +3399,6 @@
   line-height: 1.45;
 }
 
-.chatPage > .chatComposerLarge {
-  margin-right: calc(270px + 14px);
-}
-
 @media (max-width: 980px) {
   .chatPage {
     grid-template-columns: 1fr;
