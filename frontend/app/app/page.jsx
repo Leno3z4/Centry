@@ -302,7 +302,7 @@ function OverviewContent() {
         <div className="overview-board-head">
           <div>
             <h2 id="overview-widgets-title">Overview</h2>
-            <p>Drag cards to arrange your workspace.</p>
+            <p className="overview-board-hint"><span className="overview-desktop-hint">Drag cards to arrange your workspace.</span><span className="overview-phone-hint">Cards stack for easy scrolling on phones.</span></p>
           </div>
         </div>
 
@@ -326,6 +326,7 @@ function OverviewContent() {
         .overview-board-head{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:14px;padding:0 2px}
         .overview-board-head h2{margin:0;color:#fff;font-size:18px;font-weight:600;letter-spacing:-.02em}
         .overview-board-head p{margin:5px 0 0;color:rgba(255,255,255,.5);font-size:13px}
+        .overview-phone-hint{display:none}
 
         .overview-widget{height:100%;min-height:0;padding:20px;background:#111;border-radius:22px;color:#fff}
         .overview-widget-head{display:flex;align-items:center;justify-content:space-between;gap:14px}
@@ -356,6 +357,8 @@ function OverviewContent() {
         .overview-widget-button{margin-top:auto !important}
 
         @media (max-width:640px){
+          .overview-desktop-hint{display:none}
+          .overview-phone-hint{display:inline}
           .overview-widget{padding:17px;border-radius:18px}
           .overview-widget-value{font-size:28px}
           .overview-market-row{grid-template-columns:minmax(0,1fr) auto;gap:11px}
