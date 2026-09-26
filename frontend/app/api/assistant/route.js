@@ -11,14 +11,8 @@ const ACTIONS = Object.freeze({
   withdraw: 'lending.withdraw',
   borrow: 'lending.borrow',
   repay: 'lending.repay',
-  lock: 'governance.createLock',
-  increaseLock: 'governance.increaseLock',
-  extendLock: 'governance.extendLock',
-  withdrawLock: 'governance.withdrawLock',
-  reward: 'rewards.claim',
   swap: 'swap',
   bridge: 'bridge',
-  gateway: 'gateway.fund',
 });
 
 const MARKET_REFERENCE = SWAP_MARKETS
@@ -123,6 +117,39 @@ function parseModelJson(text) {
   }
 }
 
+function visibleAmount(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function applyContextSafety(plan, context) {
+  if (!plan) return null;
+  const currentMarket = marketBySymbol(context?.market, context);
+  const walletBalance = visibleAmount(context?.walletBalance);
+  const supplied = visibleAmount(context?.supplied);
+  const borrowed = visibleAmount(context?.borrowed);
+
+  for (const action of plan.actions) {
+    if (action.type === ACTIONS.supply && currentMarket && String(action.asset).toLowerCase() === String(currentMarket.address).toLowerCase() && walletBalance != null) {
+      if (Number(action.amount) > walletBalance) return null;
+    }
+    if (action.type === ACTIONS.withdraw && currentMarket && String(action.asset).toLowerCase() === String(currentMarket.address).toLowerCase() && supplied != null) {
+      if (Number(action.amount) > supplied) return null;
+    }
+    if (action.type === ACTIONS.repay && currentMarket && String(action.asset).toLowerCase() === String(currentMarket.address).toLowerCase() && borrowed != null) {
+      if (Number(action.amount) > borrowed) return null;
+    }
+    if (action.type === ACTIONS.swap && currentMarket && String(action.inputToken).toLowerCase() === String(currentMarket.address).toLowerCase() && walletBalance != null) {
+      if (Number(action.amount) > walletBalance) return null;
+    }
+    if (action.type === ACTIONS.bridge && String(action.fromChain).toLowerCase() === 'arc' && walletBalance != null) {
+      if (Number(action.amount) > walletBalance) return null;
+    }
+  }
+
+  return plan;
+}
+
 function normalizePlan(plan) {
   if (!plan || typeof plan !== 'object' || !Array.isArray(plan.actions) || !plan.actions.length) return null;
 
@@ -187,11 +214,15 @@ export async function POST(request) {
 
     const explicit = parseExplicitExecution(question, context);
     if (explicit) {
+      const safePlan = explicit.plan ? applyContextSafety(normalizePlan(explicit.plan), context) : null;
       return withRateLimitHeaders(NextResponse.json({
         success: true,
-        ...explicit,
-        plan: explicit.plan ? { ...explicit.plan, autoExecute: false } : null,
+        answer: explicit.answer,
+        plan: safePlan,
         provider: 'deterministic',
+        ...(explicit.plan && !safePlan ? {
+          warning: 'I did not prepare that transaction because it exceeds the current visible position or balance.',
+        } : {}),
       }), limit);
     }
 
@@ -204,7 +235,7 @@ export async function POST(request) {
     const rawModelText = data?.candidates?.[0]?.content?.parts?.map((part) => part?.text || '').join('');
     const parsed = parseModelJson(rawModelText);
     if (!parsed) return withRateLimitHeaders(NextResponse.json({ success: true, answer: fallbackPositionAnswer(context, question), provider: model }), limit);
-    const safePlan = normalizePlan(parsed.plan);
+    const safePlan = applyContextSafety(normalizePlan(parsed.plan), context);
     return withRateLimitHeaders(NextResponse.json({
       success: true,
       answer: parsed.answer || fallbackPositionAnswer(context, question),
