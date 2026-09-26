@@ -162,7 +162,7 @@ function ConfigureContent() {
       CIRBTC: CONTRACT_ADDRESSES.CIRBTC,
       CENT: CONTRACT_ADDRESSES.centryToken,
     };
-    const tokenDecimals = { USDC: 18, EURC: 6, CIRBTC: 8, CENT: 18 };
+    const tokenDecimals = { USDC: 6, EURC: 6, CIRBTC: 8, CENT: 18 };
     const financialActions = new Set(['supply', 'withdraw', 'borrow', 'repay', 'transfer']);
     const requiresFinancialLimits =
       allowedActions.some((action) => financialActions.has(action)) || allowedActions.includes('swap');
@@ -261,9 +261,18 @@ function ConfigureContent() {
       }
 
       if (allowedActions.includes('swap')) {
-        addPermission(CONTRACT_ADDRESSES.centryToken, 'approve(address,uint256)');
-        addLimit(CONTRACT_ADDRESSES.centryToken, 'approve(address,uint256)', CONTRACT_ADDRESSES.centryToken);
-        addApprovalSpender(CONTRACT_ADDRESSES.centryToken, CONTRACT_ADDRESSES.unitFlowRouter);
+        const swapSignature = 'exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))';
+        addPermission(CONTRACT_ADDRESSES.unitFlowRouter, swapSignature);
+        addLimit(CONTRACT_ADDRESSES.unitFlowRouter, swapSignature, CONTRACT_ADDRESSES.centryToken);
+        addLimit(CONTRACT_ADDRESSES.unitFlowRouter, swapSignature, CONTRACT_ADDRESSES.USDC);
+
+        for (const asset of ['CENT', 'USDC']) {
+          const token = tokenAddresses[asset];
+          if (!token) continue;
+          addPermission(token, 'approve(address,uint256)');
+          addLimit(token, 'approve(address,uint256)', token);
+          addApprovalSpender(token, CONTRACT_ADDRESSES.unitFlowRouter);
+        }
       }
 
       if (allowedActions.includes('transfer')) {
