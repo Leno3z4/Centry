@@ -554,6 +554,7 @@ export default function DraggableWidgetGrid({
   const boardRef = useRef<HTMLDivElement>(null)
   const hintId = useId()
   const [metrics, setMetrics] = useState({ unit: 0, columns: 0 })
+  const [isPhone, setIsPhone] = useState(false)
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [raisedId, setRaisedId] = useState<string | null>(null)
   const [landedId, setLandedId] = useState<string | null>(null)
@@ -607,6 +608,17 @@ export default function DraggableWidgetGrid({
   }, [items])
 
   useEffect(() => {
+    const phoneMedia = window.matchMedia('(max-width: 640px)')
+    const syncPhone = () => setIsPhone(phoneMedia.matches)
+
+    syncPhone()
+    phoneMedia.addEventListener?.('change', syncPhone)
+    return () => phoneMedia.removeEventListener?.('change', syncPhone)
+  }, [])
+
+  const canEdit = editable && !isPhone
+
+  useEffect(() => {
     const board = boardRef.current
     if (!board) return
 
@@ -614,10 +626,11 @@ export default function DraggableWidgetGrid({
       const width = board.getBoundingClientRect().width
       if (width < 1) return
 
-      const minColumns = Math.min(2, Math.max(1, maxColumns))
+      const minColumns = isPhone ? 1 : Math.min(2, Math.max(1, maxColumns))
+      const targetColumns = isPhone ? 1 : maxColumns
       const columns = Math.max(
         minColumns,
-        Math.min(maxColumns, Math.round(width / Math.max(1, cellSize))),
+        Math.min(targetColumns, Math.round(width / Math.max(1, cellSize))),
       )
       const unit = (width - gap * (columns - 1)) / columns
 
@@ -632,11 +645,11 @@ export default function DraggableWidgetGrid({
     const observer = new ResizeObserver(measure)
     observer.observe(board)
     return () => observer.disconnect()
-  }, [cellSize, gap, maxColumns])
+  }, [cellSize, gap, isPhone, maxColumns])
 
-  const columns =
-    metrics.columns ||
-    Math.max(1, Math.min(maxColumns, 4))
+  const columns = isPhone
+    ? 1
+    : metrics.columns || Math.max(1, Math.min(maxColumns, 4))
 
   const positions = useMemo(
     () => layout(orderedItems, columns),
@@ -857,8 +870,9 @@ export default function DraggableWidgetGrid({
       >
         {editable && (
           <p id={hintId} className="sr-only">
-            Drag to rearrange. On touch screens, press and hold first. With a
-            keyboard, hold Alt and use the arrow keys.
+            {isPhone
+              ? 'Cards are arranged automatically on phones.'
+              : 'Drag to rearrange. On touch screens, press and hold first. With a keyboard, hold Alt and use the arrow keys.'}
           </p>
         )}
 
@@ -884,7 +898,7 @@ export default function DraggableWidgetGrid({
                 item={item}
                 position={(orderPosition.get(item.id) ?? 0) + 1}
                 count={orderedItems.length}
-                editable={editable}
+                editable={canEdit}
                 col={position.col}
                 row={position.row}
                 w={position.w}
