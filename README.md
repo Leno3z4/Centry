@@ -1,4 +1,4 @@
-# Centry 
+# Centry
 
 Centry is a non-custodial lending and onchain-agent protocol built around user-owned smart accounts. The repository contains the protocol contracts, frontend, agent connection layer, keeper infrastructure, deployment documentation, and the external-agent skill.
 
