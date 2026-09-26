@@ -44,17 +44,17 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(100px, 1fr));
   min-width: min(430px, 42vw);
-  overflow: hidden;
-  border: 1px solid #24282d;
-  border-radius: 16px;
-  background: #111317;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 28px;
+  min-width: min(430px, 42vw);
 }
 
 .headerStats > div {
   display: grid;
   gap: 5px;
   padding: 13px 14px;
-  border-left: 1px solid #24282d;
+  border-left: 0;
 }
 
 .headerStats > div:first-child {
@@ -93,14 +93,14 @@
   align-items: center;
   gap: 8px;
   padding: 0 11px;
-  border: 1px solid #2a2e33;
-  border-radius: 11px;
+  border: 0;
+  border-radius: 14px;
   background: #15181c;
   color: #767c85;
 }
 
 .searchWrap:focus-within {
-  border-color: #4b5663;
+  border-color: transparent;
 }
 
 .searchWrap > span {
@@ -113,6 +113,7 @@
   min-width: 0;
   border: 0;
   outline: 0;
+  box-shadow: none;
   background: transparent;
   color: #f2f3f5;
   font: inherit;
@@ -145,8 +146,8 @@
   display: inline-flex;
   gap: 4px;
   padding: 4px;
-  border: 1px solid #2a2e33;
-  border-radius: 11px;
+  border: 0;
+  border-radius: 14px;
   background: #15181c;
 }
 
@@ -169,7 +170,7 @@
 }
 
 .categoryActive {
-  border-color: #353a40;
+  border-color: transparent;
   background: #23272d;
   color: #fff;
 }
@@ -179,9 +180,9 @@
   align-items: center;
   gap: 8px;
   min-height: 42px;
-  padding: 0 10px 0 12px;
-  border: 1px solid #2a2e33;
-  border-radius: 11px;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 14px;
   background: #15181c;
 }
 
@@ -205,33 +206,34 @@
 
 .marketGrid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: 1fr;
+  gap: 4px;
 }
 
 .marketCard {
   position: relative;
   display: flex;
   min-width: 0;
-  min-height: 330px;
+  min-height: 0;
   flex-direction: column;
-  padding: 18px;
-  border: 1px solid #292d33;
-  border-radius: 18px;
-  background: #121519;
-  box-shadow: 0 14px 38px rgba(0, 0, 0, .14);
-  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+  padding: 24px 6px;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  box-shadow: none;
+  text-decoration: none;
+  transition: background 160ms ease, transform 160ms ease;
 }
 
 .marketCard:hover {
-  transform: translateY(-2px);
-  border-color: #414952;
-  background: #161a1f;
-  box-shadow: 0 18px 44px rgba(0, 0, 0, .22);
+  transform: translateX(3px);
+  border-color: transparent;
+  background: rgba(255,255,255,.025);
+  box-shadow: none;
 }
 
 .marketCard:focus-within {
-  border-color: #5a6470;
+  border-color: transparent;
 }
 
 .cardTop {
@@ -328,29 +330,29 @@
 
 .metricGrid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1px;
-  overflow: hidden;
-  border: 1px solid #292d33;
-  border-radius: 13px;
-  background: #292d33;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 28px;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .metric,
 .metricFeatured {
   min-width: 0;
-  padding: 11px;
-  background: #171b20;
+  padding: 0;
+  background: transparent;
 }
 
 .metric:nth-child(odd),
 .metricFeatured:nth-child(odd) {
-  border-right: 1px solid #292d33;
+  border-right: 0;
 }
 
 .metric:nth-child(-n + 2),
 .metricFeatured:nth-child(-n + 2) {
-  border-bottom: 1px solid #292d33;
+  border-bottom: 0;
 }
 
 .metric span,
@@ -372,7 +374,7 @@
 }
 
 .metricFeatured {
-  background: #1a1f25;
+  background: transparent;
 }
 
 .metricFeatured strong {
@@ -384,7 +386,7 @@
 .utilization {
   display: grid;
   gap: 7px;
-  margin-top: 14px;
+  margin-top: 20px;
 }
 
 .utilizationHead {
@@ -407,7 +409,7 @@
 }
 
 .utilizationTrack {
-  height: 6px;
+  height: 5px;
   overflow: hidden;
   border-radius: 999px;
   background: #252a30;
@@ -427,28 +429,30 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  min-height: 42px;
-  margin-top: auto;
-  padding: 0 12px;
-  border: 1px solid #36404a;
-  border-radius: 11px;
-  background: #20262d;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 0;
+  margin-top: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: #f4f5f7;
   font-size: 11px;
   font-weight: 700;
   text-decoration: none;
-  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
 }
 
 .viewMarket span {
   color: #9fc1ee;
   font-size: 14px;
-  transition: transform 160ms ease;
 }
 
 .viewMarket:hover {
-  border-color: #52606e;
-  background: #2a323b;
+  border-color: transparent;
+  background: transparent;
 }
 
 .viewMarket:hover span {
@@ -502,7 +506,7 @@
   }
 
   .marketGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 }
 
@@ -551,7 +555,7 @@
 
   .marketCard {
     min-height: 0;
-    padding: 16px;
+    padding: 20px 4px;
   }
 }
 
