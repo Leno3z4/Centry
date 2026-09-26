@@ -264,96 +264,29 @@ function OverviewContent() {
         <div className="overview-hero-summary">
           <div className="overview-summary-main">
             <span>Total portfolio</span>
-            <strong>{isConnected ? '
-
-      <section
-        className="overview-widget-board"
-        aria-labelledby="overview-widgets-title"
-      >
-        <div className="overview-board-head">
-          <div>
-            <h2 id="overview-widgets-title">Overview</h2>
-            
-          </div>
-        </div>
-
-        <DraggableWidgetGrid
-          items={OVERVIEW_WIDGETS}
-          maxColumns={4}
-          cellSize={235}
-          gap={12}
-          radius={22}
-          renderItem={renderOverviewWidget}
-        />
-      </section>
-
-      <style jsx global>{`
-        .page-stack{position:relative;isolation:isolate}
-        .overview-aero-background{position:fixed;inset:0;z-index:0;opacity:.025;pointer-events:none;overflow:hidden}
-        .overview-aero-background > *{width:100%;height:100%}
-        .page-stack > :not(.overview-aero-background){position:relative;z-index:1}
-
-        .overview-widget-board{margin-top:4px}
-        .overview-board-head{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:14px;padding:0 2px}
-        .overview-board-head h2{margin:0;color:#fff;font-size:18px;font-weight:600;letter-spacing:-.02em}
-        .overview-board-head p{margin:5px 0 0;color:rgba(255,255,255,.5);font-size:13px}
-        .overview-phone-hint{display:none}
-
-        .overview-widget{height:100%;min-height:0;padding:20px;background:#111;border-radius:22px;color:#fff}
-        .overview-widget-head{display:flex;align-items:center;justify-content:space-between;gap:14px}
-        .overview-widget-head h3{margin:0;color:rgba(255,255,255,.82);font-size:14px;font-weight:600;letter-spacing:-.01em}
-        .overview-widget-head > span,.overview-widget-head > a{color:rgba(255,255,255,.48);font-size:12px;text-decoration:none}
-        .overview-widget-head > a:hover{color:#fff}
-        .overview-widget-body{display:flex;min-height:0;flex:1;flex-direction:column;margin-top:18px}
-        .overview-widget-value{font-size:32px;line-height:1.05;font-weight:650;letter-spacing:-1.3px;color:#fff}
-        .overview-widget-note{margin:auto 0 0;color:rgba(255,255,255,.5);font-size:12px;line-height:1.4}
-
-        .overview-market-widget .overview-widget-body{margin-top:14px}
-        .overview-market-list{display:flex;min-height:0;flex:1;flex-direction:column;gap:8px}
-        .overview-market-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.08);text-decoration:none}
-        .overview-market-row:last-child{border-bottom:0}
-        .overview-market-asset{display:flex;align-items:center;min-width:0;gap:10px}
-        .overview-market-icon{display:inline-flex;width:30px;height:30px;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.1);border-radius:9px;background:#181818;color:#fff;font-size:15px}
-        .overview-market-asset strong{display:block;color:#fff;font-size:13px;font-weight:600}
-        .overview-market-asset small{display:block;margin-top:3px;color:rgba(255,255,255,.42);font-size:11px}
-        .overview-market-status span{display:block;color:rgba(255,255,255,.38);font-size:10px}
-        .overview-market-status strong{display:block;margin-top:4px;color:rgba(255,255,255,.65);font-size:12px;font-weight:600}
-        .overview-market-status strong.status-live{color:#63d08a}
-        .overview-market-open{color:rgba(255,255,255,.68);font-size:12px;font-weight:600;white-space:nowrap}
-        .overview-market-row:hover .overview-market-open{color:#fff}
-
-        .overview-position-content{display:flex;min-height:0;flex:1;flex-direction:column}
-        .overview-position-content .health-meter{margin:0}
-        .overview-position-content .connect-prompt{display:flex;min-height:0;flex:1;align-items:center;color:rgba(255,255,255,.55)}
-        .overview-widget-button{margin-top:auto !important}
-
-        @media (max-width:640px){
-          .overview-desktop-hint{display:none}
-          .overview-phone-hint{display:inline}
-          .overview-widget{padding:17px;border-radius:18px}
-          .overview-widget-value{font-size:28px}
-          .overview-market-row{grid-template-columns:minmax(0,1fr) auto;gap:11px}
-          .overview-market-status{display:none}
-        }
-      `}</style>
-    </div>
-  );
-}
-
-export default function Page() {
-  return (
-    <Providers>
-      <AppShell>
-        <OverviewContent />
-      </AppShell>
-    </Providers>
-  );
-}
- + formatNumber(lending.accountPosition.totalCollateralValueUsd, 2) : '—'}</strong>
+            <strong>{isConnected ? '$' + formatNumber(lending.accountPosition?.totalCollateralValueUsd, 2) : '—'}</strong>
             <small>Collateral value across supported markets</small>
           </div>
           <div className="overview-summary-grid">
-            <div><span>Supplied</span><strong>{isConnected ? '
+            <div>
+              <span>Supplied</span>
+              <strong>{isConnected ? formatNumber(lending.supplyBalance, 2) + ' ' + (firstMarket?.symbol || '') : '—'}</strong>
+            </div>
+            <div>
+              <span>Borrowed</span>
+              <strong>{isConnected ? formatNumber(lending.borrowBalance, 2) + ' ' + (firstMarket?.symbol || '') : '—'}</strong>
+            </div>
+            <div>
+              <span>Net position</span>
+              <strong>{isConnected ? '$' + formatNumber(Number(lending.accountPosition?.totalCollateralValueUsd || 0) - Number(lending.accountPosition?.totalDebtValueUsd || 0), 2) : '—'}</strong>
+            </div>
+            <div>
+              <span>Health factor</span>
+              <strong className={'health-value-' + healthTone(lending.healthFactorPercent)}>{isConnected ? lending.healthFactor || '—' : '—'}</strong>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <section
         className="overview-widget-board"
@@ -362,7 +295,6 @@ export default function Page() {
         <div className="overview-board-head">
           <div>
             <h2 id="overview-widgets-title">Overview</h2>
-            <p className="overview-board-hint"><span className="overview-desktop-hint">Drag cards to arrange your workspace.</span><span className="overview-phone-hint">Cards stack for easy scrolling on phones.</span></p>
           </div>
         </div>
 
@@ -376,365 +308,70 @@ export default function Page() {
         />
       </section>
 
-      <style jsx global>{`
+      <style jsx global>{\`
         .page-stack{position:relative;isolation:isolate}
-        .overview-aero-background{position:fixed;inset:0;z-index:0;opacity:.025;pointer-events:none;overflow:hidden}
-        .overview-aero-background > *{width:100%;height:100%}
-        .page-stack > :not(.overview-aero-background){position:relative;z-index:1}
-
-        .overview-widget-board{margin-top:4px}
-        .overview-board-head{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:14px;padding:0 2px}
-        .overview-board-head h2{margin:0;color:#fff;font-size:18px;font-weight:600;letter-spacing:-.02em}
-        .overview-board-head p{margin:5px 0 0;color:rgba(255,255,255,.5);font-size:13px}
-        .overview-phone-hint{display:none}
-
-        .overview-widget{height:100%;min-height:0;padding:20px;background:#111;border-radius:22px;color:#fff}
-        .overview-widget-head{display:flex;align-items:center;justify-content:space-between;gap:14px}
-        .overview-widget-head h3{margin:0;color:rgba(255,255,255,.82);font-size:14px;font-weight:600;letter-spacing:-.01em}
-        .overview-widget-head > span,.overview-widget-head > a{color:rgba(255,255,255,.48);font-size:12px;text-decoration:none}
-        .overview-widget-head > a:hover{color:#fff}
-        .overview-widget-body{display:flex;min-height:0;flex:1;flex-direction:column;margin-top:18px}
-        .overview-widget-value{font-size:32px;line-height:1.05;font-weight:650;letter-spacing:-1.3px;color:#fff}
-        .overview-widget-note{margin:auto 0 0;color:rgba(255,255,255,.5);font-size:12px;line-height:1.4}
-
-        .overview-market-widget .overview-widget-body{margin-top:14px}
-        .overview-market-list{display:flex;min-height:0;flex:1;flex-direction:column;gap:8px}
-        .overview-market-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.08);text-decoration:none}
-        .overview-market-row:last-child{border-bottom:0}
-        .overview-market-asset{display:flex;align-items:center;min-width:0;gap:10px}
-        .overview-market-icon{display:inline-flex;width:30px;height:30px;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.1);border-radius:9px;background:#181818;color:#fff;font-size:15px}
-        .overview-market-asset strong{display:block;color:#fff;font-size:13px;font-weight:600}
-        .overview-market-asset small{display:block;margin-top:3px;color:rgba(255,255,255,.42);font-size:11px}
-        .overview-market-status span{display:block;color:rgba(255,255,255,.38);font-size:10px}
-        .overview-market-status strong{display:block;margin-top:4px;color:rgba(255,255,255,.65);font-size:12px;font-weight:600}
-        .overview-market-status strong.status-live{color:#63d08a}
-        .overview-market-open{color:rgba(255,255,255,.68);font-size:12px;font-weight:600;white-space:nowrap}
-        .overview-market-row:hover .overview-market-open{color:#fff}
-
-        .overview-position-content{display:flex;min-height:0;flex:1;flex-direction:column}
-        .overview-position-content .health-meter{margin:0}
-        .overview-position-content .connect-prompt{display:flex;min-height:0;flex:1;align-items:center;color:rgba(255,255,255,.55)}
-        .overview-widget-button{margin-top:auto !important}
-
-        @media (max-width:640px){
-          .overview-desktop-hint{display:none}
-          .overview-phone-hint{display:inline}
-          .overview-widget{padding:17px;border-radius:18px}
-          .overview-widget-value{font-size:28px}
-          .overview-market-row{grid-template-columns:minmax(0,1fr) auto;gap:11px}
-          .overview-market-status{display:none}
-        }
-      `}</style>
-    </div>
-  );
-}
-
-export default function Page() {
-  return (
-    <Providers>
-      <AppShell>
-        <OverviewContent />
-      </AppShell>
-    </Providers>
-  );
-}
- + formatNumber(lending.accountPosition.totalCollateralValueUsd, 2) : '—'}</strong></div>
-            <div><span>Borrowed</span><strong>{isConnected ? '
-
-      <section
-        className="overview-widget-board"
-        aria-labelledby="overview-widgets-title"
-      >
-        <div className="overview-board-head">
-          <div>
-            <h2 id="overview-widgets-title">Overview</h2>
-            <p className="overview-board-hint"><span className="overview-desktop-hint">Drag cards to arrange your workspace.</span><span className="overview-phone-hint">Cards stack for easy scrolling on phones.</span></p>
-          </div>
-        </div>
-
-        <DraggableWidgetGrid
-          items={OVERVIEW_WIDGETS}
-          maxColumns={4}
-          cellSize={235}
-          gap={12}
-          radius={22}
-          renderItem={renderOverviewWidget}
-        />
-      </section>
-
-      <style jsx global>{`
-        .page-stack{position:relative;isolation:isolate}
-        .overview-aero-background{position:fixed;inset:0;z-index:0;opacity:.025;pointer-events:none;overflow:hidden}
-        .overview-aero-background > *{width:100%;height:100%}
-        .page-stack > :not(.overview-aero-background){position:relative;z-index:1}
-
-        .overview-widget-board{margin-top:4px}
-        .overview-board-head{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:14px;padding:0 2px}
-        .overview-board-head h2{margin:0;color:#fff;font-size:18px;font-weight:600;letter-spacing:-.02em}
-        .overview-board-head p{margin:5px 0 0;color:rgba(255,255,255,.5);font-size:13px}
-        .overview-phone-hint{display:none}
-
-        .overview-widget{height:100%;min-height:0;padding:20px;background:#111;border-radius:22px;color:#fff}
-        .overview-widget-head{display:flex;align-items:center;justify-content:space-between;gap:14px}
-        .overview-widget-head h3{margin:0;color:rgba(255,255,255,.82);font-size:14px;font-weight:600;letter-spacing:-.01em}
-        .overview-widget-head > span,.overview-widget-head > a{color:rgba(255,255,255,.48);font-size:12px;text-decoration:none}
-        .overview-widget-head > a:hover{color:#fff}
-        .overview-widget-body{display:flex;min-height:0;flex:1;flex-direction:column;margin-top:18px}
-        .overview-widget-value{font-size:32px;line-height:1.05;font-weight:650;letter-spacing:-1.3px;color:#fff}
-        .overview-widget-note{margin:auto 0 0;color:rgba(255,255,255,.5);font-size:12px;line-height:1.4}
-
-        .overview-market-widget .overview-widget-body{margin-top:14px}
-        .overview-market-list{display:flex;min-height:0;flex:1;flex-direction:column;gap:8px}
-        .overview-market-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.08);text-decoration:none}
-        .overview-market-row:last-child{border-bottom:0}
-        .overview-market-asset{display:flex;align-items:center;min-width:0;gap:10px}
-        .overview-market-icon{display:inline-flex;width:30px;height:30px;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.1);border-radius:9px;background:#181818;color:#fff;font-size:15px}
-        .overview-market-asset strong{display:block;color:#fff;font-size:13px;font-weight:600}
-        .overview-market-asset small{display:block;margin-top:3px;color:rgba(255,255,255,.42);font-size:11px}
-        .overview-market-status span{display:block;color:rgba(255,255,255,.38);font-size:10px}
-        .overview-market-status strong{display:block;margin-top:4px;color:rgba(255,255,255,.65);font-size:12px;font-weight:600}
-        .overview-market-status strong.status-live{color:#63d08a}
-        .overview-market-open{color:rgba(255,255,255,.68);font-size:12px;font-weight:600;white-space:nowrap}
-        .overview-market-row:hover .overview-market-open{color:#fff}
-
-        .overview-position-content{display:flex;min-height:0;flex:1;flex-direction:column}
-        .overview-position-content .health-meter{margin:0}
-        .overview-position-content .connect-prompt{display:flex;min-height:0;flex:1;align-items:center;color:rgba(255,255,255,.55)}
-        .overview-widget-button{margin-top:auto !important}
-
-        @media (max-width:640px){
-          .overview-desktop-hint{display:none}
-          .overview-phone-hint{display:inline}
-          .overview-widget{padding:17px;border-radius:18px}
-          .overview-widget-value{font-size:28px}
-          .overview-market-row{grid-template-columns:minmax(0,1fr) auto;gap:11px}
-          .overview-market-status{display:none}
-        }
-      `}</style>
-    </div>
-  );
-}
-
-export default function Page() {
-  return (
-    <Providers>
-      <AppShell>
-        <OverviewContent />
-      </AppShell>
-    </Providers>
-  );
-}
- + formatNumber(lending.accountPosition.totalDebtValueUsd, 2) : '—'}</strong></div>
-            <div><span>Net position</span><strong>{isConnected ? '
-
-      <section
-        className="overview-widget-board"
-        aria-labelledby="overview-widgets-title"
-      >
-        <div className="overview-board-head">
-          <div>
-            <h2 id="overview-widgets-title">Overview</h2>
-            <p className="overview-board-hint"><span className="overview-desktop-hint">Drag cards to arrange your workspace.</span><span className="overview-phone-hint">Cards stack for easy scrolling on phones.</span></p>
-          </div>
-        </div>
-
-        <DraggableWidgetGrid
-          items={OVERVIEW_WIDGETS}
-          maxColumns={4}
-          cellSize={235}
-          gap={12}
-          radius={22}
-          renderItem={renderOverviewWidget}
-        />
-      </section>
-
-      <style jsx global>{`
-        .page-stack{position:relative;isolation:isolate}
-        .overview-aero-background{position:fixed;inset:0;z-index:0;opacity:.025;pointer-events:none;overflow:hidden}
-        .overview-aero-background > *{width:100%;height:100%}
-        .page-stack > :not(.overview-aero-background){position:relative;z-index:1}
-
-        .overview-widget-board{margin-top:4px}
-        .overview-board-head{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:14px;padding:0 2px}
-        .overview-board-head h2{margin:0;color:#fff;font-size:18px;font-weight:600;letter-spacing:-.02em}
-        .overview-board-head p{margin:5px 0 0;color:rgba(255,255,255,.5);font-size:13px}
-        .overview-phone-hint{display:none}
-
-        .overview-widget{height:100%;min-height:0;padding:20px;background:#111;border-radius:22px;color:#fff}
-        .overview-widget-head{display:flex;align-items:center;justify-content:space-between;gap:14px}
-        .overview-widget-head h3{margin:0;color:rgba(255,255,255,.82);font-size:14px;font-weight:600;letter-spacing:-.01em}
-        .overview-widget-head > span,.overview-widget-head > a{color:rgba(255,255,255,.48);font-size:12px;text-decoration:none}
-        .overview-widget-head > a:hover{color:#fff}
-        .overview-widget-body{display:flex;min-height:0;flex:1;flex-direction:column;margin-top:18px}
-        .overview-widget-value{font-size:32px;line-height:1.05;font-weight:650;letter-spacing:-1.3px;color:#fff}
-        .overview-widget-note{margin:auto 0 0;color:rgba(255,255,255,.5);font-size:12px;line-height:1.4}
-
-        .overview-market-widget .overview-widget-body{margin-top:14px}
-        .overview-market-list{display:flex;min-height:0;flex:1;flex-direction:column;gap:8px}
-        .overview-market-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.08);text-decoration:none}
-        .overview-market-row:last-child{border-bottom:0}
-        .overview-market-asset{display:flex;align-items:center;min-width:0;gap:10px}
-        .overview-market-icon{display:inline-flex;width:30px;height:30px;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.1);border-radius:9px;background:#181818;color:#fff;font-size:15px}
-        .overview-market-asset strong{display:block;color:#fff;font-size:13px;font-weight:600}
-        .overview-market-asset small{display:block;margin-top:3px;color:rgba(255,255,255,.42);font-size:11px}
-        .overview-market-status span{display:block;color:rgba(255,255,255,.38);font-size:10px}
-        .overview-market-status strong{display:block;margin-top:4px;color:rgba(255,255,255,.65);font-size:12px;font-weight:600}
-        .overview-market-status strong.status-live{color:#63d08a}
-        .overview-market-open{color:rgba(255,255,255,.68);font-size:12px;font-weight:600;white-space:nowrap}
-        .overview-market-row:hover .overview-market-open{color:#fff}
-
-        .overview-position-content{display:flex;min-height:0;flex:1;flex-direction:column}
-        .overview-position-content .health-meter{margin:0}
-        .overview-position-content .connect-prompt{display:flex;min-height:0;flex:1;align-items:center;color:rgba(255,255,255,.55)}
-        .overview-widget-button{margin-top:auto !important}
-
-        @media (max-width:640px){
-          .overview-desktop-hint{display:none}
-          .overview-phone-hint{display:inline}
-          .overview-widget{padding:17px;border-radius:18px}
-          .overview-widget-value{font-size:28px}
-          .overview-market-row{grid-template-columns:minmax(0,1fr) auto;gap:11px}
-          .overview-market-status{display:none}
-        }
-      `}</style>
-    </div>
-  );
-}
-
-export default function Page() {
-  return (
-    <Providers>
-      <AppShell>
-        <OverviewContent />
-      </AppShell>
-    </Providers>
-  );
-}
- + formatNumber(Math.max(lending.accountPosition.totalCollateralValueUsd - lending.accountPosition.totalDebtValueUsd, 0), 2) : '—'}</strong></div>
-            <div className="overview-summary-health"><span>Health factor</span><strong>{isConnected ? lending.healthFactor : '—'}</strong></div>
-          </div>
-        </div>
-      </section>
-
-      <section
-        className="overview-widget-board"
-        aria-labelledby="overview-widgets-title"
-      >
-        <div className="overview-board-head">
-          <div>
-            <h2 id="overview-widgets-title">Overview</h2>
-            <p className="overview-board-hint"><span className="overview-desktop-hint">Drag cards to arrange your workspace.</span><span className="overview-phone-hint">Cards stack for easy scrolling on phones.</span></p>
-          </div>
-        </div>
-
-        <DraggableWidgetGrid
-          items={OVERVIEW_WIDGETS}
-          maxColumns={4}
-          cellSize={235}
-          gap={12}
-          radius={22}
-          renderItem={renderOverviewWidget}
-        />
-      </section>
-
-      <style jsx global>{`
-        .page-stack{position:relative;isolation:isolate}
-        .overview-aero-background{position:fixed;inset:0;z-index:0;opacity:.025;pointer-events:none;overflow:hidden}
-        .overview-aero-background > *{width:100%;height:100%}
-        .page-stack > :not(.overview-aero-background){position:relative;z-index:1}
-
-        .overview-widget-board{margin-top:4px}
-        .overview-board-head{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:14px;padding:0 2px}
-        .overview-board-head h2{margin:0;color:#fff;font-size:18px;font-weight:600;letter-spacing:-.02em}
-        .overview-board-head p{margin:5px 0 0;color:rgba(255,255,255,.5);font-size:13px}
-        .overview-phone-hint{display:none}
-
-        .overview-widget{height:100%;min-height:0;padding:20px;background:#111;border-radius:22px;color:#fff}
-        .overview-widget-head{display:flex;align-items:center;justify-content:space-between;gap:14px}
-        .overview-widget-head h3{margin:0;color:rgba(255,255,255,.82);font-size:14px;font-weight:600;letter-spacing:-.01em}
-        .overview-widget-head > span,.overview-widget-head > a{color:rgba(255,255,255,.48);font-size:12px;text-decoration:none}
-        .overview-widget-head > a:hover{color:#fff}
-        .overview-widget-body{display:flex;min-height:0;flex:1;flex-direction:column;margin-top:18px}
-        .overview-widget-value{font-size:32px;line-height:1.05;font-weight:650;letter-spacing:-1.3px;color:#fff}
-        .overview-widget-note{margin:auto 0 0;color:rgba(255,255,255,.5);font-size:12px;line-height:1.4}
-
-        .overview-market-widget .overview-widget-body{margin-top:14px}
-        .overview-market-list{display:flex;min-height:0;flex:1;flex-direction:column;gap:8px}
-        .overview-market-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.08);text-decoration:none}
-        .overview-market-row:last-child{border-bottom:0}
-        .overview-market-asset{display:flex;align-items:center;min-width:0;gap:10px}
-        .overview-market-icon{display:inline-flex;width:30px;height:30px;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.1);border-radius:9px;background:#181818;color:#fff;font-size:15px}
-        .overview-market-asset strong{display:block;color:#fff;font-size:13px;font-weight:600}
-        .overview-market-asset small{display:block;margin-top:3px;color:rgba(255,255,255,.42);font-size:11px}
-        .overview-market-status span{display:block;color:rgba(255,255,255,.38);font-size:10px}
-        .overview-market-status strong{display:block;margin-top:4px;color:rgba(255,255,255,.65);font-size:12px;font-weight:600}
-        .overview-market-status strong.status-live{color:#63d08a}
-        .overview-market-open{color:rgba(255,255,255,.68);font-size:12px;font-weight:600;white-space:nowrap}
-        .overview-market-row:hover .overview-market-open{color:#fff}
-
-        .overview-position-content{display:flex;min-height:0;flex:1;flex-direction:column}
-        .overview-position-content .health-meter{margin:0}
-        .overview-position-content .connect-prompt{display:flex;min-height:0;flex:1;align-items:center;color:rgba(255,255,255,.55)}
-        .overview-widget-button{margin-top:auto !important}
-
-        @media (max-width:640px){
-          .overview-desktop-hint{display:none}
-          .overview-phone-hint{display:inline}
-          .overview-widget{padding:17px;border-radius:18px}
-          .overview-widget-value{font-size:28px}
-          .overview-market-row{grid-template-columns:minmax(0,1fr) auto;gap:11px}
-          .overview-market-status{display:none}
-        }
-
         .overview-aero-background{display:none!important}
-        .overview-hero{min-height:0!important;display:grid;grid-template-columns:minmax(0,1fr) minmax(360px,.86fr);gap:28px;align-items:stretch;padding:30px!important}
-        .overview-hero .hero-copy{max-width:620px}
-        .overview-hero-kicker{display:block;color:rgba(255,255,255,.45);font:10px var(--mono-font);letter-spacing:.08em}
-        .overview-hero h1{margin:12px 0 14px!important;font-size:clamp(42px,5vw,64px)!important;line-height:.95!important}
-        .overview-hero .hero-copy p{max-width:520px;margin:0 0 20px}
-        .overview-hero .hero-actions{gap:8px;flex-wrap:wrap}
-        .overview-hero .primary-btn,.overview-hero .secondary-btn{min-height:42px;padding:10px 17px}
-        .overview-hero-summary{display:grid;align-content:stretch;min-width:0;padding:18px;border:1px solid rgba(255,255,255,.1);border-radius:16px;background:#0d0f12}
-        .overview-summary-main{padding-bottom:17px;border-bottom:1px solid rgba(255,255,255,.08)}
-        .overview-summary-main span,.overview-summary-grid span{display:block;color:rgba(255,255,255,.5);font-size:10px;text-transform:uppercase;letter-spacing:.06em}
-        .overview-summary-main strong{display:block;margin-top:7px;color:#fff;font-size:36px;line-height:1;letter-spacing:-1.4px}
-        .overview-summary-main small{display:block;margin-top:7px;color:rgba(255,255,255,.62);font-size:11px;line-height:1.4}
-        .overview-summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px;padding-top:15px}
-        .overview-summary-grid strong{display:block;margin-top:5px;color:#fff;font-size:15px;line-height:1.25}
-        .overview-summary-health strong{color:#34c759}
-        .overview-widget{height:100%;min-height:0;padding:20px;background:#0f1114;border:1px solid rgba(255,255,255,.1);border-radius:18px;color:#fff;box-shadow:none}
-        .overview-widget-title{display:flex;align-items:center;min-width:0;gap:8px}
-        .overview-drag-handle{width:14px;color:rgba(255,255,255,.36);font-size:14px;line-height:1;letter-spacing:-3px;user-select:none}
+
+        .overview-hero{gap:32px}
+        .overview-hero-kicker{display:inline-block;margin-bottom:10px;color:rgba(255,255,255,.45);font-size:11px;letter-spacing:.14em;font-weight:700}
+        .overview-hero-summary{width:min(520px,100%);padding:22px;border:1px solid rgba(255,255,255,.1);border-radius:22px;background:rgba(17,17,17,.94);box-shadow:0 18px 55px rgba(0,0,0,.24)}
+        .overview-summary-main{padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,.08)}
+        .overview-summary-main>span,.overview-summary-grid span{display:block;color:rgba(255,255,255,.42);font-size:11px;letter-spacing:.04em}
+        .overview-summary-main strong{display:block;margin-top:7px;color:#fff;font-size:38px;line-height:1.05;font-weight:650;letter-spacing:-1.5px}
+        .overview-summary-main small{display:block;margin-top:7px;color:rgba(255,255,255,.43);font-size:11px}
+        .overview-summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 20px}
+        .overview-summary-grid>div{padding:14px 0 2px}
+        .overview-summary-grid strong{display:block;margin-top:5px;color:rgba(255,255,255,.86);font-size:14px;font-weight:600}
+        .overview-summary-grid .health-value-danger{color:#ff6b6b}
+        .overview-summary-grid .health-value-warning{color:#f2bb55}
+        .overview-summary-grid .health-value-safe{color:#7ed7a0}
+
+        .overview-widget-board{margin-top:4px}
+        .overview-board-head{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:14px;padding:0 2px}
+        .overview-board-head h2{margin:0;color:#fff;font-size:18px;font-weight:600;letter-spacing:-.02em}
+
+        .overview-widget{height:100%;min-height:0;padding:20px;background:#111;border-radius:22px;color:#fff}
         .overview-widget-head{display:flex;align-items:center;justify-content:space-between;gap:14px}
-        .overview-widget-head h3{margin:0;color:rgba(255,255,255,.88);font-size:14px;font-weight:600;letter-spacing:-.01em}
-        .overview-widget-head > span,.overview-widget-head > a{color:rgba(255,255,255,.58);font-size:12px;text-decoration:none}
+        .overview-widget-title{display:flex;align-items:center;gap:9px;min-width:0}
+        .overview-drag-handle{display:inline-flex;align-items:center;justify-content:center;width:14px;color:rgba(255,255,255,.28);font-size:13px;letter-spacing:-4px;cursor:grab;user-select:none}
+        .overview-widget-head h3{margin:0;color:rgba(255,255,255,.82);font-size:14px;font-weight:600;letter-spacing:-.01em}
+        .overview-widget-head > span,.overview-widget-head > a{color:rgba(255,255,255,.48);font-size:12px;text-decoration:none}
         .overview-widget-head > a:hover{color:#fff}
-        .overview-widget-body{display:flex;min-height:0;flex:1;flex-direction:column;margin-top:17px}
+        .overview-widget-body{display:flex;min-height:0;flex:1;flex-direction:column;margin-top:18px}
         .overview-widget-value{font-size:32px;line-height:1.05;font-weight:650;letter-spacing:-1.3px;color:#fff}
-        .overview-widget-note{margin:auto 0 0;color:rgba(255,255,255,.62);font-size:12px;line-height:1.4}
-        .health-meter{display:grid;gap:10px}
-        .health-meter-compact{gap:12px;margin-top:4px}
-        .health-meter-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
-        .health-meter-head span{color:rgba(255,255,255,.56);font-size:11px}
-        .health-meter-head strong{font-size:20px;line-height:1}
-        .health-track{height:9px;overflow:hidden;border-radius:999px;background:#1c2025}
-        .health-fill{height:100%;border-radius:inherit;transition:width .25s ease}
-        .health-fill-safe{background:#34c759}.health-fill-warning{background:#ffb000}.health-fill-danger{background:#ff453a}
-        .health-value-safe{color:#34c759}.health-value-warning{color:#ffb000}.health-value-danger{color:#ff453a}
-        .health-meter p{margin:0;color:rgba(255,255,255,.58);font-size:11px;line-height:1.45}
-        .overview-market-list{display:flex;min-height:0;flex:1;flex-direction:column;gap:0}
-        .overview-market-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.08);text-decoration:none}
+        .overview-widget-note{margin:auto 0 0;color:rgba(255,255,255,.5);font-size:12px;line-height:1.4}
+
+        .overview-market-widget .overview-widget-body{margin-top:14px}
+        .overview-market-list{display:flex;min-height:0;flex:1;flex-direction:column;gap:8px}
+        .overview-market-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:16px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.08);text-decoration:none}
         .overview-market-row:last-child{border-bottom:0}
         .overview-market-asset{display:flex;align-items:center;min-width:0;gap:10px}
-        .overview-market-icon{display:inline-flex;width:30px;height:30px;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.1);border-radius:9px;background:#181b20;color:#fff;font-size:15px}
+        .overview-market-icon{display:inline-flex;width:30px;height:30px;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.1);border-radius:9px;background:#181818;color:#fff;font-size:15px}
         .overview-market-asset strong{display:block;color:#fff;font-size:13px;font-weight:600}
-        .overview-market-asset small{display:block;margin-top:3px;color:rgba(255,255,255,.52);font-size:11px}
-        .overview-market-apys{display:flex;align-items:center;gap:14px;color:rgba(255,255,255,.66);font-size:11px;white-space:nowrap}
-        .overview-market-open{color:#0a84ff;font-size:12px;font-weight:650;white-space:nowrap}
+        .overview-market-asset small{display:block;margin-top:3px;color:rgba(255,255,255,.42);font-size:11px}
+        .overview-market-apys{display:flex;align-items:center;gap:10px;white-space:nowrap}
+        .overview-market-apys span{color:rgba(255,255,255,.52);font-size:11px}
+        .overview-market-apys span:first-child{color:rgba(255,255,255,.78)}
+        .overview-market-open{color:rgba(255,255,255,.68);font-size:12px;font-weight:600;white-space:nowrap}
         .overview-market-row:hover .overview-market-open{color:#fff}
-        @media (max-width:900px){.overview-hero{grid-template-columns:1fr;padding:24px!important}.overview-hero-summary{margin-top:2px}}
-        @media (max-width:640px){.overview-drag-handle{display:none}.overview-widget{padding:17px;border-radius:16px}.overview-widget-value{font-size:28px}.overview-market-row{grid-template-columns:minmax(0,1fr) auto;gap:11px}.overview-market-apys{display:none}.overview-hero{padding:20px!important}.overview-summary-main strong{font-size:30px}.overview-summary-grid{gap:12px}}
-      `}</style>
+
+        .overview-position-content{display:flex;min-height:0;flex:1;flex-direction:column}
+        .overview-position-content .health-meter{margin:0}
+        .overview-position-content .connect-prompt{display:flex;min-height:0;flex:1;align-items:center;color:rgba(255,255,255,.55)}
+        .overview-widget-button{margin-top:auto !important}
+
+        @media (max-width:640px){
+          .overview-hero{gap:22px}
+          .overview-hero-summary{padding:18px;border-radius:18px}
+          .overview-summary-main strong{font-size:31px}
+          .overview-summary-grid{gap:0 13px}
+          .overview-summary-grid>div{padding:12px 0 2px}
+          .overview-widget{padding:17px;border-radius:18px}
+          .overview-widget-value{font-size:28px}
+          .overview-market-row{grid-template-columns:minmax(0,1fr) auto;gap:11px}
+          .overview-market-apys{display:none}
+        }
+      \`}</style>
     </div>
   );
 }
