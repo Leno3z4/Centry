@@ -25,15 +25,15 @@ async function call(operation, args = {}) {
     cache: "no-store",
   });
 
-  let body = null;
-  try { body = await response.json(); } catch {}
+  let responseBody = null;
+  try { responseBody = await response.json(); } catch {}
 
   if (!response.ok) {
-    const error = body?.error || "agent_store_request_failed";
+    const error = responseBody?.error || "agent_store_request_failed";
     throw new Error(error);
   }
 
-  return body?.result;
+  return responseBody?.result;
 }
 
 export async function getAgentById(id) {
