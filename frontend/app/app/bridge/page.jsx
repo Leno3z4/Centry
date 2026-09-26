@@ -74,6 +74,7 @@ function BridgeContent() {
   const [stage, setStage] = useState('idle');
   const [bridgeResult, setBridgeResult] = useState(null);
   const [error, setError] = useState('');
+  const [infoOpen, setInfoOpen] = useState(false);
 
   const fromArc = fromId === 'arc-mainnet';
   const toArc = toId === 'arc-mainnet';
@@ -196,14 +197,14 @@ function BridgeContent() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <div><span className={styles.kicker}>CENTRY · BRIDGE</span><h1>Move USDC across chains</h1><p>Tower handles the bridge request. Centry marks the bridge submitted only when Tower returns the source transaction hash.</p></div>
-        <span className={styles.destinationPill}><i /> Tower Bridge</span>
+        <div><span className={styles.kicker}>CENTRY · BRIDGE</span><h1>Move USDC across chains</h1><p>Bridge USDC between the supported networks without leaving Centry.</p></div>
       </header>
 
       <section className={styles.card}>
-        <div className={styles.fieldBlock}><label>From</label><ChainPicker value={fromId} chains={sourceChains} onChange={changeFrom} label="Source chain" /></div>
+        <div className={styles.transferFields}>
+        <div className={styles.fieldCard}><div className={styles.fieldLabelRow}><label>From</label><span>Source network</span></div><ChainPicker value={fromId} chains={sourceChains} onChange={changeFrom} label="Source chain" /></div>
         <button type="button" className={styles.arrowButton} onClick={switchDirection} disabled={stage === 'switching' || stage === 'submitting'} aria-label="Switch bridge direction" title="Switch bridge direction">⇅</button>
-        <div className={styles.fieldBlock}><label>To</label><ChainPicker value={toId} chains={destinationChains} onChange={changeTo} label="Destination chain" /></div>
+        <div className={styles.fieldCard}><div className={styles.fieldLabelRow}><label>To</label><span>Destination network</span></div><ChainPicker value={toId} chains={destinationChains} onChange={changeTo} label="Destination chain" /></div></div>
 
         <div className={styles.amountBlock}>
           <div className={styles.amountHeader}><label>Amount</label><button type="button" className={styles.balanceButton} onClick={setMax} disabled={!balance || Number(balance) <= 0}>Max {balance ? `${balance} USDC` : ''}</button></div>
@@ -211,10 +212,10 @@ function BridgeContent() {
         </div>
 
         <div className={styles.summary}>
-          <div><span>From</span><strong>{source.name}</strong></div>
-          <div><span>To</span><strong>{destination.name}</strong></div>
           <div><span>Route</span><strong>Tower</strong></div>
-          <div><span>Transfer type</span><strong>1:1 USDC</strong></div>
+          <div><span>Transfer</span><strong>{source.short} → {destination.short} · 1:1 USDC</strong></div>
+          <div><span>Estimated time</span><strong>{bridgeResult?.estimatedTime || 'Shown by Tower when available'}</strong></div>
+          <div><span>Network fee</span><strong>{bridgeResult?.fee || 'Calculated by the route'}</strong></div>
           <div><span>Recipient</span><strong>{address ? `${address.slice(0, 6)}…${address.slice(-4)}` : 'Connect wallet'}</strong></div>
         </div>
 
@@ -241,7 +242,10 @@ function BridgeContent() {
         ) : null}
       </section>
 
-      <p className={styles.disclaimer}>Bridge support is currently limited to USDC and the supported mainnet networks shown above.</p>
+      <div className={styles.infoFooter}>
+        <button type="button" className={styles.infoButton} onClick={() => setInfoOpen((open) => !open)} aria-expanded={infoOpen} aria-label="Bridge information">i</button>
+        {infoOpen ? <p>Tower handles the bridge request. Centry only marks the bridge submitted when Tower returns the source transaction hash.</p> : null}
+      </div>
     </div>
   );
 }
