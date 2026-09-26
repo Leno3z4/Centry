@@ -29,10 +29,10 @@ const NAV_ITEMS = [
 
 const NAV_GROUPS = [
   { key: 'overview', label: null },
-  { key: 'use', label: 'Use Centry' },
-  { key: 'earn', label: 'Earn & Govern' },
-  { key: 'automation', label: 'Automation' },
-  { key: 'explore', label: 'Explore' },
+  { key: 'use', label: 'Trade / Liquidity' },
+  { key: 'earn', label: 'Earn' },
+  { key: 'automation', label: 'Manage' },
+  { key: 'explore', label: null },
   { key: 'docs', label: null },
 ];
 
