@@ -2420,7 +2420,6 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
             id: peer.id,
             name: peer.name,
             account: peer.account,
-            active: peer.active,
             observedActions: peer.observedActions,
             confirmedActions: peer.confirmedActions,
             failedActions: peer.failedActions,
