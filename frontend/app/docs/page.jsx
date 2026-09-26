@@ -984,7 +984,6 @@ export default function Page() {
             }
           }
         `}</style>
-      </AppShell>
     </Providers>
   );
 }
