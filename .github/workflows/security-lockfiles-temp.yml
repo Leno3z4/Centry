@@ -30,9 +30,9 @@ jobs:
 
       - name: Commit lockfiles
         run: |
-          if git diff --quiet -- package-lock.json frontend/package-lock.json; then
-            echo "No lockfile changes."
-            exit 0
+          if [ ! -f package-lock.json ] || [ ! -f frontend/package-lock.json ]; then
+            echo "Expected lockfiles were not generated."
+            exit 1
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
