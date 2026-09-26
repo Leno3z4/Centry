@@ -1,4 +1,5 @@
 name: Generate security lockfiles
+# Temporary lockfile generation workflow
 
 on:
   push:
