@@ -2,14 +2,13 @@
 
 import dynamic from 'next/dynamic';
 import { useMemo } from 'react';
-import { useAccount, useReadContracts } from 'wagmi';
+import { useAccount } from 'wagmi';
 import { Providers } from '../../components/Providers';
 import { AppShell } from '../../components/AppShell';
 import DraggableWidgetGrid from '../../components/ui/draggable-widget-grid';
 import { ACTIVE_MARKETS } from '../../constants/markets';
-import { CONTRACT_ADDRESSES } from '../../constants/contracts';
-import { LENDING_POOL_ABI } from '../../constants/abis';
 import { useMultiMarketLending } from '../../hooks/useMultiMarketLending';
+import { useDeFiRisk } from '../../hooks/useDeFiRisk';
 
 const AeroShards = dynamic(() => import('../../components/AeroShards'), {
   ssr: false,
@@ -25,14 +24,21 @@ function formatNumber(value, digits = 1) {
   });
 }
 
-function HealthMeter({ percent, factor }) {
+function healthTone(percent) {
+  const safe = Number(percent || 0);
+  if (safe < 35) return 'danger';
+  if (safe < 70) return 'warning';
+  return 'safe';
+}
+
+function HealthMeter({ percent, factor, compact = false }) {
   const safe = Math.min(Math.max(Number(percent || 0), 0), 100);
 
   return (
-    <div className="health-meter">
+    <div className={compact ? "health-meter health-meter-compact" : "health-meter"}>
       <div className="health-meter-head">
         <span>Account health</span>
-        <strong>{safe}%</strong>
+        <strong className={'health-value-' + healthTone(safe)}>{factor || safe + '%'}</strong>
       </div>
       <div className="health-factor-label">Health factor {factor || '—'}</div>
       <div
@@ -43,7 +49,7 @@ function HealthMeter({ percent, factor }) {
         aria-valuenow={safe}
         aria-label="Position health"
       >
-        <div className="health-fill" style={{ width: safe + '%' }} />
+        <div className={'health-fill health-fill-' + healthTone(safe)} style={{ width: safe + '%' }} />
       </div>
       <p>Higher is safer. A healthy account stays above the liquidation boundary.</p>
     </div>
@@ -73,6 +79,7 @@ function OverviewWidget({ title, meta, children, className = '' }) {
 
 function OverviewContent() {
   const { isConnected } = useAccount();
+  const defiRisk = useDeFiRisk();
   const firstMarket = useMemo(() => ACTIVE_MARKETS[0], []);
   const lending = useMultiMarketLending(
     firstMarket?.address,
