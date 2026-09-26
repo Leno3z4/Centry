@@ -783,7 +783,7 @@ export default function DraggableWidgetGrid({
   const onKeyDown = useCallback(
     (event: KeyboardEvent, id: string) => {
       if (
-        !editable ||
+        !canEdit ||
         !event.altKey ||
         event.target instanceof HTMLInputElement ||
         event.target instanceof HTMLTextAreaElement ||
@@ -830,7 +830,7 @@ export default function DraggableWidgetGrid({
         }
       }
     },
-    [applyOrder, editable, maxColumns],
+    [applyOrder, canEdit, maxColumns],
   )
 
   const onClickCapture = useCallback(
@@ -842,7 +842,7 @@ export default function DraggableWidgetGrid({
       }
 
       if (
-        editable &&
+        canEdit &&
         event.target instanceof Element &&
         event.target.closest('a')
       ) {
@@ -850,7 +850,7 @@ export default function DraggableWidgetGrid({
         event.stopPropagation()
       }
     },
-    [editable],
+    [canEdit],
   )
 
   useEffect(
