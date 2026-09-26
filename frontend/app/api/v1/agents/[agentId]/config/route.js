@@ -1,4 +1,4 @@
-import { getAddress } from "ethers";
+import { getAddress, parseUnits } from "ethers";
 import { verifyOwnerSession } from "../../../../../../lib/agentOwnerAuth";
 import { getAgentById, updateAgentConfig } from "../../../../../../lib/agentStore";
 
@@ -38,8 +38,50 @@ export async function POST(request, { params }) {
         .filter((asset) => maxAmountByAssetInput[asset] !== undefined && maxAmountByAssetInput[asset] !== null && String(maxAmountByAssetInput[asset]).trim() !== "")
         .map((asset) => [asset, String(maxAmountByAssetInput[asset]).trim().slice(0, 80)])
     );
+
+    const assetDecimals = { USDC: 18, EURC: 6, CIRBTC: 8, CENT: 18 };
+    const maxUint128 = (2n ** 128n) - 1n;
+    for (const [asset, value] of Object.entries(maxAmountByAsset)) {
+      try {
+        const raw = parseUnits(String(value), assetDecimals[asset] ?? 18);
+        if (raw <= 0n || raw > maxUint128) throw new Error("invalid_cap");
+      } catch {
+        return Response.json({ error: `invalid_agent_max_amount_${asset}` }, { status: 400 });
+      }
+    }
+
+    const financialActions = new Set(["supply", "withdraw", "borrow", "repay", "transfer"]);
+    const requiredCapAssets = new Set(
+      allowedActions.some((action) => financialActions.has(action))
+        ? allowedAssets
+        : [],
+    );
+    if (allowedActions.includes("swap")) requiredCapAssets.add("CENT");
+    for (const asset of requiredCapAssets) {
+      if (!maxAmountByAsset[asset]) {
+        return Response.json({ error: `onchain_financial_cap_required_${asset}` }, { status: 400 });
+      }
+    }
+
+    const requestedA2A = body?.a2a && typeof body.a2a === "object" ? body.a2a : {};
+    const existingA2A = existing?.a2a && typeof existing.a2a === "object" ? existing.a2a : {};
+    const requestedAllowedAgentIds = requestedA2A.allowedAgentIds === undefined
+      ? existingA2A.allowedAgentIds
+      : requestedA2A.allowedAgentIds;
+    const a2aAllowedAgentIds = Array.isArray(requestedAllowedAgentIds)
+      ? [...new Set(requestedAllowedAgentIds.map((value) => String(value).trim()).filter(Boolean))].slice(0, 100)
+      : [];
+    if (a2aAllowedAgentIds.some((value) => value.length > 128)) {
+      return Response.json({ error: "a2a_agent_id_too_long" }, { status: 400 });
+    }
     const config = {
       ...existing,
+      a2a: {
+        receiveEnabled: requestedA2A.receiveEnabled === undefined
+          ? existingA2A.receiveEnabled === true
+          : requestedA2A.receiveEnabled === true,
+        allowedAgentIds: a2aAllowedAgentIds,
+      },
       autonomy: {
         ...existing.autonomy,
         enabled: requested.enabled === undefined ? existing.autonomy?.enabled !== false : Boolean(requested.enabled),
