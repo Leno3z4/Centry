@@ -128,7 +128,7 @@ export default function WelcomePage() {
                 <div className="landing-nav-links">
                     <a href="#how-it-works">How it works</a>
                     <Link href="/docs" className="landing-nav-docs">Docs</Link>
-                    <Link href="/app" className="landing-nav-app">Open app</Link>
+                    <Link href="/app" className="landing-nav-app">open Centry</Link>
                 </div>
             </nav>
 
@@ -137,7 +137,7 @@ export default function WelcomePage() {
                     <h1>Lending, without the noise.</h1>
                     <p>Supply liquidity, borrow against supported collateral, and manage your capital from one account.</p>
                     <div className="landing-actions">
-                        <Link className="primary-btn" href="/app">Enter Centry</Link>
+                        <Link className="primary-btn" href="/app">open Centry</Link>
                         <a className="secondary-btn" href="#how-it-works">Explore the protocol</a>
                     </div>
                 </div>
@@ -179,7 +179,7 @@ export default function WelcomePage() {
                     <h2>Enter the live protocol.</h2>
                     <p>Supply, borrow, manage your position, and monitor your capital from one interface.</p>
                 </div>
-                <Link className="primary-btn" href="/app">Launch app</Link>
+                <Link className="primary-btn" href="/app">open Centry</Link>
             </section>
 
             <footer className="landing-footer">
