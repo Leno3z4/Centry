@@ -24,7 +24,6 @@ const NAV_ITEMS = [
   { href: '/app/bridge', label: 'Bridge', icon: '↗', group: 'explore' },
   { href: '/app/portfolio', label: 'Portfolio', icon: '◐', group: 'explore' },
   { href: '/app/analytics', label: 'Analytics', icon: '⌁', group: 'explore' },
-  { href: '/app/docs', label: 'Docs', icon: '□', group: 'docs' },
 ];
 
 const NAV_GROUPS = [
@@ -33,7 +32,6 @@ const NAV_GROUPS = [
   { key: 'earn', label: 'Earn' },
   { key: 'automation', label: 'Manage' },
   { key: 'explore', label: null },
-  { key: 'docs', label: null },
 ];
 
 export function AppShell({ children }) {
