@@ -35,6 +35,13 @@ function formatApy(value) {
   return Number.isFinite(number) ? number.toFixed(2) + '%' : '—';
 }
 
+function healthTone(percent) {
+  const value = Number(percent || 0);
+  if (value < 35) return 'danger';
+  if (value < 70) return 'warning';
+  return 'safe';
+}
+
 function StatCard({ label, value, detail }) {
   return (
     <div className="metric" key={label}>
@@ -95,7 +102,7 @@ function PortfolioContent() {
         <div className="panel risk-summary-panel">
           <div className="panel-head">
             <div><h2>Account health</h2><p>A single view of your liquidation buffer, health factor, and current debt exposure.</p></div>
-            <span className="risk-state-chip">{risk.summary.positionStatus}</span>
+            <span className={`risk-state-chip ${healthTone(lending.healthFactorPercent)}`}>{risk.summary.positionStatus}</span>
           </div>
           <div className="health-hero-row">
             <div className="health-hero-value"><span>Health</span><strong>{isConnected ? lending.healthFactorPercent + "%" : "—"}</strong></div>
@@ -104,7 +111,7 @@ function PortfolioContent() {
               <div><span>Distance to liquidation</span><strong>{isConnected ? formatPercent(risk.summary.distanceToLiquidationPct) : "—"}</strong></div>
             </div>
           </div>
-          <div className="health-status-bar"><div style={{ width: ((Math.min(100, Math.max(0, lending.healthFactorPercent || 0))) + "%") }} /></div>
+          <div className={`health-status-bar ${healthTone(lending.healthFactorPercent)}`}><div style={{ width: ((Math.min(100, Math.max(0, lending.healthFactorPercent || 0))) + "%") }} /></div>
           <div className="health-foot-row"><span>Liquidation threshold <strong>1.00 HF</strong></span><span>Total debt <strong>{isConnected ? formatUsd(risk.summary.totalDebtUsd) : "—"}</strong></span></div>
         </div>
         <div className="panel collateral-panel">
@@ -184,6 +191,67 @@ function PortfolioContent() {
       .risk-empty{padding:18px 0;color:rgba(255,255,255,.5);font-size:12px}
       @media (max-width:900px){.risk-overview-grid{grid-template-columns:1fr}}
       @media (max-width:640px){.risk-summary-metrics{grid-template-columns:1fr}}
+
+      .portfolio-hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,360px);align-items:end;gap:18px}
+      .portfolio-hero>div:first-child{min-width:0}
+      .portfolio-primary-metric{padding:18px 20px;border:1px solid #343941;border-radius:16px;background:#1e1e1e;box-shadow:0 14px 36px rgba(0,0,0,.18)}
+      .portfolio-primary-metric span,.portfolio-primary-metric small{display:block;color:rgba(255,255,255,.48);font-size:10px;text-transform:uppercase;letter-spacing:.06em}
+      .portfolio-primary-metric strong{display:block;margin:7px 0 4px;color:#fff;font-size:34px;line-height:1;letter-spacing:-1px}
+      .portfolio-primary-metric small{text-transform:none;letter-spacing:0;font-size:11px}
+      .portfolio-quick-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+      .portfolio-quick-metrics .metric{min-height:0;padding:15px 16px;border:1px solid #30343a;border-radius:14px;background:#17191c}
+      .portfolio-quick-metrics .metric>strong{font-size:20px}
+      .risk-summary-panel,.collateral-panel,.market-risk-panel{background:#1e1e1e!important;border-color:#343941!important;box-shadow:0 12px 32px rgba(0,0,0,.14)!important}
+      .risk-summary-panel .panel-head p,.collateral-panel .panel-head p{color:rgba(255,255,255,.5)}
+      .risk-state-chip.safe{border-color:rgba(52,199,89,.25);background:rgba(52,199,89,.09);color:#a6e9bb}
+      .risk-state-chip.warning{border-color:rgba(255,159,10,.28);background:rgba(255,159,10,.09);color:#ffd58a}
+      .risk-state-chip.danger{border-color:rgba(255,69,58,.3);background:rgba(255,69,58,.09);color:#ffaaa3}
+      .health-hero-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(190px,.8fr);align-items:end;gap:20px;margin-top:18px}
+      .health-hero-value span,.health-hero-meta span{display:block;color:rgba(255,255,255,.45);font-size:10px}
+      .health-hero-value strong{display:block;margin-top:5px;color:#fff;font-size:42px;line-height:1;letter-spacing:-1.8px}
+      .health-hero-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+      .health-hero-meta>div{padding:11px;border:1px solid #30343a;border-radius:11px;background:#17191c}
+      .health-hero-meta strong{display:block;margin-top:4px;color:#fff;font-size:16px}
+      .health-status-bar{height:7px;margin-top:18px;overflow:hidden;border-radius:999px;background:#2a2e33}
+      .health-status-bar>div{height:100%;border-radius:inherit;transition:width 220ms ease}
+      .health-status-bar.safe>div{background:#34c759}
+      .health-status-bar.warning>div{background:#ff9f0a}
+      .health-status-bar.danger>div{background:#ff453a}
+      .health-foot-row{display:flex;justify-content:space-between;gap:12px;margin-top:11px;color:rgba(255,255,255,.45);font-size:10px}
+      .health-foot-row strong{color:rgba(255,255,255,.82)}
+      .collateral-list{margin-top:14px}
+      .collateral-row{padding:12px 0;border-bottom-color:#2b2f34}
+      .collateral-asset{display:grid!important;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px}
+      .asset-badge{display:grid;width:30px;height:30px;place-items:center;border:1px solid #3a3f46;border-radius:50%;background:#15171a;color:#fff;font-size:12px;font-weight:750;box-shadow:inset 0 0 0 2px rgba(255,255,255,.025)}
+      .collateral-asset>div{display:grid;gap:2px;min-width:0}
+      .collateral-asset>div span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .collateral-share{grid-template-columns:auto minmax(0,1fr);gap:10px;margin-top:7px}
+      .collateral-share>strong{font-size:10px;color:rgba(255,255,255,.58)}
+      .collateral-share>div{background:#2b2f34}
+      .collateral-share>div>span{background:#8fbdf2}
+      .risk-empty{display:grid;justify-items:start;gap:7px;padding:17px 0}
+      .empty-state-mark{display:grid;width:28px;height:28px;place-items:center;border:1px solid #384049;border-radius:9px;background:#15181b;color:#8fbdf2;font-size:16px}
+      .empty-state-action{display:inline-flex;margin-top:4px;padding:8px 10px;border:1px solid #35414d;border-radius:9px;background:#171c22;color:#ddecff;font-size:11px;font-weight:700;text-decoration:none}
+      .empty-state-action:hover{border-color:#0a84ff;background:#1a232c}
+      .market-risk-panel{margin-top:14px}
+      .market-risk-table{border-color:#30343a;background:#111!important}
+      .market-risk-table-head,.market-risk-row{grid-template-columns:1.35fr .85fr .85fr .85fr 1.15fr;min-width:720px}
+      .market-risk-table-head{background:#17191c;border-bottom-color:#30343a}
+      .market-risk-row{background:#111317;border-bottom-color:#282d33}
+      .market-asset-cell{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:10px;min-width:0}
+      .market-asset-cell>div{min-width:0}
+      .market-asset-cell small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .market-risk-main{min-width:0}
+      .market-risk-details{margin-top:6px}
+      .market-risk-details summary{cursor:pointer;color:#8fbdf2;font-size:10px;list-style:none}
+      .market-risk-details summary::-webkit-details-marker{display:none}
+      .market-risk-details summary::before{content:"+ ";color:#8fbdf2}
+      .market-risk-details[open] summary::before{content:"− "}
+      .market-risk-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px 10px;margin-top:8px;padding:9px;border:1px solid #2c3137;border-radius:9px;background:#17191c}
+      .market-risk-detail-grid span{color:rgba(255,255,255,.45);font-size:9px}
+      .market-risk-detail-grid strong{display:block;margin-top:2px;color:#fff;font-size:10px}
+      @media (max-width:900px){.portfolio-hero{grid-template-columns:1fr}.portfolio-primary-metric{max-width:none}.portfolio-quick-metrics{grid-template-columns:1fr 1fr}}
+      @media (max-width:640px){.portfolio-quick-metrics{grid-template-columns:1fr}.health-hero-row{grid-template-columns:1fr}.health-hero-meta{grid-template-columns:1fr 1fr}.health-foot-row{flex-direction:column}.portfolio-primary-metric strong{font-size:30px}}
     `}</style>
     </div>
   );
