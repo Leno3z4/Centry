@@ -203,6 +203,18 @@ export async function loadOwnedAgents({ address, publicClient }) {
   return agents;
 }
 
+export async function loadAgentNetwork(agentId) {
+  return apiJson(`${API_BASE}/api/v1/agents/${encodeURIComponent(agentId)}/network`, { method: 'GET' });
+}
+
+export async function sendAgentNetworkMessage(agentId, toAgentId, message) {
+  return apiJson(`${API_BASE}/api/v1/agents/${encodeURIComponent(agentId)}/network`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ toAgentId, message }),
+  });
+}
+
 export function shortAddress(value) {
   if (!value || !isAddress(value)) return value || '';
   return `${value.slice(0, 8)}…${value.slice(-6)}`;
