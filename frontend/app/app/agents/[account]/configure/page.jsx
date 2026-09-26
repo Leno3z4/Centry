@@ -3,11 +3,12 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useAccount, usePublicClient, useSignMessage, useWriteContract } from 'wagmi';
-import { keccak256, toBytes } from 'viem';
+import { useAccount, useConnectorClient, usePublicClient, useSignMessage } from 'wagmi';
+import { encodeFunctionData, keccak256, toBytes } from 'viem';
 import { Providers } from '../../../../../components/Providers';
 import { AppShell } from '../../../../../components/AppShell';
 import { CONTRACT_ADDRESSES } from '../../../../../constants/contracts';
+import { arcMainnet } from '../../../../../config/multiWagmi';
 import { AgentConfigForm } from '../../AgentConfigForm';
 import {
   ACCOUNT_ABI,
@@ -38,12 +39,13 @@ function ConfigureContent() {
   const { address } = useAccount();
   const publicClient = usePublicClient();
   const { signMessageAsync } = useSignMessage();
-  const { writeContractAsync, isPending } = useWriteContract();
+  const { data: connectorClient } = useConnectorClient();
 
   const [agent, setAgent] = useState(null);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [authorizing, setAuthorizing] = useState(false);
 
   async function loadAgent() {
     if (!address || !publicClient) return;
@@ -137,6 +139,7 @@ function ConfigureContent() {
 
   async function authorizeRunner() {
     if (!agent || !RUNNER_ADDRESS) return setError('Hosted runner address is not configured.');
+    if (!address || !connectorClient) return setError('Connect a wallet that supports batched transaction requests.');
     const policy = agent.config?.policy;
     const allowedActions = policy?.allowedActions || AGENT_ACTION_OPTIONS.map(([value]) => value);
     const allowedAssets = policy?.allowedAssets || AGENT_ASSET_OPTIONS.map(([value]) => value);
@@ -145,17 +148,19 @@ function ConfigureContent() {
     }
 
     try {
-      setStatus('Authorizing the hosted runner… You will approve the required onchain permissions.');
-      const operatorHash = await writeContractAsync({
-        address: agent.account,
-        abi: ACCOUNT_ABI,
-        functionName: 'setAgentOperator',
-        args: [RUNNER_ADDRESS, true],
-      });
-      await publicClient.waitForTransactionReceipt({ hash: operatorHash });
-
+      setAuthorizing(true);
+      setStatus('Preparing one atomic authorization batch…');
       const permissions = [];
-      const add = (target, signature) => permissions.push([target, selector(signature)]);
+      const permissionKeys = new Set();
+      const add = (target, signature) => {
+        const normalizedTarget = target.toLowerCase();
+        const normalizedSelector = selector(signature).toLowerCase();
+        const key = `${normalizedTarget}:${normalizedSelector}`;
+        if (permissionKeys.has(key)) return;
+        permissionKeys.add(key);
+        permissions.push([target, selector(signature)]);
+      };
+
       for (const action of allowedActions) {
         if (ACTION_TARGETS[action]) add(...ACTION_TARGETS[action]);
       }
@@ -167,24 +172,65 @@ function ConfigureContent() {
         CENT: CONTRACT_ADDRESSES.centryToken,
       };
       if (allowedActions.includes('supply') || allowedActions.includes('repay')) {
-        for (const asset of allowedAssets) if (tokenAddresses[asset]) add(tokenAddresses[asset], 'approve(address,uint256)');
+        for (const asset of allowedAssets) {
+          if (tokenAddresses[asset]) add(tokenAddresses[asset], 'approve(address,uint256)');
+        }
       }
       if (allowedActions.includes('swap')) add(CONTRACT_ADDRESSES.centryToken, 'approve(address,uint256)');
       if (allowedActions.includes('transfer')) add(agent.account, 'transferToAgent(address,address,uint256)');
 
-      for (const [target, sel] of permissions) {
-        const tx = await writeContractAsync({
-          address: agent.account,
-          abi: ACCOUNT_ABI,
-          functionName: 'setPermission',
-          args: [RUNNER_ADDRESS, target, sel, true, 0, 0n],
-        });
-        await publicClient.waitForTransactionReceipt({ hash: tx });
+      const calls = [
+        {
+          to: agent.account,
+          data: encodeFunctionData({
+            abi: ACCOUNT_ABI,
+            functionName: 'setAgentOperator',
+            args: [RUNNER_ADDRESS, true],
+          }),
+        },
+        ...permissions.map(([target, sel]) => ({
+          to: agent.account,
+          data: encodeFunctionData({
+            abi: ACCOUNT_ABI,
+            functionName: 'setPermission',
+            args: [RUNNER_ADDRESS, target, sel, true, 0n, 0n],
+          }),
+        })),
+      ];
+
+      setStatus(`Approve one atomic batch covering ${calls.length} onchain authorization calls…`);
+      const { id } = await connectorClient.sendCalls({
+        account: address,
+        chain: arcMainnet,
+        calls,
+        forceAtomic: true,
+      });
+
+      const result = await connectorClient.waitForCallsStatus({
+        id,
+        throwOnFailure: true,
+        timeout: 60_000,
+        retryCount: 8,
+        retryDelay: 1_000,
+      });
+
+      if (!result?.atomic) {
+        throw new Error('wallet_did_not_confirm_atomic_authorization');
       }
+
+      await loadAgent();
       setStatus('Hosted runner authorized for the current saved policy.');
     } catch (e) {
-      setError(e?.shortMessage || e?.message || 'Runner authorization failed.');
+      const message = e?.shortMessage || e?.message || '';
+      const unsupported = /5792|sendCalls|atomic/i.test(message);
+      setError(
+        unsupported
+          ? 'This wallet cannot execute the authorization as one atomic batch. No partial authorization was submitted.'
+          : message || 'Runner authorization failed. No partial authorization was submitted.',
+      );
       setStatus('');
+    } finally {
+      setAuthorizing(false);
     }
   }
 
@@ -216,7 +262,9 @@ function ConfigureContent() {
           <div><strong>Centry runner</strong><p>{RUNNER_ADDRESS || 'Not configured'}</p></div>
           <div className={styles.price}>Arc · 5042</div>
         </div>
-        <button className={styles.secondaryButton} onClick={authorizeRunner}>Authorize runner + saved permissions</button>
+        <button className={styles.secondaryButton} onClick={authorizeRunner} disabled={saving || authorizing || !connectorClient}>
+          {authorizing ? 'Authorizing…' : 'Authorize runner + saved permissions'}
+        </button>
       </section>
 
       <section className={styles.card}>
