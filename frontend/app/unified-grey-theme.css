@@ -42,8 +42,7 @@ a { color: inherit; }
 .wallet-balance,
 .panel,
 .metric,
-.form-card,
-.risk-card,
+.form-card
 .action-card,
 .feature-card,
 .doc-card,
@@ -504,8 +503,7 @@ body,
 .wallet-balance,
 .panel,
 .metric,
-.form-card,
-.risk-card,
+.form-card
 .action-card,
 .feature-card,
 .doc-card,
@@ -687,8 +685,7 @@ textarea,
 .market-list-item,
 .landing-home-product,
 .landing-home-explore-card,
-.landing-home-cta,
-.analytics-market,
+.landing-home-cta
 .governance-position-card,
 .reward-position,
 .reward-hero-meta > div,
@@ -704,8 +701,7 @@ textarea,
 
 [class*="badge__"],
 [class*="token__"],
-.token,
-.analytics-asset .token,
+.token
 .reward-position-title .token,
 .wallet-option-mark {
   background:
