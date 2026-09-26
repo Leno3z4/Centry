@@ -19,6 +19,7 @@ function cleanIncomingConfig(agent) {
     description: agent?.description || '',
     provider: autonomy.provider || '',
     model: '',
+    providerKey: '',
     autonomy: {
       enabled: autonomy.enabled !== false,
       instructions: autonomy.instructions || '',
