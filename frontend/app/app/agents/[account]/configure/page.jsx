@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useAccount, useChainId, useConnectorClient, usePublicClient, useSignMessage, useWalletClient } from 'wagmi';
+import { useAccount, useChainId, useConnectorClient, usePublicClient, useSignMessage } from 'wagmi';
 import { encodeFunctionData, keccak256, toBytes } from 'viem';
 import { Providers } from '../../../../../components/Providers';
 import { AppShell } from '../../../../../components/AppShell';
@@ -41,7 +41,6 @@ function ConfigureContent() {
   const publicClient = usePublicClient();
   const { signMessageAsync } = useSignMessage();
   const { data: connectorClient } = useConnectorClient();
-  const { data: walletClient } = useWalletClient();
 
   const [agent, setAgent] = useState(null);
   const [status, setStatus] = useState('');
@@ -146,20 +145,9 @@ function ConfigureContent() {
     if (!agent || !RUNNER_ADDRESS) return setError('Hosted runner address is not configured.');
     if (!address || !publicClient) return setError('Connect your wallet before authorizing the hosted runner.');
     if (chainId !== arcMainnet.id) return setError('Switch your wallet to Arc Mainnet before authorizing the hosted runner.');
-
-    const batchClient =
-      walletClient && typeof walletClient.sendCalls === 'function' && typeof walletClient.waitForCallsStatus === 'function'
-        ? walletClient
-        : connectorClient && typeof connectorClient.sendCalls === 'function' && typeof connectorClient.waitForCallsStatus === 'function'
-          ? connectorClient
-          : null;
-
-    if (!batchClient) {
+    if (!connectorClient || typeof connectorClient.sendCalls !== 'function' || typeof connectorClient.waitForCallsStatus !== 'function') {
       return setError('This wallet does not support atomic batch authorization on Arc Mainnet. No transaction was sent.');
     }
-
-    // Authorization must remain atomic: this account contract exposes individual owner setters, so
-    // silently falling back to sequential transactions could leave permissions partially changed.
 
     const policy = agent.config?.policy;
     const allowedActions = policy?.allowedActions || AGENT_ACTION_OPTIONS.map(([value]) => value);
@@ -170,7 +158,7 @@ function ConfigureContent() {
 
     try {
       setAuthorizing(true);
-      setStatus('Checking agent ownership and saved permissions…');
+      setStatus('Checking agent ownership and existing permissions…');
 
       const owner = await publicClient.readContract({
         address: agent.account,
@@ -181,7 +169,7 @@ function ConfigureContent() {
         throw new Error('connected_wallet_is_not_agent_owner');
       }
 
-      const permissions = [];
+      const desiredPermissions = [];
       const permissionKeys = new Set();
       const add = (target, signature) => {
         const normalizedTarget = target.toLowerCase();
@@ -189,7 +177,7 @@ function ConfigureContent() {
         const key = normalizedTarget + ':' + normalizedSelector;
         if (permissionKeys.has(key)) return;
         permissionKeys.add(key);
-        permissions.push([target, selector(signature)]);
+        desiredPermissions.push([target, selector(signature)]);
       };
 
       for (const action of allowedActions) {
@@ -210,44 +198,69 @@ function ConfigureContent() {
       if (allowedActions.includes('swap')) add(CONTRACT_ADDRESSES.centryToken, 'approve(address,uint256)');
       if (allowedActions.includes('transfer')) add(agent.account, 'transferToAgent(address,address,uint256)');
 
-      const calls = [
-        ...permissions.map(([target, sel]) => ({
-          to: agent.account,
-          data: encodeFunctionData({
+      const operatorAlreadyAuthorized = await publicClient.readContract({
+        address: agent.account,
+        abi: ACCOUNT_ABI,
+        functionName: 'agentOperators',
+        args: [RUNNER_ADDRESS],
+      });
+
+      const existingPermissions = await Promise.all(
+        desiredPermissions.map(async ([target, sel]) => {
+          const current = await publicClient.readContract({
+            address: agent.account,
             abi: ACCOUNT_ABI,
-            functionName: 'setPermission',
-            args: [RUNNER_ADDRESS, target, sel, true, 0n, 0n],
-          }),
-        })),
-        {
+            functionName: 'permissions',
+            args: [RUNNER_ADDRESS, target, sel],
+          });
+          const allowed = Boolean(current?.[0]);
+          const expiresAt = BigInt(current?.[1] ?? 0);
+          const maxNativeValue = BigInt(current?.[2] ?? 0);
+          return [target, sel, allowed && expiresAt === 0n && maxNativeValue === 0n];
+        }),
+      );
+
+      const calls = [];
+
+      if (!operatorAlreadyAuthorized) {
+        calls.push({
           to: agent.account,
           data: encodeFunctionData({
             abi: ACCOUNT_ABI,
             functionName: 'setAgentOperator',
             args: [RUNNER_ADDRESS, true],
           }),
-        },
-      ];
-
-      setStatus('Preflighting ' + calls.length + ' authorization calls…');
-      for (let index = 0; index < calls.length; index += 1) {
-        const call = calls[index];
-        await publicClient.call({
-          account: address,
-          to: call.to,
-          data: call.data,
         });
       }
 
-      setStatus('Approve one atomic authorization batch in your wallet…');
-      const { id } = await batchClient.sendCalls({
+      for (const [target, sel, alreadyAuthorized] of existingPermissions) {
+        if (alreadyAuthorized) continue;
+        calls.push({
+          to: agent.account,
+          data: encodeFunctionData({
+            abi: ACCOUNT_ABI,
+            functionName: 'setPermission',
+            args: [RUNNER_ADDRESS, target, sel, true, 0n, 0n],
+          }),
+        });
+      }
+
+      if (!calls.length) {
+        await loadAgent();
+        setStatus('Hosted runner is already authorized for the current saved policy.');
+        return;
+      }
+
+      setStatus('Approve one atomic authorization request covering ' + calls.length + ' missing onchain permissions…');
+
+      const { id } = await connectorClient.sendCalls({
         account: address,
         chain: arcMainnet,
         calls,
         forceAtomic: true,
       });
 
-      const result = await batchClient.waitForCallsStatus({
+      const result = await connectorClient.waitForCallsStatus({
         id,
         throwOnFailure: true,
         timeout: 60_000,
@@ -259,7 +272,9 @@ function ConfigureContent() {
         throw new Error('wallet_did_not_confirm_atomic_authorization');
       }
 
-      const failedReceipts = (result?.receipts || []).filter((receipt) => String(receipt?.status || '').toLowerCase() !== '0x1');
+      const failedReceipts = (result?.receipts || []).filter(
+        (receipt) => String(receipt?.status || '').toLowerCase() !== '0x1',
+      );
       if (failedReceipts.length) {
         throw new Error('atomic_authorization_transaction_reverted');
       }
@@ -273,9 +288,9 @@ function ConfigureContent() {
           ? 'The connected wallet is not the owner of this agent smart account. No transaction was sent.'
           : raw === 'wallet_did_not_confirm_atomic_authorization'
             ? 'The wallet did not provide atomic execution, so Centry did not fall back to multiple transactions. No partial authorization was submitted.'
-            : /5792|sendCalls|5760|atomicity.*not supported|unsupported.*atomic/i.test(raw)
-              ? 'This wallet does not support atomic batch authorization on Arc Mainnet. No transaction was sent.'
-              : raw || 'Runner authorization failed during preflight. No transaction was sent unless your wallet explicitly confirmed the batch.';
+            : /call bundle.*large|bundle.*large|too large.*wallet|5792|sendCalls|5760|atomicity.*not supported|unsupported.*atomic/i.test(raw)
+              ? 'This wallet rejected the atomic authorization bundle as too large or unsupported. Centry did not split it into multiple transactions.'
+              : raw || 'Runner authorization failed. No partial authorization was submitted.';
       setError(message);
       setStatus('');
     } finally {
