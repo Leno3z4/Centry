@@ -2,14 +2,13 @@
 
 import dynamic from 'next/dynamic';
 import { useMemo } from 'react';
-import { useAccount, useReadContracts } from 'wagmi';
+import { useAccount } from 'wagmi';
 import { Providers } from '../../components/Providers';
 import { AppShell } from '../../components/AppShell';
 import DraggableWidgetGrid from '../../components/ui/draggable-widget-grid';
 import { ACTIVE_MARKETS } from '../../constants/markets';
-import { CONTRACT_ADDRESSES } from '../../constants/contracts';
-import { LENDING_POOL_ABI } from '../../constants/abis';
 import { useMultiMarketLending } from '../../hooks/useMultiMarketLending';
+import { useDeFiRisk } from '../../hooks/useDeFiRisk';
 
 const AeroShards = dynamic(() => import('../../components/AeroShards'), {
   ssr: false,
