@@ -249,7 +249,7 @@ function ConfigureContent() {
       {status ? <div className={styles.notice}>{status}</div> : null}
       {error ? <div className={styles.error}>{error}</div> : null}
 
-      <AgentConfigForm mode="edit" agent={agent} onSubmit={saveConfiguration} submitting={isPending || saving} submitLabel="Save configuration" />
+      <AgentConfigForm mode="edit" agent={agent} onSubmit={saveConfiguration} submitting={saving} submitLabel="Save configuration" />
 
       <section className={styles.card}>
         <div className={styles.sectionHead}>
