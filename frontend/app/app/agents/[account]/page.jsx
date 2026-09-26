@@ -11,7 +11,6 @@ import WalletAssetDropdown from '../WalletAssetDropdown';
 import { CONTRACT_ADDRESSES } from '../../../../constants/contracts';
 import { ORACLE_ABI } from '../../../../constants/abis';
 import styles from '../agents.module.css';
-import AgentPortfolioChart from '../../../../components/ui/c-chart-21';
 import AgentNetworkPanel from '../../../../components/AgentNetworkPanel';
 import {
   ACCOUNT_ABI,
@@ -72,6 +71,46 @@ function runtimeStatusLabel(value) {
   if (normalized === 'locked') return 'BUSY';
   if (normalized === 'processed') return 'EVALUATED';
   return normalized ? normalized.toUpperCase() : 'NO RUN YET';
+}
+
+function getRuntimeAlert(runtime) {
+  if (!runtime) {
+    return { tone: 'runtimeAlertInfo', label: 'Runtime check', title: 'Checking agent runtime', message: 'The latest runner state is being checked.' };
+  }
+
+  const run = runtime.recentRuns?.[0];
+  if (!run) {
+    return { tone: 'runtimeAlertInfo', label: 'No wake recorded', title: 'No runner wake has been recorded yet', message: 'There is no recorded runner wake available for this agent yet.' };
+  }
+
+  const reason = String(run.reason || '').trim();
+  const error = String(run.error || '').trim();
+  const status = String(run.status || '').toLowerCase();
+
+  if (error || status === 'failed') {
+    return {
+      tone: 'runtimeAlertDanger',
+      label: 'Attention',
+      title: 'The latest runner wake did not complete',
+      message: error || reason || 'The runner reported a failed wake.',
+    };
+  }
+
+  if (status === 'skipped' || status === 'waiting_provider' || /idle|minimum|threshold|balance/i.test(reason)) {
+    return {
+      tone: 'runtimeAlertWarning',
+      label: 'Runtime notice',
+      title: 'The latest wake did not execute an action',
+      message: reason || `Runner status: ${runtimeStatusLabel(run.status)}.`,
+    };
+  }
+
+  return {
+    tone: 'runtimeAlertInfo',
+    label: 'Latest wake',
+    title: `${runtimeStatusLabel(run.status)} · ${runtimeTime(run.started_at)}`,
+    message: reason || 'The runner completed its latest wake without an additional note.',
+  };
 }
 
 function DashboardContent() {
@@ -254,6 +293,16 @@ function DashboardContent() {
   }
 
   const recent = useMemo(() => activity.slice(0, 5), [activity]);
+  const runtimeAlert = getRuntimeAlert(runtime);
+
+  const automation = useMemo(() => {
+    if (!runtime) return { label: 'Checking…', tone: 'statusMuted' };
+    if (!runtime.runnerConfigured) return { label: 'Runner missing', tone: 'statusWarning' };
+    if (runtime.operatorAuthorized === false) return { label: 'Not authorized', tone: 'statusDanger' };
+    if (!runtime.providerConfigured) return { label: 'Provider missing', tone: 'statusWarning' };
+    if (!runtime.autonomyEnabled) return { label: 'Autonomy off', tone: 'statusMuted' };
+    return { label: 'Ready', tone: 'statusReady' };
+  }, [runtime]);
 
   const portfolio = useMemo(() => {
     const totalUsd = balances.reduce((sum, item) => sum + (Number.isFinite(item.usdValue) ? item.usdValue : 0), 0);
@@ -270,58 +319,64 @@ function DashboardContent() {
 
   return (
     <main className={styles.page}>
-      <header className={styles.dashboardHeader}><div><div className={styles.kicker}>Agent dashboard</div><h1>{agent.name}</h1><p>{agent.description || 'Configurable Centry onchain agent.'}</p></div><div className={styles.headerActions}><Link className={styles.secondaryButton} href="/app/agents/create">Create agent</Link><Link className={styles.secondaryButton} href={`/app/agents/${agent.account}/configure`}>Configure</Link><Link className={styles.secondaryButton} href={`/app/agents/${agent.account}/chat`}>Chat</Link><button className={styles.toggleButton} disabled={isPending} onClick={toggleActive}>{agent.active ? 'Pause agent' : 'Activate agent'}</button></div></header>
+      <header className={styles.dashboardHeader}>
+        <div className={styles.headerCopy}>
+          <div className={styles.kicker}>Agent dashboard</div>
+          <h1>{agent.name}</h1>
+          <p>{agent.description || 'Configurable Centry onchain agent.'}</p>
+        </div>
+        <div className={styles.headerActions} aria-label="Agent actions">
+          <button className={styles.toggleButton} disabled={isPending} onClick={toggleActive}>
+            {agent.active ? 'Pause agent' : 'Activate agent'}
+          </button>
+          <Link className={styles.secondaryButton} href={`/app/agents/${agent.account}/configure`}>Configure</Link>
+          <Link className={styles.secondaryButton} href={`/app/agents/${agent.account}/chat`}>Chat</Link>
+        </div>
+      </header>
       {agents.length > 1 ? <div className={styles.agentSwitcher}><span>Agent</span><select className={styles.input} value={agent.account} onChange={(e) => router.push(`/app/agents/${e.target.value}`)}>{agents.map((item) => <option key={item.account} value={item.account}>{item.name} · {shortAddress(item.account)}</option>)}</select></div> : null}
       {status ? <div className={styles.notice}>{status}</div> : null}{error ? <div className={styles.error}>{error}</div> : null}
       <section className={styles.analyticsHero}><div><span className={agent.active ? styles.statusOn : styles.statusOff}>{agent.active ? 'ACTIVE' : 'OFF'}</span><h2>Agent analytics</h2><p>Monitor this agent here. Configuration and conversation live on their own pages so the dashboard stays focused.</p></div><div className={styles.addressPanel}><span>Smart account</span><code>{agent.account}</code><button type="button" className={styles.textButton} onClick={() => navigator.clipboard.writeText(agent.account)}>Copy address</button></div></section>
-      <section className={styles.statsLarge}>
-        <div><span>Status</span><strong>{agent.active ? 'Running' : 'Paused'}</strong></div>
+      <section className={styles.runtimeAlert} role="status" aria-live="polite">
+        <span className={styles.runtimeAlertIcon} aria-hidden="true">!</span>
         <div>
-          <span>Automation</span>
-          <strong>
-            {!runtime ? 'Checking…' :
-              !runtime.runnerConfigured ? 'Runner missing' :
-              runtime.operatorAuthorized === false ? 'Not authorized' :
-              !runtime.providerConfigured ? 'Provider missing' :
-              runtime.autonomyEnabled ? 'Ready' : 'Autonomy off'}
-          </strong>
+          <span className={styles.runtimeAlertLabel}>{runtimeAlert.label}</span>
+          <strong>{runtimeAlert.title}</strong>
+          <p>{runtimeAlert.message}</p>
         </div>
-        <div><span>Recent events</span><strong>{activity.length}</strong></div>
       </section>
-      <div className={styles.runtimeMeta}>
-        <span>
-          {runtime?.recentRuns?.[0]
-            ? `Last wake: ${new Date(runtime.recentRuns[0].started_at).toLocaleString()} · ${runtime.recentRuns[0].status}${runtime.recentRuns[0].reason ? ` · ${runtime.recentRuns[0].reason}` : ''}${runtime.recentRuns[0].error ? ` · ${runtime.recentRuns[0].error}` : ''}`
-            : runtime ? 'No recorded runner wake is available for this agent yet.' : 'Checking the agent runtime…'}
-        </span>
-      </div>
 
-      <section className={styles.executionProof}>
-        <div className={styles.executionProofHead}>
+      <section className={styles.heartbeatPanel}>
+        <div className={styles.heartbeatHead}>
           <div>
-            <span className={styles.proofKicker}>Execution proof</span>
-            <h2>{runtimeStatusLabel(runtime?.executionRuntime?.last_status)}</h2>
-            <p>Compact runtime evidence from the agent runner.</p>
+            <span className={styles.proofKicker}>Agent heartbeat &amp; performance</span>
+            <h2>Runtime at a glance</h2>
+            <p>Status, automation readiness, the latest wake, and execution proof in one place.</p>
           </div>
+          <span className={[styles.statusBadge, agent.active ? styles.statusRunning : styles.statusMuted].join(' ')}>
+            {agent.active ? 'Running' : 'Paused'}
+          </span>
         </div>
 
-        <div className={styles.executionProofGrid}>
-          <div>
-            <span>Heartbeat</span>
-            <strong>{runtimeTime(runtime?.executionRuntime?.heartbeat_at)}</strong>
+        <div className={styles.heartbeatGrid}>
+          <div className={styles.heartbeatStat}>
+            <span>Status</span>
+            <strong className={[styles.statusBadge, agent.active ? styles.statusRunning : styles.statusMuted].join(' ')}>
+              {agent.active ? 'Running' : 'Paused'}
+            </strong>
           </div>
-          <div>
-            <span>Evaluation</span>
-            <strong>{runtimeTime(runtime?.executionRuntime?.last_evaluation_at)}</strong>
+          <div className={styles.heartbeatStat}>
+            <span>Automation</span>
+            <strong className={[styles.statusBadge, styles[automation.tone]].join(' ')}>{automation.label}</strong>
           </div>
-          <div>
-            <span>Result</span>
+          <div className={styles.heartbeatStat}>
+            <span>Last wake</span>
+            <strong>{runtime?.recentRuns?.[0] ? runtimeTime(runtime.recentRuns[0].started_at) : '—'}</strong>
+            <small>{runtime?.recentRuns?.[0]?.status ? runtimeStatusLabel(runtime.recentRuns[0].status) : 'No wake recorded'}</small>
+          </div>
+          <div className={styles.heartbeatStat}>
+            <span>Execution proof</span>
             <strong>{runtimeStatusLabel(runtime?.executionRuntime?.last_status)}</strong>
-            {runtime?.executionRuntime?.last_reason ? <span>{runtime.executionRuntime.last_reason}</span> : null}
-          </div>
-          <div>
-            <span>Transaction</span>
-            <strong className={styles.proofMono}>{runtime?.executionRuntime?.last_tx_hash || '—'}</strong>
+            <small>{runtime?.executionRuntime?.last_tx_hash ? 'Transaction recorded' : 'No transaction recorded'}</small>
           </div>
         </div>
       </section>
@@ -343,70 +398,90 @@ function DashboardContent() {
         <section className={styles.portfolioCard}>
           <div className={styles.sectionHead}>
             <div>
+              <span className={styles.sectionKicker}>Wallet allocation</span>
               <h2>Portfolio</h2>
               <p>USD-weighted balances held by this agent smart account.</p>
             </div>
-            <button className={styles.secondaryButton} type="button" onClick={loadBalances} disabled={balancesLoading}>
-              {balancesLoading ? 'Refreshing…' : 'Refresh'}
-            </button>
+            <div className={styles.portfolioHeaderActions}>
+              <button
+                className={styles.primaryButton}
+                type="button"
+                onClick={() => { setFundOpen((value) => !value); setWithdrawOpen(false); }}
+                aria-expanded={fundOpen}
+              >
+                Fund agent
+              </button>
+              <button
+                className={styles.secondaryButton}
+                type="button"
+                onClick={() => { setWithdrawOpen((value) => !value); setFundOpen(false); }}
+                aria-expanded={withdrawOpen}
+              >
+                Withdraw
+              </button>
+              <button className={styles.iconButton} type="button" onClick={loadBalances} disabled={balancesLoading} aria-label="Refresh portfolio">
+                {balancesLoading ? '…' : '↻'}
+              </button>
+            </div>
           </div>
 
           <div className={styles.portfolioBody}>
-            <AgentPortfolioChart
-              formatUsd={formatUsd}
-              rows={portfolio.rows.map((item) => ({
-                key: item.key,
-                label: item.label,
-                amount: formatAssetAmount(item.raw, item.decimals),
-                usdValue: item.usdValue,
-                percentage: item.percentage,
-                color: item.color,
-              }))}
-              totalUsd={portfolio.totalUsd}
-            />
+            <div className={styles.portfolioTotal}>
+              <span>Total balance</span>
+              <strong>{formatUsd(portfolio.totalUsd)}</strong>
+            </div>
+
+            <div className={styles.portfolioSegmentBar} role="img" aria-label="Portfolio allocation by USD value">
+              {portfolio.activeRows.length ? portfolio.activeRows.map((item) => (
+                <span
+                  key={item.key}
+                  title={item.label + ': ' + item.percentage.toFixed(1) + '%'}
+                  style={{ width: Math.max(item.percentage, 0) + '%', background: item.color }}
+                />
+              )) : <span className={styles.portfolioSegmentEmpty} />}
+            </div>
+
+            <div className={styles.portfolioLegend}>
+              {portfolio.rows.map((item) => (
+                <div className={styles.portfolioLegendRow} key={item.key}>
+                  <div className={styles.portfolioAsset}>
+                    <span className={styles.portfolioDot} style={{ background: item.color }} />
+                    <div>
+                      <strong>{item.label}</strong>
+                      <span>{formatAssetAmount(item.raw, item.decimals)} {item.label}</span>
+                    </div>
+                  </div>
+                  <div className={styles.portfolioValue}>
+                    <strong>{item.usdValue == null ? '—' : formatUsd(item.usdValue)}</strong>
+                    <span>{item.percentage.toFixed(1)}%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
+          {(fundOpen || withdrawOpen) ? (
+            <div className={styles.inlineAction}>
+              <WalletAssetDropdown value={asset} assets={AGENT_WALLET_ASSETS} onChange={setAsset} />
+              <input
+                className={styles.input}
+                inputMode="decimal"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
+              />
+              <button className={styles.primaryButton} onClick={fundOpen ? fundAgent : withdrawAgent}>
+                {fundOpen ? 'Fund agent' : 'Withdraw'}
+              </button>
+            </div>
+          ) : null}
+
           <div className={styles.portfolioMeta}>
-            <span>Pie share uses only assets with an available USD price feed.</span>
+            <span>Segment widths use only assets with an available USD price feed.</span>
           </div>
         </section>
       </section>
 
-      <section className={styles.quickLinks}>
-        <button
-          type="button"
-          className={styles.quickCard}
-          onClick={() => { setFundOpen((value) => !value); setWithdrawOpen(false); }}
-          aria-expanded={fundOpen}
-        >
-          <strong>Fund agent</strong>
-          <span>Add supported assets to the agent smart account.</span>
-        </button>
-        <button
-          type="button"
-          className={styles.quickCard}
-          onClick={() => { setWithdrawOpen((value) => !value); setFundOpen(false); }}
-          aria-expanded={withdrawOpen}
-        >
-          <strong>Withdraw</strong>
-          <span>Move supported assets from the agent back to your wallet.</span>
-        </button>
-        {fundOpen || withdrawOpen ? (
-          <div className={styles.inlineAction}>
-            <WalletAssetDropdown value={asset} assets={AGENT_WALLET_ASSETS} onChange={setAsset} />
-            <input
-              className={styles.input}
-              inputMode="decimal"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="0.00"
-            />
-            <button className={styles.primaryButton} onClick={fundOpen ? fundAgent : withdrawAgent}>
-              {fundOpen ? 'Fund agent' : 'Withdraw'}
-            </button>
-          </div>
-        ) : null}
-      </section>
     </main>
   );
 }
