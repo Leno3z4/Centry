@@ -2,52 +2,42 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useAccount, useReadContract } from 'wagmi';
+import { useAccount, usePublicClient } from 'wagmi';
 import { Providers } from '../../../components/Providers';
 import { AppShell } from '../../../components/AppShell';
-import { API_BASE, FACTORY_ABI, FACTORY_ADDRESS, RUNNER_ADDRESS } from './agentClient';
+import { FACTORY_ADDRESS, RUNNER_ADDRESS, loadOwnedAgents, shortAddress } from './agentClient';
 import styles from './agents.module.css';
 
 function AgentsGate() {
   const { address, isConnected } = useAccount();
-  const router = useRouter();
+  const publicClient = usePublicClient();
   const [state, setState] = useState('loading');
-
-  const ownedAccounts = useReadContract({
-    address: FACTORY_ADDRESS || undefined,
-    abi: FACTORY_ABI,
-    functionName: 'getAgentAccounts',
-    args: address ? [address] : undefined,
-    query: {
-      enabled: Boolean(address && FACTORY_ADDRESS),
-      staleTime: 30000,
-      retry: 2,
-      refetchOnWindowFocus: false,
-    },
-  });
+  const [agents, setAgents] = useState([]);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!address) {
+    let cancelled = false;
+    if (!address || !publicClient) {
       setState('connect');
-      return;
-    }
-    if (ownedAccounts.isLoading || ownedAccounts.isFetching) {
-      setState('loading');
-      return;
-    }
-    if (ownedAccounts.error) {
-      setState('error');
-      return;
+      return () => {};
     }
 
-    const accounts = Array.isArray(ownedAccounts.data) ? ownedAccounts.data : [];
-    if (accounts.length) {
-      router.replace(`/app/agents/${accounts[0]}`);
-    } else {
-      setState('empty');
-    }
-  }, [address, ownedAccounts.data, ownedAccounts.error, ownedAccounts.isFetching, ownedAccounts.isLoading, router]);
+    setState('loading');
+    setError('');
+    loadOwnedAgents({ address, publicClient })
+      .then((next) => {
+        if (cancelled) return;
+        setAgents(next);
+        setState(next.length ? 'ready' : 'empty');
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setError(e?.message || 'Unable to load your agents.');
+        setState('error');
+      });
+
+    return () => { cancelled = true; };
+  }, [address, publicClient]);
 
   if (state === 'connect' || !isConnected) {
     return (
@@ -55,7 +45,8 @@ function AgentsGate() {
         <section className={styles.emptyHero}>
           <div className={styles.kicker}>Automation</div>
           <h1>Your agents start here.</h1>
-          <p>Connect your wallet to create and manage an onchain agent with its own smart-account wallet.</p>
+          <p>Connect your wallet to create and manage multiple user-owned onchain agents.</p>
+          <Link className={styles.primaryHeroButton} href="/app/agents/create">Create agent</Link>
         </section>
       </main>
     );
@@ -68,49 +59,60 @@ function AgentsGate() {
   if (state === 'error') {
     return (
       <main className={styles.page}>
-        <div className={styles.error}>{ownedAccounts.error?.message || 'Unable to load your agents.'}</div>
-        <Link className={styles.secondaryButton} href="/app/agents">Try again</Link>
+        <div className={styles.error}>{error}</div>
+        <button className={styles.secondaryButton} type="button" onClick={() => window.location.reload()}>Try again</button>
+      </main>
+    );
+  }
+
+  if (!agents.length) {
+    return (
+      <main className={styles.page}>
+        <section className={styles.emptyHero}>
+          <div className={styles.kicker}>Centry Agents</div>
+          <h1>Build your first agent.</h1>
+          <p>Create a user-owned smart account, define its strategy and permissions, then activate it when you are ready.</p>
+          <Link className={styles.primaryHeroButton} href="/app/agents/create">Create agent</Link>
+        </section>
       </main>
     );
   }
 
   return (
     <main className={styles.page}>
-      <section className={styles.createHero}>
-        <div className={styles.kicker}>Centry Agents</div>
-        <h1>Build automation you control.</h1>
-        <p>Give an agent its own smart-account wallet, define exactly what it may do, and keep execution off until you decide to activate it.</p>
-        <Link className={styles.primaryHeroButton} href="/app/agents/create">Create agent</Link>
-        <div className={styles.heroFoot}>
-          <span>Wallet-controlled</span>
-          <span>Runs on Arc</span>
-          <span>Starts OFF</span>
+      <header className={styles.networkHeader}>
+        <div>
+          <div className={styles.kicker}>Centry agent network</div>
+          <h1>{agents.length} {agents.length === 1 ? 'agent' : 'agents'}</h1>
+          <p>Study, coordinate and communicate inside the canonical Centry genesis network.</p>
         </div>
+        <Link className={styles.primaryButton} href="/app/agents/create">Create agent</Link>
+      </header>
+
+      <section className={styles.agentList} aria-label="Your agents">
+        {agents.map((agent) => (
+          <Link key={agent.account} href={`/app/agents/${agent.account}`} className={styles.agentRow}>
+            <div className={styles.agentRowMain}>
+              <strong>{agent.name || 'Centry Agent'}</strong>
+              <span>{agent.description || 'Configurable Centry onchain agent.'}</span>
+            </div>
+            <div className={styles.agentRowMeta}>
+              <span className={agent.active ? styles.statusOn : styles.statusOff}>{agent.active ? 'ACTIVE' : 'OFF'}</span>
+              <code>{shortAddress(agent.account)}</code>
+              <span className={styles.agentRowArrow}>Open →</span>
+            </div>
+          </Link>
+        ))}
       </section>
 
-      <section className={styles.quickLinks} aria-label="How Centry automation works">
-        <div className={styles.quickCard}>
-          <strong>1. Decide</strong>
-          <span>Choose the job, AI provider, and actions the agent is allowed to use.</span>
-        </div>
-        <div className={styles.quickCard}>
-          <strong>2. Authorize</strong>
-          <span>Your connected wallet remains the owner of the smart account and its configuration.</span>
-        </div>
-        <div className={styles.quickCard}>
-          <strong>3. Run</strong>
-          <span>Activation turns the configured agent on. Execution stays bounded by its policy and permissions.</span>
-        </div>
-      </section>
-
-      {!FACTORY_ADDRESS || !RUNNER_ADDRESS ? (
-        <div className={styles.warning}>
-          {[
-            !FACTORY_ADDRESS ? 'agent factory' : null,
-            !RUNNER_ADDRESS ? 'hosted runner' : null,
-          ].filter(Boolean).join(' and ')} must be configured before an agent can be created.
-        </div>
-      ) : null}
+      <div className={styles.networkNote}>
+        <span>{agents.length} local agent{agents.length === 1 ? '' : 's'}</span>
+        <span>Genesis factory boundary</span>
+        {!FACTORY_ADDRESS || !RUNNER_ADDRESS ? <span>Factory/runner configuration incomplete</span> : null}
+      </div>
+      <p className={styles.networkNoteCopy}>
+        Messages can cross owners only inside the same canonical genesis factory. Value transfer remains owner-bound.
+      </p>
     </main>
   );
 }

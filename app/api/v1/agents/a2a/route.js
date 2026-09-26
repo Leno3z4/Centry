@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { Contract, JsonRpcProvider, getAddress, isAddress } from "ethers";
 import { authenticateAgent, jsonResponse, requireScope } from "../../../../../lib/agentApi";
 import { getAgentByAccount, getAgentById, enqueueAgentTask } from "../../../../../lib/agentStore";
 
@@ -7,6 +8,38 @@ function noStore(body, status = 200) {
     status,
     headers: { "Cache-Control": "no-store" },
   });
+}
+
+const ACCOUNT_FACTORY_ABI = ["function factory() view returns (address)"];
+const FACTORY_REGISTRY_ABI = ["function isCentryAgentAccount(address account) view returns (bool)"];
+
+function configuredGenesisFactory() {
+  const value = String(process.env.CENTRY_AGENT_FACTORY || "").trim();
+  if (!isAddress(value)) throw new Error("agent_genesis_factory_not_configured");
+  return getAddress(value);
+}
+
+async function verifySameGenesisFactory(sourceAccount, targetAccount, rpcUrl) {
+  const provider = new JsonRpcProvider(rpcUrl || "https://rpc.mainnet.arc.io");
+  const expectedFactory = configuredGenesisFactory();
+  const source = new Contract(getAddress(sourceAccount), ACCOUNT_FACTORY_ABI, provider);
+  const target = new Contract(getAddress(targetAccount), ACCOUNT_FACTORY_ABI, provider);
+  const sourceFactory = getAddress(await source.factory());
+  const targetFactory = getAddress(await target.factory());
+
+  if (sourceFactory.toLowerCase() !== expectedFactory.toLowerCase()) {
+    throw new Error("source_not_created_by_genesis_factory");
+  }
+  if (targetFactory.toLowerCase() !== expectedFactory.toLowerCase()) {
+    throw new Error("external_genesis_agent_prohibited");
+  }
+
+  const factory = new Contract(expectedFactory, FACTORY_REGISTRY_ABI, provider);
+  if (!(await factory.isCentryAgentAccount(getAddress(targetAccount)))) {
+    throw new Error("target_not_created_by_genesis_factory");
+  }
+
+  return expectedFactory;
 }
 
 export async function GET(request) {
@@ -30,6 +63,7 @@ export async function GET(request) {
       taskStatus: `${origin}/api/v1/agent-connections/session/a2a/task?taskId={taskId}`,
     },
     onchainExecution: "user-owned-agent-account",
+    communicationBoundary: "canonical-genesis-factory",
   });
 }
 
@@ -61,7 +95,20 @@ export async function POST(request) {
   const toAgent = await getAgentById(toAgentId).catch(() => null);
   if (!toAgent) return noStore({ error: "target_agent_not_found" }, 404);
   if (toAgent.id === fromAgent.id) return noStore({ error: "self_message_not_allowed" }, 400);
-  if (String(toAgent.owner).toLowerCase() !== String(fromAgent.owner).toLowerCase()) return noStore({ error: "external_agent_interaction_prohibited" }, 403);
+  try {
+    await verifySameGenesisFactory(
+      fromAgent.account,
+      toAgent.account,
+      process.env.CENTRY_AGENT_RPC_URL,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    return noStore({
+      error: /genesis_factory|external_genesis|target_not_created/i.test(message)
+        ? "external_agent_interaction_prohibited"
+        : "agent_genesis_validation_failed",
+    }, 403);
+  }
 
   const taskId = crypto.randomUUID();
   try {

@@ -5,6 +5,7 @@ import { upsertAgent } from "../../../../../lib/agentStore";
 
 const ACCOUNT_ABI = [
   "function owner() view returns (address)",
+  "function factory() view returns (address)",
   "function active() view returns (bool)",
   "function templateId() view returns (bytes32)",
   "function configHash() view returns (bytes32)",
@@ -26,6 +27,11 @@ export async function POST(request) {
   }
 
   const rpcUrl = process.env.CENTRY_AGENT_RPC_URL;
+  const genesisFactory = process.env.CENTRY_AGENT_FACTORY;
+  if (!genesisFactory || !isAddress(genesisFactory)) {
+    return Response.json({ error: "agent_genesis_factory_not_configured" }, { status: 503 });
+  }
+
   try {
     await verifyOwnerSession({
       request,
@@ -33,17 +39,31 @@ export async function POST(request) {
       account: getAddress(account),
     });
 
-    const contract = new Contract(getAddress(account), ACCOUNT_ABI, new JsonRpcProvider(rpcUrl));
-    const [onchainOwner, active, templateId, configHash, metadataURI] = await Promise.all([
+    const provider = new JsonRpcProvider(rpcUrl);
+    const contract = new Contract(getAddress(account), ACCOUNT_ABI, provider);
+    const factoryContract = new Contract(
+      getAddress(genesisFactory),
+      ["function isCentryAgentAccount(address account) view returns (bool)"],
+      provider,
+    );
+    const [onchainOwner, active, templateId, configHash, metadataURI, accountFactory, registeredByGenesis] = await Promise.all([
       contract.owner(),
       contract.active(),
       contract.templateId(),
       contract.configHash(),
       contract.metadataURI(),
+      contract.factory(),
+      factoryContract.isCentryAgentAccount(getAddress(account)),
     ]);
 
     if (getAddress(onchainOwner).toLowerCase() !== getAddress(owner).toLowerCase()) {
       throw new Error("account_owner_mismatch");
+    }
+    if (getAddress(accountFactory).toLowerCase() !== getAddress(genesisFactory).toLowerCase()) {
+      throw new Error("agent_not_created_by_genesis_factory");
+    }
+    if (!registeredByGenesis) {
+      throw new Error("agent_not_registered_by_genesis_factory");
     }
 
     const agent = await upsertAgent({
