@@ -24,14 +24,21 @@ function formatNumber(value, digits = 1) {
   });
 }
 
-function HealthMeter({ percent, factor }) {
+function healthTone(percent) {
+  const safe = Number(percent || 0);
+  if (safe < 35) return 'danger';
+  if (safe < 70) return 'warning';
+  return 'safe';
+}
+
+function HealthMeter({ percent, factor, compact = false }) {
   const safe = Math.min(Math.max(Number(percent || 0), 0), 100);
 
   return (
-    <div className="health-meter">
+    <div className={compact ? "health-meter health-meter-compact" : "health-meter"}>
       <div className="health-meter-head">
         <span>Account health</span>
-        <strong>{safe}%</strong>
+        <strong className={'health-value-' + healthTone(safe)}>{factor || safe + '%'}</strong>
       </div>
       <div className="health-factor-label">Health factor {factor || '—'}</div>
       <div
@@ -42,7 +49,7 @@ function HealthMeter({ percent, factor }) {
         aria-valuenow={safe}
         aria-label="Position health"
       >
-        <div className="health-fill" style={{ width: safe + '%' }} />
+        <div className={'health-fill health-fill-' + healthTone(safe)} style={{ width: safe + '%' }} />
       </div>
       <p>Higher is safer. A healthy account stays above the liquidation boundary.</p>
     </div>
