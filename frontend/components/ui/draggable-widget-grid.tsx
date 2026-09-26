@@ -33,8 +33,8 @@ const SIZE_MAP: Record<WidgetSize, { col: number; row: number }> = {
   lg: { col: 2, row: 2 },
 }
 
-const LAYOUT_SPRING = { type: 'spring', visualDuration: 0.38, bounce: 0.16 }
-const DRAG_SPRING = { type: 'spring', visualDuration: 0.26, bounce: 0.32 }
+const LAYOUT_SPRING = { type: 'spring', visualDuration: 0.38, bounce: 0.16 } as const
+const DRAG_SPRING = { type: 'spring', visualDuration: 0.26, bounce: 0.32 } as const
 const DRAG_SCALE = 1.03
 const TOUCH_HOLD_MS = 350
 const TOUCH_MOVE_THRESHOLD = 8
