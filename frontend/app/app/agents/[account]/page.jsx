@@ -317,6 +317,7 @@ function DashboardContent() {
 
   const recent = useMemo(() => activity.slice(0, 5), [activity]);
   const runtimeAlert = getRuntimeAlert(runtime);
+  const healthWarning = getHealthWarning(runtime);
 
   const automation = useMemo(() => {
     if (!runtime) return { label: 'Checking…', tone: 'statusMuted' };
