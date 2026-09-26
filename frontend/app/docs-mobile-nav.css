@@ -2,14 +2,14 @@
 /* Docs mobile section navigation: keep the reading column full width. */
 .docs-layout {
   display: grid;
-  grid-template-columns: 210px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 190px;
   gap: 18px;
   align-items: start;
 }
 
 .docs-sidebar {
   position: sticky;
-  top: 20px;
+  top: 84px;
 }
 
 .docs-sidebar-links {
@@ -158,4 +158,12 @@
   .docs-mobile-menu-layer {
     display: none !important;
   }
+}
+
+.docs-content > section { scroll-margin-top: 84px; }
+@media (prefers-reduced-motion: reduce) {
+  .docs-mobile-menu-button,
+  .docs-mobile-menu,
+  .docs-mobile-menu-links a,
+  .docs-sidebar-links a { transition: none !important; }
 }
