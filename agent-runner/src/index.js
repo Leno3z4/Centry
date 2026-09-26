@@ -852,7 +852,7 @@ function extractJson(text) {
   return JSON.parse(withoutFence.slice(start, end + 1));
 }
 
-async function fetchWithTimeout(url, options = {}, timeoutMs = 25_000) {
+async function fetchWithTimeout(url, options = {}, timeoutMs = 60_000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
