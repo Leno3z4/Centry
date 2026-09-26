@@ -667,6 +667,40 @@ export function WalletConnect() {
             color: #7a5310;
           }
         `}</style>
+
+          .wallet-widget {
+            display:flex;
+            align-items:center;
+            gap:13px;
+            min-height:46px;
+            padding:5px 6px 5px 12px;
+            border:1px solid #24272b;
+            border-radius:13px;
+            background:#0d0f12;
+          }
+          .wallet-widget-balance { display:grid; gap:2px; }
+          .wallet-widget-balance span {
+            color:rgba(255,255,255,.45);
+            font-size:9px;
+            letter-spacing:.04em;
+            text-transform:uppercase;
+          }
+          .wallet-widget-balance strong { color:#fff; font-size:12px; font-weight:650; line-height:1.1; }
+          .wallet-widget-divider { width:1px; height:24px; background:#24272b; }
+          .wallet-widget .wallet-address {
+            min-height:36px;
+            padding:8px 9px;
+            border-color:transparent;
+            background:transparent;
+          }
+          .wallet-widget .wallet-address:hover { border-color:#2a2d32; background:#14171b; }
+          @media (max-width:640px) {
+            .wallet-widget { gap:8px; padding-left:9px; }
+            .wallet-widget-balance span { display:none; }
+            .wallet-widget-balance strong { font-size:11px; }
+            .wallet-widget-divider { height:20px; }
+            .wallet-widget .wallet-address { font-size:10px; }
+          }
       </>
     );
   }
@@ -690,27 +724,29 @@ export function WalletConnect() {
         </p>
       ) : null}
 
-      <div className="wallet-balance">
-        <span>Test balance</span>
-        <strong>
-          {Number(usdcBalance || 0).toLocaleString(undefined, {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}{' '}
-          USDC
-        </strong>
+      <div className="wallet-widget">
+        <div className="wallet-widget-balance">
+          <span>USDC balance</span>
+          <strong>
+            {Number(usdcBalance || 0).toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}{' '}
+            USDC
+          </strong>
+        </div>
+        <span className="wallet-widget-divider" aria-hidden="true" />
+        <button
+          type="button"
+          className="wallet-address"
+          onClick={() => disconnect()}
+          title="Disconnect wallet"
+          aria-label={`Disconnect ${shortenAddress(address)}`}
+        >
+          <span className="wallet-status-dot" aria-hidden="true" />
+          {shortenAddress(address)}
+        </button>
       </div>
-
-      <button
-        type="button"
-        className="wallet-address"
-        onClick={() => disconnect()}
-        title="Disconnect wallet"
-        aria-label={`Disconnect ${shortenAddress(address)}`}
-      >
-        <span className="wallet-status-dot" aria-hidden="true" />
-        {shortenAddress(address)}
-      </button>
     </div>
   );
 }
