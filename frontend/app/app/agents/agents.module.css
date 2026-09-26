@@ -1814,3 +1814,140 @@
     margin-right: 6px;
   }
 }
+
+.networkPanel {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #242424;
+  border-radius: 14px;
+  background: #0d0d0d;
+}
+
+.networkPanelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.networkPanelHead h2 {
+  margin: 4px 0 0;
+  color: #fff;
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.networkPanelHead p {
+  margin: 4px 0 0;
+  color: rgba(255,255,255,.45);
+  font-size: 10px;
+}
+
+.networkPeers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.networkPeer,
+.networkPeerActive {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #242424;
+  border-radius: 10px;
+  background: #111111;
+  color: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.networkPeerActive {
+  border-color: #4a4a4a;
+  background: #181818;
+}
+
+.networkPeer > span:first-child,
+.networkPeerActive > span:first-child {
+  display: grid;
+  min-width: 0;
+}
+
+.networkPeer strong,
+.networkPeerActive strong {
+  overflow: hidden;
+  max-width: 150px;
+  color: #fff;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.networkPeer small,
+.networkPeerActive small {
+  margin-top: 2px;
+  color: rgba(255,255,255,.4);
+  font: 9px var(--mono-font);
+}
+
+.networkPeer > span:last-child,
+.networkPeerActive > span:last-child {
+  color: rgba(255,255,255,.35);
+  font-size: 9px;
+}
+
+.networkComposer {
+  display: grid;
+  grid-template-columns: minmax(150px, .8fr) minmax(0, 1.8fr) auto;
+  gap: 7px;
+}
+
+.networkStatus,
+.networkEmpty {
+  margin: 0;
+  color: rgba(255,255,255,.45);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+@media (max-width: 760px) {
+  .networkPanel {
+    padding: 12px;
+    border-radius: 13px;
+  }
+
+  .networkPanelHead {
+    align-items: flex-start;
+  }
+
+  .networkComposer {
+    grid-template-columns: 1fr;
+  }
+
+  .networkComposer .primaryButton,
+  .networkComposer .input {
+    width: 100%;
+    min-height: 46px;
+  }
+
+  .networkPeers {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .networkPeers::-webkit-scrollbar {
+    display: none;
+  }
+
+  .networkPeer,
+  .networkPeerActive {
+    flex: 0 0 auto;
+  }
+}
