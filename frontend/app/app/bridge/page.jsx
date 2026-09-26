@@ -223,10 +223,10 @@ function BridgeContent() {
         <button
           type="button"
           className={styles.primaryButton}
-          disabled={!isConnected || !validAmount || fromId === toId || stage === 'submitting' || stage === 'pending'}
+          disabled={!isConnected || !validAmount || balanceInsufficient || fromId === toId || stage === 'submitting' || stage === 'pending'}
           onClick={bridge}
         >
-          {buttonLabel}
+          {balanceInsufficient ? 'Insufficient USDC balance' : buttonLabel}
         </button>
 
         {stage === 'submitting' ? <div className={styles.notice}>Submitting the bridge request to Tower…</div> : null}
