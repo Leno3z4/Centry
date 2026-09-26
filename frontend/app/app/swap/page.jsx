@@ -75,6 +75,8 @@ function SwapContent() {
   const [amount, setAmount] = useState('');
   const [slippage, setSlippage] = useState('0.50');
   const [fundingSource, setFundingSource] = useState('wallet');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [tradeDetailsOpen, setTradeDetailsOpen] = useState(false);
   const [quote, setQuote] = useState(null);
   const [preparedTransactions, setPreparedTransactions] = useState(null);
   const [swapTx, setSwapTx] = useState(null);
@@ -102,10 +104,21 @@ function SwapContent() {
   const networkBlocksAction = wrongNetwork && !gatewayCanQuoteOffArc;
   const { data: inputDecimals } = useReadContract({ address: fromMarket?.address, abi: ERC20_ABI, functionName: 'decimals', query: { enabled: Boolean(fromMarket?.address) } });
   const { data: outputDecimals } = useReadContract({ address: toMarket?.address, abi: ERC20_ABI, functionName: 'decimals', query: { enabled: Boolean(toMarket?.address) } });
-  const { data: arcWalletBalanceRaw } = useReadContract({ address: gatewayEnabled ? fromMarket?.address : undefined, abi: ERC20_ABI, functionName: 'balanceOf', args: address ? [address] : undefined, chainId: ARC_CHAIN_ID, query: { enabled: Boolean(address && gatewayEnabled) } });
-  const arcWalletBalance = gatewayEnabled && arcWalletBalanceRaw != null ? formatUnits(arcWalletBalanceRaw, 6) : '0';
+  const { data: arcWalletBalanceRaw } = useReadContract({
+    address: fromMarket?.address,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
+    chainId: ARC_CHAIN_ID,
+    query: { enabled: Boolean(address && fromMarket?.address) },
+  });
   const fromTokenDecimals = Number(inputDecimals ?? fromMarket?.decimals ?? 6);
   const toTokenDecimals = Number(outputDecimals ?? toMarket?.decimals ?? 6);
+  const arcWalletBalance = arcWalletBalanceRaw != null ? formatUnits(arcWalletBalanceRaw, fromTokenDecimals) : '0';
+  const walletBalanceNumber = safeNumber(arcWalletBalance) ?? 0;
+  const amountNumber = safeNumber(amount) ?? 0;
+  const walletAmountUnavailable = fundingSource === 'wallet' && amountNumber > walletBalanceNumber;
+  const amountUnavailable = gatewayAmountUnavailable || walletAmountUnavailable;
 
   const slippageBps = useMemo(() => {
     const parsed = Number(slippage);
@@ -119,6 +132,7 @@ function SwapContent() {
   }, [amount, fromTokenDecimals]);
 
   useEffect(() => { if (!gatewayEnabled) setFundingSource('wallet'); }, [gatewayEnabled]);
+  useEffect(() => { setTradeDetailsOpen(Boolean(quote)); }, [quote]);
 
   useEffect(() => {
     const requestId = ++requestIdRef.current;
