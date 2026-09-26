@@ -8,6 +8,7 @@ import { Providers } from '../../../../../components/Providers';
 import { AppShell } from '../../../../../components/AppShell';
 import { loadOwnedAgents, API_BASE, apiJson, ensureOwnerSession } from '../../agentClient';
 import styles from '../../agents.module.css';
+import AITaskList from '../../../../../components/ui/ai-task-list';
 
 function ChatContent() {
   const { account } = useParams();
@@ -20,6 +21,28 @@ function ChatContent() {
   const [messages, setMessages] = useState([]);
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
+
+  const taskPlan = [
+    {
+      id: 'understand',
+      label: 'Understand the request',
+      status: sending ? 'running' : messages.length ? 'done' : 'pending',
+    },
+    {
+      id: 'evaluate',
+      label: 'Evaluate agent context',
+      status: messages.length ? (sending ? 'pending' : 'done') : 'pending',
+      children: [
+        { id: 'policy', label: 'Check configured permissions', status: messages.length && !sending ? 'done' : 'pending' },
+        { id: 'runtime', label: 'Prepare agent runtime', status: sending ? 'running' : 'pending' },
+      ],
+    },
+    {
+      id: 'execute',
+      label: 'Execute and return result',
+      status: sending ? 'running' : 'pending',
+    },
+  ];
 
   useEffect(() => {
     if (!address || !publicClient) return;
@@ -122,7 +145,9 @@ function ChatContent() {
       {error ? <div className={styles.error}>{error}</div> : null}
 
       <section className={styles.chatPage}>
-        <div className={styles.chat}>
+        <div className={styles.chatWorkspace}>
+          <div className={styles.chat}>
+
           <div className={styles.chatHistory}>
             {messages.length ? messages.map((item, index) => (
               <div key={item.id || index} className={item.role === 'user' ? styles.chatUser : styles.chatAgent}>
@@ -136,7 +161,12 @@ function ChatContent() {
               </div>
             )}
           </div>
+          </div>
         </div>
+
+        <aside className={styles.chatPlan}>
+          <AITaskList label="Agent plan" tasks={taskPlan} />
+        </aside>
 
         <div className={styles.chatComposerLarge}>
           <input className={styles.input} value={message} onChange={(e) => setMessage(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) sendChat(); }} placeholder="Message your agent…" />
