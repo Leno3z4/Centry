@@ -35,7 +35,14 @@ async function verifySameGenesisFactory(sourceAccount, targetAccount, rpcUrl) {
   }
 
   const factory = new Contract(expectedFactory, FACTORY_REGISTRY_ABI, provider);
-  if (!(await factory.isCentryAgentAccount(getAddress(targetAccount)))) {
+  const [sourceRegistered, targetRegistered] = await Promise.all([
+    factory.isCentryAgentAccount(getAddress(sourceAccount)),
+    factory.isCentryAgentAccount(getAddress(targetAccount)),
+  ]);
+  if (!sourceRegistered) {
+    throw new Error("source_not_registered_by_genesis_factory");
+  }
+  if (!targetRegistered) {
     throw new Error("target_not_created_by_genesis_factory");
   }
 
