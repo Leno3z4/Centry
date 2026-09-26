@@ -201,7 +201,7 @@ function BridgeContent() {
         <div><span className={styles.kicker}>CENTRY · BRIDGE</span><h1>Move USDC across chains</h1><p>Bridge USDC between the supported networks without leaving Centry.</p></div>
       </header>
 
-      <section className={styles.card}>
+      <section className={styles.bridgeCard}>
         <div className={styles.transferFields}>
         <div className={styles.fieldCard}><div className={styles.fieldLabelRow}><label>From</label><span>Source network</span></div><ChainPicker value={fromId} chains={sourceChains} onChange={changeFrom} label="Source chain" /></div>
         <button type="button" className={styles.arrowButton} onClick={switchDirection} disabled={stage === 'switching' || stage === 'submitting'} aria-label="Switch bridge direction" title="Switch bridge direction">⇅</button>
