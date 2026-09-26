@@ -350,16 +350,22 @@ export async function POST(request) {
     if (explicit) {
       const normalized = normalizePlan(explicit.plan);
       const safePlan = explicit.plan ? applyContextSafety(normalized, verifiedContext) : null;
+      if (explicit.plan && !safePlan) {
+        const message = verifiedContext?.verified
+          ? 'I did not prepare that transaction because it exceeds the verified onchain balance or position.'
+          : 'Connect your wallet so I can verify your current state and open the wallet signing flow.';
+        return withRateLimitHeaders(NextResponse.json({
+          success: true,
+          answer: message,
+          plan: null,
+          provider: 'deterministic',
+        }), limit);
+      }
       return withRateLimitHeaders(NextResponse.json({
         success: true,
         answer: explicit.answer,
         plan: safePlan,
         provider: 'deterministic',
-        ...(explicit.plan && !safePlan ? {
-          warning: verifiedContext.verified
-            ? 'I did not prepare that transaction because it exceeds the verified onchain balance or position.'
-            : 'I did not prepare that transaction because authoritative onchain state is unavailable.',
-        } : {}),
       }), limit);
     }
 
