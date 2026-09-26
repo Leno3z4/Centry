@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { CENTRY_AGENT_SYSTEM_PROMPT, fallbackPositionAnswer } from '../../../lib/agentContext';
+import { CENTRY_AGENT_SYSTEM_PROMPT, CENTRY_KNOWLEDGE_BASE, fallbackPositionAnswer } from '../../../lib/agentContext';
 import { rateLimit, rateLimitResponse, withRateLimitHeaders } from '../../../lib/rateLimit';
 import { SWAP_MARKETS } from '../../../constants/markets';
 
@@ -89,20 +89,6 @@ function parseExplicitExecution(question, context) {
     return { answer: 'Tell me the source and destination, for example: “bridge 10 USDC from Base to Arc”.', plan: null };
   }
 
-  match = text.match(/\b(?:claim|claim my)\s+(?:reward|rewards)\s+(?:for\s+)?(?:vec?ent\s*)?#?(\d+)\b/);
-  if (match) return { answer: `Claim reward for veCENT #${match[1]}. Opening the wallet signature now.`, plan: { title: `Claim veCENT #${match[1]} reward`, reason: 'Explicit reward claim request.', autoExecute: true, actions: [{ type: ACTIONS.reward, tokenId: Number(match[1]) }] } };
-
-  match = text.match(/\b(?:lock)\s+(\d+(?:\.\d+)?)\s*cent\s+(?:for\s+)?(\d+)\s*weeks?\b/);
-  if (match) {
-    const amount = parseNumber(match[1]);
-    const weeks = Number(match[2]);
-    if (amount && weeks > 0) return { answer: `Lock ${amount} CENT for ${weeks} weeks. Opening the wallet signature now.`, plan: { title: `Create ${weeks}-week veCENT lock`, reason: 'Explicit governance request.', autoExecute: true, actions: [{ type: ACTIONS.lock, amount: String(amount), weeks }] } };
-  }
-
-  if (/^lock\b/.test(text)) {
-    return { answer: 'Tell me the lock duration too, for example: “lock 500 CENT for 52 weeks”.', plan: null };
-  }
-
   return null;
 }
 
@@ -126,7 +112,7 @@ Read-only questions must return plan:null. A transaction plan requires explicit 
 `;
 
 function buildPrompt({ question, context }) {
-  return `${CENTRY_AGENT_SYSTEM_PROMPT}\n\n${EXECUTION_SCHEMA}\n\nMARKETS:\n${JSON.stringify(MARKET_REFERENCE)}\n\nPOSITION:\n${JSON.stringify(context, null, 2)}\n\nREQUEST:\n${question}`;
+  return `${CENTRY_AGENT_SYSTEM_PROMPT}\n\n${EXECUTION_SCHEMA}\n\nVERIFIED CENTRY REFERENCE:\n${CENTRY_KNOWLEDGE_BASE}\n\nMARKETS:\n${JSON.stringify(MARKET_REFERENCE)}\n\nPOSITION:\n${JSON.stringify(context, null, 2)}\n\nREQUEST:\n${question}`;
 }
 
 function parseModelJson(text) {
