@@ -296,7 +296,7 @@ function ConfigureContent() {
           <div><strong>Centry runner</strong><p>{RUNNER_ADDRESS || 'Not configured'}</p></div>
           <div className={styles.price}>Arc · 5042</div>
         </div>
-        <button className={styles.secondaryButton} onClick={authorizeRunner} disabled={saving || authorizing || (!connectorClient && !walletClient)}>
+        <button className={styles.secondaryButton} onClick={authorizeRunner} disabled={saving || authorizing}>
           {authorizing ? 'Authorizing…' : 'Authorize runner + saved permissions'}
         </button>
       </section>
