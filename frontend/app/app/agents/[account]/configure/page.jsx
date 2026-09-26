@@ -158,6 +158,9 @@ function ConfigureContent() {
       return setError('This wallet does not support atomic batch authorization on Arc Mainnet. No transaction was sent.');
     }
 
+    // Authorization must remain atomic: this account contract exposes individual owner setters, so
+    // silently falling back to sequential transactions could leave permissions partially changed.
+
     const policy = agent.config?.policy;
     const allowedActions = policy?.allowedActions || AGENT_ACTION_OPTIONS.map(([value]) => value);
     const allowedAssets = policy?.allowedAssets || AGENT_ASSET_OPTIONS.map(([value]) => value);
