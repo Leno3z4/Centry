@@ -143,6 +143,10 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
         initialized = true;
     }
 
+    function financialLimitVersion() external pure returns (uint256) {
+        return FINANCIAL_LIMIT_VERSION;
+    }
+
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
         _;
