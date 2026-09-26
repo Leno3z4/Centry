@@ -272,15 +272,43 @@ function SwapContent() {
       <header className={styles.header}><div><span className={styles.kicker}>CENTRY · SWAP</span><h1>Swap assets</h1><p>Find a routed Arc swap without leaving Centry.</p></div></header>
       <div className={styles.panelGrid}>
         <section className={styles.panel}>
-          <div className={styles.panelHead}><div><span className={styles.kicker}>ARC SWAP</span><h2>Exchange</h2></div></div>
+          <div className={styles.panelHead}>
+            <div><span className={styles.kicker}>ARC SWAP</span><h2>Exchange</h2></div>
+            <div className={styles.settingsWrap}>
+              <button type="button" className={styles.settingsButton} onClick={() => setSettingsOpen((open) => !open)} aria-expanded={settingsOpen} aria-haspopup="dialog" aria-label="Swap settings">⚙</button>
+              {settingsOpen ? (
+                <div className={styles.settingsPopover} role="dialog" aria-label="Swap settings">
+                  <strong>Swap settings</strong>
+                  <span>Slippage tolerance used for the routed quote.</span>
+                  <label>Slippage tolerance
+                    <span className={styles.settingsInputWrap}>
+                      <input className={styles.slippageInput} value={slippage} onChange={(event) => setSlippage(event.target.value)} inputMode="decimal" aria-label="Slippage tolerance" />
+                      <em>%</em>
+                    </span>
+                  </label>
+                </div>
+              ) : null}
+            </div>
+          </div>
           {wrongNetwork && !gatewayCanQuoteOffArc ? <div className={`${styles.notice} ${styles.noticeError}`}><strong>Wallet is on chain {chainId}.</strong> Arc Mainnet is required for swaps.<button type="button" className={styles.inlineButton} onClick={requestArcNetwork} disabled={switchingNetwork}>{switchingNetwork ? 'Switching…' : 'Switch to Arc Mainnet'}</button></div> : null}
           <div className={styles.swapStack}>
-            <div className={styles.assetField}><label htmlFor="swap-amount">You pay</label><div className={styles.assetRow}><input id="swap-amount" className={styles.amountInput} type="text" inputMode="decimal" placeholder="0.00" value={amount} onChange={(event) => { const value = event.target.value; if (value === '' || /^\d*(\.\d*)?$/.test(value)) setAmount(value); }} /><TokenDropdown value={fromId} markets={LIVE_MARKETS} onChange={changeFrom} label="Input token" /></div></div>
+            <div className={styles.assetField}>
+              <div className={styles.amountFieldHead}>
+                <label htmlFor="swap-amount">You pay</label>
+                <div className={styles.inlineBalance}>
+                  <span>Balance: {Number(walletBalanceNumber).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 6 })} {fromMarket.symbol}</span>
+                  <button type="button" className={styles.maxButton} onClick={() => setAmount(arcWalletBalance)} disabled={!isConnected || walletBalanceNumber <= 0 || isPreparing || approvalPending}>MAX</button>
+                </div>
+              </div>
+              <div className={styles.assetRow}>
+                <input id="swap-amount" className={styles.amountInput} type="text" inputMode="decimal" placeholder="0.00" value={amount} onChange={(event) => { const value = event.target.value; if (value === '' || /^\d*(\.\d*)?$/.test(value)) setAmount(value); }} />
+                <TokenDropdown value={fromId} markets={LIVE_MARKETS} onChange={changeFrom} label="Input token" />
+              </div>
+            </div>
             <button type="button" className={styles.switchButton} onClick={swapTokens} disabled={networkBlocksAction || isPreparing || approvalPending} aria-label="Reverse swap">↕</button>
             <div className={styles.assetField}><label>Receive</label><div className={styles.assetRow}><div className={styles.amountInput}>{outputAmount}</div><TokenDropdown value={toId} markets={LIVE_MARKETS} onChange={changeTo} label="Output token" /></div></div>
           </div>
           {gatewayEnabled ? <div style={{ marginTop: 12 }}><BalanceSourceSelector value={fundingSource} onChange={setFundingSource} walletBalance={arcWalletBalance} gatewayBalances={gateway.balances} disabled={isPreparing || approvalPending} /></div> : null}
-          <div className={styles.metaRow}><span>Slippage</span><input className={styles.slippageInput} value={slippage} onChange={(event) => setSlippage(event.target.value)} inputMode="decimal" aria-label="Slippage percentage" /><span>%</span></div>
           {quote ? <div className={styles.quoteCard}><div className={styles.quoteRow}><span>Expected output</span><strong className={styles.quoteOutput}>{outputAmount} {toMarket.symbol}</strong></div><div className={styles.quoteRow}><span>Minimum received</span><strong>{minOutput} {toMarket.symbol}</strong></div><div className={styles.quoteRow}><span>Price impact</span><strong>{formatPriceImpact(safePriceImpactPercent)}</strong></div>{safePriceImpactPercent != null && safePriceImpactPercent >= 5 ? <div className={`${styles.notice} ${styles.noticeError}`}>High price impact: {formatPriceImpact(safePriceImpactPercent)}. Consider a smaller trade or a different route.</div> : null}<div className={styles.quoteRow}><span>Route</span><strong>{typeof quote.route === 'string' ? quote.route : 'Automatic route'}</strong></div></div> : <div className={styles.quoteStatus}>{networkBlocksAction ? 'Switch to Arc Mainnet or select Gateway unified.' : stage === 'quoting' ? 'Fetching the best available route…' : stage === 'preparing' ? 'Preparing the transaction…' : 'Enter an amount to get a quote.'}</div>}
           {gatewayAmountUnavailable ? <div className={`${styles.notice} ${styles.noticeError}`}>Gateway unified balance is too low for this amount.</div> : null}
           {notice && <div className={styles.notice}>{notice}</div>}
