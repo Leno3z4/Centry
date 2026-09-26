@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { CENTRY_AGENT_SYSTEM_PROMPT, CENTRY_KNOWLEDGE_BASE, fallbackPositionAnswer } from '../../../lib/agentContext';
 import { rateLimit, rateLimitResponse, withRateLimitHeaders } from '../../../lib/rateLimit';
 import { SWAP_MARKETS } from '../../../constants/markets';
+import { CONTRACT_ADDRESSES } from '../../../constants/contracts';
+import { Contract, JsonRpcProvider, getAddress, isAddress, formatUnits } from 'ethers';
 
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 const DEFAULT_MODEL = 'gemini-3.1-flash-lite';
@@ -24,6 +26,110 @@ const MARKET_REFERENCE = SWAP_MARKETS
     address: market.address,
     status: market.status,
   }));
+
+const ERC20_BALANCE_ABI = ['function balanceOf(address) view returns (uint256)'];
+const LENDING_STATE_ABI = [
+  'function supplyBalance(address user,address asset) view returns (uint256)',
+  'function borrowBalance(address user,address asset) view returns (uint256)',
+  'function healthFactor(address user) view returns (uint256)',
+  'function borrowPower(address user) view returns (uint256)',
+  'function getReserveState(address asset) view returns (uint256 liquidityIndex,uint256 borrowIndex,uint256 totalScaledSupply,uint256 totalScaledBorrow,uint40 lastAccrual)',
+  'function utilization(address asset) view returns (uint256)',
+];
+
+function rpcProvider() {
+  return new JsonRpcProvider(
+    process.env.CENTRY_AGENT_RPC_URL || process.env.NEXT_PUBLIC_ARC_RPC_URL || 'https://rpc.mainnet.arc.io',
+    5042,
+  );
+}
+
+async function readAuthoritativeContext(account, requestedMarketSymbol = 'USDC') {
+  if (!isAddress(account)) return { verified: false, error: 'connected_account_required' };
+
+  const normalizedAccount = getAddress(account);
+  const provider = rpcProvider();
+  const network = await provider.getNetwork();
+  if (Number(network.chainId) !== 5042) return { verified: false, error: 'authoritative_state_chain_mismatch' };
+
+  const poolAddress = process.env.CENTRY_LENDING_POOL || CONTRACT_ADDRESSES.lendingPool;
+  if (!isAddress(poolAddress)) return { verified: false, error: 'lending_pool_not_configured' };
+  const pool = new Contract(getAddress(poolAddress), LENDING_STATE_ABI, provider);
+
+  const marketRows = await Promise.all(MARKET_REFERENCE.map(async (market) => {
+    const token = new Contract(getAddress(market.address), ERC20_BALANCE_ABI, provider);
+    const [walletRaw, suppliedRaw, borrowedRaw] = await Promise.all([
+      token.balanceOf(normalizedAccount),
+      pool.supplyBalance(normalizedAccount, getAddress(market.address)),
+      pool.borrowBalance(normalizedAccount, getAddress(market.address)),
+    ]);
+    return {
+      symbol: market.symbol,
+      id: market.id,
+      address: market.address,
+      decimals: market.decimals,
+      walletBalance: formatUnits(walletRaw, market.decimals),
+      supplied: formatUnits(suppliedRaw, market.decimals),
+      borrowed: formatUnits(borrowedRaw, market.decimals),
+    };
+  }));
+
+  const [healthFactorRaw, borrowPowerRaw] = await Promise.all([
+    pool.healthFactor(normalizedAccount),
+    pool.borrowPower(normalizedAccount),
+  ]);
+
+  const currentMarket = MARKET_REFERENCE.find((market) =>
+    market.symbol.toLowerCase() === String(requestedMarketSymbol || '').toLowerCase(),
+  ) || MARKET_REFERENCE.find((market) => market.symbol === 'USDC') || marketRows[0];
+  const current = marketRows.find((market) => market.address.toLowerCase() === String(currentMarket?.address || '').toLowerCase()) || marketRows[0];
+
+  let marketStats = null;
+  if (current?.address) {
+    try {
+      const [reserveState, utilizationRaw] = await Promise.all([
+        pool.getReserveState(getAddress(current.address)),
+        pool.utilization(getAddress(current.address)),
+      ]);
+      marketStats = {
+        liquidityIndex: reserveState[0].toString(),
+        borrowIndex: reserveState[1].toString(),
+        totalScaledSupply: reserveState[2].toString(),
+        totalScaledBorrow: reserveState[3].toString(),
+        lastAccrual: Number(reserveState[4]),
+        utilization: formatUnits(utilizationRaw, 18),
+      };
+    } catch {
+      marketStats = null;
+    }
+  }
+
+  return {
+    verified: true,
+    chainId: 5042,
+    account: normalizedAccount,
+    market: current?.symbol || 'USDC',
+    walletBalance: current?.walletBalance || '0',
+    supplied: current?.supplied || '0',
+    borrowed: current?.borrowed || '0',
+    healthFactor: formatUnits(healthFactorRaw, 18),
+    borrowPower: formatUnits(borrowPowerRaw, 18),
+    markets: marketRows,
+    accountPosition: {
+      ready: true,
+      address: normalizedAccount,
+      markets: marketRows.map((market) => ({
+        symbol: market.symbol,
+        walletBalance: market.walletBalance,
+        supplied: market.supplied,
+        borrowed: market.borrowed,
+      })),
+    },
+    marketStats,
+    source: 'arc-rpc',
+    verifiedAt: new Date().toISOString(),
+  };
+}
 
 function cleanText(value, maxLength) {
   return String(value ?? '').trim().slice(0, maxLength);
@@ -105,7 +211,7 @@ Supported lending assets must come from the configured Centry markets. Bridge ro
 Read-only questions must return plan:null. A transaction plan requires explicit state-changing intent. Never infer intent from topic words alone. Do not warn about liquidation unless the supplied health factor is below 1.0.
 `;
 
-function buildPrompt({ question, context }) {
+function buildPrompt({ question, context: verifiedContext }) {
   return `${CENTRY_AGENT_SYSTEM_PROMPT}\n\n${EXECUTION_SCHEMA}\n\nVERIFIED CENTRY REFERENCE:\n${CENTRY_KNOWLEDGE_BASE}\n\nMARKETS:\n${JSON.stringify(MARKET_REFERENCE)}\n\nPOSITION:\n${JSON.stringify(context, null, 2)}\n\nREQUEST:\n${question}`;
 }
 
@@ -123,30 +229,28 @@ function visibleAmount(value) {
 }
 
 function applyContextSafety(plan, context) {
-  if (!plan) return null;
-  const currentMarket = marketBySymbol(context?.market, context);
-  const walletBalance = visibleAmount(context?.walletBalance);
-  const supplied = visibleAmount(context?.supplied);
-  const borrowed = visibleAmount(context?.borrowed);
+  if (!plan || context?.verified !== true) return null;
+  const markets = Array.isArray(context.markets) ? context.markets : [];
+  const marketForAddress = (address) => markets.find(
+    (market) => String(market.address).toLowerCase() === String(address || '').toLowerCase(),
+  );
 
   for (const action of plan.actions) {
-    if (action.type === ACTIONS.supply && currentMarket && String(action.asset).toLowerCase() === String(currentMarket.address).toLowerCase() && walletBalance != null) {
-      if (Number(action.amount) > walletBalance) return null;
+    if ([ACTIONS.supply, ACTIONS.withdraw, ACTIONS.repay].includes(action.type)) {
+      const market = marketForAddress(action.asset);
+      if (!market) return null;
+      const available = action.type === ACTIONS.supply ? visibleAmount(market.walletBalance)
+        : action.type === ACTIONS.withdraw ? visibleAmount(market.supplied)
+        : visibleAmount(market.borrowed);
+      if (available != null && Number(action.amount) > available) return null;
     }
-    if (action.type === ACTIONS.withdraw && currentMarket && String(action.asset).toLowerCase() === String(currentMarket.address).toLowerCase() && supplied != null) {
-      if (Number(action.amount) > supplied) return null;
-    }
-    if (action.type === ACTIONS.repay && currentMarket && String(action.asset).toLowerCase() === String(currentMarket.address).toLowerCase() && borrowed != null) {
-      if (Number(action.amount) > borrowed) return null;
-    }
-    if (action.type === ACTIONS.swap && currentMarket && String(action.inputToken).toLowerCase() === String(currentMarket.address).toLowerCase() && walletBalance != null) {
-      if (Number(action.amount) > walletBalance) return null;
-    }
-    if (action.type === ACTIONS.bridge && String(action.fromChain).toLowerCase() === 'arc' && walletBalance != null) {
-      if (Number(action.amount) > walletBalance) return null;
+
+    if (action.type === ACTIONS.swap) {
+      const market = marketForAddress(action.inputToken);
+      const available = visibleAmount(market?.walletBalance);
+      if (!market || available == null || Number(action.amount) > available) return null;
     }
   }
-
   return plan;
 }
 
@@ -209,33 +313,49 @@ export async function POST(request) {
   try {
     const body = await request.json();
     const question = cleanText(body?.question, 500);
-    const context = body?.context && typeof body.context === 'object' ? body.context : {};
+    const requestedAccount = cleanText(body?.account, 64);
+    const requestedMarket = cleanText(body?.market || body?.context?.market || 'USDC', 32);
     if (!question) return withRateLimitHeaders(NextResponse.json({ success: false, error: 'Ask a question about Centry.' }, { status: 400 }), limit);
 
-    const explicit = parseExplicitExecution(question, context);
+    let verifiedContext = {};
+    if (requestedAccount && isAddress(requestedAccount)) {
+      try {
+        verifiedContext = await readAuthoritativeContext(requestedAccount, requestedMarket);
+      } catch (error) {
+        verifiedContext = { verified: false, account: getAddress(requestedAccount), error: error?.message || 'authoritative_state_read_failed' };
+      }
+    }
+
+    const explicit = parseExplicitExecution(question, verifiedContext);
     if (explicit) {
-      const safePlan = explicit.plan ? applyContextSafety(normalizePlan(explicit.plan), context) : null;
+      const normalized = normalizePlan(explicit.plan);
+      const safePlan = explicit.plan ? applyContextSafety(normalized, verifiedContext) : null;
       return withRateLimitHeaders(NextResponse.json({
         success: true,
         answer: explicit.answer,
         plan: safePlan,
         provider: 'deterministic',
         ...(explicit.plan && !safePlan ? {
-          warning: 'I did not prepare that transaction because it exceeds the current visible position or balance.',
+          warning: verifiedContext.verified
+            ? 'I did not prepare that transaction because it exceeds the verified onchain balance or position.'
+            : 'I did not prepare that transaction because authoritative onchain state is unavailable.',
         } : {}),
       }), limit);
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) return withRateLimitHeaders(NextResponse.json({ success: true, answer: fallbackPositionAnswer(context, question), provider: 'local-fallback' }), limit);
+    if (!apiKey) {
+      const safeContext = verifiedContext?.verified ? verifiedContext : {};
+      return withRateLimitHeaders(NextResponse.json({ success: true, answer: fallbackPositionAnswer(safeContext, question), provider: 'local-fallback' }), limit);
+    }
     const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
     const response = await fetch(`${GEMINI_ENDPOINT}/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ systemInstruction: { parts: [{ text: CENTRY_AGENT_SYSTEM_PROMPT }] }, contents: [{ role: 'user', parts: [{ text: buildPrompt({ question, context }) }] }], generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 700 } }), cache: 'no-store' });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) return withRateLimitHeaders(NextResponse.json({ success: true, answer: fallbackPositionAnswer(context, question), provider: 'local-fallback', warning: 'AI provider unavailable.' }), limit);
+    if (!response.ok) return withRateLimitHeaders(NextResponse.json({ success: true, answer: fallbackPositionAnswer(verifiedContext?.verified ? verifiedContext : {}, question), provider: 'local-fallback', warning: 'AI provider unavailable.' }), limit);
     const rawModelText = data?.candidates?.[0]?.content?.parts?.map((part) => part?.text || '').join('');
     const parsed = parseModelJson(rawModelText);
     if (!parsed) return withRateLimitHeaders(NextResponse.json({ success: true, answer: fallbackPositionAnswer(context, question), provider: model }), limit);
-    const safePlan = applyContextSafety(normalizePlan(parsed.plan), context);
+    const safePlan = applyContextSafety(normalizePlan(parsed.plan), verifiedContext);
     return withRateLimitHeaders(NextResponse.json({
       success: true,
       answer: parsed.answer || fallbackPositionAnswer(context, question),
