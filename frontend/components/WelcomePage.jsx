@@ -17,7 +17,7 @@ const AeroShards = dynamic(() => import('./AeroShards'), {
 const HOW_IT_WORKS = [
     ['01', 'Supply liquidity', 'Deposit a supported asset and earn interest as borrowers use available liquidity.'],
     ['02', 'Borrow against collateral', 'Supply eligible collateral, stay within the live risk limits, and borrow available liquidity.'],
-    ['03', 'Coordinate with veCENT', 'Lock CENT into veCENT to build voting power and participate in Centry governance.'],
+    ['03', 'Manage your position', 'Swap, bridge, repay, and monitor your capital from one account.'],
 ];
 
 function formatUsd(value) {
@@ -135,7 +135,7 @@ export default function WelcomePage() {
             <section className="landing-hero">
                 <div className="landing-hero-copy">
                     <h1>Lending, without the noise.</h1>
-                    <p>Supply liquidity, borrow against supported collateral, and coordinate the protocol through veCENT governance.</p>
+                    <p>Supply liquidity, borrow against supported collateral, and manage your capital from one account.</p>
                     <div className="landing-actions">
                         <Link className="primary-btn" href="/app">Enter Centry</Link>
                         <a className="secondary-btn" href="#how-it-works">Explore the protocol</a>
@@ -158,7 +158,7 @@ export default function WelcomePage() {
             <section id="how-it-works" className="landing-how-section">
                 <div className="landing-how-copy">
                     <h2>A lending system you can understand at a glance.</h2>
-                    <p>Three core actions connect liquidity, borrowing, risk, rewards, and governance.</p>
+                    <p>Three core actions connect liquidity, borrowing, risk, and capital management.</p>
 
                     <div className="landing-how-list">
                         {HOW_IT_WORKS.map(([number, title, text]) => (
@@ -177,7 +177,7 @@ export default function WelcomePage() {
             <section className="landing-cta">
                 <div>
                     <h2>Enter the live protocol.</h2>
-                    <p>Supply, borrow, manage your position, and follow rewards from one interface.</p>
+                    <p>Supply, borrow, manage your position, and monitor your capital from one interface.</p>
                 </div>
                 <Link className="primary-btn" href="/app">Launch app</Link>
             </section>
@@ -219,7 +219,6 @@ export default function WelcomePage() {
                 .landing-nav,
                 .landing-hero,
                 .landing-how-section,
-                .landing-governance-section,
                 .landing-cta,
                 .landing-footer {
                     width: var(--landing-content);
@@ -330,11 +329,6 @@ export default function WelcomePage() {
                 .landing-how-item h3 { margin: -3px 0 7px; font-family: var(--display-font); font-size: 25px; font-weight: 400; letter-spacing: -.4px; }
                 .landing-how-item p { margin: 0; color: rgba(255,255,255,.78); font-size: 11px; line-height: 1.7; }
 
-                .landing-governance-section { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, .75fr) minmax(180px, .7fr); gap: 90px; align-items: center; padding: 90px 0 120px; }
-                .landing-governance-copy { width: min(600px, 100%); }
-                .landing-governance-copy .secondary-btn { margin-top: 24px; }
-                .landing-governance-rule { height: 1px; background: #2a2a2a; }
-
                 .landing-cta {
                     position: relative;
                     z-index: 1;
@@ -365,8 +359,6 @@ export default function WelcomePage() {
                     .landing-nav-links::-webkit-scrollbar { display: none; }
                     .landing-hero { grid-template-columns: 1fr; min-height: auto; gap: 48px; padding: 68px 0 84px; }
                     .landing-hero-metrics { justify-self: start; width: 100%; max-width: 620px; }
-                    .landing-governance-section { grid-template-columns: 1fr; gap: 26px; }
-                    .landing-governance-rule { width: 72%; }
                     .landing-cta { grid-template-columns: 1fr; padding: 30px; }
                     .landing-cta .primary-btn { justify-self: start; }
                 }
@@ -380,18 +372,15 @@ export default function WelcomePage() {
                     .landing-hero h1 { font-size: clamp(43px, 13.5vw, 61px); letter-spacing: -2.6px; }
                     .landing-hero-copy > p { font-size: 13px; }
                     .landing-actions .primary-btn,
-                    .landing-actions .secondary-btn,
-                    .landing-governance-copy .secondary-btn { width: 100%; text-align: center; }
+                    .landing-actions .secondary-btn { width: 100%; text-align: center; }
                     .landing-metric { padding: 20px 0; }
                     .landing-metric strong { font-size: 29px; }
                     .landing-how-section { padding: 66px 0 90px; }
                     .landing-how-copy h2,
                     .landing-section-heading h2,
-                    .landing-governance-copy h2,
                     .landing-cta h2 { font-size: clamp(31px, 10vw, 43px); letter-spacing: -1.5px; }
                     .landing-how-item { grid-template-columns: 32px minmax(0,1fr); gap: 10px; }
                     .landing-how-item h3 { font-size: 22px; }
-                    .landing-governance-section { padding: 66px 0 88px; }
                     .landing-cta { margin-top: 10px; padding: 26px 22px; }
                     .landing-cta .primary-btn { width: 100%; text-align: center; }
                     .landing-footer { flex-direction: column; }
