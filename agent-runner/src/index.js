@@ -2123,7 +2123,6 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
       lastEvaluationAt: new Date().toISOString(),
       accountActive: snapshot.active,
       operatorAuthorized: snapshot.operatorAuthorized,
-      lastReason: healthWarning.active ? "health_warning" : undefined,
     }).catch(() => {});
 
     await mergeStrategyState(db, agent.id, {
