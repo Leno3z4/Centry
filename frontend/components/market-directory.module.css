@@ -42,9 +42,6 @@
 
 .headerStats {
   display: grid;
-  grid-template-columns: repeat(3, minmax(100px, 1fr));
-  min-width: min(430px, 42vw);
-  display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 28px;
   min-width: min(430px, 42vw);
@@ -79,11 +76,11 @@
   display: grid;
   grid-template-columns: minmax(220px, 1fr) auto auto;
   align-items: center;
-  gap: 10px;
-  padding: 8px;
-  border: 1px solid #25292e;
-  border-radius: 16px;
-  background: #0f1114;
+  gap: 14px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .searchWrap {
@@ -429,10 +426,6 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
   min-height: 0;
   margin-top: 18px;
   padding: 0;
@@ -528,7 +521,7 @@
   .headerStats > div:last-child {
     grid-column: 1 / -1;
     border-left: 0;
-    border-top: 1px solid #24282d;
+    border-top: 0;
   }
 
   .controls {
