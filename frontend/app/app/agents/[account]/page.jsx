@@ -113,6 +113,29 @@ function getRuntimeAlert(runtime) {
   };
 }
 
+function getHealthWarning(runtime) {
+  const raw = runtime?.executionRuntime?.strategy_state_json;
+  if (!raw) return { active: false, level: 'unknown', message: '', healthFactor: null, checkedAt: null };
+  try {
+    const state = JSON.parse(raw);
+    const warning = state?.healthWarning;
+    if (!warning || typeof warning !== 'object') {
+      return { active: false, level: 'unknown', message: '', healthFactor: null, checkedAt: null };
+    }
+    return {
+      active: Boolean(warning.active),
+      level: String(warning.level || 'unknown'),
+      message: String(warning.message || ''),
+      healthFactor: warning.healthFactor ? (() => {
+        try { return formatUnits(BigInt(warning.healthFactor), 18); } catch { return null; }
+      })() : null,
+      checkedAt: warning.checkedAt || null,
+    };
+  } catch {
+    return { active: false, level: 'unknown', message: '', healthFactor: null, checkedAt: null };
+  }
+}
+
 function DashboardContent() {
   const { account } = useParams();
   const router = useRouter();
@@ -336,47 +359,94 @@ function DashboardContent() {
       {agents.length > 1 ? <div className={styles.agentSwitcher}><span>Agent</span><select className={styles.input} value={agent.account} onChange={(e) => router.push(`/app/agents/${e.target.value}`)}>{agents.map((item) => <option key={item.account} value={item.account}>{item.name} · {shortAddress(item.account)}</option>)}</select></div> : null}
       {status ? <div className={styles.notice}>{status}</div> : null}{error ? <div className={styles.error}>{error}</div> : null}
       <section className={styles.analyticsHero}><div><span className={agent.active ? styles.statusOn : styles.statusOff}>{agent.active ? 'ACTIVE' : 'OFF'}</span><h2>Agent analytics</h2><p>Monitor this agent here. Configuration and conversation live on their own pages so the dashboard stays focused.</p></div><div className={styles.addressPanel}><span>Smart account</span><code>{agent.account}</code><button type="button" className={styles.textButton} onClick={() => navigator.clipboard.writeText(agent.account)}>Copy address</button></div></section>
-      <section className={styles.runtimeAlert} role="status" aria-live="polite">
-        <span className={styles.runtimeAlertIcon} aria-hidden="true">!</span>
-        <div>
-          <span className={styles.runtimeAlertLabel}>{runtimeAlert.label}</span>
-          <strong>{runtimeAlert.title}</strong>
-          <p>{runtimeAlert.message}</p>
-        </div>
-      </section>
-
-      <section className={styles.heartbeatPanel}>
-        <div className={styles.heartbeatHead}>
+      <section className={styles.runtimeBox}>
+        <div className={styles.runtimeBoxHead}>
           <div>
             <span className={styles.proofKicker}>Agent heartbeat &amp; performance</span>
             <h2>Runtime at a glance</h2>
-            <p>Status, automation readiness, the latest wake, and execution proof in one place.</p>
+            <p>Wake history, automation state, health warnings, and execution proof in one place.</p>
           </div>
           <span className={[styles.statusBadge, agent.active ? styles.statusRunning : styles.statusMuted].join(' ')}>
             {agent.active ? 'Running' : 'Paused'}
           </span>
         </div>
 
-        <div className={styles.heartbeatGrid}>
-          <div className={styles.heartbeatStat}>
+        {healthWarning.active ? (
+          <div className={[
+            styles.healthWarning,
+            healthWarning.level === 'liquidation' ? styles.healthWarningDanger : styles.healthWarningWarning,
+          ].join(' ')} role="alert">
+            <span className={styles.healthWarningIcon} aria-hidden="true">!</span>
+            <div>
+              <strong>
+                {healthWarning.level === 'liquidation' ? 'Liquidation risk' : healthWarning.level === 'critical' ? 'Critical health warning' : 'Health warning'}
+              </strong>
+              <p>{healthWarning.message}</p>
+              {healthWarning.healthFactor ? <small>Health factor {healthWarning.healthFactor} · checked {runtimeTime(healthWarning.checkedAt)}</small> : null}
+            </div>
+          </div>
+        ) : null}
+
+        {(runtimeAlert.tone === 'runtimeAlertDanger') ? (
+          <div className={styles.runtimeEventDanger} role="alert">
+            <strong>{runtimeAlert.title}</strong>
+            <span>{runtimeAlert.message}</span>
+          </div>
+        ) : null}
+
+        <div className={styles.runtimeSummaryGrid}>
+          <div>
             <span>Status</span>
             <strong className={[styles.statusBadge, agent.active ? styles.statusRunning : styles.statusMuted].join(' ')}>
               {agent.active ? 'Running' : 'Paused'}
             </strong>
           </div>
-          <div className={styles.heartbeatStat}>
+          <div>
             <span>Automation</span>
             <strong className={[styles.statusBadge, styles[automation.tone]].join(' ')}>{automation.label}</strong>
           </div>
-          <div className={styles.heartbeatStat}>
+          <div>
+            <span>Recent events</span>
+            <strong>{activity.length}</strong>
+          </div>
+          <div>
             <span>Last wake</span>
             <strong>{runtime?.recentRuns?.[0] ? runtimeTime(runtime.recentRuns[0].started_at) : '—'}</strong>
             <small>{runtime?.recentRuns?.[0]?.status ? runtimeStatusLabel(runtime.recentRuns[0].status) : 'No wake recorded'}</small>
           </div>
-          <div className={styles.heartbeatStat}>
-            <span>Execution proof</span>
+        </div>
+
+        <div className={styles.runtimeEventRow}>
+          <div>
+            <span>Event</span>
+            <strong>
+              {runtime?.recentRuns?.[0]
+                ? (runtime.recentRuns[0].error || runtime.recentRuns[0].reason || runtimeStatusLabel(runtime.recentRuns[0].status))
+                : 'No runner event recorded'}
+            </strong>
+          </div>
+          <div>
+            <span>Status</span>
+            <strong>{runtime?.recentRuns?.[0] ? runtimeStatusLabel(runtime.recentRuns[0].status) : 'NO RUN YET'}</strong>
+          </div>
+        </div>
+
+        <div className={styles.executionProofInline}>
+          <div>
+            <span>Heartbeat</span>
+            <strong>{runtimeTime(runtime?.executionRuntime?.heartbeat_at)}</strong>
+          </div>
+          <div>
+            <span>Evaluation</span>
+            <strong>{runtimeTime(runtime?.executionRuntime?.last_evaluation_at)}</strong>
+          </div>
+          <div>
+            <span>Result</span>
             <strong>{runtimeStatusLabel(runtime?.executionRuntime?.last_status)}</strong>
-            <small>{runtime?.executionRuntime?.last_tx_hash ? 'Transaction recorded' : 'No transaction recorded'}</small>
+          </div>
+          <div>
+            <span>Transaction</span>
+            <strong>{runtime?.executionRuntime?.last_tx_hash ? runtime.executionRuntime.last_tx_hash : '—'}</strong>
           </div>
         </div>
       </section>
