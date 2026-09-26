@@ -268,3 +268,4 @@ Live on Mainnet
 
 <!-- Deployment refresh marker — no application code changed. -->
 <!-- Redeploy pulse: documentation-only change. -->
+<!-- Redeploy pulse 2: README-only refresh. -->
