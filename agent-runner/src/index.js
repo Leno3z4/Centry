@@ -491,6 +491,26 @@ function evaluateHealthWarning(snapshot) {
   };
 }
 
+function a2aReceivePolicy(config) {
+  const a2a = config?.a2a && typeof config.a2a === "object" ? config.a2a : {};
+  const allowedAgentIds = Array.isArray(a2a.allowedAgentIds)
+    ? new Set(a2a.allowedAgentIds.map((value) => String(value).trim()).filter(Boolean))
+    : new Set();
+
+  return {
+    receiveEnabled: a2a.receiveEnabled === true,
+    allowedAgentIds,
+  };
+}
+
+function a2aTaskAllowed(config, task) {
+  const policy = a2aReceivePolicy(config);
+  if (policy.receiveEnabled !== true) return false;
+  const senderId = String(task?.from_agent_id || "").trim();
+  if (!senderId) return false;
+  return policy.allowedAgentIds.size === 0 || policy.allowedAgentIds.has(senderId);
+}
+
 function agentPolicy(autonomy) {
   const policy = autonomy && typeof autonomy.policy === "object" ? autonomy.policy : {};
   const allowedActions = Array.isArray(policy.allowedActions) && policy.allowedActions.length
@@ -2015,30 +2035,51 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
       leaseMs: 300_000,
     });
     taskLeaseId = claimed.leaseId;
-    tasks = claimed.tasks;
-    ownerChatTask = tasks.find((task) => parseOwnerChatTask(task));
-    ownerChatEnvelope = ownerChatTask ? parseOwnerChatTask(ownerChatTask) : null;
 
-    if (requestedTaskId && !ownerChatTask) {
+    const config = parseJson(agent.config_json || "{}", {});
+    const rejectedA2A = [];
+    const allowedTasks = [];
+
+    for (const task of claimed.tasks || []) {
+      const ownerRequest = parseOwnerChatTask(task);
+      if (ownerRequest || a2aTaskAllowed(config, task)) {
+        allowedTasks.push(task);
+      } else {
+        rejectedA2A.push(task);
+      }
+    }
+
+    for (const task of rejectedA2A) {
       await completeTask(
         db,
-        requestedTaskId,
+        task.id,
         taskLeaseId,
         "failed",
         JSON.stringify({
-          kind: "owner_chat_result",
-          status: "failed",
-          error: "task_not_owner_chat",
+          kind: "a2a_task_result",
+          status: "rejected",
+          error: "recipient_a2a_not_allowlisted_or_opted_in",
         }),
-      );
+      ).catch(() => {});
+    }
+
+    if (requestedTaskId && rejectedA2A.some((task) => String(task.id) === String(requestedTaskId))) {
       runStatus = "failed";
-      reason = "task_not_owner_chat";
+      reason = "recipient_a2a_not_allowlisted_or_opted_in";
+      return { agentId: agent.id, status: runStatus, reason };
+    }
+
+    tasks = allowedTasks;
+    ownerChatTask = tasks.find((task) => parseOwnerChatTask(task));
+    ownerChatEnvelope = ownerChatTask ? parseOwnerChatTask(ownerChatTask) : null;
+
+    if (requestedTaskId && !ownerChatTask && !tasks.some((task) => String(task.id) === String(requestedTaskId))) {
+      runStatus = "failed";
+      reason = "task_not_found_after_claim";
       return { agentId: agent.id, status: runStatus, reason };
     }
 
     if (ownerChatTask) tasks = [ownerChatTask];
-
-    const config = parseJson(agent.config_json || "{}", {});
     const storedAutonomy = config?.autonomy && typeof config.autonomy === "object" ? config.autonomy : {};
     const policy = config?.policy && typeof config.policy === "object" ? config.policy : {};
     const autonomy = { ...storedAutonomy, policy };
