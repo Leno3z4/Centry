@@ -30,3 +30,5 @@ jobs:
           git add agent-db/package-lock.json agent-runner/package-lock.json
           git commit -m "chore: add worker npm lockfiles"
           git push
+
+# trigger
