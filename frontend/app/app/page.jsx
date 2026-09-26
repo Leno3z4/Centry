@@ -308,7 +308,7 @@ function OverviewContent() {
         />
       </section>
 
-      <style jsx global>{\`
+      <style jsx global>{`
         .page-stack{position:relative;isolation:isolate}
         .overview-aero-background{display:none!important}
 
@@ -371,7 +371,7 @@ function OverviewContent() {
           .overview-market-row{grid-template-columns:minmax(0,1fr) auto;gap:11px}
           .overview-market-apys{display:none}
         }
-      \`}</style>
+      `}</style>
     </div>
   );
 }
