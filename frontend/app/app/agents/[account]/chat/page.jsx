@@ -147,30 +147,49 @@ function ChatContent() {
       <section className={styles.chatPage}>
         <div className={styles.chatWorkspace}>
           <div className={styles.chat}>
+            <div className={styles.chatHeader}>
+              <div>
+                <span className={styles.chatKicker}>AGENT CONVERSATION</span>
+                <h2>{agent.name}</h2>
+                <p>Ask about balances, positions, activity, or the agent's configured strategy.</p>
+              </div>
+              <span className={styles.chatLiveBadge}>
+                <i aria-hidden="true" />{agent.active ? 'Active' : 'Paused'}
+              </span>
+            </div>
 
-          <div className={styles.chatHistory}>
-            {messages.length ? messages.map((item, index) => (
-              <div key={item.id || index} className={item.role === 'user' ? styles.chatUser : styles.chatAgent}>
-                <span>{item.role === 'user' ? 'You' : agent.name}</span>
-                <p>{item.content}</p>{item.pending ? <small className={styles.chatPending}>{item.delayed ? 'Runner still processing' : 'Processing…'}</small> : null}
-              </div>
-            )) : (
-              <div className={styles.chatWelcome}>
-                <strong>What do you want to know?</strong>
-                <p>Ask about activity, strategy, balances, or what the agent is configured to do.</p>
-              </div>
-            )}
-          </div>
+            <div className={styles.chatHistory}>
+              {messages.length ? messages.map((item, index) => (
+                <div key={item.id || index} className={item.role === 'user' ? styles.chatUser : styles.chatAgent}>
+                  <span>{item.role === 'user' ? 'You' : agent.name}</span>
+                  <p>{item.content}</p>{item.pending ? <small className={styles.chatPending}>{item.delayed ? 'Runner still processing' : 'Processing…'}</small> : null}
+                </div>
+              )) : (
+                <div className={styles.chatWelcome}>
+                  <div className={styles.chatWelcomeIcon} aria-hidden="true">✦</div>
+                  <strong>What can I check for you?</strong>
+                  <p>Use a prompt below or write your own request.</p>
+                  <div className={styles.chatSuggestions}>
+                    {['Check my USDC balance', 'Show recent activity', 'What is my strategy?'].map((prompt) => (
+                      <button key={prompt} type="button" onClick={() => setMessage(prompt)}>{prompt}<span>↗</span></button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
         <aside className={styles.chatPlan}>
-          <AITaskList label="Agent plan" tasks={taskPlan} />
+          <AITaskList label="Live plan" tasks={taskPlan} />
         </aside>
 
         <div className={styles.chatComposerLarge}>
-          <input className={styles.input} value={message} onChange={(e) => setMessage(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) sendChat(); }} placeholder="Message your agent…" />
-          <button className={styles.primaryButton} disabled={sending || !message.trim()} onClick={sendChat}>{sending ? 'Replying…' : 'Send'}</button>
+          <div className={styles.chatComposerShell}>
+            <input className={styles.input} value={message} onChange={(e) => setMessage(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) sendChat(); }} placeholder="Message your agent…" aria-label="Message your agent" />
+            <button className={styles.primaryButton} disabled={sending || !message.trim()} onClick={sendChat}>{sending ? 'Replying…' : 'Send ↗'}</button>
+          </div>
+          <span className={styles.chatComposerHint}>Press Enter to send · Agent actions stay within configured permissions.</span>
         </div>
       </section>
     </main>
