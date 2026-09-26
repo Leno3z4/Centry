@@ -8,7 +8,7 @@ import { useMultiMarketLending } from '../hooks/useMultiMarketLending';
 import { useDeFiRisk } from '../hooks/useDeFiRisk';
 import { useGatewayFunding } from '../hooks/useGatewayFunding';
 import BalanceSourceSelector from './BalanceSourceSelector';
-import styles from '../app/app/markets/markets.module.css';
+import styles from './market-directory.module.css';
 
 function num(value, digits = 2) {
   const n = Number(value || 0);
