@@ -1,7 +1,3 @@
-:root {
-  --display-font: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
-
 /* Product display uses the same neutral sans family as the UI; DM Mono stays reserved for addresses and technical values. */
 .brand,
 .hero h1,
@@ -46,7 +42,7 @@
   align-items: center;
   gap: 7px;
   color: #8ee6b0;
-  font: 10px 'DM Mono', monospace;
+  font: 10px var(--mono-font);
   text-transform: uppercase;
   letter-spacing: .08em;
 }
@@ -93,7 +89,7 @@
 }
 
 .protocol-stat > strong small {
-  font-family: 'DM Mono', monospace;
+  font-family: var(--mono-font);
   font-size: 10px;
   letter-spacing: 0;
   color: #8e849e;
@@ -101,7 +97,7 @@
 
 .protocol-stat > em {
   color: #5e5669;
-  font: normal 9px 'DM Mono', monospace;
+  font: normal 9px var(--mono-font);
 }
 
 @media (max-width: 800px) {
@@ -128,7 +124,7 @@
 .panel h2,
 .metric > strong,
 .protocol-stat > strong {
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--display-font);
 }
 
 .hero h1,
@@ -149,7 +145,7 @@
 .metric > small,
 .protocol-stat > span,
 .protocol-stat > em {
-  font-family: Inter, system-ui, sans-serif;
+  font-family: var(--body-font);
 }
 
 .metric > small,

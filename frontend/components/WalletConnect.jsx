@@ -287,7 +287,7 @@ export function WalletConnect() {
 
           .wallet-picker-kicker {
             color: #a98de0;
-            font: 10px 'DM Mono', monospace;
+            font: 10px var(--mono-font);
             letter-spacing: 1.8px;
             text-transform: uppercase;
           }
@@ -468,7 +468,7 @@ export function WalletConnect() {
             border-radius: 10px;
             background: #0e0a16;
             color: #d8cfe5;
-            font: 10px 'DM Mono', monospace;
+            font: 10px var(--mono-font);
           }
 
           .wallet-address:hover {
@@ -564,7 +564,7 @@ export function WalletConnect() {
 
           .wallet-picker-kicker {
             color: rgba(255,255,255,.78);
-            font-family: var(--display-font, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif);
+            font-family: var(--display-font);
             letter-spacing: 0;
             text-transform: none;
           }
@@ -651,7 +651,7 @@ export function WalletConnect() {
             border-radius: 11px;
             background: #0d0d0d;
             color: #ffffff;
-            font-family: var(--mono-font, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+            font-family: var(--mono-font);
           }
 
           .wallet-address:hover {

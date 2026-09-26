@@ -246,7 +246,7 @@ export default function WelcomePage() {
                 }
 
                 .landing-brand {
-                    font-family: var(--display-font, Georgia, serif);
+                    font-family: var(--display-font);
                     font-size: 25px;
                     letter-spacing: -.5px;
                 }
@@ -267,7 +267,7 @@ export default function WelcomePage() {
 
                 .landing-metric span,
                 .landing-metric-note {
-                    font-family: 'DM Mono', monospace;
+                    font-family: var(--mono-font);
                     text-transform: uppercase;
                     letter-spacing: 1.3px;
                 }
@@ -286,7 +286,7 @@ export default function WelcomePage() {
                 .landing-hero h1 {
                     max-width: 760px;
                     margin: 0 0 18px;
-                    font-family: var(--display-font, Georgia, serif);
+                    font-family: var(--display-font);
                     font-size: clamp(52px, 7vw, 94px);
                     line-height: .94;
                     letter-spacing: -4px;
@@ -307,7 +307,7 @@ export default function WelcomePage() {
                 .landing-metric { display: flex; flex-direction: column; gap: 10px; padding: 24px 0; border-top: 1px solid #202020; }
                 .landing-metric:last-of-type { border-bottom: 1px solid #202020; }
                 .landing-metric span { color: rgba(255,255,255,.78); font-size: 9px; }
-                .landing-metric strong { font-family: var(--display-font, Georgia, serif); font-size: clamp(30px, 4vw, 44px); line-height: 1; font-weight: 400; letter-spacing: -1.1px; font-variant-numeric: tabular-nums; }
+                .landing-metric strong { font-family: var(--display-font); font-size: clamp(30px, 4vw, 44px); line-height: 1; font-weight: 400; letter-spacing: -1.1px; font-variant-numeric: tabular-nums; }
                 .landing-metric-note { margin-top: 14px; color: rgba(255,255,255,.60); font-size: 7px; line-height: 1.5; }
 
                 .landing-how-section { position: relative; z-index: 1; padding: 80px 0 125px; }
@@ -317,7 +317,7 @@ export default function WelcomePage() {
                 .landing-governance-copy h2,
                 .landing-cta h2 {
                     margin: 10px 0 12px;
-                    font-family: var(--display-font, Georgia, serif);
+                    font-family: var(--display-font);
                     font-size: clamp(35px, 4vw, 57px);
                     line-height: 1;
                     letter-spacing: -2.2px;
@@ -332,8 +332,8 @@ export default function WelcomePage() {
                 .landing-how-list { margin-top: 46px; }
                 .landing-how-item { display: grid; grid-template-columns: 46px minmax(0,1fr); gap: 18px; padding: 24px 0; border-top: 1px solid rgba(139, 113, 171, .17); }
                 .landing-how-item:last-child { border-bottom: 1px solid rgba(139, 113, 171, .17); }
-                .landing-how-number { color: #0071e3; font: 10px 'DM Mono', monospace; }
-                .landing-how-item h3 { margin: -3px 0 7px; font-family: var(--display-font, Georgia, serif); font-size: 25px; font-weight: 400; letter-spacing: -.4px; }
+                .landing-how-number { color: #0071e3; font: 10px var(--mono-font); }
+                .landing-how-item h3 { margin: -3px 0 7px; font-family: var(--display-font); font-size: 25px; font-weight: 400; letter-spacing: -.4px; }
                 .landing-how-item p { margin: 0; color: rgba(255,255,255,.78); font-size: 11px; line-height: 1.7; }
 
                 .landing-governance-section { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, .75fr) minmax(180px, .7fr); gap: 90px; align-items: center; padding: 90px 0 120px; }
@@ -360,7 +360,7 @@ export default function WelcomePage() {
                 .landing-cta .primary-btn { justify-self: end; white-space: nowrap; }
 
                 .landing-footer { position: relative; z-index: 1; padding-top: 26px; border-top: 1px solid rgba(139, 113, 171, .14); display: flex; justify-content: space-between; gap: 15px; color: rgba(255,255,255,.60); font-size: 10px; }
-                .landing-footer strong { color: #ffffff; font-family: var(--display-font, Georgia, serif); font-size: 16px; font-weight: 400; }
+                .landing-footer strong { color: #ffffff; font-family: var(--display-font); font-size: 16px; font-weight: 400; }
 
                 @media (max-width: 900px) {
                     .landing-page { --landing-content: min(720px, calc(100vw - 36px)); padding: 0 18px 28px; }
