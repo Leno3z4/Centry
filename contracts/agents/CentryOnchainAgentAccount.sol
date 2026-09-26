@@ -69,6 +69,7 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
     mapping(address => bool) public agentOperators;
     mapping(address => mapping(address => mapping(bytes4 => Permission))) public permissions;
     mapping(address => mapping(address => mapping(bytes4 => mapping(address => FinancialLimit)))) public financialLimits;
+    mapping(address => mapping(address => mapping(address => bool))) public approvalSpenders;
 
     error AlreadyInitialized();
     error InvalidOwner();
@@ -91,6 +92,8 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
     error FinancialLimitNotConfigured();
     error FinancialLimitExceeded();
     error InvalidFinancialCall();
+    error ApprovalSpenderNotAllowed();
+    error FinancialRecipientNotAllowed();
 
     event Initialized(
         address indexed owner,
@@ -119,6 +122,12 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
         uint128 maxAmountPerCall,
         uint128 maxAmountPerWindow,
         uint64 windowDuration
+    );
+    event ApprovalSpenderSet(
+        address indexed operator,
+        address indexed asset,
+        address indexed spender,
+        bool allowed
     );
     event AgentExecuted(
         address indexed operator,
@@ -221,6 +230,17 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
         });
 
         emit PermissionSet(operator, target, selector, allowed, expiresAt, maxNativeValue);
+    }
+
+    function setApprovalSpender(
+        address operator,
+        address asset,
+        address spender,
+        bool allowed
+    ) external onlyOwner {
+        if (operator == address(0) || asset == address(0) || spender == address(0)) revert InvalidOwner();
+        approvalSpenders[operator][asset][spender] = allowed;
+        emit ApprovalSpenderSet(operator, asset, spender, allowed);
     }
 
     function setFinancialLimit(
@@ -439,19 +459,19 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
         address target,
         bytes4 selector,
         bytes calldata data
-    ) internal pure returns (address asset, uint256 amount) {
+    ) internal pure returns (address asset, uint256 amount, address counterparty) {
         if (data.length < 4) revert InvalidFinancialCall();
 
         if (selector == APPROVE_SELECTOR || selector == TRANSFER_SELECTOR) {
             asset = target;
-            (, amount) = abi.decode(data[4:], (address, uint256));
-            return (asset, amount);
+            (counterparty, amount) = abi.decode(data[4:], (address, uint256));
+            return (asset, amount, counterparty);
         }
 
         if (selector == TRANSFER_FROM_SELECTOR) {
             asset = target;
-            (, , amount) = abi.decode(data[4:], (address, address, uint256));
-            return (asset, amount);
+            (, counterparty, amount) = abi.decode(data[4:], (address, address, uint256));
+            return (asset, amount, counterparty);
         }
 
         if (
@@ -462,13 +482,13 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
         ) {
             (asset, amount) = abi.decode(data[4:], (address, uint256));
             if (asset == address(0)) revert InvalidFinancialCall();
-            return (asset, amount);
+            return (asset, amount, address(0));
         }
 
         if (selector == TRANSFER_TO_AGENT_SELECTOR) {
-            (asset, , amount) = abi.decode(data[4:], (address, address, uint256));
-            if (asset == address(0)) revert InvalidFinancialCall();
-            return (asset, amount);
+            (asset, counterparty, amount) = abi.decode(data[4:], (address, address, uint256));
+            if (asset == address(0) || counterparty == address(0)) revert InvalidFinancialCall();
+            return (asset, amount, counterparty);
         }
 
         if (selector == SWAP_EXACT_INPUT_SINGLE_SELECTOR) {
@@ -491,8 +511,8 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
             deadline;
             amountOutMinimum;
             sqrtPriceLimitX96;
-            if (tokenIn == address(0)) revert InvalidFinancialCall();
-            return (tokenIn, amountIn);
+            if (tokenIn == address(0) || recipient == address(0)) revert InvalidFinancialCall();
+            return (tokenIn, amountIn, recipient);
         }
 
         revert InvalidFinancialCall();
@@ -506,7 +526,20 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
     ) internal {
         if (!_isFinancialSelector(selector)) return;
 
-        (address asset, uint256 amount) = _financialCallAssetAmount(target, selector, data);
+        (address asset, uint256 amount, address counterparty) = _financialCallAssetAmount(target, selector, data);
+
+        if (selector == APPROVE_SELECTOR && !approvalSpenders[operator][asset][counterparty]) {
+            revert ApprovalSpenderNotAllowed();
+        }
+
+        if (selector == TRANSFER_SELECTOR || selector == TRANSFER_FROM_SELECTOR) {
+            if (!_isAllowedFinancialRecipient(counterparty)) revert FinancialRecipientNotAllowed();
+        }
+
+        if (selector == SWAP_EXACT_INPUT_SINGLE_SELECTOR && counterparty != address(this)) {
+            revert FinancialRecipientNotAllowed();
+        }
+
         FinancialLimit storage limit = financialLimits[operator][target][selector][asset];
 
         if (
@@ -527,6 +560,22 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
         }
 
         limit.spentInWindow += uint128(amount);
+    }
+
+    function _isAllowedFinancialRecipient(address recipient) internal view returns (bool) {
+        if (recipient == owner) return true;
+
+        try ICentryAgentFactoryRegistry(factory).isCentryAgentAccount(recipient) returns (bool registered) {
+            if (!registered) return false;
+        } catch {
+            return false;
+        }
+
+        try CentryOnchainAgentAccount(payable(recipient)).owner() returns (address recipientOwner) {
+            return recipientOwner == owner;
+        } catch {
+            return false;
+        }
     }
 
     function _checkPermission(address operator, address target, bytes4 selector, uint256 value) internal view {
