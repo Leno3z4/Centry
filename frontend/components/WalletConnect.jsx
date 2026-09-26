@@ -668,6 +668,7 @@ export function WalletConnect() {
           }
         `}</style>
 
+        <style jsx global>{`
           .wallet-widget {
             display:flex;
             align-items:center;
@@ -701,6 +702,7 @@ export function WalletConnect() {
             .wallet-widget-divider { height:20px; }
             .wallet-widget .wallet-address { font-size:10px; }
           }
+        `}</style>
       </>
     );
   }
