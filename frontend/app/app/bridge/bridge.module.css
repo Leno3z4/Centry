@@ -56,5 +56,5 @@
 .infoFooter p{margin:2px 0 0;color:rgba(255,255,255,.46);font-size:10px;line-height:1.5}
 .chainTrigger:focus-visible,.chainOption:focus-visible,.arrowButton:focus-visible,.balanceButton:focus-visible,.primaryButton:focus-visible,.refreshButton:focus-visible,.infoButton:focus-visible,.amountField input:focus-visible{outline:2px solid #7dbdff;outline-offset:2px}
 @media (max-width:700px){.transferFields{grid-template-columns:1fr;gap:6px}.arrowButton{margin:-4px auto;position:relative;z-index:2}.fieldCard{padding:10px}}
-@media (max-width:620px){.card{padding:16px;border-radius:16px}.page{gap:14px}.bridgeCard{padding:16px;border-radius:16px}.header h1{font-size:40px;letter-spacing:-1.8px}.amountField input{font-size:30px}}
+@media (max-width:620px){.page{gap:14px}.bridgeCard{padding:16px;border-radius:16px}.header h1{font-size:40px;letter-spacing:-1.8px}.amountField input{font-size:30px}}
 @media (prefers-reduced-motion:reduce){.chainTrigger,.chainOption,.arrowButton,.primaryButton{transition:none}.arrowButton:active:not(:disabled),.arrowButton:hover:not(:disabled),.primaryButton:hover:not(:disabled){transform:none}}
