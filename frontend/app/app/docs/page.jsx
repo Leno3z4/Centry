@@ -83,7 +83,8 @@ export default function Page() {
   const scrollToSection = (id) => {
     setMobileDocsNavOpen(false);
     requestAnimationFrame(() => {
-      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+      document.getElementById(id)?.scrollIntoView({ behavior, block: 'start' });
     });
   };
 
@@ -353,8 +354,7 @@ export default function Page() {
     <style jsx global>{`
       .docs-page .section-header h1{font-size:clamp(44px,6vw,72px);letter-spacing:-3px}
       .docs-page .section-header p{max-width:760px;line-height:1.6;color:rgba(255,255,255,.68)}
-      .docs-layout{grid-template-columns:minmax(0,1fr) 190px;gap:18px}
-      .docs-sidebar{grid-column:2;grid-row:1;top:84px;background:#17191c!important;border-color:#343941!important}
+      .docs-sidebar{grid-column:2;grid-row:1;background:#17191c!important;border-color:#343941!important}
       .docs-content{grid-column:1;grid-row:1;gap:16px}
       .docs-sidebar-links{gap:5px;margin-top:8px}
       .docs-sidebar-groups{display:grid;gap:9px;margin-top:12px}
@@ -395,7 +395,7 @@ export default function Page() {
       .contract-copy:hover,.contract-explorer:hover{border-color:#0a84ff;background:#202830;color:#fff}
       .contract-copy{font:inherit}
       @media(max-width:900px){.docs-layout{grid-template-columns:minmax(0,1fr)}.docs-sidebar{display:none}.docs-content{grid-column:1}.protocol-flow{grid-template-columns:repeat(2,minmax(0,1fr))}.protocol-flow-arrow{display:none}}
-      @media(max-width:640px){.docs-content>.panel{padding:18px}.docs-page .section-header h1{font-size:42px;letter-spacing:-2px}.protocol-flow{grid-template-columns:1fr}.contract-row{grid-template-columns:1fr}.contract-copy,.contract-explorer{justify-self:start;padding:0 12px}}
+      @media(max-width:640px){.docs-content>.panel{padding:18px}.docs-page .section-header h1{font-size:42px;letter-spacing:-2px}.protocol-flow{grid-template-columns:1fr}.contract-row{grid-template-columns:1fr}.contract-copy,.contract-explorer{justify-self:start;padding:0 12px}.docs-content>section{scroll-margin-top:84px}}
     `}</style>
       </AppShell>
     </Providers>
