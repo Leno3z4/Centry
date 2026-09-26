@@ -12,6 +12,7 @@ import { CONTRACT_ADDRESSES } from '../../../../constants/contracts';
 import { ORACLE_ABI } from '../../../../constants/abis';
 import styles from '../agents.module.css';
 import AgentPortfolioChart from '../../../../components/ui/c-chart-21';
+import AgentNetworkPanel from '../../../../components/AgentNetworkPanel';
 import {
   ACCOUNT_ABI,
   API_BASE,
@@ -324,6 +325,8 @@ function DashboardContent() {
           </div>
         </div>
       </section>
+
+      <AgentNetworkPanel agent={agent} />
 
       <section className={styles.analyticsGrid}>
         <section className={styles.card}>
