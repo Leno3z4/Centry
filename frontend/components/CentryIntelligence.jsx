@@ -85,7 +85,7 @@ export default function CentryIntelligence({ market, lending, gateway, compact: 
 
     <div className={styles.conversation}>
       <div className={styles.chips}>{SUGGESTED.map((item) => <button key={item} type="button" onClick={() => ask(item)} disabled={loading}>{item}</button>)}</div>
-      {answer ? <div className={styles.answer} aria-live="polite"><span>Centrion</span><p>{answer}</p></div> : null}
+      {answer ? <div className={styles.answer} aria-live="polite"><span>Cask</span><p>{answer}</p></div> : null}
       {plan ? <CentryTransactionPreview plan={plan} context={context} /> : null}
       {plan ? (
         <CentryExecutionPanel
@@ -100,7 +100,7 @@ export default function CentryIntelligence({ market, lending, gateway, compact: 
     </div>
 
     <form className={styles.form} onSubmit={(event) => { event.preventDefault(); void ask(question); }}>
-      <textarea ref={inputRef} value={question} onChange={(event) => { setQuestion(event.target.value); resizeInput(); }} onKeyDown={onComposerKeyDown} placeholder="Ask Centrion or tell it what to do…" aria-label="Ask Centrion" maxLength={500} disabled={loading} rows={1} />
+      <textarea ref={inputRef} value={question} onChange={(event) => { setQuestion(event.target.value); resizeInput(); }} onKeyDown={onComposerKeyDown} placeholder="Ask Cask or tell it what to do…" aria-label="Ask Cask" maxLength={500} disabled={loading} rows={1} />
       <button type="submit" disabled={loading || !question.trim()} aria-label="Send">{loading ? '…' : '➤'}</button>
     </form>
   </section>;
