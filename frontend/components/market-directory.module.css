@@ -567,3 +567,694 @@
     transform: none;
   }
 }
+
+/* Market detail workspace */
+.detailTop {
+  display: grid;
+  gap: 14px;
+}
+
+.backLink {
+  width: fit-content;
+  color: #828991;
+  font-size: 11px;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.backLink:hover {
+  color: #e6e8eb;
+}
+
+.detailHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 24px;
+}
+
+.detailIdentity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 14px;
+}
+
+.detailIdentity > div {
+  min-width: 0;
+}
+
+.detailTokenMark {
+  display: grid;
+  width: 56px;
+  height: 56px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #3b424b;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 20px;
+  font-weight: 800;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.1), 0 16px 34px rgba(0,0,0,.22);
+}
+
+.detailTokenMark[data-token="usdc"] {
+  border-color: #5a73b7;
+  background: radial-gradient(circle at 35% 28%, #4968c0, #1c2d66 72%);
+}
+
+.detailTokenMark[data-token="eurc"] {
+  border-color: #66569d;
+  background: radial-gradient(circle at 35% 28%, #6653a7, #241b42 72%);
+}
+
+.detailTokenMark[data-token="btc"] {
+  border-color: #8a6b42;
+  background: radial-gradient(circle at 35% 28%, #b57930, #3e2914 72%);
+}
+
+.sectionKicker {
+  display: inline-block;
+  color: #7b828a;
+  font: 9px 'DM Mono', monospace;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.detailTitleRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 5px;
+}
+
+.detailTitleRow h1 {
+  margin: 0;
+  color: #f8f8f8;
+  font-size: clamp(34px, 4vw, 50px);
+  line-height: .95;
+  letter-spacing: -2.4px;
+}
+
+.detailIdentity p {
+  margin: 7px 0 0;
+  color: #858c94;
+  font-size: 12px;
+}
+
+.detailStatus,
+.connectedPill,
+.reserveBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 6px 9px;
+  border: 1px solid rgba(71, 213, 145, .18);
+  border-radius: 999px;
+  background: rgba(71, 213, 145, .045);
+  color: #8fd1b2;
+  font: 9px 'DM Mono', monospace;
+  white-space: nowrap;
+}
+
+.detailStatus i,
+.reserveBadge i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #49d793;
+}
+
+.connectedPill {
+  border-color: #30363d;
+  background: #171b20;
+  color: #9ca3ab;
+}
+
+.detailDescription {
+  max-width: 720px;
+  margin: 0 0 2px;
+  color: #9299a2;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.rateBar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(90px, 1fr));
+  min-width: min(430px, 40vw);
+  overflow: hidden;
+  border: 1px solid #292e34;
+  border-radius: 15px;
+  background: #111419;
+}
+
+.rateBar > div {
+  display: grid;
+  gap: 5px;
+  padding: 12px 13px;
+  border-left: 1px solid #292e34;
+}
+
+.rateBar > div:first-child {
+  border-left: 0;
+}
+
+.rateBar span,
+.accountMetricGrid span,
+.marketStatGrid span,
+.riskParameterGrid span,
+.borrowLimitMeter span,
+.transactionPreview span {
+  color: #727980;
+  font-size: 9px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.rateBar strong {
+  color: #f2f4f6;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.rateBar > div:first-child strong {
+  color: #9fc1ff;
+}
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(350px, 400px);
+  align-items: start;
+  gap: 16px;
+}
+
+.detailMain {
+  display: grid;
+  min-width: 0;
+  gap: 16px;
+}
+
+.detailCard,
+.actionPanelInner {
+  min-width: 0;
+  border: 1px solid #292e34;
+  border-radius: 18px;
+  background: #12161a;
+  box-shadow: 0 14px 38px rgba(0, 0, 0, .14);
+}
+
+.detailCard {
+  padding: 18px;
+}
+
+.actionPanel {
+  position: sticky;
+  top: 82px;
+}
+
+.actionPanelInner {
+  padding: 18px;
+}
+
+.detailCardHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.detailCardHead h2 {
+  margin: 5px 0 0;
+  color: #f1f3f5;
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -.35px;
+}
+
+.accountMetricGrid,
+.marketStatGrid,
+.riskParameterGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid #292e34;
+  border-radius: 13px;
+  background: #292e34;
+}
+
+.accountMetricGrid > div,
+.marketStatGrid > div,
+.riskParameterGrid > div {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  padding: 13px;
+  background: #171b20;
+  border-left: 1px solid #292e34;
+}
+
+.accountMetricGrid > div:first-child,
+.marketStatGrid > div:first-child,
+.riskParameterGrid > div:first-child {
+  border-left: 0;
+}
+
+.accountMetricGrid strong,
+.marketStatGrid strong,
+.riskParameterGrid strong,
+.transactionPreview strong {
+  overflow: hidden;
+  color: #edf0f2;
+  font-size: 14px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+}
+
+.accountHealthRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(240px, .9fr);
+  gap: 18px;
+  margin-top: 16px;
+}
+
+.healthMeter {
+  display: grid;
+  gap: 8px;
+  padding: 13px;
+  border: 1px solid #292e34;
+  border-radius: 13px;
+  background: #171b20;
+}
+
+.healthHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.healthHeader > div {
+  display: grid;
+  gap: 4px;
+}
+
+.healthHeader > div > span {
+  color: #747b83;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.healthHeader > div > strong {
+  color: #edf0f2;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.healthBadge {
+  padding: 5px 8px;
+  border: 1px solid #343a41;
+  border-radius: 999px;
+  font: 9px 'DM Mono', monospace;
+}
+
+.healthBadge_safe {
+  border-color: rgba(73, 215, 147, .2);
+  background: rgba(73, 215, 147, .06);
+  color: #8fd1b2;
+}
+
+.healthBadge_warning {
+  border-color: rgba(218, 171, 73, .24);
+  background: rgba(218, 171, 73, .07);
+  color: #e3c07a;
+}
+
+.healthBadge_danger {
+  border-color: rgba(238, 91, 91, .24);
+  background: rgba(238, 91, 91, .07);
+  color: #ee9797;
+}
+
+.healthTrack,
+.borrowLimitTrack,
+.utilizationTrack {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #252a30;
+}
+
+.healthFill,
+.borrowLimitTrack span,
+.utilizationTrack span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  transition: width 180ms ease;
+}
+
+.healthFill[data-tone="safe"],
+.borrowLimitTrack span {
+  background: #4a9b73;
+}
+
+.healthFill[data-tone="warning"] {
+  background: #b38a45;
+}
+
+.healthFill[data-tone="danger"] {
+  background: #bd5555;
+}
+
+.healthMeta,
+.borrowLimitMeter > div:first-child,
+.utilizationPanel > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.healthMeta span,
+.borrowLimitMeter small {
+  color: #6f767e;
+  font-size: 9px;
+}
+
+.healthMeta strong {
+  color: #a7adb4;
+  font-size: 10px;
+}
+
+.borrowLimitMeter {
+  display: grid;
+  align-content: center;
+  gap: 9px;
+  padding: 13px;
+  border: 1px solid #292e34;
+  border-radius: 13px;
+  background: #171b20;
+}
+
+.borrowLimitMeter > div:first-child span {
+  color: #7a8189;
+  font-size: 10px;
+}
+
+.borrowLimitMeter > div:first-child strong {
+  color: #e4e7ea;
+  font-size: 12px;
+}
+
+.marketStatGrid,
+.riskParameterGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.marketStatGrid > div:nth-child(odd),
+.riskParameterGrid > div:nth-child(odd) {
+  border-right: 1px solid #292e34;
+}
+
+.marketStatGrid > div:nth-child(-n + 2),
+.riskParameterGrid > div:nth-child(-n + 2) {
+  border-bottom: 1px solid #292e34;
+}
+
+.utilizationPanel {
+  display: grid;
+  gap: 9px;
+  margin-top: 15px;
+  padding: 13px;
+  border: 1px solid #292e34;
+  border-radius: 13px;
+  background: #15191e;
+}
+
+.utilizationPanel span {
+  color: #747b83;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.utilizationPanel strong {
+  color: #dce0e4;
+  font-size: 11px;
+}
+
+.utilizationTrack span {
+  background: #657c97;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+  padding: 4px;
+  margin-bottom: 16px;
+  border: 1px solid #292e34;
+  border-radius: 13px;
+  background: #0f1216;
+}
+
+.actionButton,
+.actionActive {
+  min-height: 42px;
+  padding: 8px 9px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: #7f878f;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.actionButton:hover {
+  color: #f0f2f4;
+  background: #191d22;
+}
+
+.actionActive {
+  border-color: #3d4650;
+  background: #2b333d;
+  color: #fff;
+  box-shadow: inset 0 -2px 0 #8fb2df;
+}
+
+.quickSelects {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.quickSelects button {
+  min-height: 30px;
+  border: 1px solid #2d3339;
+  border-radius: 8px;
+  background: #161a1f;
+  color: #858c94;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.quickSelects button:hover:not(:disabled) {
+  border-color: #4a5561;
+  background: #1c2228;
+  color: #f0f2f4;
+}
+
+.quickSelects button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+.gatewaySource {
+  margin-top: 12px;
+}
+
+.transactionPreview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin: 14px 0;
+  overflow: hidden;
+  border: 1px solid #2a3036;
+  border-radius: 13px;
+  background: #2a3036;
+}
+
+.transactionPreview > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 11px;
+  background: #161a1f;
+}
+
+.transactionPreview > div:nth-child(odd) {
+  border-right: 1px solid #2a3036;
+}
+
+.transactionPreview > div:nth-child(-n + 2) {
+  border-bottom: 1px solid #2a3036;
+}
+
+.transactionPreview strong {
+  font-size: 11px;
+}
+
+.formMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 9px 0 12px;
+  color: #7f878f;
+  font-size: 10px;
+}
+
+.formMeta button {
+  min-height: 28px;
+  padding: 5px 9px;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  background: #171b20;
+  color: #b9bec4;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.formMeta button:hover:not(:disabled) {
+  border-color: #4b5661;
+  color: #fff;
+}
+
+.note {
+  margin: 12px 0 0;
+  color: #737a82;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+@media (max-width: 1050px) {
+  .detailHeader {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .rateBar {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .detailGrid {
+    grid-template-columns: minmax(0, 1fr) 340px;
+  }
+
+  .accountMetricGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .accountMetricGrid > div:nth-child(3) {
+    border-left: 0;
+    border-top: 1px solid #292e34;
+  }
+
+  .accountMetricGrid > div:nth-child(4) {
+    border-top: 1px solid #292e34;
+  }
+}
+
+@media (max-width: 820px) {
+  .detailGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .actionPanel {
+    position: static;
+    order: -1;
+  }
+
+  .accountHealthRow {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .detailTop {
+    gap: 12px;
+  }
+
+  .detailIdentity {
+    align-items: flex-start;
+    gap: 11px;
+  }
+
+  .detailTokenMark {
+    width: 46px;
+    height: 46px;
+    font-size: 17px;
+  }
+
+  .detailTitleRow h1 {
+    font-size: 34px;
+    letter-spacing: -1.8px;
+  }
+
+  .rateBar {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .rateBar > div {
+    padding: 10px 9px;
+  }
+
+  .detailCard,
+  .actionPanelInner {
+    padding: 15px;
+    border-radius: 16px;
+  }
+
+  .actions {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .accountMetricGrid,
+  .marketStatGrid,
+  .riskParameterGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .accountMetricGrid > div:nth-child(3),
+  .accountMetricGrid > div:nth-child(4) {
+    border-top: 1px solid #292e34;
+  }
+
+  .accountMetricGrid > div:nth-child(odd),
+  .marketStatGrid > div:nth-child(odd),
+  .riskParameterGrid > div:nth-child(odd) {
+    border-right: 1px solid #292e34;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .healthFill,
+  .borrowLimitTrack span,
+  .utilizationTrack span,
+  .actionButton,
+  .actionActive,
+  .quickSelects button {
+    transition: none;
+  }
+}
