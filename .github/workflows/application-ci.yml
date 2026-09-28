@@ -15,6 +15,7 @@ on:
       - ".github/workflows/application-ci.yml"
       - "agent-db/**"
       - "agent-runner/**"
+      - "agent-executor/**"
   pull_request:
     paths:
       - "app/**"
@@ -26,6 +27,7 @@ on:
       - ".github/workflows/application-ci.yml"
       - "agent-db/**"
       - "agent-runner/**"
+      - "agent-executor/**"
 
 jobs:
   root-app:
@@ -111,3 +113,15 @@ jobs:
 
       - name: Validate runner syntax
         run: npm run check
+
+  agent-executor:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent-executor
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Validate executor syntax
+        run: node --check src/index.js
