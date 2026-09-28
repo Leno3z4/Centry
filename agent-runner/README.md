@@ -75,10 +75,10 @@ For a controlled historical backfill, set:
 
 ```text
 CENTRY_ANALYTICS_START_BLOCK=<Arc Mainnet block>
-CENTRY_ANALYTICS_RPC_URL=<dedicated Arc RPC endpoint>
+CENTRY_ANALYTICS_RPC_URL1=<dedicated Arc RPC endpoint>
 ```
 
-The analytics indexer uses `CENTRY_ANALYTICS_RPC_URL` when set, otherwise it shares `CENTRY_AGENT_RPC_URL`. Hourly protocol snapshots are captured once per hour; the event cursor may advance every scheduler tick while avoiding repeated hourly reserve reads. Indexed history is exposed by the Next.js `/api/analytics` endpoint and rendered on `/app/analytics`.
+The analytics indexer uses `CENTRY_ANALYTICS_RPC_URL1` when set, otherwise it shares `CENTRY_AGENT_RPC_URL`. Hourly protocol snapshots are captured once per hour; the event cursor may advance every scheduler tick while avoiding repeated hourly reserve reads. Indexed history is exposed by the Next.js `/api/analytics` endpoint and rendered on `/app/analytics`.
 
 ## RPC reliability
 
