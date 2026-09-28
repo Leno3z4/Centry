@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { Contract, JsonRpcProvider, getAddress } from "ethers";
 import { verifyOwnerSession } from "../../../../../../lib/agentOwnerAuth";
-import { getAgentById, enqueueAgentTask, addAgentChatMessage, listProviderConfigs, getProviderConfig, listAgentChatMessages } from "../../../../../../lib/agentStore";
+import { getAgentById, addAgentChatMessage, listProviderConfigs, getProviderConfig, listAgentChatMessages } from "../../../../../../lib/agentStore";
 import { CONTRACT_ADDRESSES } from "../../../../../../constants/contracts";
 import { decryptSecret } from "../../../../../../lib/agentSecrets";
 
@@ -241,61 +241,42 @@ export async function POST(request, { params }) {
       }, { headers: { "Cache-Control": "no-store" } });
     }
 
-    const taskId = crypto.randomUUID();
-    const assistantMessageId = crypto.randomUUID();
-    const envelope = JSON.stringify({
-      kind: "owner_chat",
-      message,
-      assistantMessageId,
-    });
-
-    const queued = await enqueueAgentTask({
-      id: taskId,
-      fromAgentId: null,
-      toAgentId: agent.id,
-      task: envelope,
-    });
-
-
-    const runnerUrl = String(process.env.CENTRY_AGENT_RUNNER_URL || "").replace(/\/$/, "");
-    const runnerSecret = String(process.env.CENTRY_AGENT_RUNNER_HTTP_SECRET || "");
-    if (runnerUrl && runnerSecret) {
-      try {
-        const wake = await fetch(`${runnerUrl}/chat`, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            authorization: `Bearer ${runnerSecret}`,
-          },
-          body: JSON.stringify({ agentId: agent.id, taskId }),
-          cache: "no-store",
-          signal: AbortSignal.timeout(1500),
-        });
-        if (!wake.ok) {
-          console.warn("centry_agent_chat_runner_wake_failed", {
-            agentId: agent.id,
-            taskId,
-            status: wake.status,
-          });
-        }
-      } catch (wakeError) {
-        console.warn("centry_agent_chat_runner_wake_unavailable", {
-          agentId: agent.id,
-          taskId,
-          error: wakeError instanceof Error ? wakeError.message : String(wakeError),
-        });
-      }
+    const executorUrl = String(process.env.CENTRY_AGENT_EXECUTOR_URL || "").replace(/\/$/, "");
+    const executorSecret = String(process.env.CENTRY_AGENT_EXECUTOR_HTTP_SECRET || "");
+    if (!executorUrl || !executorSecret) {
+      throw new Error("agent_executor_not_configured");
     }
 
+    const execution = await fetch(executorUrl + "/execute", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer " + executorSecret,
+      },
+      body: JSON.stringify({ agentId: agent.id, message }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(90_000),
+    });
+
+    let executionBody = null;
+    try { executionBody = await execution.json(); } catch {}
+    if (!execution.ok) {
+      throw new Error(executionBody?.error || "agent_execution_failed");
+    }
+
+    const answer = executionBody?.result?.answer || "The request was processed.";
+    await addAgentChatMessage({
+      id: crypto.randomUUID(),
+      agentId: agent.id,
+      role: "assistant",
+      content: answer,
+    });
+
     return Response.json({
-      mode: runnerUrl && runnerSecret ? "accepted" : "queued",
-      taskId,
-      status: queued?.status || "pending",
-      runnerConfigured: Boolean(runnerUrl && runnerSecret),
-      acknowledgement: runnerUrl && runnerSecret
-        ? "Queued with the agent runtime."
-        : "Queued. The agent runtime is not configured for an immediate wake.",
-    }, { status: 202, headers: { "Cache-Control": "no-store" } });
+      mode: "executed",
+      status: executionBody?.status || "processed",
+      result: executionBody?.result || { answer, txHash: null, error: null },
+    }, { headers: { "Cache-C
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "agent_chat_failed" }, { status: 400 });
   }
