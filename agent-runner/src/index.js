@@ -2041,7 +2041,7 @@ async function verifyTransactionOnchain(publicClient, hash, expectedAccount, run
 
 async function runAgent(db, publicClient, walletClient, runnerAddress, agent, scheduledAt, env, requestedTaskId = null, directOwnerMessage = null) {
   const directOwnerChat = typeof directOwnerMessage === "string" && directOwnerMessage.trim().length > 0;
-  const executionLockId = directOwnerChat ? ``__interactive_${agent.id}__`` : agent.id;
+  const executionLockId = directOwnerChat ? `__interactive_${agent.id}__` : agent.id;
   const locked = await tryLock(db, executionLockId, directOwnerChat ? 60_000 : 300_000);
   if (!locked) return { agentId: agent.id, status: "locked" };
 
