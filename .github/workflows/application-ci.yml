@@ -11,7 +11,6 @@ on:
       - "scripts/**"
       - "package.json"
       - "package-lock.json"
-      - "package-lock.json"
       - "frontend/**"
       - ".github/workflows/application-ci.yml"
       - "agent-db/**"
@@ -22,6 +21,7 @@ on:
       - "lib/**"
       - "scripts/**"
       - "package.json"
+      - "package-lock.json"
       - "frontend/**"
       - ".github/workflows/application-ci.yml"
       - "agent-db/**"
@@ -42,7 +42,7 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        run: npm ci --no-audit --no-fund
+        run: npm install --no-audit --no-fund
 
       - name: Build root Next app
         run: npm run build
