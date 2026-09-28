@@ -17,6 +17,7 @@ import {
   apiJson,
   ensureOwnerSession,
   normalizeConfigForHash,
+  rememberAgentName,
 } from '../agentClient';
 import styles from '../agents.module.css';
 import { CONTRACT_ADDRESSES } from '../../../../constants/contracts';
@@ -30,6 +31,7 @@ export default function CreateAgentPage() {
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [createdAccount, setCreatedAccount] = useState('');
+  const [createdAgentName, setCreatedAgentName] = useState('');
   const [setupComplete, setSetupComplete] = useState(false);
   const ready = Boolean(isConnected && address && publicClient && FACTORY_ADDRESS && RUNNER_ADDRESS);
 
@@ -61,6 +63,8 @@ export default function CreateAgentPage() {
       const account = after.find((item) => !beforeSet.has(item.toLowerCase())) || after.at(-1);
       if (!account) throw new Error('The factory transaction succeeded, but the new agent account could not be resolved.');
       createdAccountForRecovery = account;
+      rememberAgentName(account, config.name);
+      setCreatedAgentName(config.name.trim());
       const agentId = crypto.randomUUID();
       if (PAYWALL_ENABLED) {
         await apiJson(`${API_BASE}/api/v1/agents/marketplace`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ owner: address, templateId: 'centry-general-agent', onchainTemplateId: templateHash, agentId, account, purchaseTxHash: creationTx }) });
@@ -86,7 +90,7 @@ export default function CreateAgentPage() {
   }
 
   if (createdAccount) {
-    return <Providers><AppShell><main className={styles.page}>{status ? <div className={styles.notice}>{status}</div> : null}{error ? <div className={styles.error}>{error}</div> : null}<section className={styles.successHero}><div className={styles.successMark}>✓</div><p className={styles.kicker}>Agent ready</p><h1>{setupComplete ? 'Your agent is created' : 'Your smart account is created'}</h1><p>{setupComplete ? 'The smart account is owned by your connected wallet. It starts OFF until you activate it.' : 'The blockchain transaction succeeded, but the off-chain setup still needs attention. You can continue from the agent configuration page.'}</p><div className={styles.addressPanel}><span>Smart account</span><code>{createdAccount}</code></div><div className={styles.headerActions}><button className={styles.secondaryButton} type="button" onClick={() => navigator.clipboard.writeText(createdAccount)}>Copy address</button><a className={styles.secondaryButton} href={`https://explorer.arc.io/address/${createdAccount}`} target="_blank" rel="noreferrer">View on Arc</a><button className={styles.primaryButton} type="button" onClick={() => router.push(`/app/agents/${createdAccount}`)}>Open agent</button><button className={styles.secondaryButton} type="button" onClick={() => router.push('/app/agents/create')}>Create another</button><button className={styles.secondaryButton} type="button" onClick={() => router.push(`/app/agents/${createdAccount}/configure`)}>Configure</button></div></section></main></AppShell></Providers>;
+    return <Providers><AppShell><main className={styles.page}>{status ? <div className={styles.notice}>{status}</div> : null}{error ? <div className={styles.error}>{error}</div> : null}<section className={styles.successHero}><div className={styles.successMark}>✓</div><p className={styles.kicker}>Agent ready</p><h1>{createdAgentName || (setupComplete ? 'Your agent is created' : 'Your smart account is created')}</h1><p>{setupComplete ? 'The smart account is owned by your connected wallet. It starts OFF until you activate it.' : 'The blockchain transaction succeeded, but the off-chain setup still needs attention. You can continue from the agent configuration page.'}</p><div className={styles.addressPanel}><span>Smart account</span><code>{createdAccount}</code></div><div className={styles.headerActions}><button className={styles.secondaryButton} type="button" onClick={() => navigator.clipboard.writeText(createdAccount)}>Copy address</button><a className={styles.secondaryButton} href={`https://explorer.arc.io/address/${createdAccount}`} target="_blank" rel="noreferrer">View on Arc</a><button className={styles.primaryButton} type="button" onClick={() => router.push(`/app/agents/${createdAccount}`)}>Open agent</button><button className={styles.secondaryButton} type="button" onClick={() => router.push('/app/agents/create')}>Create another</button><button className={styles.secondaryButton} type="button" onClick={() => router.push(`/app/agents/${createdAccount}/configure`)}>Configure</button></div></section></main></AppShell></Providers>;
   }
 
   return <Providers><AppShell><main className={styles.page}><header className={styles.header}><div><button className={styles.backButton} type="button" onClick={() => router.push('/app/agents')}>← Agents</button><h1>Create agent</h1><p>Configure the agent first. Your wallet only gets asked to create the smart account after you submit this setup.</p></div></header>{status ? <div className={styles.notice}>{status}</div> : null}{error ? <div className={styles.error}>{error}</div> : null}{!isConnected ? <div className={styles.emptyState}>Connect your wallet to create an agent.</div> : null}{!FACTORY_ADDRESS ? <div className={styles.warning}>Agent factory is not configured yet.</div> : null}<AgentConfigForm mode="create" onSubmit={createAgent} submitting={isPending || Boolean(status && !createdAccount && !error)} submitLabel={PAYWALL_ENABLED ? 'Purchase & create agent' : 'Create agent'} /></main></AppShell></Providers>;
