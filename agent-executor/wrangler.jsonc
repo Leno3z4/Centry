@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "centry-agent-executor",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-19",
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "centry-agents",
+      "database_id": "f9404943-2d31-43f2-b09d-a7fa82823855"
+    }
+  ]
+}
