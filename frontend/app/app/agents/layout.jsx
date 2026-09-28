@@ -1,3 +1,5 @@
+import StructuredData, { webPageStructuredData } from '../../../components/StructuredData';
+
 export const metadata = {
   title: 'Agents',
   description: 'Create and manage owner-controlled onchain agents with Centry smart accounts.',
@@ -7,5 +9,16 @@ export const metadata = {
 };
 
 export default function AgentsLayout({ children }) {
-  return children;
+  return (
+    <>
+      <StructuredData
+        data={webPageStructuredData({
+          url: 'https://centry.ink/app/agents',
+          name: 'Centry Agents',
+          description: metadata.description,
+        })}
+      />
+      {children}
+    </>
+  );
 }
