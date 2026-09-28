@@ -8,12 +8,9 @@ import {
   useDisconnect,
   useChainId,
   useSwitchChain,
-  useReadContract,
 } from 'wagmi';
 import { arcMainnet } from '../config/multiWagmi';
-import { formatUnits } from 'viem';
 import { CONTRACT_ADDRESSES } from '../constants/contracts';
-import { ERC20_ABI } from '../constants/abis';
 
 function shortenAddress(address) {
   if (!address) return '';
@@ -39,15 +36,6 @@ export function WalletConnect() {
     isPending: isSwitching,
     error: switchError,
   } = useSwitchChain();
-  const { data: usdcBalanceRaw } = useReadContract({
-    address: CONTRACT_ADDRESSES.USDC,
-    abi: ERC20_ABI,
-    functionName: 'balanceOf',
-    args: address ? [address] : undefined,
-    chainId: arcMainnet.id,
-    query: { enabled: Boolean(address && isConnected && chainId === arcMainnet.id) },
-  });
-  const usdcBalance = usdcBalanceRaw == null ? '0' : formatUnits(usdcBalanceRaw, 6);
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const isWrongNetwork =
@@ -679,15 +667,6 @@ export function WalletConnect() {
             border-radius:13px;
             background:#0d0f12;
           }
-          .wallet-widget-balance { display:grid; gap:2px; }
-          .wallet-widget-balance span {
-            color:rgba(255,255,255,.45);
-            font-size:9px;
-            letter-spacing:.04em;
-            text-transform:uppercase;
-          }
-          .wallet-widget-balance strong { color:#fff; font-size:12px; font-weight:650; line-height:1.1; }
-          .wallet-widget-divider { width:1px; height:24px; background:#24272b; }
           .wallet-widget .wallet-address {
             min-height:36px;
             padding:8px 9px;
@@ -697,9 +676,6 @@ export function WalletConnect() {
           .wallet-widget .wallet-address:hover { border-color:#2a2d32; background:#14171b; }
           @media (max-width:640px) {
             .wallet-widget { gap:8px; padding-left:9px; }
-            .wallet-widget-balance span { display:none; }
-            .wallet-widget-balance strong { font-size:11px; }
-            .wallet-widget-divider { height:20px; }
             .wallet-widget .wallet-address { font-size:10px; }
           }
         `}</style>
@@ -727,17 +703,6 @@ export function WalletConnect() {
       ) : null}
 
       <div className="wallet-widget">
-        <div className="wallet-widget-balance">
-          <span>USDC balance</span>
-          <strong>
-            {Number(usdcBalance || 0).toLocaleString(undefined, {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })}{' '}
-            USDC
-          </strong>
-        </div>
-        <span className="wallet-widget-divider" aria-hidden="true" />
         <button
           type="button"
           className="wallet-address"
