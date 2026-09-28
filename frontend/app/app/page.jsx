@@ -250,7 +250,7 @@ function OverviewContent() {
       <section className="hero overview-hero">
         <div className="overview-hero-summary overview-hero-summary-full">
           <div className="overview-wallet-balance">
-            <span>Wallet balance</span>
+            <h1 className="overview-wallet-balance-label">Wallet balance</h1>
             <strong>
               {isConnected
                 ? formatNumber(lending.walletBalance, 2) + ' ' + (firstMarket?.symbol || 'USDC')
@@ -288,15 +288,13 @@ function OverviewContent() {
         .overview-hero-summary-full{width:100%;box-sizing:border-box}
         .overview-hero-summary{width:min(520px,100%);padding:22px;border:1px solid rgba(255,255,255,.1);border-radius:22px;background:rgba(17,17,17,.94);box-shadow:0 18px 55px rgba(0,0,0,.24)}
         .overview-wallet-balance{display:flex;align-items:baseline;justify-content:space-between;gap:24px}
-        .overview-wallet-balance span{color:rgba(255,255,255,.48);font-size:12px;letter-spacing:.02em}
+        .overview-wallet-balance-label{margin:0;color:rgba(255,255,255,.48);font-size:12px;line-height:1.2;font-weight:500;letter-spacing:.02em}
         .overview-wallet-balance strong{color:#fff;font-size:38px;line-height:1.05;font-weight:650;letter-spacing:-1.5px;font-variant-numeric:tabular-nums}
 
         .overview-widget-board{margin-top:4px}
         .overview-board-head{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:14px;padding:0 2px}
 
-        .overview-hero h1{font-size:clamp(30px,3.6vw,42px);letter-spacing:-1.5px;font-weight:650;line-height:1.02}
         .overview-hero .hero-copy>p{max-width:500px}
-        @media (max-width:640px){.overview-hero h1{font-size:32px}}
 
         .overview-board-head h2{margin:0;color:#fff;font-size:18px;font-weight:600;letter-spacing:-.02em}
 
