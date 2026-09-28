@@ -1,3 +1,5 @@
+import StructuredData, { webPageStructuredData } from '../../../components/StructuredData';
+
 export const metadata = {
   title: 'Swap',
   description: 'Swap supported assets on Arc through Centry.',
@@ -7,5 +9,16 @@ export const metadata = {
 };
 
 export default function SwapLayout({ children }) {
-  return children;
+  return (
+    <>
+      <StructuredData
+        data={webPageStructuredData({
+          url: 'https://centry.ink/app/swap',
+          name: 'Centry Swap',
+          description: metadata.description,
+        })}
+      />
+      {children}
+    </>
+  );
 }
