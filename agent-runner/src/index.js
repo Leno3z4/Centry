@@ -1874,7 +1874,7 @@ async function buildCalls(publicClient, agent, actions, autonomy, db, options = 
         const target = await db.prepare("SELECT id, owner, account FROM centry_agents WHERE id = ? LIMIT 1").bind(targetId).first();
         if (!target) throw new Error("transfer_target_agent_not_found");
         if (String(target.owner).toLowerCase() !== String(agent.owner).toLowerCase()) throw new Error("external_agent_transfer_prohibited");
-        await verifyAgentGenesis(publicClient, agent.account, target.account, options.env);
+        await verifyAgentGenesis(publicClient, agent.account, target.account);
         const asset = assetAddress(action.asset);
         const amount = humanReadableAmounts
           ? assetAmountToBaseUnits(action.amount, action.asset)
