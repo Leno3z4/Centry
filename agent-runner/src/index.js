@@ -2039,7 +2039,7 @@ async function verifyTransactionOnchain(publicClient, hash, expectedAccount, run
   };
 }
 
-async function runAgent(db, publicClient, walletClient, runnerAddress, agent, scheduledAt, env, requestedTaskId = null) {
+async function runAgent(db, publicClient, walletClient, runnerAddress, agent, scheduledAt, env, requestedTaskId = null, directOwnerMessage = null) {
   const locked = await tryLock(db, agent.id, 300_000);
   if (!locked) return { agentId: agent.id, status: "locked" };
 
@@ -2077,14 +2077,33 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
     const account = getAddress(agent.account);
     const rpcUrl = String(env.CENTRY_AGENT_RPC_URL || DEFAULT_ARC_RPC);
 
-    const claimed = await claimAgentTasks(db, agent.id, {
-      taskId: requestedTaskId,
-      limit: 20,
-      leaseMs: 300_000,
-    });
-    taskLeaseId = claimed.leaseId;
+    const directOwnerChat = typeof directOwnerMessage === "string" && directOwnerMessage.trim().length > 0;
+    if (directOwnerChat) {
+      ownerChatTask = {
+        id: null,
+        from_agent_id: null,
+        to_agent_id: agent.id,
+        task: JSON.stringify({
+          kind: "owner_chat",
+          message: directOwnerMessage.trim().slice(0, 4000),
+        }),
+        created_at: startedAt,
+      };
+      ownerChatEnvelope = {
+        kind: "owner_chat",
+        message: directOwnerMessage.trim().slice(0, 4000),
+        assistantMessageId: null,
+      };
+      tasks = [ownerChatTask];
+    } else {
+      const claimed = await claimAgentTasks(db, agent.id, {
+        taskId: requestedTaskId,
+        limit: 20,
+        leaseMs: 300_000,
+      });
+      taskLeaseId = claimed.leaseId;
 
-    const config = parseJson(agent.config_json || "{}", {});
+      const config = parseJson(agent.config_json || "{}");
     const rejectedA2A = [];
     const allowedTasks = [];
 
@@ -2120,6 +2139,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
     tasks = allowedTasks;
     ownerChatTask = tasks.find((task) => parseOwnerChatTask(task));
     ownerChatEnvelope = ownerChatTask ? parseOwnerChatTask(ownerChatTask) : null;
+    }
 
     if (requestedTaskId && !ownerChatTask && !tasks.some((task) => String(task.id) === String(requestedTaskId))) {
       runStatus = "failed";
@@ -3329,3 +3349,5 @@ export default {
     return new Response("Not found", { status: 404 });
   },
 };
+
+export { runAgent, getAgentById };
