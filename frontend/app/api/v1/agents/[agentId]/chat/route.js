@@ -276,7 +276,7 @@ export async function POST(request, { params }) {
       mode: "executed",
       status: executionBody?.status || "processed",
       result: executionBody?.result || { answer, txHash: null, error: null },
-    }, { headers: { "Cache-C
+    }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "agent_chat_failed" }, { status: 400 });
   }
