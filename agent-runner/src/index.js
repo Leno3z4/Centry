@@ -2793,7 +2793,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
       finishedAt,
       runId,
     ).run().catch(() => {});
-    await unlock(db, agent.id).catch(() => {});
+    await unlock(db, executionLockId).catch(() => {});
   }
 }
 
