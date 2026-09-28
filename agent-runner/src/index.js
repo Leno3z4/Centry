@@ -747,9 +747,10 @@ async function getAgents(db) {
   ).all().then((result) => result.results || []);
 }
 
-function configuredGenesisFactory(env) {
-  const value = String(env?.CENTRY_AGENT_FACTORY || "").trim();
-  return /^0x[a-fA-F0-9]{40}$/.test(value) ? getAddress(value) : null;
+const CANONICAL_AGENT_FACTORY = getAddress('0x9CD127b914F370D64589cF43Bc27e75320a226b4');
+
+function configuredGenesisFactory() {
+  return CANONICAL_AGENT_FACTORY;
 }
 
 async function verifyAgentGenesis(publicClient, sourceAccount, targetAccount, env) {
