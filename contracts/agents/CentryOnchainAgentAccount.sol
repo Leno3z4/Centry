@@ -512,7 +512,7 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
         address target,
         bytes4 selector,
         bytes calldata data
-    ) internal pure returns (address asset, uint256 amount, address counterparty) {
+    ) internal view returns (address asset, uint256 amount, address counterparty) {
         if (data.length < 4) revert InvalidFinancialCall();
 
         if (selector == APPROVE_SELECTOR || selector == TRANSFER_SELECTOR) {
