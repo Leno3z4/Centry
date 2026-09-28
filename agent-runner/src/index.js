@@ -753,9 +753,8 @@ function configuredGenesisFactory() {
   return CANONICAL_AGENT_FACTORY;
 }
 
-async function verifyAgentGenesis(publicClient, sourceAccount, targetAccount, env) {
-  const expectedFactory = configuredGenesisFactory(env);
-  if (!expectedFactory) throw new Error("agent_genesis_factory_not_configured");
+async function verifyAgentGenesis(publicClient, sourceAccount, targetAccount) {
+  const expectedFactory = configuredGenesisFactory();
   const source = getAddress(sourceAccount);
   const target = getAddress(targetAccount);
 
@@ -800,10 +799,9 @@ async function verifyAgentGenesis(publicClient, sourceAccount, targetAccount, en
   return sourceFactory;
 }
 
-async function buildGenesisRegistry(publicClient, agents, env) {
+async function buildGenesisRegistry(publicClient, agents) {
   const registry = new Map();
-  const expectedFactory = configuredGenesisFactory(env);
-  if (!expectedFactory) return registry;
+  const expectedFactory = configuredGenesisFactory();
   const candidates = Array.isArray(agents) ? agents : [];
   const verified = await withConcurrency(candidates, 6, async (candidate) => {
     try {
@@ -841,13 +839,13 @@ async function buildGenesisRegistry(publicClient, agents, env) {
   return registry;
 }
 
-async function buildPeerStudies(publicClient, agent, context = {}, env) {
+async function buildPeerStudies(publicClient, agent, context = {}) {
   const source = context.genesisRegistry?.get(String(agent.id)) || null;
   if (!source) return [];
 
   const sourceFactory = getAddress(source.factory);
-  const expectedFactory = configuredGenesisFactory(env);
-  if (!expectedFactory || sourceFactory.toLowerCase() !== expectedFactory.toLowerCase()) return [];
+  const expectedFactory = configuredGenesisFactory();
+  if (sourceFactory.toLowerCase() !== expectedFactory.toLowerCase()) return [];
 
   const candidates = [...context.genesisRegistry.values()]
     .filter((candidate) => String(candidate.id) !== String(agent.id))
@@ -2264,7 +2262,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
     }
 
     if (!ownerChatTask) {
-      peerStudies = await buildPeerStudies(publicClient, agent, {}, env).catch((error) => {
+      peerStudies = await buildPeerStudies(publicClient, agent, {}).catch((error) => {
         console.warn("centry_agent_peer_study_failed", {
           agentId: agent.id,
           error: error instanceof Error ? error.message : String(error),
@@ -2641,7 +2639,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
       ).bind(message.toAgentId).first();
       if (!target || target.id === agent.id) continue;
       try {
-        await verifyAgentGenesis(publicClient, agent.account, target.account, env);
+        await verifyAgentGenesis(publicClient, agent.account, target.account);
       } catch {
         continue;
       }
@@ -3209,7 +3207,7 @@ async function runScheduler(env, scheduledAt) {
   if (chainId !== 5042) throw new Error(`unsupported_runner_chain_${chainId}`);
 
   const agents = await getAgents(env.DB);
-  const genesisRegistry = await buildGenesisRegistry(publicClient, agents, env);
+  const genesisRegistry = await buildGenesisRegistry(publicClient, agents);
   const peerStats = await buildPeerReceiptStats(env.DB, genesisRegistry);
   const results = await withConcurrency(
     agents,
