@@ -3314,44 +3314,10 @@ export default {
       }
     }
 
-    if ((url.pathname === "/run" || url.pathname === "/chat") && request.method === "POST") {
+    if (url.pathname === "/run" && request.method === "POST") {
       const secret = env.CENTRY_AGENT_RUNNER_HTTP_SECRET || "";
       if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
         return new Response("Unauthorized", { status: 401 });
-      }
-
-      if (url.pathname === "/chat") {
-        let body;
-        try {
-          body = await request.json();
-        } catch {
-          return Response.json({ error: "invalid_json" }, { status: 400 });
-        }
-
-        const agentId = String(body?.agentId || "").trim();
-        const taskId = String(body?.taskId || "").trim();
-        if (!agentId || !taskId) {
-          return Response.json({ error: "agent_id_and_task_id_required" }, { status: 400 });
-        }
-
-        if (!ctx?.waitUntil) {
-          return Response.json({ error: "runner_background_execution_unavailable" }, { status: 503 });
-        }
-
-        ctx.waitUntil(
-          runSingleAgent(env, agentId, taskId)
-            .then((result) => console.log("centry_agent_chat_run_completed", result))
-            .catch((error) => console.error("centry_agent_chat_run_failed", {
-              agentId,
-              taskId,
-              error: error instanceof Error ? error.message : String(error),
-            })),
-        );
-
-        return Response.json(
-          { ok: true, mode: "accepted", agentId, taskId },
-          { status: 202, headers: { "Cache-Control": "no-store" } },
-        );
       }
 
       const result = await runScheduler(env, new Date().toISOString());
