@@ -11,6 +11,7 @@ import './apple-skin.css';
 import './unified-grey-theme.css';
 import './centry-design-system.css';
 import { Providers } from '../components/Providers';
+import StructuredData, { CENTRY_SITE_STRUCTURED_DATA } from '../components/StructuredData';
 
 export const metadata = {
   metadataBase: new URL('https://centry.ink'),
@@ -28,6 +29,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body>
+        <StructuredData data={CENTRY_SITE_STRUCTURED_DATA} />
         <Providers>{children}</Providers>
       </body>
     </html>
