@@ -3,7 +3,7 @@ import { Interface, JsonRpcProvider, getAddress, isAddress } from "ethers";
 import { getAgentTemplate } from "../../../../../lib/agentCatalog";
 import { createPurchase } from "../../../../../lib/agentStore";
 
-const FACTORY = getAddress(process.env.CENTRY_AGENT_FACTORY || "0x0000000000000000000000000000000000000000");
+const FACTORY = getAddress('0x9CD127b914F370D64589cF43Bc27e75320a226b4');
 const PAYWALL_ENABLED = process.env.NEXT_PUBLIC_CENTRY_AGENT_PAYWALL === "true";
 const PRICE_RAW = 2500000n;
 
