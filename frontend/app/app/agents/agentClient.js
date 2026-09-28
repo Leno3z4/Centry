@@ -7,6 +7,29 @@ export const API_BASE = (process.env.NEXT_PUBLIC_CENTRY_AGENT_API_URL || (typeof
 export const PAYWALL_ENABLED = process.env.NEXT_PUBLIC_CENTRY_AGENT_PAYWALL === 'true';
 export const AGENT_PRICE_RAW = 2500000n;
 
+const AGENT_NAME_STORAGE_KEY = 'centry_agent_names_v1';
+
+export function rememberAgentName(account, name) {
+  if (typeof window === 'undefined' || !account || !String(name || '').trim()) return;
+  try {
+    const current = JSON.parse(window.localStorage.getItem(AGENT_NAME_STORAGE_KEY) || '{}');
+    current[String(account).toLowerCase()] = String(name).trim().slice(0, 64);
+    window.localStorage.setItem(AGENT_NAME_STORAGE_KEY, JSON.stringify(current));
+  } catch {
+    // Name persistence is a UI convenience; failure must not block agent creation.
+  }
+}
+
+function rememberedAgentName(account) {
+  if (typeof window === 'undefined' || !account) return '';
+  try {
+    const current = JSON.parse(window.localStorage.getItem(AGENT_NAME_STORAGE_KEY) || '{}');
+    return String(current?.[String(account).toLowerCase()] || '').trim();
+  } catch {
+    return '';
+  }
+}
+
 
 let ownerSessionOwner = "";
 let ownerSessionPromise = null;
@@ -197,6 +220,11 @@ export async function loadOwnedAgents({ address, publicClient }) {
         active: false,
         config: null,
       };
+    }
+
+    const rememberedName = rememberedAgentName(account);
+    if (rememberedName && (!String(agent.name || '').trim() || /^centry agent$/i.test(String(agent.name).trim()))) {
+      agent = { ...agent, name: rememberedName };
     }
 
     // `active` is onchain state. Do not trust the persisted DB copy after an
