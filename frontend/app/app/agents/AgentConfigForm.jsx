@@ -146,7 +146,12 @@ export function AgentConfigForm({ mode = 'create', agent = null, onSubmit, submi
     if (!form.policy.allowedAssets.length) return setError('Select at least one allowed asset.');
     if (!form.name.trim() && mode === 'create') return setError('Give your agent a name.');
     const providerParts = [form.provider.trim(), form.model.trim(), form.providerKey.trim()].filter(Boolean).length;
-    if (providerParts > 0 && providerParts < 3) return setError('To configure an AI provider now, enter the provider, model, and API key together. Otherwise leave all three blank.');
+    if (mode === 'create' && providerParts !== 3) {
+      return setError('Enter a provider, model, and provider API key before creating the agent.');
+    }
+    if (mode !== 'create' && providerParts > 0 && providerParts < 3) {
+      return setError('To change the AI provider configuration, enter the provider, model, and API key together.');
+    }
 
     if (form.autonomy.riskGuard?.enabled) {
       const minHealth = Number(form.autonomy.riskGuard.minHealthFactor);
@@ -230,15 +235,15 @@ export function AgentConfigForm({ mode = 'create', agent = null, onSubmit, submi
         </div>
         <div className={styles.formGrid}>
           <div>
-            <label className={styles.label}>Provider <span className={styles.hint}>optional</span></label>
+            <label className={styles.label}>Provider</label>
             <input className={styles.input} value={form.provider} onChange={(e) => update('provider', e.target.value)} placeholder="Provider identifier, if you want to configure one now" />
           </div>
           <div>
-            <label className={styles.label}>Model <span className={styles.hint}>optional</span></label>
+            <label className={styles.label}>Model</label>
             <input className={styles.input} value={form.model} onChange={(e) => update('model', e.target.value)} placeholder="e.g. gemini-3.1-flash-lite" />
           </div>
         </div>
-        <label className={styles.label}>Provider API key{isCreate ? ' · optional' : ' · leave blank to keep the current key'}</label>
+        <label className={styles.label}>Provider API key</label>
         <input className={styles.input} type="password" value={form.providerKey} onChange={(e) => update('providerKey', e.target.value)} placeholder={isCreate ? 'Paste your provider API key' : 'Enter a new key only when rotating it'} />
         {!isCreate && (
           <p className={styles.hint}>{configuredProviders.length ? `Configured: ${configuredProviders.map((item) => item.provider + ' · ' + item.model).join(', ')}` : 'No provider metadata is currently returned for this agent.'}</p>
