@@ -397,34 +397,9 @@ Centry exposes a lightweight A2A message endpoint and an agent card. Agent-to-ag
 
 ### Interactive owner chat
 
-Owner chat is handled separately from the one-minute autonomous scheduler. The Next.js chat route queues the authenticated owner message and, when `CENTRY_AGENT_RUNNER_URL` plus `CENTRY_AGENT_RUNNER_HTTP_SECRET` are configured, immediately wakes the runner's `/chat` endpoint for that specific agent/task. The runner responds to the HTTP request immediately and completes the task in the Worker background.
+Interactive owner chat is intentionally separate from the autonomous scheduler. Ordinary conversation is handled directly by the configured AI provider. Read-only account requests can use targeted RPC reads. Explicit state-changing requests are sent directly to the dedicated `centry-agent-executor` Worker; they do not enter the agent queue, wait for a Cron Trigger, or require frontend polling.
 
-Owner-chat balance reads use targeted RPC calls. Token amounts are read and displayed in normal token units; action amounts supplied by the AI are human-readable decimals and the runner converts them to base units using the configured asset decimals before contract encoding.
-
-## Global autonomous scheduler
-
-Centry's hosted onchain agents now use one global Cloudflare Worker Cron Trigger rather than one scheduler per agent.
-
-```text
-Cloudflare Cron: * * * * *
-  -> load every registered agent from D1
-  -> wake the agent runtimes concurrently
-  -> check the live Arc account:
-       active()
-       agentOperators(runner)
-  -> read pending A2A tasks + persistent autonomy instructions
-  -> call the configured Gemini/OpenAI/Anthropic provider when work exists
-  -> build only catalogued Centry actions
-  -> check canExecute() for every underlying call
-  -> simulate the complete smart-account batch
-  -> submit directly to Arc RPC
-  -> record the run and task result
-  -> repeat next minute
-```
-
-The scheduler is one Worker. It is not one cron per user. The runtime uses bounded concurrency so a large fleet does not exceed the Worker runtime's outbound-connection limits.
-
-The shared hosted runner wallet is only an **operator**, never the user's owner. Every user-owned smart account still enforces its own `active`, operator, permission, expiry and native-value policy.
+The executor reuses the hardened agent execution engine for live permission checks, simulation, signing, receipt verification, and action receipts. The autonomous `centry-agent-runner` remains responsible for scheduled/background autonomy and analytics.
 
 ### A2A with the autonomous runner
 
