@@ -5,7 +5,7 @@ import {
   http,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { getAgentById, runAgent } from "../../agent-runner/src/index.js";
+import { getAgentById, runAgent } from "centry-agent-runner/src/index.js";
 
 const DEFAULT_ARC_RPC = "https://rpc.mainnet.arc.io";
 
