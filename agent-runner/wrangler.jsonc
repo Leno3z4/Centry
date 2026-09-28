@@ -7,7 +7,7 @@
     "enabled": true
   },
   "vars": {
-    "CENTRY_ANALYTICS_RPC_URL": "https://rpc.mainnet.arc.io"
+    "CENTRY_ANALYTICS_RPC_URL1": "https://rpc.mainnet.arc.io"
   },
   "triggers": {
     "crons": ["*/5 * * * *"]
