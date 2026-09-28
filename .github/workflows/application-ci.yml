@@ -123,5 +123,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
+      - name: Install executor dependencies
+        run: npm install --no-audit --no-fund
+
       - name: Validate executor syntax
         run: node --check src/index.js
