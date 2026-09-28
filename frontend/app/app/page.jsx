@@ -298,7 +298,7 @@ function OverviewContent() {
 
         .overview-board-head h2{margin:0;color:#fff;font-size:18px;font-weight:600;letter-spacing:-.02em}
 
-        .overview-widget{height:100%;min-height:0;padding:20px;background:#111;border-radius:22px;color:#fff}
+        .overview-widget{height:100%;min-height:0;padding:20px;box-sizing:border-box;background:#111;border-radius:22px;color:#fff}
         .overview-widget-head{display:flex;align-items:center;justify-content:space-between;gap:14px}
         .overview-widget-title{display:flex;align-items:center;gap:9px;min-width:0}
         .overview-drag-handle{display:inline-flex;align-items:center;justify-content:center;width:14px;color:rgba(255,255,255,.28);font-size:13px;letter-spacing:-4px;cursor:grab;user-select:none}
