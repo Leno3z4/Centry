@@ -1,3 +1,5 @@
+import StructuredData, { webPageStructuredData } from '../../../components/StructuredData';
+
 export const metadata = {
   title: 'Gateway',
   description: 'Manage unified USDC liquidity and supported Gateway funding flows with Centry.',
@@ -7,5 +9,16 @@ export const metadata = {
 };
 
 export default function GatewayLayout({ children }) {
-  return children;
+  return (
+    <>
+      <StructuredData
+        data={webPageStructuredData({
+          url: 'https://centry.ink/app/gateway',
+          name: 'Centry Gateway',
+          description: metadata.description,
+        })}
+      />
+      {children}
+    </>
+  );
 }
