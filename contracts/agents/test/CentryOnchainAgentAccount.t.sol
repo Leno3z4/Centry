@@ -63,6 +63,18 @@ contract MockAgentToken {
         return true;
     }
 
+    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
+        uint256 currentAllowance = allowance[from][msg.sender];
+        if (currentAllowance < amount) revert InsufficientAllowance();
+        uint256 balance = balanceOf[from];
+        if (balance < amount) revert InsufficientBalance();
+        allowance[from][msg.sender] = currentAllowance - amount;
+        balanceOf[from] = balance - amount;
+        balanceOf[to] += amount;
+        return true;
+    }
+
+    error InsufficientAllowance();
     error InsufficientBalance();
 }
 
@@ -182,6 +194,93 @@ contract CentryOnchainAgentAccountTest {
             )
         );
         _assertFalse(ok);
+    }
+
+    function testCanExecuteReturnsFalseWhileInactive() external {
+        bytes4 selector = CentryAgentCallTarget.setValue.selector;
+
+        vm.prank(user);
+        account.setPermission(agent, address(target), selector, true, 0, 0);
+
+        vm.prank(user);
+        account.setActive(false);
+
+        _assertFalse(account.canExecute(agent, address(target), selector, 0));
+    }
+
+    function testTransferFromCannotSourceFundsFromExternalAddress() external {
+        MockAgentToken token = new MockAgentToken();
+        address externalSource = address(0xBEEF);
+
+        token.mint(externalSource, 1000);
+
+        bytes4 selector = bytes4(keccak256("transferFrom(address,address,uint256)"));
+        vm.prank(user);
+        account.setPermission(agent, address(token), selector, true, 0, 0);
+
+        vm.prank(user);
+        account.setFinancialLimit(agent, address(token), selector, address(token), 1000, 1000, 1 days);
+
+        vm.prank(externalSource);
+        token.approve(address(account), 1000);
+
+        vm.prank(agent);
+        (bool ok,) = address(account).call(
+            abi.encodeCall(
+                account.execute,
+                (
+                    address(token),
+                    0,
+                    abi.encodeWithSelector(selector, externalSource, user, 100)
+                )
+            )
+        );
+        _assertFalse(ok);
+        _assertEq(token.balanceOf(externalSource), 1000);
+        _assertEq(token.balanceOf(user), 0);
+    }
+
+    function testOwnerCanRevokeAgentApproval() external {
+        MockAgentToken token = new MockAgentToken();
+        address spender = address(0xB0B);
+
+        vm.prank(user);
+        account.executeAsOwner(
+            address(token),
+            0,
+            abi.encodeCall(token.approve, (spender, 500))
+        );
+
+        _assertEq(token.allowance(address(account), spender), 500);
+
+        vm.prank(user);
+        account.revokeAgentApproval(address(token), spender);
+
+        _assertEq(token.allowance(address(account), spender), 0);
+    }
+
+    function testOwnershipTransferInvalidatesDelegationAndDeactivates() external {
+        bytes4 selector = CentryAgentCallTarget.setValue.selector;
+
+        vm.prank(user);
+        account.setPermission(agent, address(target), selector, true, 0, 0);
+
+        _assertTrue(account.canExecute(agent, address(target), selector, 0));
+        _assertEqBytes32(
+            account.permissionCodeHashes(agent, address(target), selector),
+            address(target).codehash
+        );
+
+        address newOwner = address(0xB0B);
+        vm.prank(user);
+        account.transferOwnership(newOwner);
+
+        vm.prank(newOwner);
+        account.acceptOwnership();
+
+        _assertEqAddress(account.owner(), newOwner);
+        _assertFalse(account.active());
+        _assertFalse(account.canExecute(agent, address(target), selector, 0));
     }
 
     function testPermissionCanExpire() external {
@@ -314,6 +413,10 @@ contract CentryOnchainAgentAccountTest {
 
     function _assertEqString(string memory a, string memory b) internal pure {
         if (keccak256(bytes(a)) != keccak256(bytes(b))) revert AssertionFailed();
+    }
+
+    function _assertEqBytes32(bytes32 a, bytes32 b) internal pure {
+        if (a != b) revert AssertionFailed();
     }
 
     function _assertFalse(bool value_) internal pure {
