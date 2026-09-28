@@ -39,6 +39,34 @@ function unauthorized() {
   return Response.json({ error: "unauthorized" }, { status: 401 });
 }
 
+let ownerAuthNonceTableReady = null;
+
+async function ensureOwnerAuthNonceTable(db) {
+  if (ownerAuthNonceTableReady) return ownerAuthNonceTableReady;
+  ownerAuthNonceTableReady = (async () => {
+    await db.prepare(
+      `CREATE TABLE IF NOT EXISTS centry_owner_auth_nonces (
+        nonce TEXT PRIMARY KEY,
+        owner TEXT NOT NULL,
+        account TEXT NOT NULL,
+        action TEXT NOT NULL,
+        params_hash TEXT NOT NULL,
+        consumed_at TEXT NOT NULL
+      )`
+    ).run();
+    await db.prepare(
+      `CREATE INDEX IF NOT EXISTS idx_centry_owner_auth_nonces_consumed
+       ON centry_owner_auth_nonces(consumed_at)`
+    ).run();
+  })();
+  try {
+    await ownerAuthNonceTableReady;
+  } catch (error) {
+    ownerAuthNonceTableReady = null;
+    throw error;
+  }
+}
+
 function timingSafeEqualHex(left, right) {
   if (typeof left !== "string" || typeof right !== "string" || left.length !== right.length) return false;
   let diff = 0;
@@ -228,6 +256,7 @@ async function runOperation(db, operation, args) {
       const account = requireString(args.account, "account");
       const action = requireString(args.action, "action");
       const paramsHash = requireString(args.paramsHash, "paramsHash");
+      await ensureOwnerAuthNonceTable(db);
       const now = new Date().toISOString();
       await db.prepare(
         "DELETE FROM centry_owner_auth_nonces WHERE consumed_at < ?"
