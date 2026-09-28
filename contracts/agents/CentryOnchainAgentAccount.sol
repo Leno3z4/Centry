@@ -523,7 +523,8 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
 
         if (selector == TRANSFER_FROM_SELECTOR) {
             asset = target;
-            (address from, counterparty, amount) = abi.decode(data[4:], (address, address, uint256));
+            address from;
+            (from, counterparty, amount) = abi.decode(data[4:], (address, address, uint256));
             if (from != address(this) || counterparty == address(0)) revert InvalidFinancialCall();
             return (asset, amount, counterparty);
         }
