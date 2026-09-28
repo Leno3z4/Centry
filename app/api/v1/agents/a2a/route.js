@@ -13,10 +13,10 @@ function noStore(body, status = 200) {
 const ACCOUNT_FACTORY_ABI = ["function factory() view returns (address)"];
 const FACTORY_REGISTRY_ABI = ["function isCentryAgentAccount(address account) view returns (bool)"];
 
+const CANONICAL_AGENT_FACTORY = getAddress('0x9CD127b914F370D64589cF43Bc27e75320a226b4');
+
 function configuredGenesisFactory() {
-  const value = String(process.env.CENTRY_AGENT_FACTORY || "").trim();
-  if (!isAddress(value)) throw new Error("agent_genesis_factory_not_configured");
-  return getAddress(value);
+  return CANONICAL_AGENT_FACTORY;
 }
 
 async function verifySameGenesisFactory(sourceAccount, targetAccount, rpcUrl) {
