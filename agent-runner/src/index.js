@@ -3069,7 +3069,7 @@ async function runProtocolAnalyticsIndexer(env, scheduledAt) {
   }
 
   const rpcUrl = String(
-    env.CENTRY_ANALYTICS_RPC_URL ||
+    env.CENTRY_ANALYTICS_RPC_URL1 ||
     env.CENTRY_AGENT_RPC_URL ||
     DEFAULT_ARC_RPC,
   );
