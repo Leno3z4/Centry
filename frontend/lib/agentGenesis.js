@@ -4,7 +4,7 @@ const ACCOUNT_FACTORY_ABI = ["function factory() view returns (address)"];
 const FACTORY_REGISTRY_ABI = ["function isCentryAgentAccount(address account) view returns (bool)"];
 
 function configuredGenesisFactory() {
-  const value = String(process.env.CENTRY_AGENT_FACTORY || "").trim();
+  const value = String(process.env.CENTRY_AGENT_FACTORY || "0x9CD127b914F370D64589cF43Bc27e75320a226b4").trim();
   if (!isAddress(value)) throw new Error("agent_genesis_factory_not_configured");
   return getAddress(value);
 }
