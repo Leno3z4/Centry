@@ -1,0 +1,11 @@
+export const metadata = {
+  title: 'Agents',
+  description: 'Create and manage owner-controlled onchain agents with Centry smart accounts.',
+  alternates: {
+    canonical: '/app/agents',
+  },
+};
+
+export default function AgentsLayout({ children }) {
+  return children;
+}

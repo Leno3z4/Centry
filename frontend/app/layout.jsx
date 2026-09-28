@@ -13,8 +13,15 @@ import './centry-design-system.css';
 import { Providers } from '../components/Providers';
 
 export const metadata = {
-  title: 'Centry',
-  description: 'Arc-native lending and yield infrastructure.',
+  metadataBase: new URL('https://centry.ink'),
+  title: {
+    default: 'Centry — Arc-native lending & yield',
+    template: '%s | Centry',
+  },
+  description: 'Arc-native lending, borrowing, swaps, and yield infrastructure.',
+  alternates: {
+    canonical: '/',
+  },
 };
 
 export default function RootLayout({ children }) {
