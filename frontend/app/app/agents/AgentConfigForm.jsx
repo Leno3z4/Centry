@@ -144,18 +144,6 @@ export function AgentConfigForm({ mode = 'create', agent = null, onSubmit, submi
 
     if (!form.policy.allowedActions.length) return setError('Select at least one allowed action.');
     if (!form.policy.allowedAssets.length) return setError('Select at least one allowed asset.');
-    const financialActions = ['supply', 'withdraw', 'borrow', 'repay', 'transfer'];
-    const requiredCapAssets = new Set(
-      form.policy.allowedActions.some((action) => financialActions.includes(action))
-        ? form.policy.allowedAssets
-        : [],
-    );
-    if (form.policy.allowedActions.includes('swap')) requiredCapAssets.add('CENT');
-    for (const asset of requiredCapAssets) {
-      if (!String(form.policy.maxAmountByAsset[asset] || '').trim()) {
-        return setError('Set a maximum amount for ' + asset + ' before enabling that financial action.');
-      }
-    }
     if (!form.name.trim() && mode === 'create') return setError('Give your agent a name.');
     const providerParts = [form.provider.trim(), form.model.trim(), form.providerKey.trim()].filter(Boolean).length;
     if (providerParts > 0 && providerParts < 3) return setError('To configure an AI provider now, enter the provider, model, and API key together. Otherwise leave all three blank.');
