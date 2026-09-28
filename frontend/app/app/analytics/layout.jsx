@@ -1,3 +1,5 @@
+import StructuredData, { webPageStructuredData } from '../../../components/StructuredData';
+
 export const metadata = {
   title: 'Analytics',
   description: 'Live Centry market, liquidity, utilization, and risk analytics.',
@@ -7,5 +9,16 @@ export const metadata = {
 };
 
 export default function AnalyticsLayout({ children }) {
-  return children;
+  return (
+    <>
+      <StructuredData
+        data={webPageStructuredData({
+          url: 'https://centry.ink/app/analytics',
+          name: 'Centry Analytics',
+          description: metadata.description,
+        })}
+      />
+      {children}
+    </>
+  );
 }
