@@ -30,16 +30,16 @@ function ChatContent() {
     },
     {
       id: 'evaluate',
-      label: 'Evaluate agent context',
+      label: 'Check agent context',
       status: messages.length ? (sending ? 'pending' : 'done') : 'pending',
       children: [
         { id: 'policy', label: 'Check configured permissions', status: messages.length && !sending ? 'done' : 'pending' },
-        { id: 'runtime', label: 'Prepare agent runtime', status: sending ? 'running' : 'pending' },
+        { id: 'runtime', label: 'Build response', status: sending ? 'running' : 'pending' },
       ],
     },
     {
       id: 'execute',
-      label: 'Execute and return result',
+      label: 'Return result',
       status: sending ? 'running' : 'pending',
     },
   ];
