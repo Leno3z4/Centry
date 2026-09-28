@@ -65,9 +65,7 @@ With no autonomy instructions and no pending A2A tasks, the agent simply wakes, 
 
 ## A2A
 
-The normal A2A endpoint persists inbound work in D1. Agent-to-agent communication is restricted to agents created by the configured canonical `CENTRY_AGENT_FACTORY`; different factory lineages cannot exchange work. The runner may study bounded behavioral summaries from other canonical agents and retain concise advisory learnings, but peer observations never change permissions or policy. Completing a task never changes onchain permissions. The recipient smart account remains the final execution boundary.
-
-Set `CENTRY_AGENT_FACTORY` to the deployed Centry agent factory address in the Worker configuration. It is a public configuration value, not a secret.
+The normal A2A endpoint persists inbound work in D1. Agent-to-agent communication is restricted to agents created by the canonical Centry factory `0x9CD127b914F370D64589cF43Bc27e75320a226b4`; different factory lineages cannot exchange work. The runner may study bounded behavioral summaries from other canonical agents and retain concise advisory learnings, but peer observations never change permissions or policy. Completing a task never changes onchain permissions. The recipient smart account remains the final execution boundary.
 
 ## Protocol analytics indexer
 
