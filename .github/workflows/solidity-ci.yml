@@ -43,8 +43,8 @@ jobs:
           cache_path = "cache"
           solc_version = "0.8.24"
           optimizer = true
-          optimizer_runs = 200
-          via_ir = false
+          optimizer_runs = 1
+          via_ir = true
           allow_paths = [
             "../../lib/openzeppelin-contracts"
           ]
@@ -52,4 +52,5 @@ jobs:
             "@openzeppelin/=../../lib/openzeppelin-contracts/"
           ]
           EOF
+          forge build --sizes
           forge test -vv
