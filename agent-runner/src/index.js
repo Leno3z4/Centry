@@ -1656,7 +1656,16 @@ async function readOwnerChatBalance(publicClient, account, symbol, rpcUrl) {
 }
 
 
-async function ensureBatchAllowance(publicClient, calls, allowanceState, token, spender, account, amount) {
+async function ensureBatchAllowance(
+  publicClient,
+  calls,
+  allowanceState,
+  token,
+  spender,
+  account,
+  amount,
+  trackCleanup,
+) {
   const key = `${token.toLowerCase()}:${spender.toLowerCase()}`;
   let remaining = allowanceState.get(key);
 
@@ -1686,6 +1695,7 @@ async function ensureBatchAllowance(publicClient, calls, allowanceState, token, 
     );
     approvalCall.generatedActionType = "approve";
     calls.push(approvalCall);
+    if (typeof trackCleanup === "function") trackCleanup(token, spender);
     remaining = amount;
   }
 
@@ -1733,6 +1743,12 @@ async function buildCalls(publicClient, agent, actions, autonomy, db, options = 
   const account = getAddress(agent.account);
   const policy = agentPolicy(autonomy);
   const allowanceState = new Map();
+  const cleanupApprovals = new Map();
+
+  const trackCleanup = (token, spender) => {
+    const key = String(token).toLowerCase() + ":" + String(spender).toLowerCase();
+    cleanupApprovals.set(key, { token, spender });
+  };
 
   for (const action of actions) {
     const type = String(action?.action || "").trim();
@@ -1765,6 +1781,7 @@ async function buildCalls(publicClient, agent, actions, autonomy, db, options = 
         const approvalCall = makeCall(asset, data);
         approvalCall.generatedActionType = "approve";
         calls.push(approvalCall);
+        trackCleanup(asset, spender);
         allowanceState.set(`${asset.toLowerCase()}:${spender.toLowerCase()}`, amount);
         break;
       }
@@ -1779,7 +1796,16 @@ async function buildCalls(publicClient, agent, actions, autonomy, db, options = 
           : positiveUint(action.amount, "amount");
 
         if (type === "supply" || type === "repay") {
-          await ensureBatchAllowance(publicClient, calls, allowanceState, asset, LENDING_POOL, account, amount);
+          await ensureBatchAllowance(
+            publicClient,
+            calls,
+            allowanceState,
+            asset,
+            LENDING_POOL,
+            account,
+            amount,
+            trackCleanup,
+          );
         }
 
         const data = encodeFunctionData({
@@ -1814,7 +1840,16 @@ async function buildCalls(publicClient, agent, actions, autonomy, db, options = 
               : positiveUint(action.minOut, "minOut"))
           : quoted.minOut;
 
-        await ensureBatchAllowance(publicClient, calls, allowanceState, input, UNITFLOW_ROUTER, account, amountIn);
+        await ensureBatchAllowance(
+          publicClient,
+          calls,
+          allowanceState,
+          input,
+          UNITFLOW_ROUTER,
+          account,
+          amountIn,
+          trackCleanup,
+        );
 
         const swap = encodeFunctionData({
           abi: UNITFLOW_ROUTER_ABI,
@@ -1870,6 +1905,20 @@ async function buildCalls(publicClient, agent, actions, autonomy, db, options = 
       default:
         throw new Error(`unsupported_action_${type || "empty"}`);
     }
+  }
+
+  // Agent-generated ERC20 approvals are transactional capabilities, not persistent
+  // standing permissions. Reset only allowances that this batch itself changed so
+  // pre-existing owner-controlled allowances are left untouched.
+  for (const { token, spender } of cleanupApprovals.values()) {
+    calls.push(makeCall(
+      token,
+      encodeFunctionData({
+        abi: ERC20_ABI,
+        functionName: "approve",
+        args: [spender, 0n],
+      }),
+    ));
   }
 
   if (calls.length === 0 || calls.length > 32) throw new Error("invalid_call_batch");
