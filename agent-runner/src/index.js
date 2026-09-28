@@ -2040,7 +2040,9 @@ async function verifyTransactionOnchain(publicClient, hash, expectedAccount, run
 }
 
 async function runAgent(db, publicClient, walletClient, runnerAddress, agent, scheduledAt, env, requestedTaskId = null, directOwnerMessage = null) {
-  const locked = await tryLock(db, agent.id, 300_000);
+  const directOwnerChat = typeof directOwnerMessage === "string" && directOwnerMessage.trim().length > 0;
+  const executionLockId = directOwnerChat ? ``__interactive_${agent.id}__`` : agent.id;
+  const locked = await tryLock(db, executionLockId, directOwnerChat ? 60_000 : 300_000);
   if (!locked) return { agentId: agent.id, status: "locked" };
 
   const runId = crypto.randomUUID();
@@ -2077,7 +2079,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
     const account = getAddress(agent.account);
     const rpcUrl = String(env.CENTRY_AGENT_RPC_URL || DEFAULT_ARC_RPC);
 
-    const directOwnerChat = typeof directOwnerMessage === "string" && directOwnerMessage.trim().length > 0;
+    const config = parseJson(agent.config_json || "{}", {});
     if (directOwnerChat) {
       ownerChatTask = {
         id: null,
@@ -2103,8 +2105,7 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
       });
       taskLeaseId = claimed.leaseId;
 
-      const config = parseJson(agent.config_json || "{}");
-    const rejectedA2A = [];
+      const rejectedA2A = [];
     const allowedTasks = [];
 
     for (const task of claimed.tasks || []) {
@@ -2172,6 +2173,17 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
         const rawBalance = await readOwnerChatBalance(publicClient, account, symbol, rpcUrl);
         const displayBalance = formatTokenAmount(rawBalance, symbol);
         const answer = `Your agent has ${displayBalance} ${symbol}.`;
+        if (directOwnerChat) {
+          await addAgentChatMessage(db, {
+            id: crypto.randomUUID(),
+            agentId: agent.id,
+            role: "assistant",
+            content: answer,
+          });
+          runStatus = "processed";
+          reason = "direct_balance_read";
+          return { agentId: agent.id, status: runStatus, reason, txHash: null, taskCount: 1, actionCount: 0, answer };
+        }
         if (ownerChatEnvelope.assistantMessageId) {
           await completeOwnerChatTask(
             db,
