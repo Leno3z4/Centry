@@ -347,34 +347,6 @@ export function AgentConfigForm({ mode = 'create', agent = null, onSubmit, submi
         </div>
       </section>
 
-      <section className={styles.configPanel}>
-        <div className={styles.sectionHead}>
-          <div>
-            <h2>Agent-to-agent</h2>
-            <p>Keep inbound agent tasks off unless you explicitly want other Centry agents to contact this agent.</p>
-          </div>
-        </div>
-        <label className={styles.scope}>
-          <input
-            type="checkbox"
-            checked={form.a2a?.receiveEnabled === true}
-            onChange={(e) => updateA2A('receiveEnabled', e.target.checked)}
-          />
-          <span>
-            <strong>Allow incoming agent tasks</strong>
-            <small>When enabled, same-factory agents may send tasks unless an allowlist is configured below.</small>
-          </span>
-        </label>
-        <label className={styles.label}>Trusted agent IDs <span className={styles.hint}>optional</span></label>
-        <textarea
-          className={styles.input}
-          rows={3}
-          value={(form.a2a?.allowedAgentIds || []).join('\n')}
-          onChange={(e) => updateA2A('allowedAgentIds', e.target.value.split(/[\n,\s]+/).map((value) => value.trim()).filter(Boolean))}
-          placeholder="One agent ID per line. Leave empty to allow any opted-in same-factory agent."
-          disabled={form.a2a?.receiveEnabled !== true}
-        />
-      </section>
 
       {error ? <div className={styles.error}>{error}</div> : null}
 
