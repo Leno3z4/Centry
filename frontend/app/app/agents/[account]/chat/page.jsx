@@ -60,30 +60,6 @@ function ChatContent() {
     )));
   }
 
-  async function waitForTask(taskId, messageId) {
-    for (let attempt = 0; attempt < 60; attempt += 1) {
-      try {
-        const result = await apiJson(`${API_BASE}/api/v1/agent-admin/tasks/${taskId}`, { method: 'GET' });
-        if (result.status !== 'pending') {
-          const answer = result.result?.answer || result.result?.error || 'The agent finished processing the request.';
-          updateMessage(messageId, { content: answer, pending: false });
-          return;
-        }
-      } catch {
-        // Keep polling through transient API/RPC failures.
-      }
-
-      const delay = attempt < 6 ? 500 : attempt < 16 ? 1000 : 2000;
-      await new Promise((resolve) => setTimeout(resolve, delay));
-    }
-
-    updateMessage(messageId, {
-      content: 'Still processing. The request remains queued with the agent runtime.',
-      pending: true,
-      delayed: true,
-    });
-  }
-
   async function sendChat() {
     if (!agent || !message.trim() || sending) return;
     const submittedMessage = message.trim();
