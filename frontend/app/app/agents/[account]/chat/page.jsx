@@ -63,8 +63,18 @@ function ChatContent() {
   async function sendChat() {
     if (!agent || !message.trim() || sending) return;
     const submittedMessage = message.trim();
+    const localUserId = `user-${crypto.randomUUID()}`;
+    const pendingMessageId = `assistant-${crypto.randomUUID()}`;
+
     setSending(true);
     setError('');
+    setMessages((current) => [
+      ...current,
+      { role: 'user', content: submittedMessage, id: localUserId },
+      { role: 'assistant', content: 'Thinking…', id: pendingMessageId, pending: true },
+    ]);
+    setMessage('');
+
     try {
       await ensureOwnerSession({ address, account: agent.account, signMessageAsync });
       const result = await apiJson(`${API_BASE}/api/v1/agents/${agent.id}/chat`, {
@@ -73,38 +83,17 @@ function ChatContent() {
         body: JSON.stringify({ message: submittedMessage }),
       });
 
-      const localUserId = `user-${result.taskId || crypto.randomUUID()}`;
-      setMessages((current) => [...current, { role: 'user', content: submittedMessage, id: localUserId }]);
-      setMessage('');
-
-      if (result.mode === 'direct') {
-        setMessages((current) => [...current, {
-          role: 'assistant',
-          content: result.result?.answer || 'The balance read completed.',
-          id: crypto.randomUUID(),
-        }]);
-        return;
-      }
-
-      if (result.taskId) {
-        const messageId = `assistant-${result.taskId}`;
-        setMessages((current) => [...current, {
-          role: 'assistant',
-          content: result.runnerConfigured === false
-            ? 'Queued. The agent runtime is not configured for an immediate wake.'
-            : 'Thinking…',
-          id: messageId,
-          pending: true,
-        }]);
-        void waitForTask(result.taskId, messageId);
-      }
+      updateMessage(pendingMessageId, {
+        content: result.result?.answer || 'The request was processed.',
+        pending: false,
+      });
     } catch (e) {
+      setMessages((current) => current.filter((item) => item.id !== pendingMessageId));
       setError(e.message);
     } finally {
       setSending(false);
     }
   }
-
   if (!agent) return <main className={styles.page}><div className={styles.emptyState}>Loading agent…</div></main>;
 
   return (
