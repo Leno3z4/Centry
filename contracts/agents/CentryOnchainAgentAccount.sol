@@ -71,6 +71,17 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
     mapping(address => mapping(address => mapping(bytes4 => mapping(address => FinancialLimit)))) public financialLimits;
     mapping(address => mapping(address => mapping(address => bool))) public approvalSpenders;
 
+    // Delegated authorization is invalidated whenever ownership changes.
+    uint64 public authorizationEpoch;
+    mapping(address => mapping(address => mapping(bytes4 => uint64))) public permissionEpochs;
+    mapping(address => mapping(address => mapping(bytes4 => mapping(address => uint64)))) public financialLimitEpochs;
+    mapping(address => mapping(address => mapping(address => uint64))) public approvalSpenderEpochs;
+
+    // Pin a permission to the deployed target bytecode that the owner approved.
+    // This prevents a proxy/upgrade from silently changing what a previously-approved
+    // selector means. A zero hash is used only as a compatibility escape hatch.
+    mapping(address => mapping(address => mapping(bytes4 => bytes32))) public permissionCodeHashes;
+
     error AlreadyInitialized();
     error InvalidOwner();
     error NotOwner();
@@ -129,6 +140,7 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
         address indexed spender,
         bool allowed
     );
+    event AgentApprovalRevoked(address indexed asset, address indexed spender, uint256 amount);
     event AgentExecuted(
         address indexed operator,
         address indexed target,
@@ -198,7 +210,14 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
         address previousOwner = owner;
         owner = pendingOwner;
         pendingOwner = address(0);
+
+        // Delegations are owner-specific. Never carry the previous owner's
+        // operator/permission state into a new ownership epoch.
+        authorizationEpoch += 1;
+        active = false;
+
         emit OwnershipTransferred(previousOwner, owner);
+        emit AgentActivationSet(false);
     }
 
     function setActive(bool active_) external onlyOwner {
@@ -228,6 +247,8 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
             expiresAt: expiresAt,
             maxNativeValue: maxNativeValue
         });
+        permissionEpochs[operator][target][selector] = authorizationEpoch;
+        permissionCodeHashes[operator][target][selector] = target.codehash;
 
         emit PermissionSet(operator, target, selector, allowed, expiresAt, maxNativeValue);
     }
@@ -240,7 +261,33 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
     ) external onlyOwner {
         if (operator == address(0) || asset == address(0) || spender == address(0)) revert InvalidOwner();
         approvalSpenders[operator][asset][spender] = allowed;
+        approvalSpenderEpochs[operator][asset][spender] = authorizationEpoch;
         emit ApprovalSpenderSet(operator, asset, spender, allowed);
+    }
+
+    /// @notice Revoke an ERC20 allowance that an agent may have previously granted.
+    /// @dev This is owner-only because ERC20 allowance state lives in the token contract.
+    function revokeAgentApproval(address asset, address spender) external onlyOwner nonReentrant {
+        if (asset == address(0) || spender == address(0)) revert InvalidOwner();
+        IERC20(asset).forceApprove(spender, 0);
+        emit AgentApprovalRevoked(asset, spender, 0);
+    }
+
+    /// @notice Revoke multiple ERC20 allowances in one owner transaction.
+    /// @dev This is intentionally bounded so the kill/recovery path stays predictable.
+    function revokeAgentApprovals(address[] calldata assets, address[] calldata spenders)
+        external
+        onlyOwner
+        nonReentrant
+    {
+        uint256 length = assets.length;
+        if (length == 0 || length > MAX_BATCH_CALLS || spenders.length != length) revert BatchTooLarge();
+
+        for (uint256 i = 0; i < length; i++) {
+            if (assets[i] == address(0) || spenders[i] == address(0)) revert InvalidOwner();
+            IERC20(assets[i]).forceApprove(spenders[i], 0);
+            emit AgentApprovalRevoked(assets[i], spenders[i], 0);
+        }
     }
 
     function setFinancialLimit(
@@ -276,6 +323,7 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
             windowStart: uint64(block.timestamp),
             windowDuration: windowDuration
         });
+        financialLimitEpochs[operator][target][selector][asset] = authorizationEpoch;
 
         emit FinancialLimitSet(
             operator,
@@ -359,9 +407,14 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
         bytes4 selector,
         uint256 value
     ) public view returns (bool) {
-        if (!agentOperators[operator] || target == address(0)) return false;
+        if (!active || !agentOperators[operator] || target == address(0)) return false;
         Permission memory permission = permissions[operator][target][selector];
         if (!permission.allowed) return false;
+        if (permissionEpochs[operator][target][selector] != authorizationEpoch) return false;
+        if (
+            permissionCodeHashes[operator][target][selector] != bytes32(0) &&
+            target.codehash != permissionCodeHashes[operator][target][selector]
+        ) return false;
         if (permission.expiresAt != 0 && block.timestamp > permission.expiresAt) return false;
         if (value > permission.maxNativeValue) return false;
         return true;
@@ -459,7 +512,7 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
         address target,
         bytes4 selector,
         bytes calldata data
-    ) internal pure returns (address asset, uint256 amount, address counterparty) {
+    ) internal view returns (address asset, uint256 amount, address counterparty) {
         if (data.length < 4) revert InvalidFinancialCall();
 
         if (selector == APPROVE_SELECTOR || selector == TRANSFER_SELECTOR) {
@@ -470,7 +523,9 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
 
         if (selector == TRANSFER_FROM_SELECTOR) {
             asset = target;
-            (, counterparty, amount) = abi.decode(data[4:], (address, address, uint256));
+            address from;
+            (from, counterparty, amount) = abi.decode(data[4:], (address, address, uint256));
+            if (from != address(this) || counterparty == address(0)) revert InvalidFinancialCall();
             return (asset, amount, counterparty);
         }
 
@@ -528,7 +583,11 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
 
         (address asset, uint256 amount, address counterparty) = _financialCallAssetAmount(target, selector, data);
 
-        if (selector == APPROVE_SELECTOR && !approvalSpenders[operator][asset][counterparty]) {
+        if (
+            selector == APPROVE_SELECTOR &&
+            (!approvalSpenders[operator][asset][counterparty] ||
+                approvalSpenderEpochs[operator][asset][counterparty] != authorizationEpoch)
+        ) {
             revert ApprovalSpenderNotAllowed();
         }
 
@@ -541,6 +600,10 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
         }
 
         FinancialLimit storage limit = financialLimits[operator][target][selector][asset];
+
+        if (financialLimitEpochs[operator][target][selector][asset] != authorizationEpoch) {
+            revert FinancialLimitNotConfigured();
+        }
 
         if (
             limit.maxAmountPerCall == 0 ||
