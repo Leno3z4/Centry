@@ -27,7 +27,7 @@ export async function POST(request) {
   }
 
   const rpcUrl = process.env.CENTRY_AGENT_RPC_URL;
-  const genesisFactory = process.env.CENTRY_AGENT_FACTORY || "0x9CD127b914F370D64589cF43Bc27e75320a226b4";
+  const genesisFactory = process.env.CENTRY_AGENT_FACTORY;
   if (!genesisFactory || !isAddress(genesisFactory)) {
     return Response.json({ error: "agent_genesis_factory_not_configured" }, { status: 503 });
   }
