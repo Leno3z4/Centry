@@ -1,5 +1,4 @@
 import { getAddress } from 'viem';
-import { BatchFacilitatorClient } from '@circle-fin/x402-batching/server';
 import { CONTRACT_ADDRESSES } from '../constants/contracts';
 
 export const CIRCLE_X402_NETWORK = 'eip155:5042';
@@ -7,9 +6,10 @@ export const CIRCLE_X402_ASSET = CONTRACT_ADDRESSES.USDC;
 export const CIRCLE_X402_SELLER =
   process.env.CENTRY_AGENT_SERVICE_SELLER_ADDRESS ||
   CONTRACT_ADDRESSES.treasury;
-
 const CIRCLE_GATEWAY_WALLET = '0x77777777Dcc4d5A8B6E418Fd04D8997ef11000eE';
-const FACILITATOR = new BatchFacilitatorClient();
+const CIRCLE_FACILITATOR_URL = (
+  process.env.CIRCLE_GATEWAY_API_URL || 'https://gateway-api.circle.com'
+).replace(/\/$/, '');
 const USDC_DECIMALS = 6;
 
 function serviceEnabled() {
@@ -43,6 +43,35 @@ function encodePaymentRequired(value) {
 
 function encodePaymentResponse(value) {
   return Buffer.from(JSON.stringify(value), 'utf8').toString('base64');
+}
+
+async function facilitatorRequest(pathname, body) {
+  const response = await fetch(CIRCLE_FACILITATOR_URL + pathname, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    cache: 'no-store',
+    signal: AbortSignal.timeout(15000),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error || data?.message || ('circle_gateway_' + pathname.slice(1) + '_' + response.status));
+  }
+  return data;
+}
+
+async function verifyPayment(paymentPayload, paymentRequirements) {
+  return facilitatorRequest('/v1/x402/verify', {
+    paymentPayload,
+    paymentRequirements,
+  });
+}
+
+async function settlePayment(paymentPayload, paymentRequirements) {
+  return facilitatorRequest('/v1/x402/settle', {
+    paymentPayload,
+    paymentRequirements,
+  });
 }
 
 function withPaymentHeaders(response, settlement) {
@@ -96,7 +125,6 @@ export async function requireCircleGatewayPayment(request, {
   };
 
   const encoded = paymentHeader(request);
-
   if (!encoded) {
     return new Response(JSON.stringify({}), {
       status: 402,
@@ -120,7 +148,7 @@ export async function requireCircleGatewayPayment(request, {
   }
 
   try {
-    const verification = await FACILITATOR.verify(payload, requirements);
+    const verification = await verifyPayment(payload, requirements);
     if (!verification.isValid) {
       return Response.json(
         { error: 'payment_verification_failed', reason: verification.invalidReason || 'invalid_payment' },
@@ -136,7 +164,7 @@ export async function requireCircleGatewayPayment(request, {
       );
     }
 
-    const settlement = await FACILITATOR.settle(payload, requirements);
+    const settlement = await settlePayment(payload, requirements);
     if (!settlement.success) {
       return Response.json(
         { error: 'payment_settlement_failed', reason: settlement.errorReason || 'settlement_failed' },
