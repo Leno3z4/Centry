@@ -20,7 +20,8 @@
     "clsx": "2.1.1",
     "tailwind-merge": "3.3.1",
     "recharts": "2.15.4",
-    "motion": "13.4.3"
+    "motion": "13.4.3",
+    "@circle-fin/x402-batching": "3.5.0"
   },
   "devDependencies": {
     "@types/node": "22.7.5",
