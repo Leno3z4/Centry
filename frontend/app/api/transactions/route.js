@@ -64,27 +64,14 @@ function normalizeArcscanTransaction(tx) {
 
 async function fetchBlockscoutHistory(address) {
   const params = new URLSearchParams({
-    filter: 'from',
     limit: '15',
   });
-  const fromResult = await fetchJson(
+  const result = await fetchJson(
     \`\${BLOCKSCOUT_API}/addresses/\${address}/transactions?\${params.toString()}\`
   );
 
-  if (fromResult.response.ok && Array.isArray(fromResult.data?.items)) {
-    return fromResult.data.items.map(normalizeBlockscoutTransaction).filter((tx) => tx.hash);
-  }
-
-  const toParams = new URLSearchParams({
-    filter: 'to',
-    limit: '15',
-  });
-  const toResult = await fetchJson(
-    \`\${BLOCKSCOUT_API}/addresses/\${address}/transactions?\${toParams.toString()}\`
-  );
-
-  if (toResult.response.ok && Array.isArray(toResult.data?.items)) {
-    return toResult.data.items.map(normalizeBlockscoutTransaction).filter((tx) => tx.hash);
+  if (result.response.ok && Array.isArray(result.data?.items)) {
+    return result.data.items.map(normalizeBlockscoutTransaction).filter((tx) => tx.hash);
   }
 
   return null;
