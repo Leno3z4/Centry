@@ -259,11 +259,8 @@ function SwapContent() {
   const approvalComplete = !approvalRequired || approvalReceipt.isSuccess;
   const approvalPending = Boolean(approvalTx) && !approvalComplete;
   const isPreparing = walletPending || ['quoting', 'preparing', 'building', 'gateway'].includes(stage);
-  const displayQuoteRaw = quote?.decimalsNormalized && quote.providerOutputAmount != null
-    ? { output: quote.providerOutputAmount, min: quote.providerMinOut, decimals: Number(quote.providerQuoteDecimals) }
-    : { output: quote?.outputAmount, min: quote?.minOut, decimals: Number(quote?.quoteDecimals ?? toTokenDecimals) };
-  const outputAmount = quote ? formatQuoteAmount(displayQuoteRaw.output, displayQuoteRaw.decimals) : '—';
-  const minOutput = quote ? formatQuoteAmount(displayQuoteRaw.min, displayQuoteRaw.decimals) : '—';
+  const outputAmount = quote ? formatQuoteAmount(quote.outputAmount, Number(quote.quoteDecimals ?? toTokenDecimals)) : '—';
+  const minOutput = quote ? formatQuoteAmount(quote.minOut, Number(quote.quoteDecimals ?? toTokenDecimals)) : '—';
   const priceImpactPercent = quote?.priceImpact != null ? safeNumber(quote.priceImpact) : null;
   const safePriceImpactPercent = priceImpactPercent != null && priceImpactPercent >= 0 && priceImpactPercent <= 100 ? priceImpactPercent : null;
   const quoteReady = Boolean(quote?.outputAmount && quote?.minOut && BigInt(String(quote.minOut)) > 0n && BigInt(String(quote.outputAmount)) >= BigInt(String(quote.minOut)));
