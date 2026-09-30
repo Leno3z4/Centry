@@ -200,20 +200,30 @@ export async function POST(request) {
       );
     }
 
-    const response = await fetch(`${TOWER_BASE_URL}/swap/quote`, {
-      method: 'POST',
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12_000);
+
+    let response;
+    try {
+      response = await fetch(`${TOWER_BASE_URL}/swap/quote`, {
+        method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        inputToken,
-        outputToken,
-        inputAmount: String(inputAmount),
-        slippageTolerance: slippage,
-      }),
-      cache: 'no-store',
-    });
+        body: JSON.stringify({
+          inputToken,
+          outputToken,
+          inputAmount: String(inputAmount),
+          slippageTolerance: slippage,
+          chainId: ARC_CHAIN_ID,
+        }),
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
 
     const data = await response.json();
 
@@ -245,9 +255,13 @@ export async function POST(request) {
       limit,
     );
   } catch (error) {
+    const message = error?.name === 'AbortError'
+      ? 'Swap routing provider timed out. Please refresh and try again.'
+      : error?.message || 'Unable to reach a swap routing provider.';
+
     return withRateLimitHeaders(
       NextResponse.json(
-        { success: false, error: error?.message || 'Unable to reach a swap routing provider.' },
+        { success: false, error: message },
         { status: 502 },
       ),
       limit,
