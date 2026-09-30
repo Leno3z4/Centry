@@ -1,6 +1,24 @@
 import { NextResponse } from 'next/server';
 
 const EXPLORER_API = 'https://api.arc-scan.org/api';
+const MAX_BLOCK_LOOKBACK = 200_000;
+
+function explorerError(message = 'Transaction history is temporarily unavailable.') {
+  return NextResponse.json({ success: false, error: message }, { status: 502 });
+}
+
+async function fetchJson(url) {
+  const response = await fetch(url, {
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': 'Centry/1.0 transaction-history',
+    },
+    next: { revalidate: 15 },
+  });
+
+  const data = await response.json().catch(() => null);
+  return { response, data };
+}
 
 export async function GET(request) {
   const address = new URL(request.url).searchParams.get('address')?.trim();
@@ -10,31 +28,47 @@ export async function GET(request) {
   }
 
   try {
+    // Arcscan's account history index accepts bounded block windows. The old
+    // implementation queried genesis -> 999999999, which can be rejected as
+    // an oversized range and surfaced as "history unavailable".
+    const headParams = new URLSearchParams({
+      module: 'proxy',
+      action: 'eth_blockNumber',
+    });
+    const headResult = await fetchJson(EXPLORER_API + '?' + headParams.toString());
+
+    if (!headResult.response.ok || typeof headResult.data?.result !== 'string') {
+      return explorerError();
+    }
+
+    const headBlock = Number.parseInt(headResult.data.result, 16);
+    if (!Number.isSafeInteger(headBlock) || headBlock < 0) {
+      return explorerError();
+    }
+
+    const startBlock = Math.max(0, headBlock - MAX_BLOCK_LOOKBACK);
     const params = new URLSearchParams({
       module: 'account',
       action: 'txlist',
       address,
-      startblock: '0',
-      endblock: '999999999',
+      startblock: String(startBlock),
+      endblock: String(headBlock),
       page: '1',
       offset: '15',
       sort: 'desc',
     });
 
-    const response = await fetch(`${EXPLORER_API}?${params.toString()}`, {
-      headers: { Accept: 'application/json' },
-      next: { revalidate: 15 },
-    });
+    const { response, data } = await fetchJson(EXPLORER_API + '?' + params.toString());
 
     if (!response.ok) {
-      return NextResponse.json({ success: false, error: 'Transaction history is temporarily unavailable.' }, { status: 502 });
+      return explorerError();
     }
 
-    const data = await response.json();
-    const result = Array.isArray(data?.result) ? data.result : [];
     if (data?.status === '0' && !Array.isArray(data?.result)) {
-      return NextResponse.json({ success: false, error: data?.message || 'Transaction history is temporarily unavailable.' }, { status: 502 });
+      return explorerError(data?.result || data?.message || 'Transaction history is temporarily unavailable.');
     }
+
+    const result = Array.isArray(data?.result) ? data.result : [];
 
     return NextResponse.json({
       success: true,
@@ -50,6 +84,6 @@ export async function GET(request) {
       })),
     });
   } catch {
-    return NextResponse.json({ success: false, error: 'Transaction history is temporarily unavailable.' }, { status: 502 });
+    return explorerError();
   }
 }
