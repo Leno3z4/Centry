@@ -232,10 +232,6 @@ export default function MarketDetail({ marketId }) {
       <section className={styles.simpleMarketWorkspace}>
         <div className={styles.positionCard}>
           <div className={styles.simpleCardHead}>
-            <div>
-              <span className={styles.sectionKicker}>YOUR POSITION</span>
-              <h2>At a glance</h2>
-            </div>
             {isConnected ? <span className={styles.connectedPill}>Wallet connected</span> : null}
           </div>
 
