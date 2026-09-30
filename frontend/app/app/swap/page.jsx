@@ -301,7 +301,7 @@ function SwapContent() {
     }
   };
 
-  const buildAndSwap = async () => {
+  const buildAndSwap = async (preparedOverride = null) => {
     if (!quote || !address || !isConnected || walletPending || approvalPending) return;
     setNotice(''); setError('');
     try {
@@ -313,7 +313,7 @@ function SwapContent() {
         await requestArcNetwork(); return;
       }
 
-      let transactions = preparedTransactions;
+      let transactions = preparedOverride || preparedTransactions;
       if (!transactions?.swap?.to || !transactions?.swap?.data) {
         setStage('building');
         transactions = await ensurePreparedTransactions();
