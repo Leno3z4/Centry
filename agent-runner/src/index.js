@@ -747,7 +747,7 @@ async function getAgents(db) {
   ).all().then((result) => result.results || []);
 }
 
-const CANONICAL_AGENT_FACTORY = getAddress('0x9CD127b914F370D64589cF43Bc27e75320a226b4');
+const CANONICAL_AGENT_FACTORY = getAddress('0x6Fc0b5E800A055f8adC9212294779860b2B0D0E3');
 
 function configuredGenesisFactory() {
   return CANONICAL_AGENT_FACTORY;
