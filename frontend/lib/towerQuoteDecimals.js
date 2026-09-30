@@ -61,18 +61,10 @@ export function normalizeTowerQuoteDecimals(quote, actualOutputDecimals) {
     throw new Error('Invalid authoritative output-token decimals.');
   }
 
-  if (quote.decimalsNormalized === true && quote.providerOutputAmount != null && quote.providerMinOut != null) {
-    return {
-      ...quote,
-      quoteDecimals: actualOutputDecimals,
-      decimalsNormalized: true,
-    };
-  }
-
   const outputToken = String(quote.outputToken || '').toLowerCase();
-  // Tower's quoteDecimals/providerQuoteDecimals metadata is not authoritative
-  // for the raw amount. Use our token-address mapping as the provider-unit
-  // source of truth, then convert into the actual ERC-20 decimals.
+  // Tower's quote metadata is not authoritative for the raw amount.
+  // Use Centry's token-address mapping as the provider-unit source of truth,
+  // then convert into the actual ERC-20 decimals exactly once.
   const providerOutputDecimals = TOWER_OUTPUT_DECIMAL_OVERRIDES[outputToken] ?? actualOutputDecimals;
   const providerOutputAmount = String(quote.outputAmount ?? '0');
   const providerMinOut = String(quote.minOut ?? '0');
