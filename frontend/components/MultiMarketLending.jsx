@@ -132,7 +132,6 @@ export default function MultiMarketLending() {
       setNotice(`${action[0].toUpperCase()}${action.slice(1)} confirmed onchain.`);
       void lending.refetchAll();
     } catch (error) {
-      setRefreshingPosition(false);
       setNotice(error?.shortMessage || error?.message || 'Transaction failed. Check your wallet, network, allowance, and reserve state.');
     }
   };
@@ -207,16 +206,14 @@ export default function MultiMarketLending() {
           </div>
 
           {!isConnected ? <div className="connect-prompt">Connect your wallet to interact with this market.</div>
-            : lending.reserveLoading ? <div className="connect-prompt">Checking {market.symbol} reserve…</div>
-            : refreshingPosition ? <div className="connect-prompt" aria-live="polite" aria-busy="true">Updating your borrowing capacity… We’re refreshing the lending position.</div>
-            : lending.reserveActive !== true ? <div className="connect-prompt">{market.symbol} is not enabled in the connected Centry LendingPool.</div>
+            : lending.reserveLoading ? <div className="connect-prompt">Checking {market.symbol} reserve…</div>            : lending.reserveActive !== true ? <div className="connect-prompt">{market.symbol} is not enabled in the connected Centry LendingPool.</div>
             : noLiquidity ? <div className="connect-prompt">There is no {market.symbol} liquidity available to borrow right now.</div>
             : noRoom ? <div className="connect-prompt">You have no remaining borrowing room.</div>
             : needsGatewayFunding && gatewayAmountUnavailable ? <div className="connect-prompt">Enter an amount covered by your Arc wallet plus finalized Gateway USDC.</div>
             : <button type="button" className="primary-btn full-btn large-btn"
-                disabled={busy || refreshingPosition || !amount || numericAmount <= 0 || (action === 'repay' && debt <= 0) || (action === 'borrow' && numericAmount > maxBorrowNumber) || (needsGatewayFunding && gatewayAmountUnavailable)}
+                disabled={busy || !amount || numericAmount <= 0 || (action === 'repay' && debt <= 0) || (action === 'borrow' && numericAmount > maxBorrowNumber) || (needsGatewayFunding && gatewayAmountUnavailable)}
                 onClick={run}>
-                {busy ? 'Waiting for confirmation…' : refreshingPosition ? 'Updating borrow capacity…' : needsGatewayFunding ? `Supply ${market.symbol}` : needsApproval ? `Approve ${market.symbol}` : `${action[0].toUpperCase()}${action.slice(1)} ${market.symbol}`}
+                {busy ? 'Waiting for confirmation…' : false ? 'Updating borrow capacity…' : needsGatewayFunding ? `Supply ${market.symbol}` : needsApproval ? `Approve ${market.symbol}` : `${action[0].toUpperCase()}${action.slice(1)} ${market.symbol}`}
               </button>}
           {notice && <div className="notice" aria-live="polite">{notice}</div>}
         </div>
