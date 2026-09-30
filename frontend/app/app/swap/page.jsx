@@ -86,6 +86,8 @@ function SwapContent() {
   const [stage, setStage] = useState('idle');
   const [switchingNetwork, setSwitchingNetwork] = useState(false);
   const requestIdRef = useRef(0);
+  const prepareRequestIdRef = useRef(0);
+  const preparePromiseRef = useRef(null);
 
   const fromMarket = LIVE_MARKETS.find((market) => market.id === fromId) || LIVE_MARKETS[0];
   const toMarket = LIVE_MARKETS.find((market) => market.id === toId) || LIVE_MARKETS[1] || LIVE_MARKETS[0];
@@ -157,24 +159,58 @@ function SwapContent() {
   }, [amountRaw, fromMarket?.address, toMarket?.address, slippageBps, networkBlocksAction]);
 
   useEffect(() => {
-    if (!quote || !address || !isConnected || networkBlocksAction) { setPreparedTransactions(null); return undefined; }
-    const requestId = ++requestIdRef.current;
-    setPreparedTransactions(null); setApprovalTx(null); setNotice(''); setError(''); setStage('preparing');
+    if (!quote || !address || !isConnected || networkBlocksAction) {
+      setPreparedTransactions(null);
+      preparePromiseRef.current = null;
+      return undefined;
+    }
+
+    const requestId = ++prepareRequestIdRef.current;
+    setPreparedTransactions(null);
+    setApprovalTx(null);
+    setNotice('');
+    setError('');
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 10_000);
+
     const prepare = async () => {
       try {
-        const response = await fetch('/api/tower/swap/build', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quote, userAddress: address }) });
+        const response = await fetch('/api/tower/swap/build', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ quote, userAddress: address }),
+          signal: controller.signal,
+        });
         const result = await response.json();
-        if (requestId !== requestIdRef.current) return;
+        if (requestId !== prepareRequestIdRef.current) return null;
         if (!response.ok || !result.success) throw new Error(result.error || 'Unable to prepare the swap transaction.');
-        if (result.data?.swap?.chainId != null && Number(result.data.swap.chainId) !== ARC_CHAIN_ID) throw new Error('Swap transaction is not targeting Arc Mainnet.');
-        setPreparedTransactions(result.data || {}); setStage('quoted');
+        if (result.data?.swap?.chainId != null && Number(result.data.swap.chainId) !== ARC_CHAIN_ID) {
+          throw new Error('Swap transaction is not targeting Arc Mainnet.');
+        }
+        const prepared = result.data || {};
+        setPreparedTransactions(prepared);
+        return prepared;
       } catch (caughtError) {
-        if (requestId !== requestIdRef.current) return;
-        setPreparedTransactions(null); setError(errorText(caughtError)); setStage('quoted');
+        if (caughtError?.name === 'AbortError' || requestId !== prepareRequestIdRef.current) return null;
+        setError(errorText(caughtError));
+        return null;
       }
     };
-    prepare();
-    return () => { requestIdRef.current += 1; };
+
+    preparePromiseRef.current = prepare().finally(() => {
+      if (requestId === prepareRequestIdRef.current) preparePromiseRef.current = null;
+      window.clearTimeout(timer);
+    });
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+      if (requestId === prepareRequestIdRef.current) {
+        prepareRequestIdRef.current += 1;
+        preparePromiseRef.current = null;
+      }
+    };
   }, [quote, address, isConnected, networkBlocksAction]);
 
   const invalidateQuote = () => { requestIdRef.current += 1; setQuote(null); setPreparedTransactions(null); setApprovalTx(null); setSwapTx(null); setNotice(''); setError(''); setStage(networkBlocksAction ? 'network' : 'idle'); };
@@ -213,14 +249,56 @@ function SwapContent() {
     finally { setSwitchingNetwork(false); }
   };
 
+  const ensurePreparedTransactions = async () => {
+    if (preparedTransactions?.swap?.to && preparedTransactions?.swap?.data) return preparedTransactions;
+    if (preparePromiseRef.current) {
+      const prepared = await preparePromiseRef.current;
+      if (prepared?.swap?.to && prepared?.swap?.data) return prepared;
+    }
+
+    const response = await fetch('/api/tower/swap/build', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quote, userAddress: address }),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) throw new Error(result.error || 'Unable to prepare the swap transaction.');
+    if (result.data?.swap?.chainId != null && Number(result.data.swap.chainId) !== ARC_CHAIN_ID) {
+      throw new Error('Swap transaction is not targeting Arc Mainnet.');
+    }
+    const prepared = result.data || {};
+    setPreparedTransactions(prepared);
+    return prepared;
+  };
+
   const approveToken = async () => {
-    const approval = preparedTransactions?.approval;
-    if (!approval || !address || !isConnected || walletPending || switchingNetwork) return;
-    setNotice(`Approve ${fromMarket.symbol} in your wallet. This is a one-time token permission for the swap.`); setError(''); setStage('approval');
+    if (!address || !isConnected || walletPending || switchingNetwork || !quote) return;
+    setNotice('');
+    setError('');
+    setStage('building');
+
     try {
-      const hash = await sendTransactionAsync({ to: approval.to, data: approval.data, value: BigInt(approval.value || '0'), gas: approval.gasLimit ? BigInt(approval.gasLimit) : undefined, chainId: ARC_CHAIN_ID });
+      const transactions = await ensurePreparedTransactions();
+      const approval = transactions?.approval;
+      if (!approval) {
+        await buildAndSwap(transactions);
+        return;
+      }
+      setNotice(`Approve ${fromMarket.symbol} in your wallet. This is a one-time token permission for the swap.`);
+      setStage('approval');
+      const hash = await sendTransactionAsync({
+        to: approval.to,
+        data: approval.data,
+        value: BigInt(approval.value || '0'),
+        gas: approval.gasLimit ? BigInt(approval.gasLimit) : undefined,
+        chainId: ARC_CHAIN_ID,
+      });
       setApprovalTx(hash);
-    } catch (caughtError) { setError(errorText(caughtError)); setStage('quoted'); }
+      setStage('quoted');
+    } catch (caughtError) {
+      setError(errorText(caughtError));
+      setStage('quoted');
+    }
   };
 
   const buildAndSwap = async () => {
@@ -238,15 +316,24 @@ function SwapContent() {
       let transactions = preparedTransactions;
       if (!transactions?.swap?.to || !transactions?.swap?.data) {
         setStage('building');
-        const response = await fetch('/api/tower/swap/build', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quote, userAddress: address }) });
-        const result = await response.json();
-        if (!response.ok || !result.success) throw new Error(result.error || 'Tower could not build the swap transaction.');
-        if (result.data?.swap?.chainId != null && Number(result.data.swap.chainId) !== ARC_CHAIN_ID) throw new Error('Swap transaction is not targeting Arc Mainnet.');
-        transactions = result.data || {}; setPreparedTransactions(transactions);
+        transactions = await ensurePreparedTransactions();
       }
       if (!transactions.swap?.to || !transactions.swap?.data) throw new Error('The selected route returned an incomplete swap transaction.');
       if (transactions.swap.chainId != null && Number(transactions.swap.chainId) !== ARC_CHAIN_ID) throw new Error('Swap transaction is not targeting Arc Mainnet.');
-      if (transactions.approval && !approvalComplete) { setError('Approve the token first.'); setStage('quoted'); return; }
+      if (transactions.approval && !approvalComplete) {
+        setNotice(`Approve ${fromMarket.symbol} in your wallet. This is a one-time token permission for the swap.`);
+        setStage('approval');
+        const hash = await sendTransactionAsync({
+          to: transactions.approval.to,
+          data: transactions.approval.data,
+          value: BigInt(transactions.approval.value || '0'),
+          gas: transactions.approval.gasLimit ? BigInt(transactions.approval.gasLimit) : undefined,
+          chainId: ARC_CHAIN_ID,
+        });
+        setApprovalTx(hash);
+        setStage('quoted');
+        return;
+      }
       setNotice('Approve the swap transaction in your wallet.'); setStage('swapping');
       const hash = await sendTransactionAsync({ to: transactions.swap.to, data: transactions.swap.data, value: BigInt(transactions.swap.value || '0'), gas: transactions.swap.gasLimit ? BigInt(transactions.swap.gasLimit) : undefined, chainId: ARC_CHAIN_ID });
       setSwapTx(hash); setStage('submitted'); setNotice('Swap transaction submitted.');
@@ -316,7 +403,7 @@ function SwapContent() {
           {approvalReceipt.isLoading ? <div className={styles.notice}>Waiting for approval confirmation…</div> : null}
           {swapReceipt.isLoading ? <div className={styles.notice}>Waiting for swap confirmation…</div> : null}
           {swapReceipt.isSuccess ? <div className={`${styles.notice} ${styles.noticeSuccess}`}>Swap confirmed on Arc.</div> : null}
-          {networkBlocksAction ? <button type="button" className={styles.primaryButton} disabled={switchingNetwork} onClick={requestArcNetwork}>{switchingNetwork ? 'Switching network…' : 'Switch to Arc Mainnet'}</button> : isConnected && quoteReady && !amountUnavailable ? <>{approvalRequired && !approvalComplete ? <button type="button" className={styles.secondaryButton} disabled={isPreparing || approvalPending || switchingNetwork || !preparedTransactions} onClick={approveToken}>{walletPending ? 'Confirm in wallet…' : approvalPending ? `Waiting for ${fromMarket.symbol} approval…` : `Approve ${fromMarket.symbol}`}</button> : <button type="button" className={styles.primaryButton} disabled={isPreparing || switchingNetwork || !preparedTransactions || !approvalComplete} onClick={buildAndSwap}>{walletPending ? 'Confirm in wallet…' : fundingSource === 'gateway' && gatewayEnabled ? 'Use Gateway USDC' : `Swap ${fromMarket.symbol} → ${toMarket.symbol}`}</button>}</> : <button type="button" className={styles.secondaryButton} disabled>{!isConnected ? 'Connect wallet' : amountUnavailable ? `Insufficient ${fromMarket.symbol} balance` : stage === 'quoting' ? 'Finding route…' : stage === 'preparing' ? 'Preparing swap…' : 'Enter an amount'}</button>}
+          {networkBlocksAction ? <button type="button" className={styles.primaryButton} disabled={switchingNetwork} onClick={requestArcNetwork}>{switchingNetwork ? 'Switching network…' : 'Switch to Arc Mainnet'}</button> : isConnected && quoteReady && !amountUnavailable ? <>{approvalRequired && !approvalComplete ? <button type="button" className={styles.secondaryButton} disabled={isPreparing || approvalPending || switchingNetwork || !preparedTransactions} onClick={approveToken}>{walletPending ? 'Confirm in wallet…' : approvalPending ? `Waiting for ${fromMarket.symbol} approval…` : `Approve ${fromMarket.symbol}`}</button> : <button type="button" className={styles.primaryButton} disabled={walletPending || switchingNetwork} onClick={buildAndSwap}>{walletPending ? 'Confirm in wallet…' : fundingSource === 'gateway' && gatewayEnabled ? 'Use Gateway USDC' : `Swap ${fromMarket.symbol} → ${toMarket.symbol}`}</button>}</> : <button type="button" className={styles.secondaryButton} disabled>{!isConnected ? 'Connect wallet' : amountUnavailable ? `Insufficient ${fromMarket.symbol} balance` : stage === 'quoting' ? 'Finding route…' : stage === 'preparing' ? 'Preparing swap…' : 'Enter an amount'}</button>}
         </section>
 
         <section className={styles.tradeDetails}>
