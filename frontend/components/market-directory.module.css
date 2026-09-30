@@ -725,6 +725,148 @@
     border-top: 1px solid #292e34;
   }
 }
+
+/* Unified market summary + centered action */
+.marketSummaryCard {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid #292e34;
+  border-radius: 18px;
+  background: #12161a;
+  box-shadow: 0 14px 38px rgba(0, 0, 0, .14);
+}
+
+.marketSummaryRates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  background: #171b20;
+  border-bottom: 1px solid #292e34;
+}
+
+.marketSummaryRates > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 14px 18px;
+}
+
+.marketSummaryRates > div + div {
+  border-left: 1px solid #292e34;
+}
+
+.marketSummaryRates span,
+.simplePositionGrid span {
+  color: #727980;
+  font-size: 9px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.marketSummaryRates strong {
+  color: #edf0f2;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.marketSummaryRates > div:first-child strong {
+  color: #9fc1ff;
+}
+
+.marketSummaryCard .simplePositionGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.marketSummaryCard .simplePositionGrid > div {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 17px 18px;
+  background: #12161a;
+}
+
+.marketSummaryCard .simplePositionGrid > div + div {
+  border-left: 1px solid #292e34;
+}
+
+.marketSummaryCard .simplePositionGrid strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #edf0f2;
+  font-size: 15px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.marketSummaryCard .contextHint {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid #292e34;
+  border-radius: 0;
+}
+
+.marketActionWrap {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.marketActionWrap .simpleActionCard {
+  position: static;
+  width: min(100%, 560px);
+}
+
+@media (max-width: 700px) {
+  .marketSummaryCard {
+    border-radius: 16px;
+  }
+
+  .marketSummaryRates > div {
+    padding: 12px 14px;
+  }
+
+  .marketSummaryCard .simplePositionGrid > div {
+    padding: 14px 12px;
+  }
+
+  .marketSummaryCard .simplePositionGrid strong {
+    font-size: 14px;
+  }
+
+  .marketActionWrap .simpleActionCard {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .marketSummaryRates > div {
+    padding: 11px 12px;
+  }
+
+  .marketSummaryRates strong {
+    font-size: 14px;
+  }
+
+  .marketSummaryCard .simplePositionGrid > div {
+    padding: 13px 10px;
+  }
+
+  .marketSummaryCard .simplePositionGrid span {
+    font-size: 8px;
+  }
+
+  .marketSummaryCard .simplePositionGrid strong {
+    font-size: 13px;
+  }
+}
+
 /* Market detail workspace */
 .detailTop {
   display: grid;
