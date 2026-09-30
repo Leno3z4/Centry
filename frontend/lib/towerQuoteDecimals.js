@@ -61,15 +61,19 @@ export function normalizeTowerQuoteDecimals(quote, actualOutputDecimals) {
     throw new Error('Invalid authoritative output-token decimals.');
   }
 
+  if (quote.decimalsNormalized === true && quote.providerOutputAmount != null && quote.providerMinOut != null) {
+    return {
+      ...quote,
+      quoteDecimals: actualOutputDecimals,
+      decimalsNormalized: true,
+    };
+  }
+
   const outputToken = String(quote.outputToken || '').toLowerCase();
-  // Tower's quoteDecimals metadata is not authoritative for the raw amount.
-  // The provider can label a quote with the token's on-chain decimals while
-  // still returning outputAmount/minOut in its router-specific units. Always
-  // normalize from the token-specific provider unit into the actual ERC-20
-  // decimals before exposing the quote to the UI.
-  const providerOutputDecimals = Number.isInteger(Number(quote.providerQuoteDecimals))
-    ? Number(quote.providerQuoteDecimals)
-    : TOWER_OUTPUT_DECIMAL_OVERRIDES[outputToken] ?? actualOutputDecimals;
+  // Tower's quoteDecimals/providerQuoteDecimals metadata is not authoritative
+  // for the raw amount. Use our token-address mapping as the provider-unit
+  // source of truth, then convert into the actual ERC-20 decimals.
+  const providerOutputDecimals = TOWER_OUTPUT_DECIMAL_OVERRIDES[outputToken] ?? actualOutputDecimals;
   const providerOutputAmount = String(quote.outputAmount ?? '0');
   const providerMinOut = String(quote.minOut ?? '0');
   const providerRoute = quote.route;
