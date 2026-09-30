@@ -14,7 +14,6 @@ contract CentryOnchainAgentFactory is Ownable {
 
     address public constant USDC = 0x3600000000000000000000000000000000000000;
     address public constant TREASURY = 0x475a93394F1EDef9255EA565Ee50eb8feaC7744C;
-    uint256 public constant agentPriceUsdc = 2_500_000;
 
     mapping(address => address[]) private _agentsByOwner;
     mapping(address => bool) public isCentryAgentAccount;
