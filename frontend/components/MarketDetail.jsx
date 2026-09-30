@@ -293,8 +293,6 @@ export default function MarketDetail({ marketId }) {
             <div className="connect-prompt">Connect your wallet to interact with this market.</div>
           ) : lending.reserveLoading ? (
             <div className="connect-prompt">Checking {market.symbol} market…</div>
-          )
-            <div className="connect-prompt" aria-live="polite" aria-busy="true">Updating your position…</div>
           ) : lending.reserveActive !== true ? (
             <div className="connect-prompt">{market.symbol} is not available in the lending market.</div>
           ) : noLiquidity ? (
@@ -318,11 +316,9 @@ export default function MarketDetail({ marketId }) {
             >
               {busy
                 ? 'Waiting for confirmation…'
-                : false
-                  ? 'Updating…'
-                  : needsApproval
-                    ? 'Approve ' + market.symbol
-                    : actionLabel + ' ' + market.symbol}
+                : needsApproval
+                  ? 'Approve ' + market.symbol
+                  : actionLabel + ' ' + market.symbol}
             </button>
           )}
 
