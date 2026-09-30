@@ -19,6 +19,8 @@ import {
   normalizeConfigForHash,
   rememberAgentName,
   buildRunnerAuthorizationPlan,
+  formatAgentPrice,
+  readAgentPriceRaw,
 } from '../agentClient';
 import styles from '../agents.module.css';
 import { CONTRACT_ADDRESSES } from '../../../../constants/contracts';
@@ -52,10 +54,12 @@ export default function CreateAgentPage() {
       const before = (await publicClient.readContract({ address: FACTORY_ADDRESS, abi: FACTORY_ABI, functionName: 'getAgentAccounts', args: [address] })).map(String);
       let creationTx;
       if (PAYWALL_ENABLED) {
-        setStatus('Approve 2.50 USDC for the agent factory…');
-        const approvalHash = await writeContractAsync({ address: CONTRACT_ADDRESSES.USDC, abi: [{ type: 'function', name: 'approve', stateMutability: 'nonpayable', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }] }], functionName: 'approve', args: [FACTORY_ADDRESS, AGENT_PRICE_RAW] });
+        const agentPriceRaw = await readAgentPriceRaw(publicClient);
+        const agentPriceLabel = formatAgentPrice(agentPriceRaw);
+        setStatus(`Approve ${agentPriceLabel} USDC for the agent factory…`);
+        const approvalHash = await writeContractAsync({ address: CONTRACT_ADDRESSES.USDC, abi: [{ type: 'function', name: 'approve', stateMutability: 'nonpayable', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }] }], functionName: 'approve', args: [FACTORY_ADDRESS, agentPriceRaw] });
         await publicClient.waitForTransactionReceipt({ hash: approvalHash });
-        setStatus('Create and authorize your agent on Arc… approve one wallet transaction.');
+        setStatus(`Create and authorize your agent on Arc… approve one wallet transaction for ${agentPriceLabel} USDC.`);
         creationTx = await writeContractAsync({
           address: FACTORY_ADDRESS,
           abi: FACTORY_ABI,
@@ -101,7 +105,7 @@ export default function CreateAgentPage() {
         await apiJson(`${API_BASE}/api/v1/agents/marketplace`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ owner: address, templateId: 'centry-general-agent', onchainTemplateId: templateHash, agentId, account, purchaseTxHash: creationTx }) });
       }
       await ensureOwnerSession({ address, account, signMessageAsync });
-      await apiJson(`${API_BASE}/api/v1/agents/register`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ owner: address, account, agentId, type: PAYWALL_ENABLED ? 'purchased' : 'standard', name: config.name, description: config.description || 'Configurable Centry onchain agent.', operator: RUNNER_ADDRESS, priceUsdCents: PAYWALL_ENABLED ? 250 : 0 }) });
+      await apiJson(`${API_BASE}/api/v1/agents/register`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ owner: address, account, agentId, type: PAYWALL_ENABLED ? 'purchased' : 'standard', name: config.name, description: config.description || 'Configurable Centry onchain agent.', operator: RUNNER_ADDRESS, priceUsdCents: PAYWALL_ENABLED ? Number((await readAgentPriceRaw(publicClient)) / 10000n) : 0 }) });
       if (config.provider && config.model && config.providerKey) {
         await ensureOwnerSession({ address, account, signMessageAsync });
         await apiJson(`${API_BASE}/api/v1/agents/${agentId}/providers`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ provider: config.provider, model: config.model, apiKey: config.providerKey }) });
