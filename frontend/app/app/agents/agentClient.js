@@ -222,7 +222,12 @@ export function buildRunnerAuthorizationPlan({
   const permissionKeys = new Set();
   const limitKeys = new Set();
   const approvalSpenderKeys = new Set();
-  const expiresAt = BigInt(nowSeconds + RUNNER_PERMISSION_TTL_SECONDS);
+  // A TTL of 0 means no expiry onchain. Do not encode the current timestamp,
+  // because the transaction can be mined after that timestamp and immediately
+  // fail PermissionExpired().
+  const expiresAt = RUNNER_PERMISSION_TTL_SECONDS > 0
+    ? BigInt(nowSeconds + RUNNER_PERMISSION_TTL_SECONDS)
+    : 0n;
   const maxUint128 = (1n << 128n) - 1n;
   const capFor = (asset) => String(policy.maxAmountByAsset?.[asset] || '').trim();
 
