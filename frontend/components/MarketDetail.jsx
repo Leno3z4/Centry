@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useAccount } from 'wagmi';
 import { ACTIVE_MARKETS } from '../constants/markets';
@@ -102,7 +102,7 @@ export default function MarketDetail({ marketId }) {
       lending.reserveActive !== true ||
       !amount ||
       numericAmount <= 0 ||
-      busy ||
+      busy
     ) {
       return;
     }
