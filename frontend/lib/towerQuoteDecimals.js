@@ -55,13 +55,13 @@ function normalizeHopAmounts(route) {
   };
 }
 
-export function normalizeTowerQuoteDecimals(quote, actualOutputDecimals) {
+export function normalizeTowerQuoteDecimals(quote, actualOutputDecimals, authoritativeOutputToken) {
   if (!quote || typeof quote !== 'object') throw new Error('Tower returned an invalid quote.');
   if (!Number.isInteger(actualOutputDecimals) || actualOutputDecimals < 0 || actualOutputDecimals > 36) {
     throw new Error('Invalid authoritative output-token decimals.');
   }
 
-  const outputToken = String(quote.outputToken || '').toLowerCase();
+  const outputToken = String(authoritativeOutputToken || quote.outputToken || '').toLowerCase();
   // Tower's quote metadata is not authoritative for the raw amount.
   // Use Centry's token-address mapping as the provider-unit source of truth,
   // then convert into the actual ERC-20 decimals exactly once.
