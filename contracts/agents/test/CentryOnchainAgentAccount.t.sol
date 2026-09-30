@@ -174,6 +174,182 @@ contract CentryOnchainAgentAccountTest {
         );
     }
 
+    function testFactoryCreateWithAuthorizationInstallsBundle() external {
+        bytes4 selector = CentryAgentCallTarget.setValue.selector;
+
+        CentryOnchainAgentAccount.AuthorizationPermission[] memory permissions = new CentryOnchainAgentAccount.AuthorizationPermission[](1);
+        permissions[0] = CentryOnchainAgentAccount.AuthorizationPermission({
+            operator: agent,
+            target: address(target),
+            selector: selector,
+            allowed: true,
+            expiresAt: 0,
+            maxNativeValue: 0
+        });
+
+        CentryOnchainAgentAccount.AuthorizationFinancialLimit[] memory limits = new CentryOnchainAgentAccount.AuthorizationFinancialLimit[](0);
+        CentryOnchainAgentAccount.AuthorizationApprovalSpender[] memory spenders = new CentryOnchainAgentAccount.AuthorizationApprovalSpender[](0);
+
+        vm.prank(user);
+        address newAccountAddress = factory.createAgentAccountWithAuthorization(
+            keccak256("batched-agent"),
+            keccak256("config-v2"),
+            "ipfs://centry/agents/batched-agent/v1",
+            agent,
+            permissions,
+            limits,
+            spenders
+        );
+
+        CentryOnchainAgentAccount newAccount = CentryOnchainAgentAccount(payable(newAccountAddress));
+        _assertTrue(newAccount.agentOperators(agent));
+        (bool allowed,,) = newAccount.permissions(agent, address(target), selector);
+        _assertTrue(allowed);
+        _assertTrue(newAccount.permissionCodeHashes(agent, address(target), selector) == address(target).codehash);
+        _assertFalse(newAccount.active());
+
+        vm.prank(agent);
+        (bool inactiveExecutionOk,) = address(newAccount).call(
+            abi.encodeCall(newAccount.execute, (address(target), 0, abi.encodeCall(target.setValue, (11))))
+        );
+        _assertFalse(inactiveExecutionOk);
+
+        vm.prank(user);
+        newAccount.setActive(true);
+
+        vm.prank(agent);
+        newAccount.execute(address(target), 0, abi.encodeCall(target.setValue, (11)));
+        _assertEq(target.value(), 11);
+    }
+
+    function testConfigureAuthorizationHandles43Writes() external {
+        uint256 permissionCount = 15;
+        uint256 limitCount = 20;
+        uint256 spenderCount = 8;
+
+        CentryOnchainAgentAccount.AuthorizationPermission[] memory permissions =
+            new CentryOnchainAgentAccount.AuthorizationPermission[](permissionCount);
+        for (uint256 i = 0; i < permissionCount; i++) {
+            permissions[i] = CentryOnchainAgentAccount.AuthorizationPermission({
+                operator: agent,
+                target: address(target),
+                selector: bytes4(uint32(0x10000000 + i)),
+                allowed: true,
+                expiresAt: 0,
+                maxNativeValue: 0
+            });
+        }
+
+        CentryOnchainAgentAccount.AuthorizationFinancialLimit[] memory limits =
+            new CentryOnchainAgentAccount.AuthorizationFinancialLimit[](limitCount);
+        for (uint256 i = 0; i < limitCount; i++) {
+            limits[i] = CentryOnchainAgentAccount.AuthorizationFinancialLimit({
+                operator: agent,
+                target: address(account),
+                selector: bytes4(keccak256("transferToAgent(address,address,uint256)")),
+                asset: address(uint160(0x2000 + i)),
+                maxAmountPerCall: 100,
+                maxAmountPerWindow: 100,
+                windowDuration: 1 days
+            });
+        }
+
+        CentryOnchainAgentAccount.AuthorizationApprovalSpender[] memory spenders =
+            new CentryOnchainAgentAccount.AuthorizationApprovalSpender[](spenderCount);
+        for (uint256 i = 0; i < spenderCount; i++) {
+            spenders[i] = CentryOnchainAgentAccount.AuthorizationApprovalSpender({
+                operator: agent,
+                asset: address(uint160(0x3000 + i)),
+                spender: address(uint160(0x4000 + i)),
+                allowed: true
+            });
+        }
+
+        vm.prank(user);
+        account.configureAuthorization(permissions, limits, spenders);
+
+        // A successful return proves the full 43-write authorization bundle is accepted atomically.
+    }
+
+    function testConfigureAuthorizationAppliesMultipleWritesInOneCall() external {
+        bytes4 selector = CentryAgentCallTarget.setValue.selector;
+
+        CentryOnchainAgentAccount.AuthorizationPermission[] memory permissions = new CentryOnchainAgentAccount.AuthorizationPermission[](2);
+        permissions[0] = CentryOnchainAgentAccount.AuthorizationPermission({
+            operator: agent,
+            target: address(target),
+            selector: selector,
+            allowed: true,
+            expiresAt: 0,
+            maxNativeValue: 0
+        });
+        permissions[1] = CentryOnchainAgentAccount.AuthorizationPermission({
+            operator: agent,
+            target: address(target),
+            selector: bytes4(keccak256("receiveNative()")),
+            allowed: true,
+            expiresAt: 0,
+            maxNativeValue: 1 ether
+        });
+
+        CentryOnchainAgentAccount.AuthorizationFinancialLimit[] memory limits = new CentryOnchainAgentAccount.AuthorizationFinancialLimit[](0);
+        CentryOnchainAgentAccount.AuthorizationApprovalSpender[] memory spenders = new CentryOnchainAgentAccount.AuthorizationApprovalSpender[](0);
+
+        vm.prank(user);
+        account.configureAuthorization(permissions, limits, spenders);
+
+        _assertTrue(account.canExecute(agent, address(target), selector, 0));
+        _assertTrue(account.canExecute(agent, address(target), bytes4(keccak256("receiveNative()")), 1 ether));
+
+        vm.prank(agent);
+        account.execute(address(target), 0, abi.encodeCall(target.setValue, (21)));
+        _assertEq(target.value(), 21);
+    }
+
+    function testFactoryCreateWithSelfTransferAuthorizationResolvesAgentTarget() external {
+        bytes4 selector = bytes4(keccak256("transferToAgent(address,address,uint256)"));
+
+        CentryOnchainAgentAccount.AuthorizationPermission[] memory permissions = new CentryOnchainAgentAccount.AuthorizationPermission[](1);
+        permissions[0] = CentryOnchainAgentAccount.AuthorizationPermission({
+            operator: agent,
+            target: address(0),
+            selector: selector,
+            allowed: true,
+            expiresAt: 0,
+            maxNativeValue: 0
+        });
+
+        CentryOnchainAgentAccount.AuthorizationFinancialLimit[] memory limits = new CentryOnchainAgentAccount.AuthorizationFinancialLimit[](1);
+        limits[0] = CentryOnchainAgentAccount.AuthorizationFinancialLimit({
+            operator: agent,
+            target: address(0),
+            selector: selector,
+            asset: address(0x1234),
+            maxAmountPerCall: 100,
+            maxAmountPerWindow: 100,
+            windowDuration: 1 days
+        });
+
+        CentryOnchainAgentAccount.AuthorizationApprovalSpender[] memory spenders = new CentryOnchainAgentAccount.AuthorizationApprovalSpender[](0);
+
+        vm.prank(user);
+        address newAccountAddress = factory.createAgentAccountWithAuthorization(
+            keccak256("transfer-agent"),
+            keccak256("config-v3"),
+            "",
+            agent,
+            permissions,
+            limits,
+            spenders
+        );
+
+        CentryOnchainAgentAccount newAccount = CentryOnchainAgentAccount(payable(newAccountAddress));
+        (bool allowed,,) = newAccount.permissions(agent, newAccountAddress, selector);
+        _assertTrue(allowed);
+        (uint128 perCall,,,,) = newAccount.financialLimits(agent, newAccountAddress, selector, address(0x1234));
+        _assertEq(perCall, 100);
+    }
+
     function testAgentCanExecutePermittedCall() external {
         bytes4 selector = CentryAgentCallTarget.setValue.selector;
 

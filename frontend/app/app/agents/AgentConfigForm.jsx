@@ -144,6 +144,19 @@ export function AgentConfigForm({ mode = 'create', agent = null, onSubmit, submi
 
     if (!form.policy.allowedActions.length) return setError('Select at least one allowed action.');
     if (!form.policy.allowedAssets.length) return setError('Select at least one allowed asset.');
+
+    const financialActions = new Set(['supply', 'withdraw', 'borrow', 'repay', 'transfer', 'swap']);
+    const requiresFinancialCap = form.policy.allowedActions.some((action) => financialActions.has(action));
+    if (requiresFinancialCap) {
+      for (const asset of form.policy.allowedAssets) {
+        const cap = String(form.policy.maxAmountByAsset?.[asset] || '').trim();
+        if (!cap) return setError(`Set a maximum amount for ${asset} before authorizing financial actions.`);
+        const numericCap = Number(cap);
+        if (!Number.isFinite(numericCap) || numericCap <= 0) {
+          return setError(`Maximum amount for ${asset} must be a positive number.`);
+        }
+      }
+    }
     if (!form.name.trim() && mode === 'create') return setError('Give your agent a name.');
     const providerParts = [form.provider.trim(), form.model.trim(), form.providerKey.trim()].filter(Boolean).length;
     if (mode === 'create' && providerParts !== 3) {
@@ -334,7 +347,7 @@ export function AgentConfigForm({ mode = 'create', agent = null, onSubmit, submi
           {AGENT_ASSET_OPTIONS.map(([value, label]) => (
             <div key={value}>
               <label className={styles.label}>{label}</label>
-              <input className={styles.input} inputMode="decimal" value={form.policy.maxAmountByAsset[value] || ''} onChange={(e) => updateCap(value, e.target.value)} placeholder={value === 'CIRBTC' ? 'e.g. 0.01' : value === 'CENT' ? 'e.g. 1000' : 'Leave blank for no cap'} />
+              <input className={styles.input} inputMode="decimal" value={form.policy.maxAmountByAsset[value] || ''} onChange={(e) => updateCap(value, e.target.value)} placeholder={value === 'CIRBTC' ? 'e.g. 0.01' : value === 'CENT' ? 'e.g. 1000' : 'Required for financial actions'} />
             </div>
           ))}
         </div>
@@ -346,7 +359,7 @@ export function AgentConfigForm({ mode = 'create', agent = null, onSubmit, submi
       <div className={styles.configFooter}>
         <div>
           <strong>{isCreate ? 'Everything is ready?' : 'Save your changes'}</strong>
-          <p>{isCreate ? 'The smart-account transaction happens only after you confirm this configuration.' : 'Backend configuration changes are signed by your wallet; no owner private key is shared.'}</p>
+          <p>{isCreate ? 'Creation installs the saved runner permissions in the same wallet transaction.' : 'Backend settings use a wallet message; onchain runner authorization uses one owner transaction.'}</p>
         </div>
         <button className={styles.primaryButton} disabled={submitting} type="submit">
           {submitting ? 'Saving…' : submitLabel || (isCreate ? 'Create agent' : 'Save configuration')}
