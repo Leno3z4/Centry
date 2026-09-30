@@ -197,4 +197,12 @@ Centry validates that the first token and final token are fixed to the intended 
 
 ## Agent factory
 
-Deploy `CentryOnchainAgentFactory` with no constructor arguments. It deploys the agent-account implementation internally.
+Deploy `CentryOnchainAgentFactory` with the initial agent price in USDC base units (USDC has 6 decimals). For example, `2.50 USDC` is `2500000`.
+
+The factory deploys the agent-account implementation internally. The deployed factory owner can later call:
+
+```text
+setAgentPriceUsdc(newPriceUsdc)
+```
+
+The frontend paywall remains separately controlled by `NEXT_PUBLIC_CENTRY_AGENT_PAYWALL`; keeping that flag false leaves the free creation flow available even when an onchain paid price is configured.
