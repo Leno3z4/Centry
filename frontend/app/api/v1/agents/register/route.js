@@ -27,7 +27,7 @@ export async function POST(request) {
   }
 
   const rpcUrl = process.env.CENTRY_AGENT_RPC_URL;
-  const genesisFactory = getAddress('0x9CD127b914F370D64589cF43Bc27e75320a226b4');
+  const genesisFactory = getAddress('0x6Fc0b5E800A055f8adC9212294779860b2B0D0E3');
 
   try {
     await verifyOwnerSession({
