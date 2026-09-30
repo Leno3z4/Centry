@@ -9,7 +9,6 @@ import { SWAP_MARKETS } from '../../../constants/markets';
 import { ERC20_ABI } from '../../../constants/abis';
 import { useGatewayFunding } from '../../../hooks/useGatewayFunding';
 import BalanceSourceSelector from '../../../components/BalanceSourceSelector';
-import { normalizeTowerQuoteDecimals } from '../../../lib/towerQuoteDecimals';
 import styles from './swap.module.css';
 
 const LIVE_MARKETS = SWAP_MARKETS.filter((market) => market.status === 'live' && market.address && market.id !== 'cent');
@@ -260,16 +259,8 @@ function SwapContent() {
   const approvalComplete = !approvalRequired || approvalReceipt.isSuccess;
   const approvalPending = Boolean(approvalTx) && !approvalComplete;
   const isPreparing = walletPending || ['quoting', 'preparing', 'building', 'gateway'].includes(stage);
-  const displayQuote = useMemo(() => {
-    if (!quote) return null;
-    try {
-      return normalizeTowerQuoteDecimals(quote, toTokenDecimals);
-    } catch {
-      return null;
-    }
-  }, [quote, toTokenDecimals]);
-  const outputAmount = displayQuote ? formatQuoteAmount(displayQuote.outputAmount, displayQuote.quoteDecimals ?? toTokenDecimals) : '—';
-  const minOutput = displayQuote ? formatQuoteAmount(displayQuote.minOut, displayQuote.quoteDecimals ?? toTokenDecimals) : '—';
+  const outputAmount = quote ? formatQuoteAmount(quote.outputAmount, quote.quoteDecimals ?? toTokenDecimals) : '—';
+  const minOutput = quote ? formatQuoteAmount(quote.minOut, quote.quoteDecimals ?? toTokenDecimals) : '—';
   const priceImpactPercent = quote?.priceImpact != null ? safeNumber(quote.priceImpact) : null;
   const safePriceImpactPercent = priceImpactPercent != null && priceImpactPercent >= 0 && priceImpactPercent <= 100 ? priceImpactPercent : null;
   const quoteReady = Boolean(quote?.outputAmount && quote?.minOut && BigInt(String(quote.minOut)) > 0n && BigInt(String(quote.outputAmount)) >= BigInt(String(quote.minOut)));
