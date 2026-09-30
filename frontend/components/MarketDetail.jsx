@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useAccount } from 'wagmi';
 import { ACTIVE_MARKETS } from '../constants/markets';
@@ -74,28 +74,6 @@ export default function MarketDetail({ marketId }) {
     lending.accountPosition?.remainingBorrowCapacityUsd || 0,
   );
 
-  useEffect(
-    () => () => {
-      if (refreshTimerRef.current) window.clearTimeout(refreshTimerRef.current);
-    },
-    [],
-  );
-
-  const refreshPosition = async (attempt = 0) => {
-    try {
-      await lending.refetchAll();
-    } catch {
-      // Keep polling through temporary RPC pressure.
-    }
-    if (attempt >= 15) {
-      setRefreshingPosition(false);
-      return;
-    }
-    refreshTimerRef.current = window.setTimeout(
-      () => refreshPosition(attempt + 1),
-      3000,
-    );
-  };
 
   const setAmountFromMax = () => {
     if (action === 'withdraw') setAmount(String(lending.supplyBalance || '0'));
@@ -127,7 +105,6 @@ export default function MarketDetail({ marketId }) {
       !amount ||
       numericAmount <= 0 ||
       busy ||
-      refreshingPosition
     ) {
       return;
     }
@@ -147,18 +124,16 @@ export default function MarketDetail({ marketId }) {
       if (action === 'supply') {
         await lending.supply(amount);
         setAmount('');
-        setRefreshingPosition(true);
-        setNotice('Supply confirmed. Updating your position…');
-        if (refreshTimerRef.current) window.clearTimeout(refreshTimerRef.current);
-        void refreshPosition();
+        setNotice('Supply confirmed onchain.');
+        void lending.refetchAll();
         return;
       }
       if (action === 'withdraw') await lending.withdraw(amount);
       if (action === 'borrow') await lending.borrow(amount);
       if (action === 'repay') await lending.repay(amount);
-      await lending.refetchAll();
       setAmount('');
       setNotice(action[0].toUpperCase() + action.slice(1) + ' confirmed onchain.');
+      void lending.refetchAll();
     } catch (error) {
       setRefreshingPosition(false);
       setNotice(
@@ -299,7 +274,7 @@ export default function MarketDetail({ marketId }) {
           <div className={styles.simpleActionMeta}>
             <span>{balanceLabel}</span>
             {isConnected ? (
-              <button type="button" onClick={setAmountFromMax} disabled={busy || refreshingPosition}>
+              <button type="button" onClick={setAmountFromMax} disabled={busy}>
                 Max
               </button>
             ) : null}
