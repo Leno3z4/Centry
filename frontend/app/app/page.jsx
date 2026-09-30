@@ -40,7 +40,7 @@ function HealthMeter({ percent, factor, compact = false }) {
         <span>Account health</span>
         <strong className={'health-value-' + healthTone(safe)}>{factor || safe + '%'}</strong>
       </div>
-      <div className="health-factor-label">Health factor {factor || '—'}</div>
+      {!compact ? <div className="health-factor-label">Health factor {factor || '—'}</div> : null}
       <div
         className="health-track"
         role="progressbar"
@@ -51,7 +51,7 @@ function HealthMeter({ percent, factor, compact = false }) {
       >
         <div className={'health-fill health-fill-' + healthTone(safe)} style={{ width: safe + '%' }} />
       </div>
-      <p>Higher is safer. A healthy account stays above the liquidation boundary.</p>
+      {!compact ? <p>Higher is safer. A healthy account stays above the liquidation boundary.</p> : null}
     </div>
   );
 }
@@ -325,10 +325,15 @@ function OverviewContent() {
 
         .overview-position-content{display:flex;min-height:0;flex:1;flex-direction:column}
         .overview-position-content .health-meter{margin:0}
+        .overview-position-content .health-meter-compact{gap:10px}
+        .overview-position-content .health-meter-compact .health-meter-head{margin-bottom:0}
+        .overview-position-content .health-meter-compact .health-track{height:7px}
         .overview-position-content .connect-prompt{display:flex;min-height:0;flex:1;align-items:center;color:rgba(255,255,255,.55)}
-        .overview-widget-button{margin-top:auto !important}
+        .overview-widget-button{margin-top:14px !important;flex:0 0 auto;min-height:42px}
 
         @media (max-width:640px){
+          .overview-position-content .health-meter-compact .health-meter-head{gap:8px}
+          .overview-widget-button{margin-top:12px !important;min-height:44px}
           .overview-hero{gap:22px}
           .overview-hero-summary{padding:18px;border-radius:18px}
           .overview-wallet-balance{align-items:flex-start;flex-direction:column;gap:8px}
