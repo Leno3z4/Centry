@@ -67,7 +67,7 @@ async function fetchBlockscoutHistory(address) {
     limit: '15',
   });
   const result = await fetchJson(
-    \`\${BLOCKSCOUT_API}/addresses/\${address}/transactions?\${params.toString()}\`
+    BLOCKSCOUT_API + '/addresses/' + address + '/transactions?' + params.toString()
   );
 
   if (result.response.ok && Array.isArray(result.data?.items)) {
