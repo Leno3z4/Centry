@@ -58,7 +58,7 @@ export default function AgentConnectionPanel() {
   const [copied, setCopied] = useState(false);
   const [isConnectingAgent, setIsConnectingAgent] = useState(false);
 
-  const factoryAddress = '0x9CD127b914F370D64589cF43Bc27e75320a226b4';
+  const factoryAddress = '0x6Fc0b5E800A055f8adC9212294779860b2B0D0E3';
   const configuredApi = apiBase();
 
   const accountsQuery = useReadContract({
