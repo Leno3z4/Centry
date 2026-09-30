@@ -1,11 +1,10 @@
-import { isAddress, keccak256, parseUnits, toBytes } from 'viem';
+import { formatUnits, isAddress, keccak256, parseUnits, toBytes } from 'viem';
 import { CONTRACT_ADDRESSES } from '../../../constants/contracts';
 
 export const FACTORY_ADDRESS = '0x9CD127b914F370D64589cF43Bc27e75320a226b4';
 export const RUNNER_ADDRESS = process.env.NEXT_PUBLIC_CENTRY_AGENT_RUNNER_ADDRESS || '';
 export const API_BASE = (process.env.NEXT_PUBLIC_CENTRY_AGENT_API_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
 export const PAYWALL_ENABLED = process.env.NEXT_PUBLIC_CENTRY_AGENT_PAYWALL === 'true';
-export const AGENT_PRICE_RAW = 2500000n;
 
 const AGENT_NAME_STORAGE_KEY = 'centry_agent_names_v1';
 
@@ -105,6 +104,7 @@ const AUTHORIZATION_SPENDER_COMPONENTS = [
 
 export const FACTORY_ABI = [
   { type: 'function', name: 'getAgentAccounts', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }], outputs: [{ name: 'accounts', type: 'address[]' }] },
+  { type: 'function', name: 'agentPriceUsdc', stateMutability: 'view', inputs: [], outputs: [{ name: 'priceUsdc', type: 'uint256' }] },
   { type: 'function', name: 'createAgentAccount', stateMutability: 'nonpayable', inputs: [{ name: 'templateId', type: 'bytes32' }, { name: 'configHash', type: 'bytes32' }, { name: 'metadataURI', type: 'string' }, { name: 'initialOperator', type: 'address' }], outputs: [{ name: 'agentAccount', type: 'address' }] },
   { type: 'function', name: 'purchaseAndCreateAgentAccount', stateMutability: 'nonpayable', inputs: [{ name: 'templateId', type: 'bytes32' }, { name: 'configHash', type: 'bytes32' }, { name: 'metadataURI', type: 'string' }, { name: 'initialOperator', type: 'address' }], outputs: [{ name: 'agentAccount', type: 'address' }] },
   { type: 'function', name: 'createAgentAccountWithAuthorization', stateMutability: 'nonpayable', inputs: [
@@ -160,6 +160,20 @@ export const providerOptions = [
   ['openai', 'OpenAI'],
   ['anthropic', 'Anthropic'],
 ];
+
+export async function readAgentPriceRaw(publicClient) {
+  if (!publicClient || !FACTORY_ADDRESS) throw new Error('agent_factory_not_configured');
+  const priceRaw = await publicClient.readContract({
+    address: FACTORY_ADDRESS,
+    abi: FACTORY_ABI,
+    functionName: 'agentPriceUsdc',
+  });
+  return BigInt(priceRaw);
+}
+
+export function formatAgentPrice(priceRaw) {
+  return formatUnits(BigInt(priceRaw), 6);
+}
 
 export const RUNNER_PERMISSION_TTL_SECONDS = 0;
 export const RUNNER_FINANCIAL_WINDOW_SECONDS = 24 * 60 * 60;
