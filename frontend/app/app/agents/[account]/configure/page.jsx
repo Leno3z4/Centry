@@ -179,7 +179,8 @@ function ConfigureContent() {
         const allowed = Boolean(current?.[0]);
         const expiresAt = BigInt(current?.[1] ?? 0);
         const maxNativeValue = BigInt(current?.[2] ?? 0);
-        if (!allowed || expiresAt < item[4] || maxNativeValue !== item[5]) {
+        const expiryNeedsUpdate = item[4] === 0n ? expiresAt !== 0n : expiresAt < item[4];
+        if (!allowed || expiryNeedsUpdate || maxNativeValue !== item[5]) {
           permissionUpdates.push(item);
         }
       }
@@ -244,7 +245,7 @@ function ConfigureContent() {
       }
 
       await loadAgent();
-      setStatus('Hosted runner authorized with a 30-day permission expiry and 24-hour financial limits.');
+      setStatus('Hosted runner authorized with persistent permissions and 24-hour financial limits.');
     } catch (e) {
       const raw = e?.shortMessage || e?.message || '';
       const message =

@@ -222,6 +222,63 @@ contract CentryOnchainAgentAccountTest {
         _assertEq(target.value(), 11);
     }
 
+    function testConfigureAuthorizationHandles43Writes() external {
+        uint256 permissionCount = 15;
+        uint256 limitCount = 20;
+        uint256 spenderCount = 8;
+
+        CentryOnchainAgentAccount.AuthorizationPermission[] memory permissions =
+            new CentryOnchainAgentAccount.AuthorizationPermission[](permissionCount);
+        for (uint256 i = 0; i < permissionCount; i++) {
+            permissions[i] = CentryOnchainAgentAccount.AuthorizationPermission({
+                operator: agent,
+                target: address(target),
+                selector: bytes4(uint32(0x10000000 + i)),
+                allowed: true,
+                expiresAt: 0,
+                maxNativeValue: 0
+            });
+        }
+
+        CentryOnchainAgentAccount.AuthorizationFinancialLimit[] memory limits =
+            new CentryOnchainAgentAccount.AuthorizationFinancialLimit[](limitCount);
+        for (uint256 i = 0; i < limitCount; i++) {
+            limits[i] = CentryOnchainAgentAccount.AuthorizationFinancialLimit({
+                operator: agent,
+                target: address(target),
+                selector: CentryAgentCallTarget.setValue.selector,
+                asset: address(uint160(0x2000 + i)),
+                maxAmountPerCall: 100,
+                maxAmountPerWindow: 100,
+                windowDuration: 1 days
+            });
+        }
+
+        CentryOnchainAgentAccount.AuthorizationApprovalSpender[] memory spenders =
+            new CentryOnchainAgentAccount.AuthorizationApprovalSpender[](spenderCount);
+        for (uint256 i = 0; i < spenderCount; i++) {
+            spenders[i] = CentryOnchainAgentAccount.AuthorizationApprovalSpender({
+                operator: agent,
+                asset: address(uint160(0x3000 + i)),
+                spender: address(uint160(0x4000 + i)),
+                allowed: true
+            });
+        }
+
+        vm.prank(user);
+        account.configureAuthorization(permissions, limits, spenders);
+
+        _assertTrue(account.canExecute(agent, address(target), permissions[0].selector, 0));
+        (uint128 perCall,,,,) = account.financialLimits(
+            agent,
+            address(target),
+            CentryAgentCallTarget.setValue.selector,
+            limits[0].asset
+        );
+        _assertEq(perCall, 100);
+        _assertTrue(account.approvalSpenders(agent, spenders[0].asset, spenders[0].spender));
+    }
+
     function testConfigureAuthorizationAppliesMultipleWritesInOneCall() external {
         bytes4 selector = CentryAgentCallTarget.setValue.selector;
 

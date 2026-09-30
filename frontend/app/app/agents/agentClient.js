@@ -161,7 +161,7 @@ export const providerOptions = [
   ['anthropic', 'Anthropic'],
 ];
 
-export const RUNNER_PERMISSION_TTL_SECONDS = 30 * 24 * 60 * 60;
+export const RUNNER_PERMISSION_TTL_SECONDS = 0;
 export const RUNNER_FINANCIAL_WINDOW_SECONDS = 24 * 60 * 60;
 
 export const AGENT_ACTION_OPTIONS = [
@@ -214,8 +214,8 @@ export function buildRunnerAuthorizationPlan({
 } = {}) {
   if (!RUNNER_ADDRESS) throw new Error('Hosted runner address is not configured.');
 
-  const allowedActions = policy.allowedActions || AGENT_ACTION_OPTIONS.map(([value]) => value);
-  const allowedAssets = policy.allowedAssets || AGENT_ASSET_OPTIONS.map(([value]) => value);
+  const allowedActions = policy.allowedActions || ['supply', 'withdraw', 'borrow', 'repay'];
+  const allowedAssets = policy.allowedAssets || ['USDC'];
   const permissions = [];
   const financialLimits = [];
   const approvalSpenders = [];
@@ -362,8 +362,8 @@ export function defaultAgentConfig() {
       },
     },
     policy: {
-      allowedActions: AGENT_ACTION_OPTIONS.map(([value]) => value),
-      allowedAssets: AGENT_ASSET_OPTIONS.map(([value]) => value),
+      allowedActions: ['supply', 'withdraw', 'borrow', 'repay'],
+      allowedAssets: ['USDC'],
       maxAmountByAsset: { USDC: '', EURC: '', CIRBTC: '', CENT: '' },
     },
     a2a: {
