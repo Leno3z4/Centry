@@ -40,43 +40,6 @@ function TokenMark({ symbol }) {
   );
 }
 
-function HealthMeter({ value }) {
-  const safe = Math.min(Math.max(Number(value || 0), 0), 100);
-  const tone = safe < 35 ? 'danger' : safe < 70 ? 'warning' : 'safe';
-
-  return (
-    <div className={styles.healthMeter}>
-      <div className={styles.healthHeader}>
-        <div>
-          <span>Position health</span>
-          <strong>{safe}%</strong>
-        </div>
-        <span className={styles.healthBadge + ' ' + styles['healthBadge_' + tone]}>
-          {tone === 'safe' ? 'Healthy' : tone === 'warning' ? 'Watch' : 'At risk'}
-        </span>
-      </div>
-      <div
-        className={styles.healthTrack}
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={safe}
-        aria-label="Position health"
-      >
-        <div
-          className={styles.healthFill}
-          data-tone={tone}
-          style={{ width: safe + '%' }}
-        />
-      </div>
-      <div className={styles.healthMeta}>
-        <span>Higher is safer</span>
-        <strong>{safe}%</strong>
-      </div>
-    </div>
-  );
-}
-
 export default function MarketDetail({ marketId }) {
   const { isConnected } = useAccount();
   const market = useMemo(
@@ -107,21 +70,9 @@ export default function MarketDetail({ marketId }) {
     numericAmount > allowance;
 
   const riskMarket = riskMarkets.find((item) => item.id === market?.id);
-  const ltv = Number(riskMarket?.ltvBps || 0) / 100;
-  const borrowLimitTotal = Number(lending.accountPosition?.totalBorrowPowerUsd || 0);
   const borrowLimitRemaining = Number(
     lending.accountPosition?.remainingBorrowCapacityUsd || 0,
   );
-  const borrowLimitUsedPct =
-    borrowLimitTotal > 0
-      ? Math.min(
-          Math.max(
-            ((borrowLimitTotal - borrowLimitRemaining) / borrowLimitTotal) * 100,
-            0,
-          ),
-          100,
-        )
-      : 0;
 
   useEffect(
     () => () => {
@@ -146,44 +97,13 @@ export default function MarketDetail({ marketId }) {
     );
   };
 
-  const setAmountFromPercent = (percent) => {
-    let base = 0;
-    if (action === 'withdraw') base = Number(lending.supplyBalance || 0);
-    else if (action === 'repay') base = debt;
-    else if (action === 'borrow') base = maxBorrowNumber;
-    else {
-      base =
-        fundingSource === 'gateway' && gatewayEnabled
-          ? Number(gateway.total || 0)
-          : Number(lending.walletBalance || 0);
-    }
-
-    if (!Number.isFinite(base) || base <= 0) {
-      setAmount('0');
-      return;
-    }
-
-    if (percent === 100) {
-      setAmount(
-        action === 'borrow'
-          ? String(maxBorrow)
-          : action === 'repay'
-            ? String(lending.borrowBalance || '0')
-            : action === 'withdraw'
-              ? String(lending.supplyBalance || '0')
-              : fundingSource === 'gateway' && gatewayEnabled
-                ? String(gateway.total || '0')
-                : String(lending.walletBalance || '0'),
-      );
-      return;
-    }
-
-    const scaled = base * (percent / 100);
-    const precision = market?.decimals >= 8 ? 8 : 6;
-    setAmount(scaled.toFixed(precision).replace(/\.?(0+)$/, ''));
+  const setAmountFromMax = () => {
+    if (action === 'withdraw') setAmount(String(lending.supplyBalance || '0'));
+    else if (action === 'repay') setAmount(String(lending.borrowBalance || '0'));
+    else if (action === 'borrow') setAmount(String(maxBorrow));
+    else if (fundingSource === 'gateway' && gatewayEnabled) setAmount(String(gateway.total || '0'));
+    else setAmount(String(lending.walletBalance || '0'));
   };
-
-  const setMax = () => setAmountFromPercent(100);
 
   const onAmount = (event) => {
     const value = event.target.value;
@@ -221,14 +141,14 @@ export default function MarketDetail({ marketId }) {
       }
       if (needsApproval) {
         await lending.approveAsset(amount);
-        setNotice(`Approved ${amount} ${market.symbol}.`);
+        setNotice('Approved ' + amount + ' ' + market.symbol + '. Tap ' + action + ' again to continue.');
         return;
       }
       if (action === 'supply') {
         await lending.supply(amount);
         setAmount('');
         setRefreshingPosition(true);
-        setNotice('Supply confirmed. Updating your borrowing capacity…');
+        setNotice('Supply confirmed. Updating your position…');
         if (refreshTimerRef.current) window.clearTimeout(refreshTimerRef.current);
         void refreshPosition();
         return;
@@ -238,13 +158,13 @@ export default function MarketDetail({ marketId }) {
       if (action === 'repay') await lending.repay(amount);
       await lending.refetchAll();
       setAmount('');
-      setNotice(`${action[0].toUpperCase()}${action.slice(1)} confirmed onchain.`);
+      setNotice(action[0].toUpperCase() + action.slice(1) + ' confirmed onchain.');
     } catch (error) {
       setRefreshingPosition(false);
       setNotice(
         error?.shortMessage ||
           error?.message ||
-          'Transaction failed. Check your wallet, network, allowance, Gateway balance, and reserve state.',
+          'Transaction failed. Check your wallet, network, amount, allowance, and reserve state.',
       );
     }
   };
@@ -263,6 +183,16 @@ export default function MarketDetail({ marketId }) {
   const noLiquidity = action === 'borrow' && liquidity <= 0;
   const noRoom = action === 'borrow' && maxBorrowNumber <= 0 && !noLiquidity;
   const actionLabel = action[0].toUpperCase() + action.slice(1);
+  const balanceLabel =
+    action === 'withdraw'
+      ? 'Supplied: ' + (isConnected ? num(lending.supplyBalance) : '—') + ' ' + market.symbol
+      : action === 'repay'
+        ? 'Owed: ' + (isConnected ? num(lending.borrowBalance, Math.min(market.decimals, 8)) : '—') + ' ' + market.symbol
+        : action === 'borrow'
+          ? 'Available: ' + (isConnected ? '$' + num(borrowLimitRemaining) : '—')
+          : fundingSource === 'gateway' && gatewayEnabled
+            ? 'Gateway: ' + num(gateway.total, 6) + ' USDC'
+            : 'Wallet: ' + (isConnected ? num(lending.walletBalance) : '—') + ' ' + market.symbol;
 
   return (
     <div className={styles.page}>
@@ -278,10 +208,7 @@ export default function MarketDetail({ marketId }) {
               <span className={styles.sectionKicker}>LENDING MARKET</span>
               <div className={styles.detailTitleRow}>
                 <h1>{market.symbol}</h1>
-                <span className={styles.detailStatus}>
-                  <i aria-hidden="true" />
-                  Active
-                </span>
+                <span className={styles.detailStatus}><i aria-hidden="true" />Active</span>
               </div>
               <p>{market.name}</p>
             </div>
@@ -296,235 +223,149 @@ export default function MarketDetail({ marketId }) {
               <span>Borrow APY</span>
               <strong>{riskMarket ? formatPct(riskMarket.borrowApy) : '—'}</strong>
             </div>
-            <div>
-              <span>LTV</span>
-              <strong>{riskMarket ? formatPct(ltv) : '—'}</strong>
-            </div>
           </div>
         </div>
 
         <p className={styles.detailDescription}>{market.description}</p>
       </div>
 
-      <section className={styles.detailGrid}>
-        <div className={styles.detailMain}>
-          <section className={styles.detailCard}>
-            <div className={styles.detailCardHead}>
-              <div>
-                <span className={styles.sectionKicker}>YOUR ACCOUNT</span>
-                <h2>Position overview</h2>
-              </div>
-              {isConnected ? <span className={styles.connectedPill}>Wallet connected</span> : null}
+      <section className={styles.simpleMarketWorkspace}>
+        <div className={styles.positionCard}>
+          <div className={styles.simpleCardHead}>
+            <div>
+              <span className={styles.sectionKicker}>YOUR POSITION</span>
+              <h2>At a glance</h2>
             </div>
+            {isConnected ? <span className={styles.connectedPill}>Wallet connected</span> : null}
+          </div>
 
-            <div className={styles.accountMetricGrid}>
-              <div><span>Wallet balance</span><strong>{isConnected ? num(lending.walletBalance) + ' ' + market.symbol : '—'}</strong></div>
-              <div><span>Supplied</span><strong>{isConnected ? num(lending.supplyBalance) + ' ' + market.symbol : '—'}</strong></div>
-              <div><span>Borrowed</span><strong>{isConnected ? num(lending.borrowBalance) + ' ' + market.symbol : '—'}</strong></div>
-              <div><span>Remaining borrow limit</span><strong>{isConnected ? '$' + num(lending.borrowLimit) : '—'}</strong></div>
+          <div className={styles.simplePositionGrid}>
+            <div>
+              <span>Wallet</span>
+              <strong>{isConnected ? num(lending.walletBalance) + ' ' + market.symbol : '—'}</strong>
             </div>
+            <div>
+              <span>Supplied</span>
+              <strong>{isConnected ? num(lending.supplyBalance) + ' ' + market.symbol : '—'}</strong>
+            </div>
+            <div>
+              <span>Borrowed</span>
+              <strong>{isConnected ? num(lending.borrowBalance) + ' ' + market.symbol : '—'}</strong>
+            </div>
+          </div>
 
-            <div className={styles.accountHealthRow}>
-              <HealthMeter value={lending.healthFactorPercent} />
-              <div className={styles.borrowLimitMeter}>
-                <div>
-                  <span>Borrow limit used</span>
-                  <strong>{isConnected ? formatPct(borrowLimitUsedPct) : '—'}</strong>
-                </div>
-                <div className={styles.borrowLimitTrack} aria-hidden="true">
-                  <span style={{ width: borrowLimitUsedPct + '%' }} />
-                </div>
-                <small>
-                  {isConnected
-                    ? '$' + num(Math.max(borrowLimitTotal - borrowLimitRemaining, 0)) + ' used of $' + num(borrowLimitTotal)
-                    : 'Connect wallet to view borrowing capacity'}
-                </small>
-              </div>
+          {isConnected && action === 'borrow' ? (
+            <div className={styles.contextHint}>
+              You can borrow up to <strong>${num(borrowLimitRemaining)}</strong> with your current position.
             </div>
-          </section>
-
-          <section className={styles.detailCard}>
-            <div className={styles.detailCardHead}>
-              <div>
-                <span className={styles.sectionKicker}>MARKET STATS</span>
-                <h2>Liquidity & utilization</h2>
-              </div>
-              <span className={styles.reserveBadge}>
-                <i aria-hidden="true" />
-                {lending.reserveActive ? 'Reserve active' : lending.reserveLoading ? 'Checking' : 'Not enabled'}
-              </span>
+          ) : null}
+          {isConnected && action === 'supply' ? (
+            <div className={styles.contextHint}>
+              Supply assets to earn <strong>{riskMarket ? formatPct(riskMarket.supplyApy) : '—'} APY</strong>.
             </div>
-
-            <div className={styles.marketStatGrid}>
-              <div><span>Total liquidity</span><strong>{num(lending.reserveData?.totalLiquidity)} {market.symbol}</strong></div>
-              <div><span>Total supplied</span><strong>{num(lending.reserveData?.totalSupply)} {market.symbol}</strong></div>
-              <div><span>Total borrowed</span><strong>{num(lending.reserveData?.totalBorrows)} {market.symbol}</strong></div>
-              <div><span>Utilization</span><strong>{formatPct(lending.reserveData?.utilization)}</strong></div>
-            </div>
-
-            <div className={styles.utilizationPanel}>
-              <div>
-                <span>Market utilization</span>
-                <strong>{formatPct(lending.reserveData?.utilization)}</strong>
-              </div>
-              <div className={styles.utilizationTrack} aria-hidden="true">
-                <span style={{ width: Math.min(Math.max(Number(lending.reserveData?.utilization || 0), 0), 100) + '%' }} />
-              </div>
-            </div>
-          </section>
-
-          <section className={styles.detailCard}>
-            <div className={styles.detailCardHead}>
-              <div>
-                <span className={styles.sectionKicker}>RISK PARAMETERS</span>
-                <h2>Collateral rules</h2>
-              </div>
-            </div>
-            <div className={styles.riskParameterGrid}>
-              <div><span>Loan-to-value</span><strong>{riskMarket ? formatPct(ltv) : '—'}</strong></div>
-              <div><span>Liquidation threshold</span><strong>{riskMarket ? formatPct(Number(riskMarket.liquidationThresholdBps || 0) / 100) : '—'}</strong></div>
-              <div><span>Supply cap usage</span><strong>{riskMarket ? formatPct(riskMarket.supplyCapUtilizationPct) : '—'}</strong></div>
-              <div><span>Borrow cap usage</span><strong>{riskMarket ? formatPct(riskMarket.borrowCapUtilizationPct) : '—'}</strong></div>
-            </div>
-          </section>
+          ) : null}
         </div>
 
-        <aside className={styles.actionPanel}>
-          <div className={styles.actionPanelInner}>
-            <div className={styles.detailCardHead}>
-              <div>
-                <span className={styles.sectionKicker}>ACTION</span>
-                <h2>{actionLabel} {market.symbol}</h2>
-              </div>
+        <aside className={styles.simpleActionCard}>
+          <div className={styles.simpleCardHead}>
+            <div>
+              <span className={styles.sectionKicker}>ACTION</span>
+              <h2>{actionLabel} {market.symbol}</h2>
             </div>
-
-            <div className={styles.actions}>
-              {['supply', 'withdraw', 'borrow', 'repay'].map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  className={action === item ? styles.actionActive : styles.actionButton}
-                  onClick={() => {
-                    setAction(item);
-                    setAmount('');
-                    setNotice('');
-                  }}
-                >
-                  {item[0].toUpperCase() + item.slice(1)}
-                </button>
-              ))}
-            </div>
-
-            <label className="field-label" htmlFor="market-amount">Amount</label>
-            <div className="amount-input-wrap">
-              <input
-                id="market-amount"
-                type="number"
-                min="0"
-                max={action === 'repay' ? lending.borrowBalance : action === 'borrow' ? lending.maxBorrowAmount : undefined}
-                step={market.decimals >= 8 ? '0.00000001' : '0.000001'}
-                placeholder="0.00"
-                value={amount}
-                onChange={onAmount}
-              />
-              <span>{market.symbol}</span>
-            </div>
-
-            <div className={styles.quickSelects} aria-label="Quick amount selection">
-              {[25, 50, 75, 100].map((percent) => (
-                <button
-                  key={percent}
-                  type="button"
-                  onClick={() => setAmountFromPercent(percent)}
-                  disabled={!isConnected || busy || refreshingPosition}
-                >
-                  {percent === 100 ? 'MAX' : percent + '%'}
-                </button>
-              ))}
-            </div>
-
-            {gatewayEnabled ? (
-              <div className={styles.gatewaySource}>
-                <BalanceSourceSelector
-                  value={fundingSource}
-                  onChange={setFundingSource}
-                  walletBalance={lending.walletBalance}
-                  gatewayBalances={gateway.balances}
-                  disabled={busy || refreshingPosition}
-                />
-              </div>
-            ) : null}
-
-            <div className={styles.formMeta}>
-              <span>
-                {action === 'repay'
-                  ? 'Owed: ' + (isConnected ? num(lending.borrowBalance, Math.min(market.decimals, 8)) + ' ' + market.symbol : 'Connect wallet')
-                  : action === 'borrow'
-                    ? 'Max: ' + (isConnected ? num(maxBorrow, Math.min(market.decimals, 8)) + ' ' + market.symbol : 'Connect wallet')
-                    : fundingSource === 'gateway' && gatewayEnabled
-                      ? 'Gateway: ' + num(gateway.total, 6) + ' USDC'
-                      : 'Wallet: ' + (isConnected ? num(lending.walletBalance) + ' ' + market.symbol : 'Connect wallet')}
-              </span>
-              {isConnected ? (
-                <button type="button" onClick={setMax} disabled={refreshingPosition}>
-                  Max
-                </button>
-              ) : null}
-            </div>
-
-            <div className={styles.transactionPreview}>
-              <div>
-                <span>Estimated gas</span>
-                <strong>Wallet estimate</strong>
-              </div>
-              <div>
-                <span>Health factor after</span>
-                <strong>{amount ? 'Simulate in wallet' : '—'}</strong>
-              </div>
-              <div>
-                <span>Supply APY</span>
-                <strong>{riskMarket ? formatPct(riskMarket.supplyApy) : '—'}</strong>
-              </div>
-              <div>
-                <span>Borrow APY</span>
-                <strong>{riskMarket ? formatPct(riskMarket.borrowApy) : '—'}</strong>
-              </div>
-            </div>
-
-            {!isConnected ? (
-              <div className="connect-prompt">Connect your wallet to interact with this market.</div>
-            ) : lending.reserveLoading ? (
-              <div className="connect-prompt">Checking {market.symbol} reserve…</div>
-            ) : refreshingPosition ? (
-              <div className="connect-prompt" aria-live="polite" aria-busy="true">
-                Updating your borrowing capacity… We’re refreshing the lending position.
-              </div>
-            ) : lending.reserveActive !== true ? (
-              <div className="connect-prompt">{market.symbol} is not enabled in the connected Centry LendingPool.</div>
-            ) : noLiquidity ? (
-              <div className="connect-prompt">There is no {market.symbol} liquidity available to borrow right now.</div>
-            ) : noRoom ? (
-              <div className="connect-prompt">You have no remaining borrowing room.</div>
-            ) : fundingSource === 'gateway' && gatewayEnabled && Number(gateway.total || 0) < numericAmount ? (
-              <div className="connect-prompt">Gateway does not currently have enough finalized USDC for this amount.</div>
-            ) : (
-              <button
-                type="button"
-                className="primary-btn full-btn large-btn"
-                disabled={busy || refreshingPosition || !amount || numericAmount <= 0 || (action === 'repay' && debt <= 0) || (action === 'borrow' && numericAmount > maxBorrowNumber)}
-                onClick={run}
-              >
-                {busy
-                  ? 'Waiting for confirmation…'
-                  : refreshingPosition
-                    ? 'Updating borrow capacity…'
-                    : needsApproval
-                      ? 'Approve ' + market.symbol
-                      : actionLabel + ' ' + market.symbol}
-              </button>
-            )}
-            {notice ? <div className="notice" aria-live="polite">{notice}</div> : null}
           </div>
+
+          <div className={styles.actions}>
+            {['supply', 'withdraw', 'borrow', 'repay'].map((item) => (
+              <button
+                key={item}
+                type="button"
+                className={action === item ? styles.actionActive : styles.actionButton}
+                onClick={() => {
+                  setAction(item);
+                  setAmount('');
+                  setNotice('');
+                }}
+              >
+                {item[0].toUpperCase() + item.slice(1)}
+              </button>
+            ))}
+          </div>
+
+          <label className={styles.simpleAmountLabel} htmlFor="market-amount">Amount</label>
+          <div className="amount-input-wrap">
+            <input
+              id="market-amount"
+              type="number"
+              min="0"
+              max={action === 'repay' ? lending.borrowBalance : action === 'borrow' ? lending.maxBorrowAmount : undefined}
+              step={market.decimals >= 8 ? '0.00000001' : '0.000001'}
+              placeholder="0.00"
+              value={amount}
+              onChange={onAmount}
+            />
+            <span>{market.symbol}</span>
+          </div>
+
+          <div className={styles.simpleActionMeta}>
+            <span>{balanceLabel}</span>
+            {isConnected ? (
+              <button type="button" onClick={setAmountFromMax} disabled={busy || refreshingPosition}>
+                Max
+              </button>
+            ) : null}
+          </div>
+
+          {gatewayEnabled ? (
+            <div className={styles.gatewaySource}>
+              <BalanceSourceSelector
+                value={fundingSource}
+                onChange={setFundingSource}
+                walletBalance={lending.walletBalance}
+                gatewayBalances={gateway.balances}
+                disabled={busy || refreshingPosition}
+              />
+            </div>
+          ) : null}
+
+          {!isConnected ? (
+            <div className="connect-prompt">Connect your wallet to interact with this market.</div>
+          ) : lending.reserveLoading ? (
+            <div className="connect-prompt">Checking {market.symbol} market…</div>
+          ) : refreshingPosition ? (
+            <div className="connect-prompt" aria-live="polite" aria-busy="true">Updating your position…</div>
+          ) : lending.reserveActive !== true ? (
+            <div className="connect-prompt">{market.symbol} is not available in the lending market.</div>
+          ) : noLiquidity ? (
+            <div className="connect-prompt">There is no {market.symbol} liquidity available to borrow right now.</div>
+          ) : noRoom ? (
+            <div className="connect-prompt">You have no remaining borrowing room.</div>
+          ) : fundingSource === 'gateway' && gatewayEnabled && Number(gateway.total || 0) < numericAmount ? (
+            <div className="connect-prompt">Gateway does not currently have enough finalized USDC for this amount.</div>
+          ) : (
+            <button
+              type="button"
+              className="primary-btn full-btn large-btn"
+              disabled={
+                busy ||
+                refreshingPosition ||
+                !amount ||
+                numericAmount <= 0 ||
+                (action === 'repay' && debt <= 0) ||
+                (action === 'borrow' && numericAmount > maxBorrowNumber)
+              }
+              onClick={run}
+            >
+              {busy
+                ? 'Waiting for confirmation…'
+                : refreshingPosition
+                  ? 'Updating…'
+                  : needsApproval
+                    ? 'Approve ' + market.symbol
+                    : actionLabel + ' ' + market.symbol}
+            </button>
+          )}
+
+          {notice ? <div className="notice" aria-live="polite">{notice}</div> : null}
         </aside>
       </section>
     </div>
