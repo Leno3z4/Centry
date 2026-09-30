@@ -238,7 +238,7 @@ export async function POST(request) {
         );
       }
 
-      const normalizedQuote = normalizeTowerQuoteDecimals(data.data, outputMarket.decimals);
+      const normalizedQuote = normalizeTowerQuoteDecimals(data.data, outputMarket.decimals, outputToken);
       data.data = normalizedQuote;
 
       const providerImpact = Number(data.data.priceImpact);
