@@ -3,16 +3,18 @@ pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/proxy/Clones.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "./CentryOnchainAgentAccount.sol";
 
 /// @title Centry Onchain Agent Factory
 /// @notice Creates isolated, user-owned onchain agent accounts from one reusable implementation.
-contract CentryOnchainAgentFactory {
+contract CentryOnchainAgentFactory is Ownable {
     address public immutable implementation;
+    uint256 public agentPriceUsdc;
 
     address public constant USDC = 0x3600000000000000000000000000000000000000;
     address public constant TREASURY = 0x475a93394F1EDef9255EA565Ee50eb8feaC7744C;
-    uint256 public constant AGENT_PRICE_USDC = 2_500_000;
+    uint256 public constant agentPriceUsdc = 2_500_000;
 
     mapping(address => address[]) private _agentsByOwner;
     mapping(address => bool) public isCentryAgentAccount;
@@ -31,9 +33,17 @@ contract CentryOnchainAgentFactory {
         bytes32 indexed templateId,
         uint256 priceUsdc
     );
+    event AgentPriceUpdated(uint256 indexed previousPriceUsdc, uint256 indexed newPriceUsdc);
 
-    constructor() {
+    constructor(uint256 initialAgentPriceUsdc_) Ownable(msg.sender) {
+        agentPriceUsdc = initialAgentPriceUsdc_;
         implementation = address(new CentryOnchainAgentAccount());
+    }
+
+    function setAgentPriceUsdc(uint256 newPriceUsdc) external onlyOwner {
+        uint256 previousPriceUsdc = agentPriceUsdc;
+        agentPriceUsdc = newPriceUsdc;
+        emit AgentPriceUpdated(previousPriceUsdc, newPriceUsdc);
     }
 
     function createAgentAccount(
@@ -73,11 +83,11 @@ contract CentryOnchainAgentFactory {
         string calldata metadataURI,
         address initialOperator
     ) external returns (address agentAccount) {
-        bool paid = IERC20(USDC).transferFrom(msg.sender, TREASURY, AGENT_PRICE_USDC);
+        bool paid = IERC20(USDC).transferFrom(msg.sender, TREASURY, agentPriceUsdc);
         require(paid, "CENT: payment failed");
 
         agentAccount = _create(msg.sender, templateId, configHash, metadataURI, initialOperator);
-        emit AgentAccountPurchased(msg.sender, agentAccount, templateId, AGENT_PRICE_USDC);
+        emit AgentAccountPurchased(msg.sender, agentAccount, templateId, agentPriceUsdc);
     }
 
 
@@ -90,7 +100,7 @@ contract CentryOnchainAgentFactory {
         CentryOnchainAgentAccount.AuthorizationFinancialLimit[] calldata authorizationLimits,
         CentryOnchainAgentAccount.AuthorizationApprovalSpender[] calldata authorizationSpenders
     ) external returns (address agentAccount) {
-        bool paid = IERC20(USDC).transferFrom(msg.sender, TREASURY, AGENT_PRICE_USDC);
+        bool paid = IERC20(USDC).transferFrom(msg.sender, TREASURY, agentPriceUsdc);
         require(paid, "CENT: payment failed");
 
         agentAccount = _createWithAuthorization(
@@ -103,7 +113,7 @@ contract CentryOnchainAgentFactory {
             authorizationLimits,
             authorizationSpenders
         );
-        emit AgentAccountPurchased(msg.sender, agentAccount, templateId, AGENT_PRICE_USDC);
+        emit AgentAccountPurchased(msg.sender, agentAccount, templateId, agentPriceUsdc);
     }
 
     function getAgentAccounts(address owner) external view returns (address[] memory) {
