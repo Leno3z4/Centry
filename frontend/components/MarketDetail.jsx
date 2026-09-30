@@ -205,7 +205,6 @@ export default function MarketDetail({ marketId }) {
           <div className={styles.detailIdentity}>
             <TokenMark symbol={market.symbol} />
             <div>
-              <span className={styles.sectionKicker}>LENDING MARKET</span>
               <div className={styles.detailTitleRow}>
                 <h1>{market.symbol}</h1>
                 <span className={styles.detailStatus}><i aria-hidden="true" />Active</span>
@@ -261,7 +260,6 @@ export default function MarketDetail({ marketId }) {
         <aside className={styles.simpleActionCard}>
           <div className={styles.simpleCardHead}>
             <div>
-              <span className={styles.sectionKicker}>ACTION</span>
               <h2>{actionLabel} {market.symbol}</h2>
             </div>
           </div>
