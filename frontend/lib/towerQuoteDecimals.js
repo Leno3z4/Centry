@@ -2,10 +2,12 @@ import { CONTRACT_ADDRESSES } from '../constants/contracts';
 
 const TOWER_EURC_OUTPUT_DECIMALS = 18;
 const TOWER_USDC_OUTPUT_DECIMALS = 12;
+const TOWER_CIRBTC_OUTPUT_DECIMALS = 8;
 
 const TOWER_OUTPUT_DECIMAL_OVERRIDES = Object.freeze({
   [CONTRACT_ADDRESSES.EURC.toLowerCase()]: TOWER_EURC_OUTPUT_DECIMALS,
   [CONTRACT_ADDRESSES.USDC.toLowerCase()]: TOWER_USDC_OUTPUT_DECIMALS,
+  [CONTRACT_ADDRESSES.CIRBTC.toLowerCase()]: TOWER_CIRBTC_OUTPUT_DECIMALS,
 });
 
 function asRaw(value) {
@@ -27,19 +29,29 @@ function scaleRawAmount(value, fromDecimals, toDecimals) {
   return raw * (10n ** BigInt(toDecimals - fromDecimals));
 }
 
-function normalizeHopAmounts(route, providerDecimals, actualDecimals) {
+function hopOutputToken(hop) {
+  if (!hop || typeof hop !== 'object') return null;
+  return hop.outputToken || hop.tokenOut || hop.toToken || hop.outputTokenAddress || null;
+}
+
+function normalizeHopAmounts(route) {
   if (!route || typeof route !== 'object' || !Array.isArray(route.hops)) return route;
 
   return {
     ...route,
-    hops: route.hops.map((hop) => (
-      hop && typeof hop === 'object' && hop.amountOut != null
-        ? {
-            ...hop,
-            amountOut: scaleRawAmount(hop.amountOut, providerDecimals, actualDecimals).toString(),
-          }
-        : hop
-    )),
+    hops: route.hops.map((hop) => {
+      const outputToken = hopOutputToken(hop);
+      if (!outputToken || hop.amountOut == null) return hop;
+
+      const providerDecimals = TOWER_OUTPUT_DECIMAL_OVERRIDES[String(outputToken).toLowerCase()];
+      const actualDecimals = hop.outputDecimals ?? hop.tokenOutDecimals;
+      if (providerDecimals == null || !Number.isInteger(Number(actualDecimals))) return hop;
+
+      return {
+        ...hop,
+        amountOut: scaleRawAmount(hop.amountOut, providerDecimals, Number(actualDecimals)).toString(),
+      };
+    }),
   };
 }
 
@@ -77,7 +89,7 @@ export function normalizeTowerQuoteDecimals(quote, actualOutputDecimals) {
     ...quote,
     outputAmount: scaleRawAmount(providerOutputAmount, providerOutputDecimals, actualOutputDecimals).toString(),
     minOut: scaleRawAmount(providerMinOut, providerOutputDecimals, actualOutputDecimals).toString(),
-    route: normalizeHopAmounts(providerRoute, providerOutputDecimals, actualOutputDecimals),
+    route: normalizeHopAmounts(providerRoute),
     providerOutputAmount,
     providerMinOut,
     providerRoute,
