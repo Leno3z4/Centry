@@ -1,9 +1,11 @@
 import { CONTRACT_ADDRESSES } from '../constants/contracts';
 
 const TOWER_EURC_OUTPUT_DECIMALS = 18;
+const TOWER_USDC_OUTPUT_DECIMALS = 12;
 
 const TOWER_OUTPUT_DECIMAL_OVERRIDES = Object.freeze({
   [CONTRACT_ADDRESSES.EURC.toLowerCase()]: TOWER_EURC_OUTPUT_DECIMALS,
+  [CONTRACT_ADDRESSES.USDC.toLowerCase()]: TOWER_USDC_OUTPUT_DECIMALS,
 });
 
 function asRaw(value) {
