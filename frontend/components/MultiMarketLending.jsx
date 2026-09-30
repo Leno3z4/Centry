@@ -213,7 +213,7 @@ export default function MultiMarketLending() {
             : <button type="button" className="primary-btn full-btn large-btn"
                 disabled={busy || !amount || numericAmount <= 0 || (action === 'repay' && debt <= 0) || (action === 'borrow' && numericAmount > maxBorrowNumber) || (needsGatewayFunding && gatewayAmountUnavailable)}
                 onClick={run}>
-                {busy ? 'Waiting for confirmation…' : false ? 'Updating borrow capacity…' : needsGatewayFunding ? `Supply ${market.symbol}` : needsApproval ? `Approve ${market.symbol}` : `${action[0].toUpperCase()}${action.slice(1)} ${market.symbol}`}
+                {busy ? 'Waiting for confirmation…' : needsGatewayFunding ? `Supply ${market.symbol}` : needsApproval ? `Approve ${market.symbol}` : `${action[0].toUpperCase()}${action.slice(1)} ${market.symbol}`}
               </button>}
           {notice && <div className="notice" aria-live="polite">{notice}</div>}
         </div>
