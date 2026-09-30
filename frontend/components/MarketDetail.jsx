@@ -213,55 +213,51 @@ export default function MarketDetail({ marketId }) {
               <p>{market.name}</p>
             </div>
           </div>
-
-          <div className={styles.rateBar} aria-label="Market rates">
-            <div>
-              <span>Supply APY</span>
-              <strong>{riskMarket ? formatPct(riskMarket.supplyApy) : '—'}</strong>
-            </div>
-            <div>
-              <span>Borrow APY</span>
-              <strong>{riskMarket ? formatPct(riskMarket.borrowApy) : '—'}</strong>
-            </div>
-          </div>
         </div>
 
         <p className={styles.detailDescription}>{market.description}</p>
       </div>
 
-      <section className={styles.simpleMarketWorkspace}>
-        <div className={styles.positionCard}>
-          <div className={styles.simpleCardHead}>
-            {isConnected ? <span className={styles.connectedPill}>Wallet connected</span> : null}
+      <section className={styles.marketSummaryCard}>
+        <div className={styles.marketSummaryRates} aria-label="Market rates">
+          <div>
+            <span>Supply APY</span>
+            <strong>{riskMarket ? formatPct(riskMarket.supplyApy) : '—'}</strong>
           </div>
-
-          <div className={styles.simplePositionGrid}>
-            <div>
-              <span>Wallet</span>
-              <strong>{isConnected ? num(lending.walletBalance) + ' ' + market.symbol : '—'}</strong>
-            </div>
-            <div>
-              <span>Supplied</span>
-              <strong>{isConnected ? num(lending.supplyBalance) + ' ' + market.symbol : '—'}</strong>
-            </div>
-            <div>
-              <span>Borrowed</span>
-              <strong>{isConnected ? num(lending.borrowBalance) + ' ' + market.symbol : '—'}</strong>
-            </div>
+          <div>
+            <span>Borrow APY</span>
+            <strong>{riskMarket ? formatPct(riskMarket.borrowApy) : '—'}</strong>
           </div>
-
-          {isConnected && action === 'borrow' ? (
-            <div className={styles.contextHint}>
-              You can borrow up to <strong>${num(borrowLimitRemaining)}</strong> with your current position.
-            </div>
-          ) : null}
-          {isConnected && action === 'supply' ? (
-            <div className={styles.contextHint}>
-              Supply assets to earn <strong>{riskMarket ? formatPct(riskMarket.supplyApy) : '—'} APY</strong>.
-            </div>
-          ) : null}
         </div>
 
+        <div className={styles.simplePositionGrid}>
+          <div>
+            <span>Wallet</span>
+            <strong>{isConnected ? num(lending.walletBalance) + ' ' + market.symbol : '—'}</strong>
+          </div>
+          <div>
+            <span>Supplied</span>
+            <strong>{isConnected ? num(lending.supplyBalance) + ' ' + market.symbol : '—'}</strong>
+          </div>
+          <div>
+            <span>Borrowed</span>
+            <strong>{isConnected ? num(lending.borrowBalance) + ' ' + market.symbol : '—'}</strong>
+          </div>
+        </div>
+
+        {isConnected && action === 'borrow' ? (
+          <div className={styles.contextHint}>
+            You can borrow up to <strong>${num(borrowLimitRemaining)}</strong> with your current position.
+          </div>
+        ) : null}
+        {isConnected && action === 'supply' ? (
+          <div className={styles.contextHint}>
+            Supply assets to earn <strong>{riskMarket ? formatPct(riskMarket.supplyApy) : '—'} APY</strong>.
+          </div>
+        ) : null}
+      </section>
+
+      <section className={styles.marketActionWrap}>
         <aside className={styles.simpleActionCard}>
           <div className={styles.simpleCardHead}>
             <div>
