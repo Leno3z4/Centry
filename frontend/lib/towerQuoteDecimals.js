@@ -62,25 +62,14 @@ export function normalizeTowerQuoteDecimals(quote, actualOutputDecimals) {
   }
 
   const outputToken = String(quote.outputToken || '').toLowerCase();
-  if (quote.decimalsNormalized === true || Number(quote.quoteDecimals) === actualOutputDecimals) {
-    return {
-      ...quote,
-      quoteDecimals: actualOutputDecimals,
-      providerQuoteDecimals: Number(quote.providerQuoteDecimals ?? actualOutputDecimals),
-      decimalsNormalized: true,
-    };
-  }
-
-  const providerOutputDecimals = TOWER_OUTPUT_DECIMAL_OVERRIDES[outputToken] ?? actualOutputDecimals;
-  if (providerOutputDecimals === actualOutputDecimals) {
-    return {
-      ...quote,
-      quoteDecimals: actualOutputDecimals,
-      providerQuoteDecimals: providerOutputDecimals,
-      decimalsNormalized: false,
-    };
-  }
-
+  // Tower's quoteDecimals metadata is not authoritative for the raw amount.
+  // The provider can label a quote with the token's on-chain decimals while
+  // still returning outputAmount/minOut in its router-specific units. Always
+  // normalize from the token-specific provider unit into the actual ERC-20
+  // decimals before exposing the quote to the UI.
+  const providerOutputDecimals = Number.isInteger(Number(quote.providerQuoteDecimals))
+    ? Number(quote.providerQuoteDecimals)
+    : TOWER_OUTPUT_DECIMAL_OVERRIDES[outputToken] ?? actualOutputDecimals;
   const providerOutputAmount = String(quote.outputAmount ?? '0');
   const providerMinOut = String(quote.minOut ?? '0');
   const providerRoute = quote.route;
@@ -97,6 +86,17 @@ export function normalizeTowerQuoteDecimals(quote, actualOutputDecimals) {
     providerQuoteDecimals: providerOutputDecimals,
     decimalsNormalized: true,
   };
+
+  if (providerOutputDecimals === actualOutputDecimals) {
+    return {
+      ...normalized,
+      outputAmount: providerOutputAmount,
+      minOut: providerMinOut,
+      quoteDecimals: actualOutputDecimals,
+      providerQuoteDecimals: providerOutputDecimals,
+      decimalsNormalized: false,
+    };
+  }
 
   if (asRaw(normalized.outputAmount) <= 0n || asRaw(normalized.minOut) <= 0n) {
     throw new Error('Tower returned an output quote too small to represent with the token\'s actual decimals.');
