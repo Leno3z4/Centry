@@ -45,6 +45,28 @@ contract CentryOnchainAgentFactory {
         agentAccount = _create(msg.sender, templateId, configHash, metadataURI, initialOperator);
     }
 
+
+    function createAgentAccountWithAuthorization(
+        bytes32 templateId,
+        bytes32 configHash,
+        string calldata metadataURI,
+        address initialOperator,
+        CentryOnchainAgentAccount.AuthorizationPermission[] calldata authorizationPermissions,
+        CentryOnchainAgentAccount.AuthorizationFinancialLimit[] calldata authorizationLimits,
+        CentryOnchainAgentAccount.AuthorizationApprovalSpender[] calldata authorizationSpenders
+    ) external returns (address agentAccount) {
+        agentAccount = _createWithAuthorization(
+            msg.sender,
+            templateId,
+            configHash,
+            metadataURI,
+            initialOperator,
+            authorizationPermissions,
+            authorizationLimits,
+            authorizationSpenders
+        );
+    }
+
     function purchaseAndCreateAgentAccount(
         bytes32 templateId,
         bytes32 configHash,
@@ -58,8 +80,63 @@ contract CentryOnchainAgentFactory {
         emit AgentAccountPurchased(msg.sender, agentAccount, templateId, AGENT_PRICE_USDC);
     }
 
+
+    function purchaseAndCreateAgentAccountWithAuthorization(
+        bytes32 templateId,
+        bytes32 configHash,
+        string calldata metadataURI,
+        address initialOperator,
+        CentryOnchainAgentAccount.AuthorizationPermission[] calldata authorizationPermissions,
+        CentryOnchainAgentAccount.AuthorizationFinancialLimit[] calldata authorizationLimits,
+        CentryOnchainAgentAccount.AuthorizationApprovalSpender[] calldata authorizationSpenders
+    ) external returns (address agentAccount) {
+        bool paid = IERC20(USDC).transferFrom(msg.sender, TREASURY, AGENT_PRICE_USDC);
+        require(paid, "CENT: payment failed");
+
+        agentAccount = _createWithAuthorization(
+            msg.sender,
+            templateId,
+            configHash,
+            metadataURI,
+            initialOperator,
+            authorizationPermissions,
+            authorizationLimits,
+            authorizationSpenders
+        );
+        emit AgentAccountPurchased(msg.sender, agentAccount, templateId, AGENT_PRICE_USDC);
+    }
+
     function getAgentAccounts(address owner) external view returns (address[] memory) {
         return _agentsByOwner[owner];
+    }
+
+    function _createWithAuthorization(
+        address owner,
+        bytes32 templateId,
+        bytes32 configHash,
+        string calldata metadataURI,
+        address initialOperator,
+        CentryOnchainAgentAccount.AuthorizationPermission[] calldata authorizationPermissions,
+        CentryOnchainAgentAccount.AuthorizationFinancialLimit[] calldata authorizationLimits,
+        CentryOnchainAgentAccount.AuthorizationApprovalSpender[] calldata authorizationSpenders
+    ) internal returns (address agentAccount) {
+        agentAccount = Clones.clone(implementation);
+
+        CentryOnchainAgentAccount(payable(agentAccount)).initializeWithAuthorization(
+            owner,
+            templateId,
+            configHash,
+            metadataURI,
+            initialOperator,
+            authorizationPermissions,
+            authorizationLimits,
+            authorizationSpenders
+        );
+
+        _agentsByOwner[owner].push(agentAccount);
+        isCentryAgentAccount[agentAccount] = true;
+
+        emit AgentAccountCreated(owner, agentAccount, initialOperator, templateId, configHash);
     }
 
     function agentAccountCount(address owner) external view returns (uint256) {

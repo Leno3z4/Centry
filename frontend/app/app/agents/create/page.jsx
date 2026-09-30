@@ -18,6 +18,7 @@ import {
   ensureOwnerSession,
   normalizeConfigForHash,
   rememberAgentName,
+  buildRunnerAuthorizationPlan,
 } from '../agentClient';
 import styles from '../agents.module.css';
 import { CONTRACT_ADDRESSES } from '../../../../constants/contracts';
@@ -44,20 +45,50 @@ export default function CreateAgentPage() {
     try {
       const templateHash = keccak256(toBytes('centry-general-agent'));
       const configHash = keccak256(toBytes(JSON.stringify(normalizeConfigForHash(config))));
+      const authorizationPlan = buildRunnerAuthorizationPlan({
+        policy: config.policy,
+        agentAccount: null,
+      });
       const before = (await publicClient.readContract({ address: FACTORY_ADDRESS, abi: FACTORY_ABI, functionName: 'getAgentAccounts', args: [address] })).map(String);
       let creationTx;
       if (PAYWALL_ENABLED) {
         setStatus('Approve 2.50 USDC for the agent factory…');
         const approvalHash = await writeContractAsync({ address: CONTRACT_ADDRESSES.USDC, abi: [{ type: 'function', name: 'approve', stateMutability: 'nonpayable', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }] }], functionName: 'approve', args: [FACTORY_ADDRESS, AGENT_PRICE_RAW] });
         await publicClient.waitForTransactionReceipt({ hash: approvalHash });
-        setStatus('Create your agent on Arc… approve the wallet transaction.');
-        creationTx = await writeContractAsync({ address: FACTORY_ADDRESS, abi: FACTORY_ABI, functionName: 'purchaseAndCreateAgentAccount', args: [templateHash, configHash, '', RUNNER_ADDRESS] });
+        setStatus('Create and authorize your agent on Arc… approve one wallet transaction.');
+        creationTx = await writeContractAsync({
+          address: FACTORY_ADDRESS,
+          abi: FACTORY_ABI,
+          functionName: 'purchaseAndCreateAgentAccountWithAuthorization',
+          args: [
+            templateHash,
+            configHash,
+            '',
+            RUNNER_ADDRESS,
+            authorizationPlan.permissions,
+            authorizationPlan.financialLimits,
+            authorizationPlan.approvalSpenders,
+          ],
+        });
       } else {
-        setStatus('Create your agent on Arc… approve the wallet transaction.');
-        creationTx = await writeContractAsync({ address: FACTORY_ADDRESS, abi: FACTORY_ABI, functionName: 'createAgentAccount', args: [templateHash, configHash, '', RUNNER_ADDRESS] });
+        setStatus('Create and authorize your agent on Arc… approve one wallet transaction.');
+        creationTx = await writeContractAsync({
+          address: FACTORY_ADDRESS,
+          abi: FACTORY_ABI,
+          functionName: 'createAgentAccountWithAuthorization',
+          args: [
+            templateHash,
+            configHash,
+            '',
+            RUNNER_ADDRESS,
+            authorizationPlan.permissions,
+            authorizationPlan.financialLimits,
+            authorizationPlan.approvalSpenders,
+          ],
+        });
       }
       await publicClient.waitForTransactionReceipt({ hash: creationTx });
-      setStatus('Smart account created. Finishing agent setup…');
+      setStatus('Smart account created and runner permissions installed. Finishing agent setup…');
       const after = (await publicClient.readContract({ address: FACTORY_ADDRESS, abi: FACTORY_ABI, functionName: 'getAgentAccounts', args: [address] })).map(String);
       const beforeSet = new Set(before.map((item) => item.toLowerCase()));
       const account = after.find((item) => !beforeSet.has(item.toLowerCase())) || after.at(-1);
@@ -85,7 +116,18 @@ export default function CreateAgentPage() {
     } catch (e) {
       if (createdAccountForRecovery) setCreatedAccount(createdAccountForRecovery);
       setStatus('');
-      setError(e?.shortMessage || e?.message || 'Agent setup failed.');
+      const raw = e?.shortMessage || e?.message || '';
+      const message =
+        raw.startsWith('missing_financial_cap_')
+          ? 'Set a maximum amount for every asset used by the selected financial actions.'
+          : raw.startsWith('invalid_financial_cap_')
+            ? 'One of the financial caps is not a valid token amount.'
+            : raw.startsWith('financial_cap_too_large_')
+              ? 'One of the financial caps is too large for the onchain limit.'
+              : /user rejected|user denied|rejected the request|denied/i.test(raw)
+                ? 'Agent creation or authorization was rejected in the wallet.'
+                : raw || 'Agent setup failed.';
+      setError(message);
     }
   }
 

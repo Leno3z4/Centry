@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useAccount, useChainId, usePublicClient, useSignMessage, useWriteContract } from 'wagmi';
-import { encodeFunctionData, keccak256, parseUnits, toBytes } from 'viem';
+import { encodeFunctionData } from 'viem';
 import { Providers } from '../../../../../components/Providers';
 import { AppShell } from '../../../../../components/AppShell';
 import { CONTRACT_ADDRESSES } from '../../../../../constants/contracts';
@@ -22,18 +22,9 @@ import {
   shortAddress,
   RUNNER_PERMISSION_TTL_SECONDS,
   RUNNER_FINANCIAL_WINDOW_SECONDS,
+  buildRunnerAuthorizationPlan,
 } from '../../agentClient';
 import styles from '../../agents.module.css';
-
-const ACTION_TARGETS = {
-  supply: [CONTRACT_ADDRESSES.lendingPool, 'supply(address,uint256)'],
-  withdraw: [CONTRACT_ADDRESSES.lendingPool, 'withdraw(address,uint256)'],
-  borrow: [CONTRACT_ADDRESSES.lendingPool, 'borrow(address,uint256)'],
-  repay: [CONTRACT_ADDRESSES.lendingPool, 'repay(address,uint256)'],
-  swap: [CONTRACT_ADDRESSES.unitFlowRouter, 'exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))'],
-  transfer: null,
-  castVote: [CONTRACT_ADDRESSES.governor, 'castVote(uint256,uint8)'],
-};
 
 function ConfigureContent() {
   const { account } = useParams();
@@ -137,10 +128,6 @@ function ConfigureContent() {
     }
   }
 
-  function selector(signature) {
-    return '0x' + keccak256(toBytes(signature)).slice(2, 10);
-  }
-
   async function authorizeRunner() {
     setError('');
     setStatus('');
@@ -148,26 +135,6 @@ function ConfigureContent() {
     if (!agent || !RUNNER_ADDRESS) return setError('Hosted runner address is not configured.');
     if (!address || !publicClient) return setError('Connect your wallet before authorizing the hosted runner.');
     if (chainId !== arcMainnet.id) return setError('Switch your wallet to Arc Mainnet before authorizing the hosted runner.');
-
-    const policy = agent.config?.policy || {};
-    const allowedActions = policy.allowedActions || AGENT_ACTION_OPTIONS.map(([value]) => value);
-    const allowedAssets = policy.allowedAssets || AGENT_ASSET_OPTIONS.map(([value]) => value);
-    if (allowedActions.includes('swap') && (!allowedAssets.includes('CENT') || !allowedAssets.includes('USDC'))) {
-      return setError('Swap requires both CENT and USDC to be allowed.');
-    }
-
-    const tokenAddresses = {
-      USDC: CONTRACT_ADDRESSES.USDC,
-      EURC: CONTRACT_ADDRESSES.EURC,
-      CIRBTC: CONTRACT_ADDRESSES.CIRBTC,
-      CENT: CONTRACT_ADDRESSES.centryToken,
-    };
-    const tokenDecimals = { USDC: 6, EURC: 6, CIRBTC: 8, CENT: 18 };
-    const financialActions = new Set(['supply', 'withdraw', 'borrow', 'repay', 'transfer']);
-    const requiresFinancialLimits =
-      allowedActions.some((action) => financialActions.has(action)) || allowedActions.includes('swap');
-
-    const capFor = (asset) => String(policy.maxAmountByAsset?.[asset] || '').trim();
 
     try {
       setAuthorizing(true);
@@ -182,7 +149,12 @@ function ConfigureContent() {
         throw new Error('connected_wallet_is_not_agent_owner');
       }
 
-      if (requiresFinancialLimits) {
+      const authorizationPlan = buildRunnerAuthorizationPlan({
+        policy: agent.config?.policy || {},
+        agentAccount: agent.account,
+      });
+
+      if (authorizationPlan.financialLimits.length) {
         let version;
         try {
           version = await publicClient.readContract({
@@ -196,233 +168,83 @@ function ConfigureContent() {
         if (BigInt(version) < 1n) throw new Error('agent_account_requires_financial_limit_upgrade');
       }
 
-      const desiredPermissions = [];
-      const desiredLimits = [];
-      const desiredApprovalSpenders = [];
-      const permissionKeys = new Set();
-      const limitKeys = new Set();
-      const approvalSpenderKeys = new Set();
-
-      const addPermission = (target, signature) => {
-        const normalizedTarget = target.toLowerCase();
-        const normalizedSelector = selector(signature).toLowerCase();
-        const key = normalizedTarget + ':' + normalizedSelector;
-        if (permissionKeys.has(key)) return;
-        permissionKeys.add(key);
-        desiredPermissions.push({
-          target,
-          selector: selector(signature),
-        });
-      };
-
-      const addApprovalSpender = (asset, spender) => {
-        const key = asset.toLowerCase() + ':' + spender.toLowerCase();
-        if (approvalSpenderKeys.has(key)) return;
-        approvalSpenderKeys.add(key);
-        desiredApprovalSpenders.push({ asset, spender });
-      };
-
-      const addLimit = (target, signature, asset) => {
-        const normalizedAsset = String(asset || '').toLowerCase();
-        const normalizedTarget = target.toLowerCase();
-        const normalizedSelector = selector(signature).toLowerCase();
-        const key = normalizedTarget + ':' + normalizedSelector + ':' + normalizedAsset;
-        if (limitKeys.has(key)) return;
-        limitKeys.add(key);
-        desiredLimits.push({
-          target,
-          selector: selector(signature),
-          asset,
-        });
-      };
-
-      for (const action of allowedActions) {
-        if (ACTION_TARGETS[action]) addPermission(...ACTION_TARGETS[action]);
-
-        if (financialActions.has(action)) {
-          const targetSignature = ACTION_TARGETS[action]?.[1];
-          const targetAddress = ACTION_TARGETS[action]?.[0];
-          if (targetAddress && targetSignature) {
-            for (const asset of allowedAssets) {
-              if (!tokenAddresses[asset]) continue;
-              addLimit(targetAddress, targetSignature, tokenAddresses[asset]);
-            }
-          }
-        }
-      }
-
-      if (allowedActions.includes('supply') || allowedActions.includes('repay')) {
-        for (const asset of allowedAssets) {
-          if (!tokenAddresses[asset]) continue;
-          addPermission(tokenAddresses[asset], 'approve(address,uint256)');
-          addLimit(tokenAddresses[asset], 'approve(address,uint256)', tokenAddresses[asset]);
-          addApprovalSpender(tokenAddresses[asset], CONTRACT_ADDRESSES.lendingPool);
-        }
-      }
-
-      if (allowedActions.includes('swap')) {
-        const swapSignature = 'exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))';
-        addPermission(CONTRACT_ADDRESSES.unitFlowRouter, swapSignature);
-        addLimit(CONTRACT_ADDRESSES.unitFlowRouter, swapSignature, CONTRACT_ADDRESSES.centryToken);
-        addLimit(CONTRACT_ADDRESSES.unitFlowRouter, swapSignature, CONTRACT_ADDRESSES.USDC);
-
-        for (const asset of ['CENT', 'USDC']) {
-          const token = tokenAddresses[asset];
-          if (!token) continue;
-          addPermission(token, 'approve(address,uint256)');
-          addLimit(token, 'approve(address,uint256)', token);
-          addApprovalSpender(token, CONTRACT_ADDRESSES.unitFlowRouter);
-        }
-      }
-
-      if (allowedActions.includes('transfer')) {
-        for (const asset of allowedAssets) {
-          if (!tokenAddresses[asset]) continue;
-          addPermission(agent.account, 'transferToAgent(address,address,uint256)');
-          addLimit(agent.account, 'transferToAgent(address,address,uint256)', tokenAddresses[asset]);
-        }
-      }
-
-      const operatorAlreadyAuthorized = await publicClient.readContract({
-        address: agent.account,
-        abi: ACCOUNT_ABI,
-        functionName: 'agentOperators',
-        args: [RUNNER_ADDRESS],
-      });
-
-      const pending = [];
-      if (!operatorAlreadyAuthorized) {
-        pending.push({
-          label: 'runner operator',
-          functionName: 'setAgentOperator',
-          args: [RUNNER_ADDRESS, true],
-        });
-      }
-
-      const nowSeconds = Math.floor(Date.now() / 1000);
-      const desiredExpiry = BigInt(nowSeconds + RUNNER_PERMISSION_TTL_SECONDS);
-
-      for (const item of desiredPermissions) {
+      const permissionUpdates = [];
+      for (const item of authorizationPlan.permissions) {
         const current = await publicClient.readContract({
           address: agent.account,
           abi: ACCOUNT_ABI,
           functionName: 'permissions',
-          args: [RUNNER_ADDRESS, item.target, item.selector],
+          args: [item[0], item[1], item[2]],
         });
         const allowed = Boolean(current?.[0]);
         const expiresAt = BigInt(current?.[1] ?? 0);
         const maxNativeValue = BigInt(current?.[2] ?? 0);
-
-        if (!allowed || expiresAt === 0n || expiresAt < desiredExpiry || maxNativeValue !== 0n) {
-          pending.push({
-            label: 'permission ' + item.target.slice(0, 10) + '… ' + item.selector,
-            functionName: 'setPermission',
-            args: [RUNNER_ADDRESS, item.target, item.selector, true, desiredExpiry, 0n],
-          });
+        if (!allowed || expiresAt < item[4] || maxNativeValue !== item[5]) {
+          permissionUpdates.push(item);
         }
       }
 
-      for (const item of desiredApprovalSpenders) {
-        const allowed = await publicClient.readContract({
-          address: agent.account,
-          abi: ACCOUNT_ABI,
-          functionName: 'approvalSpenders',
-          args: [RUNNER_ADDRESS, item.asset, item.spender],
-        });
-        if (!allowed) {
-          const symbol = Object.entries(tokenAddresses).find(([, value]) =>
-            String(value).toLowerCase() === item.asset.toLowerCase()
-          )?.[0] || 'asset';
-          pending.push({
-            label: 'approve spender ' + symbol,
-            functionName: 'setApprovalSpender',
-            args: [RUNNER_ADDRESS, item.asset, item.spender, true],
-          });
-        }
-      }
-
-      for (const item of desiredLimits) {
-        const assetSymbol = Object.entries(tokenAddresses).find(([, value]) =>
-          String(value).toLowerCase() === item.asset.toLowerCase()
-        )?.[0];
-        const cap = assetSymbol ? capFor(assetSymbol) : '';
-        if (!cap) throw new Error('missing_financial_cap_' + (assetSymbol || 'asset'));
-
-        const decimals = tokenDecimals[assetSymbol] ?? 18;
-        const maxRaw = parseUnits(cap, decimals);
-        const limit = await publicClient.readContract({
+      const limitUpdates = [];
+      for (const item of authorizationPlan.financialLimits) {
+        const current = await publicClient.readContract({
           address: agent.account,
           abi: ACCOUNT_ABI,
           functionName: 'financialLimits',
-          args: [RUNNER_ADDRESS, item.target, item.selector, item.asset],
+          args: [item[0], item[1], item[2], item[3]],
         });
-        const currentPerCall = BigInt(limit?.[0] ?? 0);
-        const currentPerWindow = BigInt(limit?.[1] ?? 0);
-        const currentWindow = BigInt(limit?.[4] ?? 0);
-
-        if (
-          currentPerCall !== maxRaw ||
-          currentPerWindow !== maxRaw ||
-          currentWindow !== BigInt(RUNNER_FINANCIAL_WINDOW_SECONDS)
-        ) {
-          if (maxRaw > ((1n << 128n) - 1n)) throw new Error('financial_cap_too_large_' + assetSymbol);
-          pending.push({
-            label: 'limit ' + (assetSymbol || 'asset') + ' · ' + item.selector,
-            functionName: 'setFinancialLimit',
-            args: [
-              RUNNER_ADDRESS,
-              item.target,
-              item.selector,
-              item.asset,
-              maxRaw,
-              maxRaw,
-              BigInt(RUNNER_FINANCIAL_WINDOW_SECONDS),
-            ],
-          });
-        }
+        const currentPerCall = BigInt(current?.[0] ?? 0);
+        const currentPerWindow = BigInt(current?.[1] ?? 0);
+        const currentWindow = BigInt(current?.[4] ?? 0);
+        if (currentPerCall !== item[4] || currentPerWindow !== item[5] || currentWindow !== item[6]) limitUpdates.push(item);
       }
 
-      if (!pending.length) {
+      const spenderUpdates = [];
+      for (const item of authorizationPlan.approvalSpenders) {
+        const current = await publicClient.readContract({
+          address: agent.account,
+          abi: ACCOUNT_ABI,
+          functionName: 'approvalSpenders',
+          args: [item[0], item[1], item[2]],
+        });
+        if (Boolean(current) !== Boolean(item[3])) spenderUpdates.push(item);
+      }
+
+      const writeCount = permissionUpdates.length + limitUpdates.length + spenderUpdates.length;
+      if (!writeCount) {
         await loadAgent();
-        setStatus('Hosted runner is authorized with expiring permissions and onchain financial limits.');
+        setStatus('Hosted runner is already authorized with the saved permissions.');
         return;
       }
 
-      setStatus('Preparing ' + pending.length + ' authorization transactions…');
-
-      for (let index = 0; index < pending.length; index += 1) {
-        const item = pending[index];
-        const txConfig = {
-          account: address,
-          chain: arcMainnet,
-          address: agent.account,
+      const args = [permissionUpdates, limitUpdates, spenderUpdates];
+      await publicClient.call({
+        account: address,
+        to: agent.account,
+        data: encodeFunctionData({
           abi: ACCOUNT_ABI,
-          functionName: item.functionName,
-          args: item.args,
-        };
+          functionName: 'configureAuthorization',
+          args,
+        }),
+      });
 
-        await publicClient.call({
-          account: address,
-          to: agent.account,
-          data: encodeFunctionData({
-            abi: ACCOUNT_ABI,
-            functionName: item.functionName,
-            args: item.args,
-          }),
-        });
+      setStatus('Approve one authorization transaction… ' + writeCount + ' changes will be applied.');
 
-        setStatus('Approve transaction ' + (index + 1) + '/' + pending.length + ': ' + item.label + '…');
+      const hash = await writeContractAsync({
+        account: address,
+        chain: arcMainnet,
+        address: agent.account,
+        abi: ACCOUNT_ABI,
+        functionName: 'configureAuthorization',
+        args,
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
-        const hash = await writeContractAsync(txConfig);
-        const receipt = await publicClient.waitForTransactionReceipt({ hash });
-
-        if (String(receipt?.status || '').toLowerCase() !== 'success' && String(receipt?.status || '').toLowerCase() !== '0x1') {
-          throw new Error('authorization_transaction_reverted');
-        }
+      if (String(receipt?.status || '').toLowerCase() !== 'success' && String(receipt?.status || '').toLowerCase() !== '0x1') {
+        throw new Error('authorization_transaction_reverted');
       }
 
       await loadAgent();
-      setStatus('Hosted runner authorized with a 7-day permission expiry and 24-hour financial limits.');
+      setStatus('Hosted runner authorized with a 30-day permission expiry and 24-hour financial limits.');
     } catch (e) {
       const raw = e?.shortMessage || e?.message || '';
       const message =
@@ -432,17 +254,22 @@ function ConfigureContent() {
             ? 'This agent account was created with the older implementation. Create a new agent account from the updated factory before authorizing financial actions.'
             : raw.startsWith('missing_financial_cap_')
               ? 'Set maximum amounts for every asset used by the saved financial actions before authorizing the runner.'
-              : raw === 'authorization_transaction_reverted'
-                ? 'An authorization transaction reverted. Remaining authorization transactions were not sent.'
-                : /user rejected|user denied|rejected the request|denied/i.test(raw)
-                  ? 'Authorization was rejected in the wallet. Remaining authorization transactions were not sent.'
-                  : raw || 'Runner authorization failed. Remaining authorization transactions were not sent.';
+              : raw.startsWith('invalid_financial_cap_')
+                ? 'One of the financial caps is not a valid token amount.'
+                : raw.startsWith('financial_cap_too_large_')
+                  ? 'One of the financial caps is too large for the onchain limit.'
+                  : raw === 'authorization_transaction_reverted'
+                    ? 'The authorization transaction reverted. No later authorization changes were sent.'
+                    : /user rejected|user denied|rejected the request|denied/i.test(raw)
+                      ? 'Authorization was rejected in the wallet. No later authorization changes were sent.'
+                      : raw || 'Runner authorization failed.';
       setError(message);
       setStatus('');
     } finally {
       setAuthorizing(false);
     }
   }
+
   if (!agent) return <main className={styles.page}><div className={styles.emptyState}>Loading agent…</div></main>;
 
   return (
@@ -472,7 +299,7 @@ function ConfigureContent() {
           <div className={styles.price}>Arc · 5042</div>
         </div>
         <button className={styles.secondaryButton} onClick={authorizeRunner} disabled={saving || authorizing || writePending}>
-          {authorizing ? 'Authorizing…' : 'Authorize runner + saved permissions'}
+          {authorizing ? 'Authorizing…' : 'Authorize runner + saved permissions (1 tx)'}
         </button>
       </section>
 

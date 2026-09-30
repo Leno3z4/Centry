@@ -346,7 +346,7 @@ export function AgentConfigForm({ mode = 'create', agent = null, onSubmit, submi
       <div className={styles.configFooter}>
         <div>
           <strong>{isCreate ? 'Everything is ready?' : 'Save your changes'}</strong>
-          <p>{isCreate ? 'The smart-account transaction happens only after you confirm this configuration.' : 'Backend configuration changes are signed by your wallet; no owner private key is shared.'}</p>
+          <p>{isCreate ? 'Creation installs the saved runner permissions in the same wallet transaction.' : 'Backend settings use a wallet message; onchain runner authorization uses one owner transaction.'}</p>
         </div>
         <button className={styles.primaryButton} disabled={submitting} type="submit">
           {submitting ? 'Saving…' : submitLabel || (isCreate ? 'Create agent' : 'Save configuration')}

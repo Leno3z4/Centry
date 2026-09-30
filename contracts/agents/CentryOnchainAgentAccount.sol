@@ -35,7 +35,34 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
         uint64 windowDuration;
     }
 
+    struct AuthorizationPermission {
+        address operator;
+        address target;
+        bytes4 selector;
+        bool allowed;
+        uint64 expiresAt;
+        uint128 maxNativeValue;
+    }
+
+    struct AuthorizationFinancialLimit {
+        address operator;
+        address target;
+        bytes4 selector;
+        address asset;
+        uint128 maxAmountPerCall;
+        uint128 maxAmountPerWindow;
+        uint64 windowDuration;
+    }
+
+    struct AuthorizationApprovalSpender {
+        address operator;
+        address asset;
+        address spender;
+        bool allowed;
+    }
+
     uint256 public constant FINANCIAL_LIMIT_VERSION = 1;
+    uint256 public constant MAX_AUTHORIZATION_WRITES = 128;
     uint64 public constant MIN_FINANCIAL_WINDOW = 1 hours;
     uint64 public constant MAX_FINANCIAL_WINDOW = 30 days;
 
@@ -180,6 +207,34 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
         string calldata metadataURI_,
         address initialOperator
     ) external {
+        _initialize(owner_, templateId_, configHash_, metadataURI_, initialOperator);
+    }
+
+    function initializeWithAuthorization(
+        address owner_,
+        bytes32 templateId_,
+        bytes32 configHash_,
+        string calldata metadataURI_,
+        address initialOperator,
+        AuthorizationPermission[] calldata authorizationPermissions_,
+        AuthorizationFinancialLimit[] calldata authorizationLimits_,
+        AuthorizationApprovalSpender[] calldata authorizationSpenders_
+    ) external {
+        _initialize(owner_, templateId_, configHash_, metadataURI_, initialOperator);
+        _configureAuthorization(
+            authorizationPermissions_,
+            authorizationLimits_,
+            authorizationSpenders_
+        );
+    }
+
+    function _initialize(
+        address owner_,
+        bytes32 templateId_,
+        bytes32 configHash_,
+        string calldata metadataURI_,
+        address initialOperator
+    ) internal {
         if (msg.sender != factory) revert NotFactory();
         if (initialized) revert AlreadyInitialized();
         if (owner_ == address(0)) revert InvalidOwner();
@@ -229,6 +284,109 @@ contract CentryOnchainAgentAccount is ERC721Holder, ERC1155Holder, ReentrancyGua
         if (operator == address(0)) revert InvalidOwner();
         agentOperators[operator] = active_;
         emit AgentOperatorSet(operator, active_);
+    }
+
+    /// @notice Apply multiple delegated authorization changes in one owner transaction.
+    function configureAuthorization(
+        AuthorizationPermission[] calldata authorizationPermissions_,
+        AuthorizationFinancialLimit[] calldata authorizationLimits_,
+        AuthorizationApprovalSpender[] calldata authorizationSpenders_
+    ) external onlyOwner {
+        _configureAuthorization(
+            authorizationPermissions_,
+            authorizationLimits_,
+            authorizationSpenders_
+        );
+    }
+
+    function _configureAuthorization(
+        AuthorizationPermission[] calldata authorizationPermissions_,
+        AuthorizationFinancialLimit[] calldata authorizationLimits_,
+        AuthorizationApprovalSpender[] calldata authorizationSpenders_
+    ) internal {
+        uint256 writeCount =
+            authorizationPermissions_.length +
+            authorizationLimits_.length +
+            authorizationSpenders_.length;
+        if (writeCount == 0 || writeCount > MAX_AUTHORIZATION_WRITES) revert BatchTooLarge();
+
+        for (uint256 i = 0; i < authorizationPermissions_.length; i++) {
+            AuthorizationPermission calldata item = authorizationPermissions_[i];
+            address target = _resolveAuthorizationTarget(item.target, item.selector);
+            if (item.operator == address(0) || target == address(0)) revert InvalidOwner();
+            if (item.expiresAt != 0 && item.expiresAt <= block.timestamp) revert PermissionExpired();
+
+            permissions[item.operator][target][item.selector] = Permission({
+                allowed: item.allowed,
+                expiresAt: item.expiresAt,
+                maxNativeValue: item.maxNativeValue
+            });
+            permissionEpochs[item.operator][target][item.selector] = authorizationEpoch;
+            permissionCodeHashes[item.operator][target][item.selector] = target.codehash;
+
+            emit PermissionSet(
+                item.operator,
+                target,
+                item.selector,
+                item.allowed,
+                item.expiresAt,
+                item.maxNativeValue
+            );
+        }
+
+        for (uint256 i = 0; i < authorizationLimits_.length; i++) {
+            AuthorizationFinancialLimit calldata item = authorizationLimits_[i];
+            address target = _resolveAuthorizationTarget(item.target, item.selector);
+            if (item.operator == address(0) || item.asset == address(0) || target == address(0)) revert InvalidOwner();
+            if (!_isFinancialSelector(item.selector)) revert InvalidFinancialLimit();
+
+            if (item.maxAmountPerCall == 0 && item.maxAmountPerWindow == 0) {
+                delete financialLimits[item.operator][target][item.selector][item.asset];
+                emit FinancialLimitSet(item.operator, target, item.selector, item.asset, 0, 0, 0);
+                continue;
+            }
+
+            if (
+                item.maxAmountPerCall == 0 ||
+                item.maxAmountPerWindow == 0 ||
+                item.maxAmountPerCall > item.maxAmountPerWindow ||
+                item.windowDuration < MIN_FINANCIAL_WINDOW ||
+                item.windowDuration > MAX_FINANCIAL_WINDOW
+            ) revert InvalidFinancialLimit();
+
+            financialLimits[item.operator][target][item.selector][item.asset] = FinancialLimit({
+                maxAmountPerCall: item.maxAmountPerCall,
+                maxAmountPerWindow: item.maxAmountPerWindow,
+                spentInWindow: 0,
+                windowStart: uint64(block.timestamp),
+                windowDuration: item.windowDuration
+            });
+            financialLimitEpochs[item.operator][target][item.selector][item.asset] = authorizationEpoch;
+
+            emit FinancialLimitSet(
+                item.operator,
+                target,
+                item.selector,
+                item.asset,
+                item.maxAmountPerCall,
+                item.maxAmountPerWindow,
+                item.windowDuration
+            );
+        }
+
+        for (uint256 i = 0; i < authorizationSpenders_.length; i++) {
+            AuthorizationApprovalSpender calldata item = authorizationSpenders_[i];
+            if (item.operator == address(0) || item.asset == address(0) || item.spender == address(0)) revert InvalidOwner();
+
+            approvalSpenders[item.operator][item.asset][item.spender] = item.allowed;
+            approvalSpenderEpochs[item.operator][item.asset][item.spender] = authorizationEpoch;
+            emit ApprovalSpenderSet(item.operator, item.asset, item.spender, item.allowed);
+        }
+    }
+
+    function _resolveAuthorizationTarget(address target, bytes4 selector_) internal view returns (address) {
+        if (target == address(0) && selector_ == TRANSFER_TO_AGENT_SELECTOR) return address(this);
+        return target;
     }
 
     function setPermission(

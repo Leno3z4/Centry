@@ -1,4 +1,4 @@
-import { isAddress } from 'viem';
+import { isAddress, keccak256, parseUnits, toBytes } from 'viem';
 import { CONTRACT_ADDRESSES } from '../../../constants/contracts';
 
 export const FACTORY_ADDRESS = '0x9CD127b914F370D64589cF43Bc27e75320a226b4';
@@ -77,10 +77,54 @@ export async function ensureOwnerSession({ address, account, signMessageAsync })
   return ownerSessionPromise;
 }
 
+const AUTHORIZATION_PERMISSION_COMPONENTS = [
+  { name: 'operator', type: 'address' },
+  { name: 'target', type: 'address' },
+  { name: 'selector', type: 'bytes4' },
+  { name: 'allowed', type: 'bool' },
+  { name: 'expiresAt', type: 'uint64' },
+  { name: 'maxNativeValue', type: 'uint128' },
+];
+
+const AUTHORIZATION_LIMIT_COMPONENTS = [
+  { name: 'operator', type: 'address' },
+  { name: 'target', type: 'address' },
+  { name: 'selector', type: 'bytes4' },
+  { name: 'asset', type: 'address' },
+  { name: 'maxAmountPerCall', type: 'uint128' },
+  { name: 'maxAmountPerWindow', type: 'uint128' },
+  { name: 'windowDuration', type: 'uint64' },
+];
+
+const AUTHORIZATION_SPENDER_COMPONENTS = [
+  { name: 'operator', type: 'address' },
+  { name: 'asset', type: 'address' },
+  { name: 'spender', type: 'address' },
+  { name: 'allowed', type: 'bool' },
+];
+
 export const FACTORY_ABI = [
   { type: 'function', name: 'getAgentAccounts', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }], outputs: [{ name: 'accounts', type: 'address[]' }] },
   { type: 'function', name: 'createAgentAccount', stateMutability: 'nonpayable', inputs: [{ name: 'templateId', type: 'bytes32' }, { name: 'configHash', type: 'bytes32' }, { name: 'metadataURI', type: 'string' }, { name: 'initialOperator', type: 'address' }], outputs: [{ name: 'agentAccount', type: 'address' }] },
   { type: 'function', name: 'purchaseAndCreateAgentAccount', stateMutability: 'nonpayable', inputs: [{ name: 'templateId', type: 'bytes32' }, { name: 'configHash', type: 'bytes32' }, { name: 'metadataURI', type: 'string' }, { name: 'initialOperator', type: 'address' }], outputs: [{ name: 'agentAccount', type: 'address' }] },
+  { type: 'function', name: 'createAgentAccountWithAuthorization', stateMutability: 'nonpayable', inputs: [
+    { name: 'templateId', type: 'bytes32' },
+    { name: 'configHash', type: 'bytes32' },
+    { name: 'metadataURI', type: 'string' },
+    { name: 'initialOperator', type: 'address' },
+    { name: 'authorizationPermissions', type: 'tuple[]', components: AUTHORIZATION_PERMISSION_COMPONENTS },
+    { name: 'authorizationLimits', type: 'tuple[]', components: AUTHORIZATION_LIMIT_COMPONENTS },
+    { name: 'authorizationSpenders', type: 'tuple[]', components: AUTHORIZATION_SPENDER_COMPONENTS },
+  ], outputs: [{ name: 'agentAccount', type: 'address' }] },
+  { type: 'function', name: 'purchaseAndCreateAgentAccountWithAuthorization', stateMutability: 'nonpayable', inputs: [
+    { name: 'templateId', type: 'bytes32' },
+    { name: 'configHash', type: 'bytes32' },
+    { name: 'metadataURI', type: 'string' },
+    { name: 'initialOperator', type: 'address' },
+    { name: 'authorizationPermissions', type: 'tuple[]', components: AUTHORIZATION_PERMISSION_COMPONENTS },
+    { name: 'authorizationLimits', type: 'tuple[]', components: AUTHORIZATION_LIMIT_COMPONENTS },
+    { name: 'authorizationSpenders', type: 'tuple[]', components: AUTHORIZATION_SPENDER_COMPONENTS },
+  ], outputs: [{ name: 'agentAccount', type: 'address' }] },
 ];
 
 export const ERC20_ABI = [
@@ -103,6 +147,11 @@ export const ACCOUNT_ABI = [
   { type: 'function', name: 'setFinancialLimit', stateMutability: 'nonpayable', inputs: [{ name: 'operator', type: 'address' }, { name: 'target', type: 'address' }, { name: 'selector', type: 'bytes4' }, { name: 'asset', type: 'address' }, { name: 'maxAmountPerCall', type: 'uint128' }, { name: 'maxAmountPerWindow', type: 'uint128' }, { name: 'windowDuration', type: 'uint64' }], outputs: [] },
   { type: 'function', name: 'setApprovalSpender', stateMutability: 'nonpayable', inputs: [{ name: 'operator', type: 'address' }, { name: 'asset', type: 'address' }, { name: 'spender', type: 'address' }, { name: 'allowed', type: 'bool' }], outputs: [] },
   { type: 'function', name: 'approvalSpenders', stateMutability: 'view', inputs: [{ name: 'operator', type: 'address' }, { name: 'asset', type: 'address' }, { name: 'spender', type: 'address' }], outputs: [{ type: 'bool' }] },
+  { type: 'function', name: 'configureAuthorization', stateMutability: 'nonpayable', inputs: [
+    { name: 'authorizationPermissions', type: 'tuple[]', components: AUTHORIZATION_PERMISSION_COMPONENTS },
+    { name: 'authorizationLimits', type: 'tuple[]', components: AUTHORIZATION_LIMIT_COMPONENTS },
+    { name: 'authorizationSpenders', type: 'tuple[]', components: AUTHORIZATION_SPENDER_COMPONENTS },
+  ], outputs: [] },
   { type: 'function', name: 'financialLimits', stateMutability: 'view', inputs: [{ name: 'operator', type: 'address' }, { name: 'target', type: 'address' }, { name: 'selector', type: 'bytes4' }, { name: 'asset', type: 'address' }], outputs: [{ name: 'maxAmountPerCall', type: 'uint128' }, { name: 'maxAmountPerWindow', type: 'uint128' }, { name: 'spentInWindow', type: 'uint128' }, { name: 'windowStart', type: 'uint64' }, { name: 'windowDuration', type: 'uint64' }] },
 ];
 
@@ -112,7 +161,7 @@ export const providerOptions = [
   ['anthropic', 'Anthropic'],
 ];
 
-export const RUNNER_PERMISSION_TTL_SECONDS = 7 * 24 * 60 * 60;
+export const RUNNER_PERMISSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 export const RUNNER_FINANCIAL_WINDOW_SECONDS = 24 * 60 * 60;
 
 export const AGENT_ACTION_OPTIONS = [
@@ -131,6 +180,148 @@ export const AGENT_ASSET_OPTIONS = [
   ['CIRBTC', 'cirBTC'],
   ['CENT', 'CENT'],
 ];
+
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+
+const ACTION_TARGETS = {
+  supply: [CONTRACT_ADDRESSES.lendingPool, 'supply(address,uint256)'],
+  withdraw: [CONTRACT_ADDRESSES.lendingPool, 'withdraw(address,uint256)'],
+  borrow: [CONTRACT_ADDRESSES.lendingPool, 'borrow(address,uint256)'],
+  repay: [CONTRACT_ADDRESSES.lendingPool, 'repay(address,uint256)'],
+  swap: [CONTRACT_ADDRESSES.unitFlowRouter, 'exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))'],
+  transfer: null,
+  castVote: [CONTRACT_ADDRESSES.governor, 'castVote(uint256,uint8)'],
+};
+
+const TOKEN_ADDRESSES = {
+  USDC: CONTRACT_ADDRESSES.USDC,
+  EURC: CONTRACT_ADDRESSES.EURC,
+  CIRBTC: CONTRACT_ADDRESSES.CIRBTC,
+  CENT: CONTRACT_ADDRESSES.centryToken,
+};
+
+const TOKEN_DECIMALS = { USDC: 6, EURC: 6, CIRBTC: 8, CENT: 18 };
+const FINANCIAL_ACTIONS = new Set(['supply', 'withdraw', 'borrow', 'repay', 'transfer']);
+
+export function selector(signature) {
+  return '0x' + keccak256(toBytes(signature)).slice(2, 10);
+}
+
+export function buildRunnerAuthorizationPlan({
+  policy = {},
+  agentAccount = null,
+  nowSeconds = Math.floor(Date.now() / 1000),
+} = {}) {
+  if (!RUNNER_ADDRESS) throw new Error('Hosted runner address is not configured.');
+
+  const allowedActions = policy.allowedActions || AGENT_ACTION_OPTIONS.map(([value]) => value);
+  const allowedAssets = policy.allowedAssets || AGENT_ASSET_OPTIONS.map(([value]) => value);
+  const permissions = [];
+  const financialLimits = [];
+  const approvalSpenders = [];
+  const permissionKeys = new Set();
+  const limitKeys = new Set();
+  const approvalSpenderKeys = new Set();
+  const expiresAt = BigInt(nowSeconds + RUNNER_PERMISSION_TTL_SECONDS);
+  const maxUint128 = (1n << 128n) - 1n;
+  const capFor = (asset) => String(policy.maxAmountByAsset?.[asset] || '').trim();
+
+  const addPermission = (target, signature) => {
+    const normalizedTarget = target.toLowerCase();
+    const normalizedSelector = selector(signature).toLowerCase();
+    const key = normalizedTarget + ':' + normalizedSelector;
+    if (permissionKeys.has(key)) return;
+    permissionKeys.add(key);
+    permissions.push([RUNNER_ADDRESS, target, selector(signature), true, expiresAt, 0n]);
+  };
+
+  const addApprovalSpender = (asset, spender) => {
+    const key = asset.toLowerCase() + ':' + spender.toLowerCase();
+    if (approvalSpenderKeys.has(key)) return;
+    approvalSpenderKeys.add(key);
+    approvalSpenders.push([RUNNER_ADDRESS, asset, spender, true]);
+  };
+
+  const addLimit = (target, signature, asset) => {
+    const normalizedAsset = String(asset || '').toLowerCase();
+    const normalizedTarget = target.toLowerCase();
+    const normalizedSelector = selector(signature).toLowerCase();
+    const key = normalizedTarget + ':' + normalizedSelector + ':' + normalizedAsset;
+    if (limitKeys.has(key)) return;
+    limitKeys.add(key);
+
+    const assetSymbol = Object.entries(TOKEN_ADDRESSES).find(([, value]) =>
+      String(value).toLowerCase() === normalizedAsset
+    )?.[0];
+    const cap = assetSymbol ? capFor(assetSymbol) : '';
+    if (!cap) throw new Error('missing_financial_cap_' + (assetSymbol || 'asset'));
+
+    let maxRaw;
+    try {
+      maxRaw = parseUnits(cap, TOKEN_DECIMALS[assetSymbol] ?? 18);
+    } catch {
+      throw new Error('invalid_financial_cap_' + assetSymbol);
+    }
+    if (maxRaw <= 0n) throw new Error('missing_financial_cap_' + assetSymbol);
+    if (maxRaw > maxUint128) throw new Error('financial_cap_too_large_' + assetSymbol);
+
+    financialLimits.push([
+      RUNNER_ADDRESS,
+      target,
+      selector(signature),
+      asset,
+      maxRaw,
+      maxRaw,
+      BigInt(RUNNER_FINANCIAL_WINDOW_SECONDS),
+    ]);
+  };
+
+  for (const action of allowedActions) {
+    if (ACTION_TARGETS[action]) addPermission(...ACTION_TARGETS[action]);
+    if (FINANCIAL_ACTIONS.has(action)) {
+      const targetAddress = ACTION_TARGETS[action]?.[0];
+      const targetSignature = ACTION_TARGETS[action]?.[1];
+      if (targetAddress && targetSignature) {
+        for (const asset of allowedAssets) {
+          if (TOKEN_ADDRESSES[asset]) addLimit(targetAddress, targetSignature, TOKEN_ADDRESSES[asset]);
+        }
+      }
+    }
+  }
+
+  if (allowedActions.includes('supply') || allowedActions.includes('repay')) {
+    for (const asset of allowedAssets) {
+      if (!TOKEN_ADDRESSES[asset]) continue;
+      addPermission(TOKEN_ADDRESSES[asset], 'approve(address,uint256)');
+      addLimit(TOKEN_ADDRESSES[asset], 'approve(address,uint256)', TOKEN_ADDRESSES[asset]);
+      addApprovalSpender(TOKEN_ADDRESSES[asset], CONTRACT_ADDRESSES.lendingPool);
+    }
+  }
+
+  if (allowedActions.includes('swap')) {
+    const swapSignature = 'exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))';
+    addPermission(CONTRACT_ADDRESSES.unitFlowRouter, swapSignature);
+    addLimit(CONTRACT_ADDRESSES.unitFlowRouter, swapSignature, CONTRACT_ADDRESSES.centryToken);
+    addLimit(CONTRACT_ADDRESSES.unitFlowRouter, swapSignature, CONTRACT_ADDRESSES.USDC);
+    for (const asset of ['CENT', 'USDC']) {
+      const token = TOKEN_ADDRESSES[asset];
+      if (!token) continue;
+      addPermission(token, 'approve(address,uint256)');
+      addLimit(token, 'approve(address,uint256)', token);
+      addApprovalSpender(token, CONTRACT_ADDRESSES.unitFlowRouter);
+    }
+  }
+
+  if (allowedActions.includes('transfer')) {
+    const transferTarget = agentAccount || ZERO_ADDRESS;
+    addPermission(transferTarget, 'transferToAgent(address,address,uint256)');
+    for (const asset of allowedAssets) {
+      if (TOKEN_ADDRESSES[asset]) addLimit(transferTarget, 'transferToAgent(address,address,uint256)', TOKEN_ADDRESSES[asset]);
+    }
+  }
+
+  return { permissions, financialLimits, approvalSpenders };
+}
 
 export const DEFAULT_SCOPES = ['read', 'lend', 'borrow', 'repay', 'swap'];
 
