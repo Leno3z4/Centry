@@ -242,10 +242,13 @@ export async function POST(request) {
       data.data = normalizedQuote;
 
       const providerImpact = Number(data.data.priceImpact);
-      data.data.priceImpact = Number.isFinite(providerImpact) && providerImpact >= 0 && providerImpact <= 100
-        ? providerImpact
-        : null;
-      data.data.priceImpactSource = data.data.priceImpact == null ? 'unavailable' : 'tower';
+      const validProviderImpact = Number.isFinite(providerImpact) && providerImpact >= 0 && providerImpact <= 100;
+      // Tower's live priceImpact has been observed as a route-level metadata value
+      // that stays constant across materially different trade sizes. Do not present
+      // it as a definitive user-facing impact calculation without independent validation.
+      data.data.providerPriceImpact = validProviderImpact ? providerImpact : null;
+      data.data.priceImpact = null;
+      data.data.priceImpactSource = 'unverified-provider';
       data.data.chainId = Number(data.data.chainId || ARC_CHAIN_ID);
       data.data.quoteDecimals = outputMarket.decimals;
     }
