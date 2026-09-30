@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { ACTIVE_MARKETS } from '../constants/markets';
 import { useMultiMarketLending } from '../hooks/useMultiMarketLending';
@@ -34,8 +34,6 @@ export default function MultiMarketLending() {
   const [amount, setAmount] = useState('');
   const [fundingSource, setFundingSource] = useState('wallet');
   const [notice, setNotice] = useState('');
-  const [refreshingPosition, setRefreshingPosition] = useState(false);
-  const refreshTimerRef = useRef(null);
   const market = supportedMarkets.find((item) => item.id === marketId) || supportedMarkets[0];
   const lending = useMultiMarketLending(market?.address, market?.decimals);
   const gateway = useGatewayFunding({ enabled: market?.symbol === 'USDC' });
@@ -54,28 +52,10 @@ export default function MultiMarketLending() {
   const gatewayAmountUnavailable = needsGatewayFunding && numericAmount > 0 && gatewayShortfall > gatewayBalanceNumber;
   const needsApproval = isConnected && ['supply', 'repay'].includes(action) && numericAmount > allowance;
 
-  useEffect(() => () => {
-    if (refreshTimerRef.current) window.clearTimeout(refreshTimerRef.current);
-  }, []);
 
   useEffect(() => {
     if (!gatewayEnabled) setFundingSource('wallet');
   }, [gatewayEnabled]);
-
-  const refreshPosition = async (attempt = 0) => {
-    try {
-      await lending.refetchAll();
-    } catch {
-      // Keep polling; the underlying RPC may be temporarily busy while the position updates.
-    }
-
-    if (attempt >= 15) {
-      setRefreshingPosition(false);
-      return;
-    }
-
-    refreshTimerRef.current = window.setTimeout(() => refreshPosition(attempt + 1), 3000);
-  };
 
   const setMax = () => {
     if (action === 'withdraw') setAmount(lending.supplyBalance || '0');
@@ -107,11 +87,10 @@ export default function MultiMarketLending() {
     setFundingSource('wallet');
     setAmount('');
     setNotice('');
-    setRefreshingPosition(false);
   };
 
   const run = async () => {
-    if (!isConnected || !market?.address || lending.reserveActive !== true || !amount || numericAmount <= 0 || busy || refreshingPosition) return;
+    if (!isConnected || !market?.address || lending.reserveActive !== true || !amount || numericAmount <= 0 || busy) return;
     try {
       setNotice('');
 
@@ -141,19 +120,17 @@ export default function MultiMarketLending() {
         }
         await lending.supply(amount);
         setAmount('');
-        setRefreshingPosition(true);
-        setNotice('Supply confirmed. Updating your borrowing capacity…');
-        refreshTimerRef.current && window.clearTimeout(refreshTimerRef.current);
-        void refreshPosition();
+        setNotice('Supply confirmed onchain.');
+        void lending.refetchAll();
         return;
       }
 
       if (action === 'withdraw') await lending.withdraw(amount);
       if (action === 'borrow') await lending.borrow(amount);
       if (action === 'repay') await lending.repay(amount);
-      await lending.refetchAll();
       setAmount('');
       setNotice(`${action[0].toUpperCase()}${action.slice(1)} confirmed onchain.`);
+      void lending.refetchAll();
     } catch (error) {
       setRefreshingPosition(false);
       setNotice(error?.shortMessage || error?.message || 'Transaction failed. Check your wallet, network, allowance, and reserve state.');
@@ -208,7 +185,7 @@ export default function MultiMarketLending() {
               onChange={setFundingSource}
               walletBalance={lending.walletBalance}
               gatewayBalances={gateway.balances}
-              disabled={busy || refreshingPosition}
+              disabled={busy}
             />
           ) : null}
 
@@ -226,7 +203,7 @@ export default function MultiMarketLending() {
               : action === 'borrow'
                 ? `Max: ${isConnected ? `${num(maxBorrow, Math.min(market.decimals, 8))} ${market.symbol}` : 'Connect wallet'}`
                 : `${fundingSource === 'gateway' && gatewayEnabled ? 'Unified USDC:' : 'Wallet:'} ${isConnected ? `${num(displayedFundingBalance)} ${market.symbol}` : 'Connect wallet'}`}</span>
-            {isConnected && <button type="button" onClick={setMax} disabled={refreshingPosition}>Max</button>}
+            {isConnected && <button type="button" onClick={setMax} >Max</button>}
           </div>
 
           {!isConnected ? <div className="connect-prompt">Connect your wallet to interact with this market.</div>
