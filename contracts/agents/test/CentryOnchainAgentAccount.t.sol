@@ -245,8 +245,8 @@ contract CentryOnchainAgentAccountTest {
         for (uint256 i = 0; i < limitCount; i++) {
             limits[i] = CentryOnchainAgentAccount.AuthorizationFinancialLimit({
                 operator: agent,
-                target: address(target),
-                selector: CentryAgentCallTarget.setValue.selector,
+                target: address(account),
+                selector: bytes4(keccak256("transferToAgent(address,address,uint256)")),
                 asset: address(uint160(0x2000 + i)),
                 maxAmountPerCall: 100,
                 maxAmountPerWindow: 100,
