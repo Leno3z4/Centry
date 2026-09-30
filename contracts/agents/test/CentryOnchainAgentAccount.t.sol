@@ -92,7 +92,7 @@ contract CentryOnchainAgentAccountTest {
     address internal agent = address(0xA61E7);
 
     function setUp() public {
-        factory = new CentryOnchainAgentFactory();
+        factory = new CentryOnchainAgentFactory(2_500_000);
         target = new CentryAgentCallTarget();
         identityRegistry = new MockERC8004IdentityRegistry();
 
@@ -107,6 +107,21 @@ contract CentryOnchainAgentAccountTest {
 
         vm.prank(user);
         account.setActive(true);
+    }
+
+    function testFactoryPriceIsConfigurableByOwner() external {
+        _assertEq(factory.agentPriceUsdc(), 2_500_000);
+
+        vm.prank(user);
+        (bool nonOwnerOk,) = address(factory).call(
+            abi.encodeCall(factory.setAgentPriceUsdc, (5_000_000))
+        );
+        _assertFalse(nonOwnerOk);
+
+        vm.prank(address(this));
+        factory.setAgentPriceUsdc(3_000_000);
+
+        _assertEq(factory.agentPriceUsdc(), 3_000_000);
     }
 
     function testFinancialLimitsRequireApprovedSpenderAndReset() external {
