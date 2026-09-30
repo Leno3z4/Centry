@@ -50,9 +50,7 @@ export default function MarketDetail({ marketId }) {
   const [action, setAction] = useState('supply');
   const [amount, setAmount] = useState('');
   const [notice, setNotice] = useState('');
-  const [refreshingPosition, setRefreshingPosition] = useState(false);
   const [fundingSource, setFundingSource] = useState('wallet');
-  const refreshTimerRef = useRef(null);
   const lending = useMultiMarketLending(market?.address, market?.decimals);
   const gateway = useGatewayFunding({ enabled: market?.symbol === 'USDC' });
   const busy = lending.isPending || lending.isConfirming;
@@ -135,7 +133,6 @@ export default function MarketDetail({ marketId }) {
       setNotice(action[0].toUpperCase() + action.slice(1) + ' confirmed onchain.');
       void lending.refetchAll();
     } catch (error) {
-      setRefreshingPosition(false);
       setNotice(
         error?.shortMessage ||
           error?.message ||
@@ -287,7 +284,7 @@ export default function MarketDetail({ marketId }) {
                 onChange={setFundingSource}
                 walletBalance={lending.walletBalance}
                 gatewayBalances={gateway.balances}
-                disabled={busy || refreshingPosition}
+                disabled={busy}
               />
             </div>
           ) : null}
@@ -296,7 +293,7 @@ export default function MarketDetail({ marketId }) {
             <div className="connect-prompt">Connect your wallet to interact with this market.</div>
           ) : lending.reserveLoading ? (
             <div className="connect-prompt">Checking {market.symbol} market…</div>
-          ) : refreshingPosition ? (
+          )
             <div className="connect-prompt" aria-live="polite" aria-busy="true">Updating your position…</div>
           ) : lending.reserveActive !== true ? (
             <div className="connect-prompt">{market.symbol} is not available in the lending market.</div>
@@ -312,7 +309,6 @@ export default function MarketDetail({ marketId }) {
               className="primary-btn full-btn large-btn"
               disabled={
                 busy ||
-                refreshingPosition ||
                 !amount ||
                 numericAmount <= 0 ||
                 (action === 'repay' && debt <= 0) ||
@@ -322,7 +318,7 @@ export default function MarketDetail({ marketId }) {
             >
               {busy
                 ? 'Waiting for confirmation…'
-                : refreshingPosition
+                : false
                   ? 'Updating…'
                   : needsApproval
                     ? 'Approve ' + market.symbol
