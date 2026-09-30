@@ -20,8 +20,6 @@ import {
   ensureOwnerSession,
   loadOwnedAgents,
   shortAddress,
-  RUNNER_PERMISSION_TTL_SECONDS,
-  RUNNER_FINANCIAL_WINDOW_SECONDS,
   buildRunnerAuthorizationPlan,
 } from '../../agentClient';
 import styles from '../../agents.module.css';
