@@ -1706,10 +1706,8 @@ async function ensureBatchAllowance(
   remaining -= amount;
   allowanceState.set(key, remaining);
 }
-async function quoteCentToUsdc(publicClient, amountIn, slippageBps = 50, fromAddress) {
+async function quoteUnitFlowExactInput(publicClient, input, output, amountIn, slippageBps = 50, fromAddress) {
   let best = null;
-  const input = TOKENS.CENT;
-  const output = TOKENS.USDC;
 
   for (const fee of UNITFLOW_FEES) {
     const path = encodePacked(["address", "uint24", "address"], [input, fee, output]);
@@ -1772,7 +1770,7 @@ async function buildCalls(publicClient, agent, actions, autonomy, db, options = 
         if (!allowedSpender) throw new Error("agent_approval_spender_not_allowed");
         if (
           spender.toLowerCase() === UNITFLOW_ROUTER.toLowerCase() &&
-          asset !== TOKENS.CENT
+          !Object.values(TOKENS).some((token) => token === asset)
         ) {
           throw new Error("agent_approval_asset_not_allowed");
         }
@@ -1824,14 +1822,16 @@ async function buildCalls(publicClient, agent, actions, autonomy, db, options = 
       case "swap": {
         const input = assetAddress(action.asset || action.inputToken);
         const output = assetAddress(action.toAsset || action.outputToken);
-        if (input !== TOKENS.CENT || output !== TOKENS.USDC) {
+        if (input === output) {
           throw new Error("unsupported_swap_direction");
         }
         const amountIn = humanReadableAmounts
           ? assetAmountToBaseUnits(action.amount, action.asset || action.inputToken)
           : positiveUint(action.amount, "amount");
-        const quoted = await quoteCentToUsdc(
+        const quoted = await quoteUnitFlowExactInput(
           publicClient,
+          input,
+          output,
           amountIn,
           action.slippageBps ?? autonomy.slippageBps ?? 50,
           account,
