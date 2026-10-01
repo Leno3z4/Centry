@@ -58,26 +58,39 @@ function errorText(error) {
   return error?.shortMessage || error?.message || 'The bridge transaction could not be completed.';
 }
 
-function findTransaction(value, seen = new Set(), depth = 0) {
-  if (!value || typeof value !== 'object' || depth > 6 || seen.has(value)) return null;
+function findTransactionHash(value, seen = new Set(), depth = 0) {
+  if (depth > 8 || value == null) return null;
+  if (typeof value === 'string' && /^0x[a-fA-F0-9]{64}$/.test(value)) return value;
+  if (typeof value !== 'object' || seen.has(value)) return null;
   seen.add(value);
-  if (typeof value.to === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value.to) && typeof value.data === 'string' && /^0x[a-fA-F0-9]*$/.test(value.data)) return value;
-  for (const key of ['transaction', 'tx', 'bridge', 'data', 'result', 'response']) {
+  for (const key of ['transactionHash', 'txHash', 'sourceTransactionHash', 'sourceTxHash', 'hash']) {
+    if (typeof value?.[key] === 'string' && /^0x[a-fA-F0-9]{64}$/.test(value[key])) return value[key];
+  }
+  for (const key of Object.keys(value)) {
+    const nested = findTransactionHash(value[key], seen, depth + 1);
+    if (nested) return nested;
+  }
+  return null;
+}
+
+function findTransaction(value, seen = new Set(), depth = 0) {
+  if (!value || typeof value !== 'object' || depth > 8 || seen.has(value)) return null;
+  seen.add(value);
+  const data = value.data || value.input;
+  if (typeof value.to === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value.to) && typeof data === 'string' && /^0x[a-fA-F0-9]*$/.test(data) && value.type !== 'approval' && value.kind !== 'approval') return { ...value, data };
+  for (const key of ['transaction', 'tx', 'bridgeTransaction', 'sourceTransaction', 'data', 'result', 'response']) {
     const nested = findTransaction(value?.[key], seen, depth + 1);
     if (nested) return nested;
   }
   return null;
 }
 
-function findApproval(value, seen = new Set(), depth = 0) {
-  if (!value || typeof value !== 'object' || depth > 6 || seen.has(value)) return null;
-  seen.add(value);
-  if (typeof value.to === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value.to) && typeof value.data === 'string' && /^0x[a-fA-F0-9]*$/.test(value.data) && (value.type === 'approval' || value.kind === 'approval')) return value;
-  for (const key of ['approval', 'approve', 'data', 'result', 'response']) {
-    const nested = findApproval(value?.[key], seen, depth + 1);
-    if (nested) return nested;
-  }
-  return null;
+function findApproval(value) {
+  const approval = value?.approval || value?.approve || value?.data?.approval || value?.data?.approve || value?.result?.approval || value?.result?.approve;
+  if (!approval || typeof approval !== 'object') return null;
+  const data = approval.data || approval.input;
+  if (typeof approval.to !== 'string' || !/^0x[a-fA-F0-9]{40}$/.test(approval.to) || typeof data !== 'string' || !/^0x[a-fA-F0-9]*$/.test(data)) return null;
+  return { ...approval, data };
 }
 
 export default function Page() {
@@ -188,7 +201,7 @@ function BridgeContent() {
         throw new Error(result?.error || 'Tower could not start the bridge.');
       }
 
-      const transactionHash = result.transactionHash || result.txHash || result.sourceTransactionHash || result.sourceTxHash || result.data?.transactionHash || result.data?.txHash || result.data?.sourceTransactionHash || result.data?.sourceTxHash || null;
+      const transactionHash = findTransactionHash(result);
 
       if (transactionHash) {
         setBridgeResult({ ...result, transactionHash });
