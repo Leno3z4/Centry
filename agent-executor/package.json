@@ -8,6 +8,6 @@
   },
   "dependencies": {
     "centry-agent-runner": "file:../agent-runner",
-    "viem": "2.33.0"
+    "viem": "2.37.7"
   }
 }
