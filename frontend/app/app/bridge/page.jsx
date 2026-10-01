@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAccount, useChainId, useConnectorClient, useSwitchChain } from 'wagmi';
 import { encodeFunctionData, formatUnits } from 'viem';
+import { BridgeKit } from '@circle-fin/bridge-kit';
+import { createViemAdapterFromProvider } from '@circle-fin/adapter-viem-v2';
 import { Providers } from '../../../components/Providers';
 import { AppShell } from '../../../components/AppShell';
 import styles from './bridge.module.css';
 
 const ARC_CHAIN_ID = 5042;
-const TOWER_BRIDGE_ENDPOINT = '/api/tower/bridge';
 const BRIDGE_CHAINS = [
   { id: 'arc-mainnet', chainId: ARC_CHAIN_ID, name: 'Arc Mainnet', short: 'Arc', badge: 'A', usdc: '0x3600000000000000000000000000000000000000', rpcUrl: 'https://rpc.mainnet.arc.io', explorerUrl: 'https://explorer.arc.io', native: { name: 'USDC', symbol: 'USDC', decimals: 18 } },
   { id: 'base-mainnet', chainId: 8453, name: 'Base', short: 'Base', badge: 'B', usdc: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', rpcUrl: 'https://mainnet.base.org', explorerUrl: 'https://basescan.org', native: { name: 'Ether', symbol: 'ETH', decimals: 18 } },
@@ -17,6 +18,15 @@ const BRIDGE_CHAINS = [
 ];
 
 const EXTERNAL_CHAINS = BRIDGE_CHAINS.filter((chain) => chain.chainId !== ARC_CHAIN_ID);
+
+const bridgeKit = new BridgeKit();
+
+const CIRCLE_CHAIN_BY_ID = {
+  [ARC_CHAIN_ID]: 'Arc',
+  8453: 'Base',
+  42161: 'Arbitrum',
+  1: 'Ethereum',
+};
 
 const ERC20_ABI = [
   { type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }], outputs: [{ type: 'uint256' }] },
@@ -58,47 +68,13 @@ function errorText(error) {
   return error?.shortMessage || error?.message || 'The bridge transaction could not be completed.';
 }
 
-function findTransactionHash(value, seen = new Set(), depth = 0) {
-  if (depth > 8 || value == null) return null;
-  if (typeof value === 'string' && /^0x[a-fA-F0-9]{64}$/.test(value)) return value;
-  if (typeof value !== 'object' || seen.has(value)) return null;
-  seen.add(value);
-  for (const key of ['transactionHash', 'txHash', 'sourceTransactionHash', 'sourceTxHash', 'hash']) {
-    if (typeof value?.[key] === 'string' && /^0x[a-fA-F0-9]{64}$/.test(value[key])) return value[key];
-  }
-  for (const key of Object.keys(value)) {
-    const nested = findTransactionHash(value[key], seen, depth + 1);
-    if (nested) return nested;
-  }
-  return null;
-}
-
-function findTransaction(value, seen = new Set(), depth = 0) {
-  if (!value || typeof value !== 'object' || depth > 8 || seen.has(value)) return null;
-  seen.add(value);
-  const data = value.data || value.input;
-  if (typeof value.to === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value.to) && typeof data === 'string' && /^0x[a-fA-F0-9]*$/.test(data) && value.type !== 'approval' && value.kind !== 'approval') return { ...value, data };
-  for (const key of ['transaction', 'tx', 'bridgeTransaction', 'sourceTransaction', 'swap', 'bridge', 'data', 'result', 'response']) {
-    const nested = findTransaction(value?.[key], seen, depth + 1);
-    if (nested) return nested;
-  }
-  return null;
-}
-
-function findApproval(value) {
-  const approval = value?.approval || value?.approve || value?.data?.approval || value?.data?.approve || value?.result?.approval || value?.result?.approve;
-  if (!approval || typeof approval !== 'object') return null;
-  const data = approval.data || approval.input;
-  if (typeof approval.to !== 'string' || !/^0x[a-fA-F0-9]{40}$/.test(approval.to) || typeof data !== 'string' || !/^0x[a-fA-F0-9]*$/.test(data)) return null;
-  return { ...approval, data };
-}
 
 export default function Page() {
   return <Providers><AppShell><BridgeContent /></AppShell></Providers>;
 }
 
 function BridgeContent() {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, connector } = useAccount();
   const walletChainId = useChainId();
   const { data: connectorClient } = useConnectorClient();
   const { switchChainAsync } = useSwitchChain();
@@ -175,66 +151,54 @@ function BridgeContent() {
   };
 
   const bridge = async () => {
-    if (!address || !validAmount || fromId === toId || stage === 'submitting') return;
+    if (!address || !validAmount || fromId === toId || stage === 'submitting' || !connector) return;
     setError('');
     setBridgeResult(null);
     setStage('submitting');
 
     try {
-      const response = await fetch(TOWER_BRIDGE_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fromChainId: source.chainId,
-          toChainId: destination.chainId,
-          amount: amount.trim(),
-          token: 'USDC',
+      if (walletChainId !== source.chainId) {
+        await switchChainAsync({ chainId: source.chainId });
+      }
+
+      const provider = await connector.getProvider();
+      const adapter = await createViemAdapterFromProvider({ provider });
+      const sourceChain = CIRCLE_CHAIN_BY_ID[source.chainId];
+      const destinationChain = CIRCLE_CHAIN_BY_ID[destination.chainId];
+
+      if (!sourceChain || !destinationChain) {
+        throw new Error('This bridge route is not supported yet.');
+      }
+
+      const result = await bridgeKit.bridge({
+        from: { adapter, chain: sourceChain },
+        to: {
+          chain: destinationChain,
           recipientAddress: address,
-          senderAddress: address,
           useForwarder: true,
-        }),
-      });
-      const text = await response.text();
-      let result;
-      try { result = JSON.parse(text); } catch { throw new Error('Tower returned an invalid bridge response.'); }
-      if (!response.ok || !result?.success) {
-        throw new Error(result?.error || 'Tower could not start the bridge.');
-      }
-
-      const transactionHash = findTransactionHash(result);
-
-      if (transactionHash) {
-        setBridgeResult({ ...result, transactionHash });
-        setAmount('');
-        setStage('pending');
-        setError('');
-        void readBalance();
-        return;
-      }
-
-      const unsignedTx = findTransaction(result);
-      if (!unsignedTx || !connectorClient?.request) {
-        throw new Error('Tower accepted the bridge request but did not return a source transaction hash or wallet transaction payload.');
-      }
-
-      const txChainId = Number(unsignedTx.chainId || source.chainId);
-      if (txChainId !== walletChainId) await switchChainAsync({ chainId: txChainId });
-
-      const approval = findApproval(result);
-      if (approval) {
-        await connectorClient.request({
-          method: 'eth_sendTransaction',
-          params: [{ from: address, to: approval.to, data: approval.data, value: approval.value ? `0x${BigInt(approval.value).toString(16)}` : '0x0', ...(approval.gasLimit ? { gas: `0x${BigInt(approval.gasLimit).toString(16)}` } : {}) }],
-        });
-      }
-
-      const submittedHash = await connectorClient.request({
-        method: 'eth_sendTransaction',
-        params: [{ from: address, to: unsignedTx.to, data: unsignedTx.data, value: unsignedTx.value ? `0x${BigInt(unsignedTx.value).toString(16)}` : '0x0', ...(unsignedTx.gasLimit ? { gas: `0x${BigInt(unsignedTx.gasLimit).toString(16)}` } : {}) }],
+        },
+        amount: amount.trim(),
       });
 
-      if (!submittedHash) throw new Error('Your wallet did not return a source transaction hash after signing the bridge transaction.');
-      setBridgeResult({ ...result, transactionHash: submittedHash, status: result.status || result.data?.status || 'pending' });
+      const burnStep = Array.isArray(result?.steps)
+        ? result.steps.find((step) => ['burn', 'burnUsdc'].includes(String(step?.name)))
+        : null;
+      const approveStep = Array.isArray(result?.steps)
+        ? result.steps.find((step) => String(step?.name) === 'approve')
+        : null;
+      const transactionHash = burnStep?.txHash || burnStep?.transactionHash || result?.sourceTxHash || result?.transactionHash || null;
+
+      if (!transactionHash) {
+        throw new Error('Circle accepted the bridge but did not return the source burn transaction hash.');
+      }
+
+      setBridgeResult({
+        ...result,
+        transactionHash,
+        approvalTransactionHash: approveStep?.txHash || approveStep?.transactionHash || null,
+        status: result?.state || 'pending',
+        estimatedTime: result?.estimatedTime || null,
+      });
       setAmount('');
       setStage('pending');
       setError('');
@@ -271,7 +235,7 @@ function BridgeContent() {
         </div>
 
         <div className={styles.summary}>
-          <div><span>Route</span><strong>Tower</strong></div>
+          <div><span>Route</span><strong>Circle CCTP v2</strong></div>
           <div><span>Transfer</span><strong>{source.short} → {destination.short} · 1:1 USDC</strong></div>
           <div><span>Estimated time</span><strong>{bridgeResult?.estimatedTime || 'Shown by Tower when available'}</strong></div>
           <div><span>Network fee</span><strong>{bridgeResult?.fee || 'Calculated by the route'}</strong></div>
@@ -303,7 +267,7 @@ function BridgeContent() {
 
       <div className={styles.infoFooter}>
         <button type="button" className={styles.infoButton} onClick={() => setInfoOpen((open) => !open)} aria-expanded={infoOpen} aria-label="Bridge information">i</button>
-        {infoOpen ? <p>Tower handles the bridge request. Centry only marks the bridge submitted when Tower returns the source transaction hash.</p> : null}
+        {infoOpen ? <p>Circle CCTP handles the cross-chain USDC transfer. Centry submits the source burn through your connected wallet and uses Circle's Forwarding Service for the destination mint.</p> : null}
       </div>
     </div>
   );
