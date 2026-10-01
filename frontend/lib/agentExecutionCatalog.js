@@ -4,7 +4,6 @@ export const ARC_MAINNET_CHAIN_ID = 5042;
 
 export const LENDING_POOL = getAddress(process.env.CENTRY_LENDING_POOL || "0x0ee649E5A95eB9127cB7146b26349a92B68c17A4");
 export const ORACLE = getAddress(process.env.CENTRY_ORACLE || "0x00C6d554BD44859349c4aeEA0E8216AE94FC3f84");
-export const CENT = getAddress(process.env.CENTRY_TOKEN || "0x75E1C49f3fAebEc149c4c997f209A8e639c2253F");
 export const USDC = getAddress(process.env.CENTRY_USDC || "0x3600000000000000000000000000000000000000");
 export const EURC = getAddress(process.env.CENTRY_EURC || "0xbEf5f6d51CB62b58e6A8f77868681825C6fe21c1");
 export const CIRBTC = getAddress(process.env.CENTRY_CIRBTC || "0x171A4217b86A807A64eB94757Db6849fb4bDbAA0");
@@ -46,7 +45,7 @@ export const ACTIONS = Object.freeze({
   withdraw: { scope: "lend", description: "Withdraw a supported supplied asset from the Centry agent account.", required: ["asset", "amount"] },
   borrow: { scope: "borrow", description: "Borrow a supported asset against the Centry agent account's collateral.", required: ["asset", "amount"] },
   repay: { scope: "repay", description: "Approve and repay debt for the connected Centry agent account using the requested supported asset.", required: ["asset", "amount"] },
-  swap: { scope: "swap", description: "Swap CENT to Arc native USDC through the validated UnitFlow V3 route.", required: ["asset", "toAsset", "amount", "minOut", "fee"] },
+  swap: { scope: "swap", description: "Swap supported assets through the validated UnitFlow V3 route.", required: ["asset", "toAsset", "amount", "minOut", "fee"] },
   castVote: { scope: "governance", description: "Cast a governance vote on an existing Centry Governor proposal.", required: ["proposalId", "support"] },
   transfer: { scope: "agent-to-agent", description: "Transfer a supported token to another Centry agent owned by the same user.", required: ["toAgentId", "asset", "amount"] },
 });
@@ -75,11 +74,11 @@ export function resolveAsset(value) {
 
 export function resolveSwapAsset(value) {
   if (typeof value !== "string") throw new Error("invalid_swap_asset");
-  if (value.toUpperCase() === "CENT") return CENT;
-  if (value.toUpperCase() === "USDC") return USDC;
+  const key = value.toUpperCase();
+  if (SUPPORTED_ASSETS[key]) return SUPPORTED_ASSETS[key];
   if (isAddress(value)) {
     const normalized = getAddress(value);
-    if (normalized === CENT || normalized === USDC) return normalized;
+    if (Object.values(SUPPORTED_ASSETS).includes(normalized)) return normalized;
   }
   throw new Error("unsupported_swap_asset");
 }
@@ -92,7 +91,7 @@ function buildSwap({ account, asset, toAsset, amount, minOut, fee = 3000 }) {
   if (!isAddress(account)) throw new Error("invalid_swap_account");
   const inputToken = resolveSwapAsset(asset);
   const outputToken = resolveSwapAsset(toAsset);
-  if (inputToken !== CENT || outputToken !== USDC) throw new Error("unsupported_swap_direction");
+  if (inputToken === outputToken) throw new Error("unsupported_swap_direction");
 
   const amountIn = parseUint(amount, "amount");
   const minOutput = parseUint(minOut, "minOut");
