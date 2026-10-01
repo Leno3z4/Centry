@@ -20,7 +20,9 @@
     "clsx": "2.1.1",
     "tailwind-merge": "3.3.1",
     "recharts": "2.15.4",
-    "motion": "13.4.3"
+    "motion": "13.4.3",
+    "@circle-fin/adapter-viem-v2": "1.18.0",
+    "@circle-fin/bridge-kit": "1.15.1"
   },
   "devDependencies": {
     "@types/node": "22.7.5",
