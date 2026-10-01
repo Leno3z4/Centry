@@ -23,7 +23,7 @@ export async function POST(request, { params }) {
     const requested = body?.autonomy && typeof body.autonomy === "object" ? body.autonomy : {};
     const requestedPolicy = body?.policy && typeof body.policy === "object" ? body.policy : {};
     const actionUniverse = ["supply", "withdraw", "borrow", "repay", "swap", "castVote", "transfer"];
-    const assetUniverse = ["USDC", "EURC", "CIRBTC", "CENT"];
+    const assetUniverse = ["USDC", "EURC", "CIRBTC"];
     const allowedActions = Array.isArray(requestedPolicy.allowedActions)
       ? requestedPolicy.allowedActions.filter((item) => actionUniverse.includes(String(item)))
       : (Array.isArray(existing?.policy?.allowedActions) ? existing.policy.allowedActions : actionUniverse);
@@ -39,7 +39,7 @@ export async function POST(request, { params }) {
         .map((asset) => [asset, String(maxAmountByAssetInput[asset]).trim().slice(0, 80)])
     );
 
-    const assetDecimals = { USDC: 18, EURC: 6, CIRBTC: 8, CENT: 18 };
+    const assetDecimals = { USDC: 18, EURC: 6, CIRBTC: 8 };
     const maxUint128 = (2n ** 128n) - 1n;
     for (const [asset, value] of Object.entries(maxAmountByAsset)) {
       try {
@@ -56,7 +56,6 @@ export async function POST(request, { params }) {
         ? allowedAssets
         : [],
     );
-    if (allowedActions.includes("swap")) requiredCapAssets.add("CENT");
     for (const asset of requiredCapAssets) {
       if (!maxAmountByAsset[asset]) {
         return Response.json({ error: `onchain_financial_cap_required_${asset}` }, { status: 400 });
