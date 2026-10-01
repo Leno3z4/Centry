@@ -78,7 +78,7 @@ function findTransaction(value, seen = new Set(), depth = 0) {
   seen.add(value);
   const data = value.data || value.input;
   if (typeof value.to === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value.to) && typeof data === 'string' && /^0x[a-fA-F0-9]*$/.test(data) && value.type !== 'approval' && value.kind !== 'approval') return { ...value, data };
-  for (const key of ['transaction', 'tx', 'bridgeTransaction', 'sourceTransaction', 'data', 'result', 'response']) {
+  for (const key of ['transaction', 'tx', 'bridgeTransaction', 'sourceTransaction', 'swap', 'bridge', 'data', 'result', 'response']) {
     const nested = findTransaction(value?.[key], seen, depth + 1);
     if (nested) return nested;
   }
