@@ -237,7 +237,7 @@ function BridgeContent() {
         <div className={styles.summary}>
           <div><span>Route</span><strong>Circle CCTP v2</strong></div>
           <div><span>Transfer</span><strong>{source.short} → {destination.short} · 1:1 USDC</strong></div>
-          <div><span>Estimated time</span><strong>{bridgeResult?.estimatedTime || 'Shown by Tower when available'}</strong></div>
+          <div><span>Estimated time</span><strong>{bridgeResult?.estimatedTime || 'Shown by Circle when available'}</strong></div>
           <div><span>Network fee</span><strong>{bridgeResult?.fee || 'Calculated by the route'}</strong></div>
           <div><span>Recipient</span><strong>{address ? `${address.slice(0, 6)}…${address.slice(-4)}` : 'Connect wallet'}</strong></div>
         </div>
@@ -251,13 +251,13 @@ function BridgeContent() {
           {balanceInsufficient ? 'Insufficient USDC balance' : buttonLabel}
         </button>
 
-        {stage === 'submitting' ? <div className={styles.notice}>Submitting the bridge request to Tower…</div> : null}
+        {stage === 'submitting' ? <div className={styles.notice}>Preparing your Circle CCTP transfer…</div> : null}
 
         {stage !== 'pending' && isConnected && <button type="button" className={styles.refreshButton} onClick={readBalance} disabled={loadingBalance}>{loadingBalance ? 'Checking balance…' : `Refresh ${source.short} USDC balance`}</button>}
         {error && <div className={`${styles.notice} ${styles.noticeError}`} role="alert">{error}</div>}
         {stage === 'pending' && bridgeResult ? (
           <div className={`${styles.notice} ${styles.noticeSuccess}`}>
-            <strong>Bridge accepted by Tower.</strong>
+            <strong>Bridge submitted through Circle CCTP.</strong>
             <span>Status: {bridgeResult.status || 'pending'}{bridgeResult.estimatedTime ? ` · Estimated time: ${bridgeResult.estimatedTime}` : ''}</span>
             {bridgeResult.transactionHash ? <a href={`${source.explorerUrl}/tx/${bridgeResult.transactionHash}`} target="_blank" rel="noreferrer">View source transaction ↗</a> : <span>Tower did not expose the source transaction hash.</span>}
             <button type="button" className={styles.refreshButton} onClick={resetFlow}>Start another bridge</button>
