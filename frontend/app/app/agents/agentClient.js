@@ -169,7 +169,7 @@ export const AGENT_ACTION_OPTIONS = [
   ['withdraw', 'Withdraw', 'Withdraw supplied assets'],
   ['borrow', 'Borrow', 'Open or increase borrowing'],
   ['repay', 'Repay', 'Repay existing debt'],
-  ['swap', 'Swap', 'Use the configured swap route'],
+  ['swap', 'Swap', 'Swap supported assets through UnitFlow V3'],
   ['castVote', 'Governance', 'Cast governance votes'],
   ['transfer', 'Agent transfer', 'Move supported assets between your own agents'],
 ];
@@ -304,11 +304,10 @@ export function buildRunnerAuthorizationPlan({
   if (allowedActions.includes('swap')) {
     const swapSignature = 'exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))';
     addPermission(CONTRACT_ADDRESSES.unitFlowRouter, swapSignature);
-    addLimit(CONTRACT_ADDRESSES.unitFlowRouter, swapSignature, CONTRACT_ADDRESSES.centryToken);
-    addLimit(CONTRACT_ADDRESSES.unitFlowRouter, swapSignature, CONTRACT_ADDRESSES.USDC);
-    for (const asset of ['CENT', 'USDC']) {
+    for (const asset of allowedAssets) {
       const token = TOKEN_ADDRESSES[asset];
       if (!token) continue;
+      addLimit(CONTRACT_ADDRESSES.unitFlowRouter, swapSignature, token);
       addPermission(token, 'approve(address,uint256)');
       addLimit(token, 'approve(address,uint256)', token);
       addApprovalSpender(token, CONTRACT_ADDRESSES.unitFlowRouter);
@@ -333,7 +332,7 @@ export const scopeOptions = [
   ['lend', 'Supply and withdraw'],
   ['borrow', 'Borrow assets'],
   ['repay', 'Repay debt'],
-  ['swap', 'Swap', 'Use the configured swap route'],
+  ['swap', 'Swap', 'Swap supported assets through UnitFlow V3'],
   ['governance', 'Governance actions'],
   ['agent-to-agent', 'Send tasks/messages to other Centry agents'],
 ];
