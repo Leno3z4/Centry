@@ -169,7 +169,7 @@ export const AGENT_ACTION_OPTIONS = [
   ['withdraw', 'Withdraw', 'Withdraw supplied assets'],
   ['borrow', 'Borrow', 'Open or increase borrowing'],
   ['repay', 'Repay', 'Repay existing debt'],
-  ['swap', 'Swap', 'Swap CENT and Arc-native USDC'],
+  ['swap', 'Swap', 'Use the configured swap route'],
   ['castVote', 'Governance', 'Cast governance votes'],
   ['transfer', 'Agent transfer', 'Move supported assets between your own agents'],
 ];
@@ -178,7 +178,6 @@ export const AGENT_ASSET_OPTIONS = [
   ['USDC', 'USDC'],
   ['EURC', 'EURC'],
   ['CIRBTC', 'cirBTC'],
-  ['CENT', 'CENT'],
 ];
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
@@ -197,10 +196,9 @@ const TOKEN_ADDRESSES = {
   USDC: CONTRACT_ADDRESSES.USDC,
   EURC: CONTRACT_ADDRESSES.EURC,
   CIRBTC: CONTRACT_ADDRESSES.CIRBTC,
-  CENT: CONTRACT_ADDRESSES.centryToken,
 };
 
-const TOKEN_DECIMALS = { USDC: 6, EURC: 6, CIRBTC: 8, CENT: 18 };
+const TOKEN_DECIMALS = { USDC: 6, EURC: 6, CIRBTC: 8 };
 const FINANCIAL_ACTIONS = new Set(['supply', 'withdraw', 'borrow', 'repay', 'transfer']);
 
 export function selector(signature) {
@@ -335,14 +333,13 @@ export const scopeOptions = [
   ['lend', 'Supply and withdraw'],
   ['borrow', 'Borrow assets'],
   ['repay', 'Repay debt'],
-  ['swap', 'Swap CENT and Arc-native USDC'],
+  ['swap', 'Swap', 'Use the configured swap route'],
   ['governance', 'Governance actions'],
   ['agent-to-agent', 'Send tasks/messages to other Centry agents'],
 ];
 
 export const WITHDRAWABLE_ASSETS = [
   { key: 'native', label: 'USDC (native)', decimals: 18, address: null },
-  { key: 'cent', label: 'CENT', decimals: 18, address: CONTRACT_ADDRESSES.centryToken },
   { key: 'eurc', label: 'EURC', decimals: 6, address: CONTRACT_ADDRESSES.EURC },
   { key: 'cirbtc', label: 'cirBTC', decimals: 8, address: CONTRACT_ADDRESSES.CIRBTC },
 ];
@@ -369,7 +366,7 @@ export function defaultAgentConfig() {
     policy: {
       allowedActions: ['supply', 'withdraw', 'borrow', 'repay'],
       allowedAssets: ['USDC'],
-      maxAmountByAsset: { USDC: '', EURC: '', CIRBTC: '', CENT: '' },
+      maxAmountByAsset: { USDC: '', EURC: '', CIRBTC: '' },
     },
     a2a: {
       receiveEnabled: false,
