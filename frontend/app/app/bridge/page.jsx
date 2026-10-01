@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useAccount, useChainId, useConnectorClient } from 'wagmi';
+import { useAccount, useChainId, useConnectorClient, useSwitchChain } from 'wagmi';
 import { encodeFunctionData, formatUnits } from 'viem';
 import { Providers } from '../../../components/Providers';
 import { AppShell } from '../../../components/AppShell';
@@ -58,6 +58,28 @@ function errorText(error) {
   return error?.shortMessage || error?.message || 'The bridge transaction could not be completed.';
 }
 
+function findTransaction(value, seen = new Set(), depth = 0) {
+  if (!value || typeof value !== 'object' || depth > 6 || seen.has(value)) return null;
+  seen.add(value);
+  if (typeof value.to === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value.to) && typeof value.data === 'string' && /^0x[a-fA-F0-9]*$/.test(value.data)) return value;
+  for (const key of ['transaction', 'tx', 'bridge', 'data', 'result', 'response']) {
+    const nested = findTransaction(value?.[key], seen, depth + 1);
+    if (nested) return nested;
+  }
+  return null;
+}
+
+function findApproval(value, seen = new Set(), depth = 0) {
+  if (!value || typeof value !== 'object' || depth > 6 || seen.has(value)) return null;
+  seen.add(value);
+  if (typeof value.to === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value.to) && typeof value.data === 'string' && /^0x[a-fA-F0-9]*$/.test(value.data) && (value.type === 'approval' || value.kind === 'approval')) return value;
+  for (const key of ['approval', 'approve', 'data', 'result', 'response']) {
+    const nested = findApproval(value?.[key], seen, depth + 1);
+    if (nested) return nested;
+  }
+  return null;
+}
+
 export default function Page() {
   return <Providers><AppShell><BridgeContent /></AppShell></Providers>;
 }
@@ -66,6 +88,7 @@ function BridgeContent() {
   const { address, isConnected } = useAccount();
   const walletChainId = useChainId();
   const { data: connectorClient } = useConnectorClient();
+  const { switchChainAsync } = useSwitchChain();
   const [fromId, setFromId] = useState('arc-mainnet');
   const [toId, setToId] = useState('base-mainnet');
   const [amount, setAmount] = useState('');
@@ -165,18 +188,40 @@ function BridgeContent() {
         throw new Error(result?.error || 'Tower could not start the bridge.');
       }
 
-      const transactionHash =
-        result.transactionHash
-        || result.txHash
-        || result.data?.transactionHash
-        || result.data?.txHash
-        || null;
+      const transactionHash = result.transactionHash || result.txHash || result.sourceTransactionHash || result.sourceTxHash || result.data?.transactionHash || result.data?.txHash || result.data?.sourceTransactionHash || result.data?.sourceTxHash || null;
 
-      if (!transactionHash) {
-        throw new Error('Tower accepted the bridge request but did not return the source transaction hash. No wallet transaction was submitted.');
+      if (transactionHash) {
+        setBridgeResult({ ...result, transactionHash });
+        setAmount('');
+        setStage('pending');
+        setError('');
+        void readBalance();
+        return;
       }
 
-      setBridgeResult({ ...result, transactionHash });
+      const unsignedTx = findTransaction(result);
+      if (!unsignedTx || !connectorClient?.request) {
+        throw new Error('Tower accepted the bridge request but did not return a source transaction hash or wallet transaction payload.');
+      }
+
+      const txChainId = Number(unsignedTx.chainId || source.chainId);
+      if (txChainId !== walletChainId) await switchChainAsync({ chainId: txChainId });
+
+      const approval = findApproval(result);
+      if (approval) {
+        await connectorClient.request({
+          method: 'eth_sendTransaction',
+          params: [{ from: address, to: approval.to, data: approval.data, value: approval.value ? `0x${BigInt(approval.value).toString(16)}` : '0x0', ...(approval.gasLimit ? { gas: `0x${BigInt(approval.gasLimit).toString(16)}` } : {}) }],
+        });
+      }
+
+      const submittedHash = await connectorClient.request({
+        method: 'eth_sendTransaction',
+        params: [{ from: address, to: unsignedTx.to, data: unsignedTx.data, value: unsignedTx.value ? `0x${BigInt(unsignedTx.value).toString(16)}` : '0x0', ...(unsignedTx.gasLimit ? { gas: `0x${BigInt(unsignedTx.gasLimit).toString(16)}` } : {}) }],
+      });
+
+      if (!submittedHash) throw new Error('Your wallet did not return a source transaction hash after signing the bridge transaction.');
+      setBridgeResult({ ...result, transactionHash: submittedHash, status: result.status || result.data?.status || 'pending' });
       setAmount('');
       setStage('pending');
       setError('');
