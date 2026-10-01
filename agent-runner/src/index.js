@@ -282,7 +282,7 @@ const DEFAULT_ALLOWED_ACTIONS = Object.freeze([
   "transfer",
 ]);
 
-const DEFAULT_ALLOWED_ASSETS = Object.freeze(["USDC", "EURC", "CIRBTC", "CENT"]);
+const DEFAULT_ALLOWED_ASSETS = Object.freeze(["USDC", "EURC", "CIRBTC"]);
 
 const ASSET_DECIMALS = Object.freeze({
   USDC: 6,
@@ -2393,8 +2393,8 @@ async function runAgent(db, publicClient, walletClient, runnerAddress, agent, sc
       ),
       "Return ONLY a JSON object so the runtime can safely separate the user-facing reply from optional onchain actions.",
       ownerChatTask
-        ? 'Schema: {"response":"string","reason":"string","actions":[{"action":"approve|supply|withdraw|borrow|repay|swap|castVote|transfer","asset":"USDC|EURC|CIRBTC|CENT","toAsset":"USDC","amount":"human-readable decimal token amount","minOut":"human-readable decimal output amount","fee":100|500|3000|10000,"proposalId":"uint256","support":0|1|2,"slippageBps":number,"toAgentId":"string"}],"replies":[{"taskId":"string","response":"string"}],"messages":[{"toAgentId":"string","task":"string"}]}'
-        : 'Schema: {"response":"string","reason":"string","actions":[{"action":"approve|supply|withdraw|borrow|repay|swap|castVote|transfer","asset":"USDC|EURC|CIRBTC|CENT","toAsset":"USDC|CENT","amount":"uint256 base-unit string","minOut":"uint256 base-unit string","fee":100|500|3000|10000,"proposalId":"uint256","support":0|1|2,"slippageBps":number,"toAgentId":"string"}],"replies":[{"taskId":"string","response":"string"}],"messages":[{"toAgentId":"string","task":"string"}],"learnings":[{"agentId":"string","insight":"string"}]}',
+        ? 'Schema: {"response":"string","reason":"string","actions":[{"action":"approve|supply|withdraw|borrow|repay|swap|castVote|transfer","asset":"USDC|EURC|CIRBTC","toAsset":"USDC|EURC|CIRBTC","amount":"human-readable decimal token amount","minOut":"human-readable decimal output amount","fee":100|500|3000|10000,"proposalId":"uint256","support":0|1|2,"slippageBps":number,"toAgentId":"string"}],"replies":[{"taskId":"string","response":"string"}],"messages":[{"toAgentId":"string","task":"string"}]}'
+        : 'Schema: {"response":"string","reason":"string","actions":[{"action":"approve|supply|withdraw|borrow|repay|swap|castVote|transfer","asset":"USDC|EURC|CIRBTC","toAsset":"USDC|EURC|CIRBTC","amount":"uint256 base-unit string","minOut":"uint256 base-unit string","fee":100|500|3000|10000,"proposalId":"uint256","support":0|1|2,"slippageBps":number,"toAgentId":"string"}],"replies":[{"taskId":"string","response":"string"}],"messages":[{"toAgentId":"string","task":"string"}],"learnings":[{"agentId":"string","insight":"string"}]}',
       "The response field is the normal conversational answer. Use replies for queued non-owner tasks. Keep actions to 4 or fewer.",
     ].join("\n\n");
 
