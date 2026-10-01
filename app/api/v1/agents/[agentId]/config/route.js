@@ -23,7 +23,7 @@ export async function POST(request, { params }) {
     const requested = body?.autonomy && typeof body.autonomy === "object" ? body.autonomy : {};
     const requestedPolicy = body?.policy && typeof body.policy === "object" ? body.policy : {};
     const actionUniverse = ["supply", "withdraw", "borrow", "repay", "swap", "castVote", "transfer"];
-    const assetUniverse = ["USDC", "EURC", "CIRBTC", "CENT"];
+    const assetUniverse = ["USDC", "EURC", "CIRBTC"];
     const allowedActions = Array.isArray(requestedPolicy.allowedActions)
       ? requestedPolicy.allowedActions.filter((item) => actionUniverse.includes(String(item)))
       : (Array.isArray(existing?.policy?.allowedActions) ? existing.policy.allowedActions : actionUniverse);
