@@ -39,7 +39,6 @@ function cleanIncomingConfig(agent) {
         USDC: String(policy.maxAmountByAsset?.USDC || ''),
         EURC: String(policy.maxAmountByAsset?.EURC || ''),
         CIRBTC: String(policy.maxAmountByAsset?.CIRBTC || ''),
-        CENT: String(policy.maxAmountByAsset?.CENT || ''),
       },
     },
     a2a: {
@@ -275,7 +274,7 @@ export function AgentConfigForm({ mode = 'create', agent = null, onSubmit, submi
           <span><strong>Allow autonomous runs</strong><small>When OFF, the hosted runner can be configured but will not execute AI-driven work.</small></span>
         </label>
         <label className={styles.label}>Strategy / instructions</label>
-        <textarea className={styles.textarea} rows={7} value={form.autonomy.instructions} onChange={(e) => update('autonomy.instructions', e.target.value)} placeholder="Example: supply idle USDC, never borrow, preserve enough native USDC for gas, and only swap CENT when the stated condition is met." />
+        <textarea className={styles.textarea} rows={7} value={form.autonomy.instructions} onChange={(e) => update('autonomy.instructions', e.target.value)} placeholder="Example: supply idle USDC, never borrow, preserve enough native USDC for gas, and only swap when the stated condition is met." />
         <div className={styles.riskGuardPanel}>
           <div className={styles.sectionHead}>
             <div>
@@ -347,7 +346,7 @@ export function AgentConfigForm({ mode = 'create', agent = null, onSubmit, submi
           {AGENT_ASSET_OPTIONS.map(([value, label]) => (
             <div key={value}>
               <label className={styles.label}>{label}</label>
-              <input className={styles.input} inputMode="decimal" value={form.policy.maxAmountByAsset[value] || ''} onChange={(e) => updateCap(value, e.target.value)} placeholder={value === 'CIRBTC' ? 'e.g. 0.01' : value === 'CENT' ? 'e.g. 1000' : 'Required for financial actions'} />
+              <input className={styles.input} inputMode="decimal" value={form.policy.maxAmountByAsset[value] || ''} onChange={(e) => updateCap(value, e.target.value)} placeholder={value === 'CIRBTC' ? 'e.g. 0.01' : 'Required for financial actions'} />
             </div>
           ))}
         </div>
