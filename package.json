@@ -25,7 +25,7 @@
     "vgpu": "0.3.1",
     "wagmi": "2.16.0",
     "@circle-fin/adapter-viem-v2": "1.18.0",
-    "@circle-fin/bridge-kit": "1.15.1"
+    "@circle-fin/bridge-kit": "1.15.2"
   },
   "overrides": {
     "baseline-browser-mapping": "2.11.26"
