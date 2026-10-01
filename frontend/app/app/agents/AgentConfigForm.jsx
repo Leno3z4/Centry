@@ -34,7 +34,12 @@ function cleanIncomingConfig(agent) {
     },
     policy: {
       allowedActions: Array.isArray(policy.allowedActions) && policy.allowedActions.length ? policy.allowedActions : base.policy.allowedActions,
-      allowedAssets: Array.isArray(policy.allowedAssets) && policy.allowedAssets.length ? policy.allowedAssets : base.policy.allowedAssets,
+      allowedAssets: (() => {
+        const assets = Array.isArray(policy.allowedAssets)
+          ? policy.allowedAssets.map((item) => String(item).toUpperCase()).filter((item) => ['USDC', 'EURC', 'CIRBTC'].includes(item))
+          : [];
+        return assets.length ? assets : base.policy.allowedAssets;
+      })(),
       maxAmountByAsset: {
         USDC: String(policy.maxAmountByAsset?.USDC || ''),
         EURC: String(policy.maxAmountByAsset?.EURC || ''),
