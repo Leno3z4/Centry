@@ -101,8 +101,8 @@ function buildSwap({ account, asset, toAsset, amount, minOut, fee = 3000 }) {
 
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
   const params = {
-    tokenIn: CENT,
-    tokenOut: USDC,
+    tokenIn: inputToken,
+    tokenOut: outputToken,
     fee: parsedFee,
     recipient: getAddress(account),
     deadline,
@@ -115,7 +115,7 @@ function buildSwap({ account, asset, toAsset, amount, minOut, fee = 3000 }) {
 
   return {
     calls: [
-      call(CENT, ERC20_INTERFACE.encodeFunctionData("approve", [UNITFLOW_V3_ROUTER, amountIn])),
+      call(inputToken, ERC20_INTERFACE.encodeFunctionData("approve", [UNITFLOW_V3_ROUTER, amountIn])),
       call(UNITFLOW_V3_ROUTER, swapData),
     ],
     description: ACTIONS.swap.description,
