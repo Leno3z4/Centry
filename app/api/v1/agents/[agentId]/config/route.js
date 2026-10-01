@@ -29,7 +29,9 @@ export async function POST(request, { params }) {
       : (Array.isArray(existing?.policy?.allowedActions) ? existing.policy.allowedActions : actionUniverse);
     const allowedAssets = Array.isArray(requestedPolicy.allowedAssets)
       ? requestedPolicy.allowedAssets.map((item) => String(item).toUpperCase()).filter((item) => assetUniverse.includes(item))
-      : (Array.isArray(existing?.policy?.allowedAssets) ? existing.policy.allowedAssets : assetUniverse);
+      : (Array.isArray(existing?.policy?.allowedAssets)
+        ? existing.policy.allowedAssets.map((item) => String(item).toUpperCase()).filter((item) => assetUniverse.includes(item))
+        : assetUniverse);
     const maxAmountByAssetInput = requestedPolicy.maxAmountByAsset && typeof requestedPolicy.maxAmountByAsset === "object"
       ? requestedPolicy.maxAmountByAsset
       : (existing?.policy?.maxAmountByAsset || {});
